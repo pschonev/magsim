@@ -1,27 +1,78 @@
 import heapq
 import logging
 import random
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Literal, Sequence, Type, Callable, Any
 
 # ------------------------------
-# IDs and static configuration
+# 1. Logging
+# ------------------------------
+
+
+class GlobalLogState:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(GlobalLogState, cls).__new__(cls)
+            cls._instance.reset()
+        return cls._instance
+
+    def reset(self):
+        self.total_turn = 0
+        self.turn_log_count = 0
+        self.current_racer_repr = "_"
+
+    def new_round(self):
+        self.total_turn += 1
+
+    def start_turn_log(self, racer_repr: str):
+        self.turn_log_count = 0
+        self.current_racer_repr = racer_repr
+
+    def inc_log_count(self):
+        self.turn_log_count += 1
+
+
+log_context = GlobalLogState()
+
+
+class ContextFilter(logging.Filter):
+    def filter(self, record):
+        record.total_turn = log_context.total_turn
+        record.turn_log_count = log_context.turn_log_count
+        record.racer_repr = log_context.current_racer_repr
+        log_context.inc_log_count()
+        return True
+
+
+class CustomFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        prefix = f"{record.total_turn}.{record.racer_repr}.{record.turn_log_count}"
+        msg = record.getMessage()
+        return f"{prefix} - {record.levelname} - {msg}"
+
+
+logger = logging.getLogger("magical_athlete")
+logger.setLevel(logging.INFO)  # Changed to INFO to reduce noise
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(CustomFormatter())
+handler.addFilter(ContextFilter())
+logger.addHandler(handler)
+logger.propagate = False
+
+# ------------------------------
+# 2. Config
 # ------------------------------
 
 RacerName = Literal[
-    "Centaur",
-    "BigBaby",
-    "Scoocher",
-    "Banana",
-    "Copycat",
-    "Gunk",
-    "PartyAnimal",
+    "Centaur", "HugeBaby", "Scoocher", "Banana", "Copycat", "Gunk", "PartyAnimal"
 ]
-
 AbilityName = Literal[
     "Trample",
-    "BigBabyPush",
+    "HugeBabyPush",
     "BananaTrip",
     "ScoochStep",
     "CopyLead",
@@ -32,13 +83,11 @@ AbilityName = Literal[
 
 TRIP_SPACES: set[int] = {4, 10, 18}
 FINISH_SPACE: int = 20
-WIN_VP: int = 5
-
-logger = logging.getLogger("magical_athlete")
-
+WIN_VP: int = 4
+SECOND_VP: int = 2
 
 # ------------------------------
-# Core state
+# 3. Game State
 # ------------------------------
 
 
@@ -52,6 +101,10 @@ class RacerState:
     victory_points: int = 0
     abilities: set[AbilityName] = field(default_factory=set)
 
+    @property
+    def repr(self) -> str:
+        return f"{self.idx}:{self.name}"
+
 
 @dataclass(slots=True)
 class GameState:
@@ -59,16 +112,30 @@ class GameState:
     current_racer_idx: int = 0
     finished_order: list[int] = field(default_factory=list)
 
+    def get_state_hash(self) -> int:
+        """Creates a hash of the physical board state (positions + status)."""
+        # We exclude 'abilities' from hash to avoid recursion issues if abilities change
+        data = tuple((r.position, r.tripped, r.finished) for r in self.racers)
+        return hash(data)
+
 
 # ------------------------------
-# Events
+# 4. Events & Scheduling
 # ------------------------------
 
 
 class GameEvent:
-    """Marker base class."""
-
     pass
+
+
+class Phase:
+    SYSTEM = 0
+    PRE_MAIN = 10
+    REACTION = 15
+    MAIN_ACT = 20
+    MOVE_EXEC = 30
+    BOARD = 40
+    CLEANUP = 100
 
 
 @dataclass(frozen=True)
@@ -82,17 +149,24 @@ class RollAndMainMoveEvent(GameEvent):
 
 
 @dataclass(frozen=True)
-class CmdMoveEvent(GameEvent):
+class MoveCmdEvent(GameEvent):
     racer_idx: int
     distance: int
     is_main_move: bool
-    source_racer_idx: int | None
-    source_ability: AbilityName | None
+    source: str
+
+
+@dataclass(frozen=True)
+class WarpCmdEvent(GameEvent):
+    racer_idx: int
+    target_tile: int
+    source: str
 
 
 @dataclass(frozen=True)
 class PassingEvent(GameEvent):
     mover_idx: int
+    victim_idx: int
     tile_idx: int
 
 
@@ -105,40 +179,30 @@ class LandingEvent(GameEvent):
 @dataclass(frozen=True)
 class AbilityTriggeredEvent(GameEvent):
     source_racer_idx: int
-    ability_id: AbilityName
+    ability_name: AbilityName
 
 
 @dataclass(frozen=True)
 class MoveDistanceQuery:
-    """Used for synchronous modifier queries (Gunk, PartyBoost)."""
-
     racer_idx: int
-    base_roll: int
+    base_amount: int
     modifiers: list[int] = field(default_factory=list)
 
     @property
     def final_value(self) -> int:
-        return max(0, self.base_roll + sum(self.modifiers))
+        return max(0, self.base_amount + sum(self.modifiers))
 
 
 @dataclass(order=True)
 class ScheduledEvent:
     phase: int
-    turn_distance: int
+    priority: int
     serial: int
     event: GameEvent = field(compare=False)
 
 
-class Phase:
-    SYSTEM = 0
-    BOARD = 10
-    ABILITY = 20
-    MOVE = 30
-    CLEANUP = 100
-
-
 # ------------------------------
-# Pub/Sub Registry
+# 5. Interfaces
 # ------------------------------
 
 AbilityCallback = Callable[[Any, int, "GameEngine"], None]
@@ -150,36 +214,25 @@ class Subscriber:
     owner_idx: int
 
 
-# ------------------------------
-# Ability Base Class
-# ------------------------------
-
-
 class Ability(ABC):
-    """Base class for all abilities with auto-registration."""
-
     name: AbilityName
     triggers: tuple[Type[GameEvent], ...] = ()
 
     def register(self, engine: "GameEngine", owner_idx: int):
-        """Default: auto-subscribe to events in `triggers`."""
         for event_type in self.triggers:
             engine.subscribe(event_type, self._wrapped_handler, owner_idx)
 
     def _wrapped_handler(self, event: GameEvent, owner_idx: int, engine: "GameEngine"):
-        """Wrapper that calls logic and auto-emits ability trigger."""
+        if engine.state.racers[owner_idx].finished:
+            return
         self.execute(event, owner_idx, engine)
-        engine.emit_ability_trigger(owner_idx, self.name)
 
     @abstractmethod
     def execute(self, event: GameEvent, owner_idx: int, engine: "GameEngine"):
-        """The actual ability logic. Subclasses implement this."""
         pass
 
 
 class Modifier(ABC):
-    """Base class for synchronous modifiers (Gunk, PartyBoost)."""
-
     name: AbilityName
 
     @abstractmethod
@@ -188,142 +241,172 @@ class Modifier(ABC):
 
 
 # ------------------------------
-# Concrete Abilities
+# 6. Abilities
 # ------------------------------
 
 
 class AbilityTrample(Ability):
-    name: AbilityName = "Trample"
+    """Centaur: When I pass a racer, they move -2."""
+
+    name = "Trample"
     triggers = (PassingEvent,)
 
     def execute(self, event: PassingEvent, owner_idx: int, engine: "GameEngine"):
         if event.mover_idx != owner_idx:
             return
-
-        victims = [
-            r
-            for r in engine.state.racers
-            if r.position == event.tile_idx and not r.finished and r.idx != owner_idx
-        ]
-
-        if not victims:
+        victim = engine.get_racer(event.victim_idx)
+        if victim.finished:
             return
 
-        logger.info(
-            "Centaur Trample: tramples racers %s on tile %d",
-            [v.idx for v in victims],
-            event.tile_idx,
-        )
-
-        for v in victims:
-            engine.push_event(
-                CmdMoveEvent(
-                    racer_idx=v.idx,
-                    distance=-2,
-                    is_main_move=False,
-                    source_racer_idx=owner_idx,
-                    source_ability=self.name,
-                ),
-                phase=Phase.MOVE,
-                reactor_idx=owner_idx,
-            )
-
-
-class AbilityBigBabyPush(Ability):
-    name: AbilityName = "BigBabyPush"
-    triggers = (LandingEvent,)
-
-    def execute(self, event: LandingEvent, owner_idx: int, engine: "GameEngine"):
-        owner = engine.get_racer(owner_idx)
-        victim = engine.get_racer(event.mover_idx)
-
-        if event.mover_idx == owner_idx or victim.finished:
-            return
-
-        if owner.position != event.tile_idx:
-            return
-
-        logger.info(
-            "BigBabyPush: racer #%d pushes racer #%d back 1", owner_idx, event.mover_idx
-        )
-
+        logger.info(f"Trample: Centaur passed {victim.repr}. Victim moves -2.")
         engine.push_event(
-            CmdMoveEvent(
-                racer_idx=event.mover_idx,
-                distance=-1,
-                is_main_move=False,
-                source_racer_idx=owner_idx,
-                source_ability=self.name,
-            ),
-            phase=Phase.MOVE,
-            reactor_idx=owner_idx,
+            MoveCmdEvent(victim.idx, -2, False, "Trample"), phase=Phase.REACTION
         )
+        engine.emit_ability_trigger(owner_idx, self.name)
 
 
 class AbilityBananaTrip(Ability):
-    name: AbilityName = "BananaTrip"
+    """Banana: I trip any racer that passes me."""
+
+    name = "BananaTrip"
     triggers = (PassingEvent,)
 
     def execute(self, event: PassingEvent, owner_idx: int, engine: "GameEngine"):
-        owner = engine.get_racer(owner_idx)
-
-        if event.mover_idx == owner_idx:
+        if event.victim_idx != owner_idx:
             return
-
-        if owner.position != event.tile_idx:
-            return
-
         mover = engine.get_racer(event.mover_idx)
         if mover.finished:
             return
 
-        logger.info("BananaTrip: racer #%d trips racer #%d", owner_idx, event.mover_idx)
+        logger.info(f"BananaTrip: {mover.repr} passed Banana! Mover trips.")
         mover.tripped = True
+        engine.emit_ability_trigger(owner_idx, self.name)
+
+
+class AbilityHugeBabyPush(Ability):
+    """Huge Baby: No one can ever be on my space... put them behind me."""
+
+    name = "HugeBabyPush"
+    triggers = (LandingEvent,)
+
+    def execute(self, event: LandingEvent, owner_idx: int, engine: "GameEngine"):
+        if event.mover_idx == owner_idx:
+            return
+
+        owner = engine.get_racer(owner_idx)
+        victim = engine.get_racer(event.mover_idx)
+
+        if victim.finished:
+            return
+        if owner.position != event.tile_idx:
+            return
+
+        target = max(0, owner.position - 1)
+        logger.info(
+            f"HugeBabyPush: {victim.repr} landed on HugeBaby. Warping to {target}."
+        )
+
+        engine.push_event(
+            WarpCmdEvent(victim.idx, target, "HugeBabyPush"), phase=Phase.REACTION
+        )
+        engine.emit_ability_trigger(owner_idx, self.name)
 
 
 class AbilityScoochStep(Ability):
-    name: AbilityName = "ScoochStep"
+    """Scoocher: When another racer's power happens, I move 1."""
+
+    name = "ScoochStep"
     triggers = (AbilityTriggeredEvent,)
 
     def execute(
         self, event: AbilityTriggeredEvent, owner_idx: int, engine: "GameEngine"
     ):
-        # Don't trigger on self to prevent simple loops
         if event.source_racer_idx == owner_idx:
             return
 
-        logger.info(
-            "ScoochStep: racer #%d moves 1 due to ability %s",
-            owner_idx,
-            event.ability_id,
-        )
-
+        # Loop protection is handled by the Engine's history check,
+        # but conceptually this ability is very prone to loops.
         engine.push_event(
-            CmdMoveEvent(
-                racer_idx=owner_idx,
-                distance=1,
-                is_main_move=False,
-                source_racer_idx=owner_idx,
-                source_ability=self.name,
-            ),
-            phase=Phase.MOVE,
-            reactor_idx=owner_idx,
+            MoveCmdEvent(owner_idx, 1, False, "ScoochStep"), phase=Phase.REACTION
         )
 
 
-class AbilityCopyLead(Ability):
-    name: AbilityName = "CopyLead"
+class AbilityPartyPull(Ability):
+    """Party Animal: Before main move, all racers move 1 space towards me."""
+
+    name = "PartyPull"
     triggers = (TurnStartEvent,)
 
     def execute(self, event: TurnStartEvent, owner_idx: int, engine: "GameEngine"):
         if event.racer_idx != owner_idx:
             return
 
-        copycat = engine.get_racer(owner_idx)
+        party_animal = engine.get_racer(owner_idx)
+        logger.info("PartyPull: Pulling everyone closer!")
+        engine.emit_ability_trigger(owner_idx, self.name)
+
+        for r in engine.state.racers:
+            if r.idx == owner_idx or r.finished:
+                continue
+            direction = 0
+            if r.position < party_animal.position:
+                direction = 1
+            elif r.position > party_animal.position:
+                direction = -1
+
+            if direction != 0:
+                engine.push_event(
+                    MoveCmdEvent(r.idx, direction, False, "PartyPull"),
+                    phase=Phase.PRE_MAIN,
+                )
+
+
+class ModifierPartyBoost(Modifier):
+    """Party Animal: +1 to main move per guest."""
+
+    name = "PartyBoost"
+
+    def modify(self, query: MoveDistanceQuery, owner_idx: int, engine: "GameEngine"):
+        if query.racer_idx != owner_idx:
+            return
+        owner = engine.get_racer(owner_idx)
+        guests = [
+            r
+            for r in engine.state.racers
+            if r.idx != owner_idx and not r.finished and r.position == owner.position
+        ]
+        if guests:
+            query.modifiers.append(len(guests))
+            engine.emit_ability_trigger(owner_idx, self.name)
+
+
+class ModifierSlime(Modifier):
+    """Gunk: -1 to others' main move."""
+
+    name = "Slime"
+
+    def modify(self, query: MoveDistanceQuery, owner_idx: int, engine: "GameEngine"):
+        if query.racer_idx == owner_idx:
+            return
+        query.modifiers.append(-1)
+        engine.emit_ability_trigger(owner_idx, self.name)
+
+
+class AbilityCopyLead(Ability):
+    """Copycat: Copy the leader."""
+
+    name = "CopyLead"
+    triggers = (LandingEvent, TurnStartEvent)
+
+    def execute(self, event: GameEvent, owner_idx: int, engine: "GameEngine"):
+        me = engine.get_racer(owner_idx)
+        if me.finished:
+            return
+
+        # Exclude finished racers from 'Lead' definition
         active = [
             r for r in engine.state.racers if not r.finished and r.idx != owner_idx
         ]
-
         if not active:
             return
 
@@ -331,123 +414,34 @@ class AbilityCopyLead(Ability):
         leaders = [r for r in active if r.position == max_pos]
         leader = engine.rng.choice(leaders)
 
-        # Copy abilities from the leader's definition
-        new_abilities = set(RACER_ABILITIES.get(leader.name, set()))
-        new_abilities.add(self.name)  # Keep CopyLead itself
+        current_abilities = me.abilities
+        target_abilities = RACER_ABILITIES.get(leader.name, set()) | {self.name}
 
-        # Unregister old abilities and register new ones
-        engine.update_racer_abilities(owner_idx, new_abilities)
-
-        logger.info(
-            "CopyLead: racer #%d copies abilities of racer #%d: %s",
-            owner_idx,
-            leader.idx,
-            sorted(new_abilities),
-        )
-
-
-class AbilityPartyPull(Ability):
-    name: AbilityName = "PartyPull"
-    triggers = (TurnStartEvent,)
-
-    def execute(self, event: TurnStartEvent, owner_idx: int, engine: "GameEngine"):
-        if event.racer_idx != owner_idx:
-            return
-
-        party = engine.get_racer(owner_idx)
-        if party.finished:
-            return
-
-        logger.info("PartyPull: racer #%d pulls everyone closer", owner_idx)
-
-        for r in engine.state.racers:
-            if r.idx == owner_idx or r.finished:
-                continue
-
-            if r.position < party.position:
-                dist = 1
-            elif r.position > party.position:
-                dist = -1
-            else:
-                continue
-
-            engine.push_event(
-                CmdMoveEvent(
-                    racer_idx=r.idx,
-                    distance=dist,
-                    is_main_move=False,
-                    source_racer_idx=owner_idx,
-                    source_ability=self.name,
-                ),
-                phase=Phase.MOVE,
-                reactor_idx=owner_idx,
-            )
+        if current_abilities != target_abilities:
+            # Only log if it's a change to avoid log spam
+            logger.info(f"Copycat: Now copying {leader.name}")
+            engine.update_racer_abilities(owner_idx, target_abilities)
 
 
 # ------------------------------
-# Modifiers
+# 7. Registry
 # ------------------------------
 
-
-class ModifierSlime(Modifier):
-    name: AbilityName = "Slime"
-
-    def modify(self, query: MoveDistanceQuery, owner_idx: int, engine: "GameEngine"):
-        if query.racer_idx == owner_idx:
-            return
-
-        logger.info("Gunk Slime: modifies racer #%d main move by -1", query.racer_idx)
-        query.modifiers.append(-1)
-        engine.emit_ability_trigger(owner_idx, self.name)
-
-
-class ModifierPartyBoost(Modifier):
-    name: AbilityName = "PartyBoost"
-
-    def modify(self, query: MoveDistanceQuery, owner_idx: int, engine: "GameEngine"):
-        if query.racer_idx != owner_idx:
-            return
-
-        party = engine.get_racer(owner_idx)
-        same_tile = [
-            r
-            for r in engine.state.racers
-            if r.idx != owner_idx and not r.finished and r.position == party.position
-        ]
-        bonus = len(same_tile)
-
-        if bonus:
-            logger.info(
-                "PartyBoost: racer #%d gets +%d (co-occupants: %s)",
-                owner_idx,
-                bonus,
-                [r.idx for r in same_tile],
-            )
-            query.modifiers.append(bonus)
-            engine.emit_ability_trigger(owner_idx, self.name)
-
-
-# ------------------------------
-# Registry
-# ------------------------------
-
-ABILITY_CLASSES: dict[AbilityName, Type[Ability]] = {
+ABILITY_CLASSES = {
     "Trample": AbilityTrample,
-    "BigBabyPush": AbilityBigBabyPush,
+    "HugeBabyPush": AbilityHugeBabyPush,
     "BananaTrip": AbilityBananaTrip,
     "ScoochStep": AbilityScoochStep,
-    "CopyLead": AbilityCopyLead,
     "PartyPull": AbilityPartyPull,
+    "CopyLead": AbilityCopyLead,
 }
-
-MODIFIER_CLASSES: dict[AbilityName, Type[Modifier]] = {
-    "Slime": ModifierSlime,
+MODIFIER_CLASSES = {
     "PartyBoost": ModifierPartyBoost,
+    "Slime": ModifierSlime,
 }
-
-RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
+RACER_ABILITIES = {
     "Centaur": {"Trample"},
-    "BigBaby": {"BigBabyPush"},
+    "HugeBaby": {"HugeBabyPush"},
     "Scoocher": {"ScoochStep"},
     "Banana": {"BananaTrip"},
     "Copycat": {"CopyLead"},
@@ -455,9 +449,8 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "PartyAnimal": {"PartyPull", "PartyBoost"},
 }
 
-
 # ------------------------------
-# Engine
+# 8. Engine
 # ------------------------------
 
 
@@ -467,14 +460,13 @@ class GameEngine:
     rng: random.Random
     queue: list[ScheduledEvent] = field(default_factory=list)
     subscribers: dict[Type[GameEvent], list[Subscriber]] = field(default_factory=dict)
-    modifiers: list[tuple[Modifier, int]] = field(
-        default_factory=list
-    )  # (modifier, owner_idx)
+    modifiers: list[tuple[Modifier, int]] = field(default_factory=list)
+
     _serial: int = 0
     race_over: bool = False
-    seen_signatures: set[int] = field(default_factory=set)
 
-    # ---------- Pub/Sub ----------
+    # Loop detection history: Set of (StateHash, EventHash)
+    history: set[tuple[int, int]] = field(default_factory=set)
 
     def subscribe(
         self, event_type: Type[GameEvent], callback: AbilityCallback, owner_idx: int
@@ -487,391 +479,222 @@ class GameEngine:
         self.modifiers.append((modifier, owner_idx))
 
     def update_racer_abilities(self, racer_idx: int, new_abilities: set[AbilityName]):
-        """Update a racer's abilities and re-register them (for Copycat)."""
         racer = self.get_racer(racer_idx)
         racer.abilities = new_abilities
-
-        # Clear old subscriptions for this racer
-        for event_type in self.subscribers:
-            self.subscribers[event_type] = [
-                sub
-                for sub in self.subscribers[event_type]
-                if sub.owner_idx != racer_idx
+        # Clean up and re-register
+        for et in self.subscribers:
+            self.subscribers[et] = [
+                s for s in self.subscribers[et] if s.owner_idx != racer_idx
             ]
-
-        # Clear old modifiers
-        self.modifiers = [(mod, idx) for mod, idx in self.modifiers if idx != racer_idx]
-
-        # Re-register new abilities
-        for ability_name in new_abilities:
-            if ability_name in ABILITY_CLASSES:
-                ability = ABILITY_CLASSES[ability_name]()
-                ability.register(self, racer_idx)
-            if ability_name in MODIFIER_CLASSES:
-                modifier = MODIFIER_CLASSES[ability_name]()
-                self.register_modifier(modifier, racer_idx)
-
-    def publish_to_subscribers(self, event: GameEvent):
-        """Publish event to all subscribers, sorted by turn order."""
-        if type(event) not in self.subscribers:
-            return
-
-        subs = self.subscribers[type(event)]
-
-        # Sort by turn distance to ensure proper trigger order
-        def sort_key(sub: Subscriber):
-            current = self.state.current_racer_idx
-            total = len(self.state.racers)
-            return (sub.owner_idx - current) % total
-
-        sorted_subs = sorted(subs, key=sort_key)
-
-        for sub in sorted_subs:
-            owner = self.get_racer(sub.owner_idx)
-            if owner.finished:
-                continue
-            sub.callback(event, sub.owner_idx, self)
-
-    # ---------- Scheduling ----------
-
-    def push_event(
-        self, event: GameEvent, *, phase: int, reactor_idx: int | None = None
-    ):
-        self._serial += 1
-        current = self.state.current_racer_idx
-        if reactor_idx is None or not self.state.racers:
-            dist = 0
-        else:
-            n = len(self.state.racers)
-            dist = (reactor_idx - current) % n
-
-        sched = ScheduledEvent(
-            phase=phase, turn_distance=dist, serial=self._serial, event=event
-        )
-        heapq.heappush(self.queue, sched)
-        logger.debug(
-            "Enqueued %s (phase=%s, dist=%s, serial=%s)",
-            event,
-            phase,
-            dist,
-            self._serial,
-        )
-
-    def emit_ability_trigger(self, source_idx: int, ability: AbilityName):
-        r = self.get_racer(source_idx)
-        if r.finished:
-            return
-        evt = AbilityTriggeredEvent(source_racer_idx=source_idx, ability_id=ability)
-        self.push_event(evt, phase=Phase.ABILITY, reactor_idx=source_idx)
-
-    # ---------- Main Loop ----------
-
-    def run_race(self):
-        while not self.race_over:
-            self.start_turn()
-            self.process_events_for_turn()
-            self.advance_turn()
-
-    def start_turn(self):
-        self.seen_signatures.clear()
-        cr = self.state.current_racer_idx
-        racer = self.state.racers[cr]
-        logger.info("=== Turn start: Racer %s (#%d) ===", racer.name, cr)
-        self.push_event(TurnStartEvent(cr), phase=Phase.SYSTEM, reactor_idx=cr)
-
-    def process_events_for_turn(self):
-        while self.queue and not self.race_over:
-            sched = heapq.heappop(self.queue)
-            event = sched.event
-            if self.is_loop(event):
-                logger.warning("Loop detected for event %s – skipping", event)
-                continue
-            logger.info("Processing %s", event)
-            self.handle_event(event)
-
-    def advance_turn(self):
-        if self.race_over:
-            return
-        n = len(self.state.racers)
-        for _ in range(n):
-            self.state.current_racer_idx = (self.state.current_racer_idx + 1) % n
-            if not self.state.racers[self.state.current_racer_idx].finished:
-                break
-
-    # ---------- Loop Detection ----------
-
-    def hash_state(self) -> int:
-        positions = tuple(r.position for r in self.state.racers)
-        tripped = tuple(r.tripped for r in self.state.racers)
-        return hash((positions, tripped))
-
-    def is_loop(self, event: GameEvent) -> bool:
-        key = (type(event).__name__, self.hash_state())
-        sig = hash(key)
-        if sig in self.seen_signatures:
-            return True
-        self.seen_signatures.add(sig)
-        return False
-
-    # ---------- Event Handling ----------
-
-    def handle_event(self, event: GameEvent):
-        match event:
-            case TurnStartEvent():
-                self.on_turn_start(event)
-            case RollAndMainMoveEvent():
-                self.on_roll_and_main_move(event)
-            case CmdMoveEvent():
-                self.on_cmd_move(event)
-            case PassingEvent():
-                self.publish_to_subscribers(event)
-            case LandingEvent():
-                self.on_landing(event)
-            case AbilityTriggeredEvent():
-                self.publish_to_subscribers(event)
-            case _:
-                logger.warning("Unhandled event type: %s", event)
-
-    # ---------- Helpers ----------
+        self.modifiers = [m for m in self.modifiers if m[1] != racer_idx]
+        for an in new_abilities:
+            if an in ABILITY_CLASSES:
+                ABILITY_CLASSES[an]().register(self, racer_idx)
+            if an in MODIFIER_CLASSES:
+                self.register_modifier(MODIFIER_CLASSES[an](), racer_idx)
 
     def get_racer(self, idx: int) -> RacerState:
         return self.state.racers[idx]
 
-    # ---------- Turn Start ----------
+    def push_event(self, event: GameEvent, *, phase: int):
+        self._serial += 1
+        sched = ScheduledEvent(phase, 0, self._serial, event)
+        heapq.heappush(self.queue, sched)
 
-    def on_turn_start(self, event: TurnStartEvent):
-        racer = self.get_racer(event.racer_idx)
-        if racer.finished:
-            logger.info(
-                "Racer %s (#%d) already finished; skipping turn",
-                racer.name,
-                event.racer_idx,
-            )
-            return
-
-        if racer.tripped:
-            logger.info(
-                "Racer %s (#%d) stands up from being tripped",
-                racer.name,
-                event.racer_idx,
-            )
-            racer.tripped = False
-            return
-
-        # Publish to subscribers (CopyLead, PartyPull)
-        self.publish_to_subscribers(event)
-
-        # Queue main move
+    def emit_ability_trigger(self, source_idx: int, ability: AbilityName):
         self.push_event(
-            RollAndMainMoveEvent(event.racer_idx),
-            phase=Phase.SYSTEM,
-            reactor_idx=event.racer_idx,
+            AbilityTriggeredEvent(source_idx, ability), phase=Phase.REACTION
         )
 
-    # ---------- Main Move ----------
+    def publish_to_subscribers(self, event: GameEvent):
+        if type(event) not in self.subscribers:
+            return
+        subs = self.subscribers[type(event)]
+        current = self.state.current_racer_idx
+        total = len(self.state.racers)
+        # Active player -> Clockwise
+        for sub in sorted(subs, key=lambda s: (s.owner_idx - current) % total):
+            sub.callback(event, sub.owner_idx, self)
 
-    def on_roll_and_main_move(self, event: RollAndMainMoveEvent):
+    # --- Core Loop ---
+
+    def run_race(self):
+        log_context.reset()
+        while not self.race_over:
+            self.run_turn()
+            self.advance_turn()
+
+    def run_turn(self):
+        # Clear history at start of turn (loops are only relevant per-turn execution chain)
+        self.history.clear()
+
+        cr = self.state.current_racer_idx
+        racer = self.state.racers[cr]
+        log_context.start_turn_log(racer.repr)
+
+        logger.info(f"=== START TURN: {racer.repr} ===")
+
+        if racer.tripped:
+            logger.info(f"{racer.repr} is recovering from Trip.")
+            racer.tripped = False
+            self.push_event(TurnStartEvent(cr), phase=Phase.SYSTEM)
+        else:
+            self.push_event(TurnStartEvent(cr), phase=Phase.SYSTEM)
+            self.push_event(RollAndMainMoveEvent(cr), phase=Phase.MAIN_ACT)
+
+        while self.queue and not self.race_over:
+            sched = heapq.heappop(self.queue)
+
+            # --- LOOP DETECTION ---
+            state_hash = self.state.get_state_hash()
+            # Use repr(event) to distinguish between identical event types with different values
+            event_sig = hash(repr(sched.event))
+            history_key = (state_hash, event_sig)
+
+            if history_key in self.history:
+                logger.warning(
+                    f"Loop detected for {sched.event}. Discarding to break cycle."
+                )
+                continue
+            self.history.add(history_key)
+            # ----------------------
+
+            self.handle_event(sched.event)
+
+    def handle_event(self, event: GameEvent):
+        match event:
+            case (
+                TurnStartEvent()
+                | PassingEvent()
+                | LandingEvent()
+                | AbilityTriggeredEvent()
+            ):
+                self.publish_to_subscribers(event)
+            case RollAndMainMoveEvent():
+                self._handle_main_roll(event)
+            case MoveCmdEvent():
+                self._handle_move(event)
+            case WarpCmdEvent():
+                self._handle_warp(event)
+
+    def _handle_main_roll(self, event: RollAndMainMoveEvent):
         racer = self.get_racer(event.racer_idx)
         if racer.finished:
             return
 
         roll = self.rng.randint(1, 6)
-        logger.info("Racer %s (#%d) rolls %d", racer.name, event.racer_idx, roll)
+        query = MoveDistanceQuery(event.racer_idx, roll)
 
-        distance = self.apply_move_modifiers(event.racer_idx, roll)
-        logger.info(
-            "Racer %s (#%d) main move distance: %d",
-            racer.name,
-            event.racer_idx,
-            distance,
-        )
+        for mod, owner_idx in self.modifiers:
+            if not self.get_racer(owner_idx).finished:
+                mod.modify(query, owner_idx, self)
 
-        if distance != 0:
-            move_evt = CmdMoveEvent(
-                racer_idx=event.racer_idx,
-                distance=distance,
-                is_main_move=True,
-                source_racer_idx=None,
-                source_ability=None,
+        final_dist = query.final_value
+        logger.info(f"Roll: {roll} -> Final: {final_dist}")
+
+        if final_dist != 0:
+            self.push_event(
+                MoveCmdEvent(event.racer_idx, final_dist, True, "MainMove"),
+                phase=Phase.MOVE_EXEC,
             )
-            self.push_event(move_evt, phase=Phase.MOVE, reactor_idx=event.racer_idx)
 
-    def apply_move_modifiers(self, target_idx: int, base: int) -> int:
-        query = MoveDistanceQuery(racer_idx=target_idx, base_roll=base)
+    def _check_finish(self, racer: RacerState) -> bool:
+        if not racer.finished and racer.position > FINISH_SPACE:
+            racer.finished = True
+            self.state.finished_order.append(racer.idx)
+            rank = len(self.state.finished_order)
+            logger.info(f"!!! {racer.repr} FINISHED rank {rank} !!!")
+            if rank == 1:
+                racer.victory_points += WIN_VP
+            if rank >= 2:
+                racer.victory_points += SECOND_VP
+                self.race_over = True
+                self.queue.clear()  # Stop processing immediately
+            return True
+        return False
 
-        for modifier, owner_idx in self.modifiers:
-            owner = self.get_racer(owner_idx)
-            if owner.finished:
-                continue
-            modifier.modify(query, owner_idx, self)
-
-        return query.final_value
-
-    # ---------- Movement ----------
-
-    def on_cmd_move(self, evt: CmdMoveEvent):
+    def _handle_move(self, evt: MoveCmdEvent):
         racer = self.get_racer(evt.racer_idx)
         if racer.finished:
             return
 
-        start = racer.position
-        dist = evt.distance
+        start_pos = racer.position
+        end_pos = start_pos + evt.distance
 
-        logger.info(
-            "CmdMove: %s (#%d) moves from %d by %d (source_racer=%s, source_ability=%s)",
-            racer.name,
-            racer.idx,
-            start,
-            dist,
-            evt.source_racer_idx,
-            evt.source_ability,
-        )
+        logger.info(f"Move: {racer.repr} {start_pos}->{end_pos} ({evt.source})")
 
-        if dist == 0:
-            self.push_event(
-                LandingEvent(mover_idx=evt.racer_idx, tile_idx=start),
-                phase=Phase.SYSTEM,
-                reactor_idx=evt.racer_idx,
-            )
+        # Trigger Passing (Simplified: if moving forward, trigger for all tiles strictly between)
+        if evt.distance > 0:
+            for tile in range(start_pos + 1, min(end_pos, FINISH_SPACE) + 1):
+                victims = [
+                    r
+                    for r in self.state.racers
+                    if r.position == tile and r.idx != racer.idx and not r.finished
+                ]
+                # Technically you only 'pass' if you end up ahead of them?
+                # Rules: "Start behind and end ahead".
+                # So if we land ON them (end_pos == tile), it's not a pass yet.
+                # But Centaur tramples when passing.
+                # We'll trigger for all tiles strictly < end_pos.
+                if tile < end_pos:
+                    for v in victims:
+                        self.push_event(
+                            PassingEvent(racer.idx, v.idx, tile), phase=Phase.MOVE_EXEC
+                        )
+
+        racer.position = end_pos
+
+        # Check finish immediately
+        if self._check_finish(racer):
             return
 
-        direction = 1 if dist > 0 else -1
-        steps = abs(dist)
+        self.push_event(LandingEvent(racer.idx, end_pos), phase=Phase.BOARD)
 
-        for i in range(1, steps):
-            tile = start + direction * i
-            if tile > FINISH_SPACE:
-                break
-            self.push_event(
-                PassingEvent(mover_idx=evt.racer_idx, tile_idx=tile),
-                phase=Phase.SYSTEM,
-                reactor_idx=evt.racer_idx,
-            )
-
-        final_tile = start + dist
-        self.push_event(
-            LandingEvent(mover_idx=evt.racer_idx, tile_idx=final_tile),
-            phase=Phase.SYSTEM,
-            reactor_idx=evt.racer_idx,
-        )
-
-    def on_landing(self, evt: LandingEvent):
-        mover = self.get_racer(evt.mover_idx)
-        if mover.finished:
-            return
-
-        logger.info(
-            "LandingEvent: %s (#%d) lands on %d", mover.name, mover.idx, evt.tile_idx
-        )
-        mover.position = evt.tile_idx
-
-        if mover.position > FINISH_SPACE:
-            self.handle_finish(mover.idx)
-            return
-
-        if mover.position in TRIP_SPACES:
-            logger.info(
-                "Board: tile %d trips %s (#%d)", mover.position, mover.name, mover.idx
-            )
-            mover.tripped = True
-
-        # Publish to subscribers (BigBabyPush)
-        self.publish_to_subscribers(evt)
-
-    def handle_finish(self, racer_idx: int):
-        racer = self.get_racer(racer_idx)
+    def _handle_warp(self, evt: WarpCmdEvent):
+        racer = self.get_racer(evt.racer_idx)
         if racer.finished:
             return
 
-        racer.finished = True
-        racer.position = FINISH_SPACE + 1
-        self.state.finished_order.append(racer_idx)
-        order = len(self.state.finished_order)
+        logger.info(f"Warp: {racer.repr} -> {evt.target_tile} ({evt.source})")
+        racer.position = evt.target_tile
 
-        logger.info("Racer %s (#%d) finishes in place %d", racer.name, racer.idx, order)
+        if self._check_finish(racer):
+            return
 
-        if order == 1:
-            racer.victory_points += WIN_VP
-            logger.info(
-                "Racer %s (#%d) gains %d VP (total %d)",
-                racer.name,
-                racer.idx,
-                WIN_VP,
-                racer.victory_points,
-            )
+        self.push_event(LandingEvent(racer.idx, evt.target_tile), phase=Phase.BOARD)
 
-        if order >= 2:
-            logger.info("Second finisher reached; race over.")
-            self.race_over = True
-            self.queue.clear()
+    def advance_turn(self):
+        if self.race_over:
+            return
+        n = len(self.state.racers)
+        curr = self.state.current_racer_idx
+        next_idx = (curr + 1) % n
 
+        # Skip finished racers
+        while self.state.racers[next_idx].finished:
+            next_idx = (next_idx + 1) % n
+            if next_idx == curr:
+                break  # Should be caught by race_over check usually
 
-# ------------------------------
-# Factory
-# ------------------------------
+        if next_idx < curr:
+            log_context.new_round()
+        self.state.current_racer_idx = next_idx
 
-
-def build_engine(racers: Sequence[RacerName], seed: int = 0) -> GameEngine:
-    state_racers: list[RacerState] = []
-    for idx, name in enumerate(racers):
-        abilities = set(RACER_ABILITIES.get(name, set()))
-        state_racers.append(
-            RacerState(
-                idx=idx,
-                name=name,
-                position=0,
-                tripped=False,
-                finished=False,
-                victory_points=0,
-                abilities=abilities,
-            )
-        )
-
-    state = GameState(racers=state_racers, current_racer_idx=0)
-    rng = random.Random(seed)
-    engine = GameEngine(state=state, rng=rng)
-
-    # Register all abilities
-    for racer in state_racers:
-        for ability_name in racer.abilities:
-            if ability_name in ABILITY_CLASSES:
-                ability = ABILITY_CLASSES[ability_name]()
-                ability.register(engine, racer.idx)
-            if ability_name in MODIFIER_CLASSES:
-                modifier = MODIFIER_CLASSES[ability_name]()
-                engine.register_modifier(modifier, racer.idx)
-
-    return engine
-
-
-# ------------------------------
-# Demo
-# ------------------------------
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-    )
+    # Full Roster Test
+    roster = ["PartyAnimal", "Scoocher", "HugeBaby", "Centaur", "Copycat", "Gunk"]
 
-    starting_racers: list[RacerName] = [
-        "Centaur",
-        "BigBaby",
-        "Scoocher",
-        "Banana",
-        "Copycat",
-        "Gunk",
-        "PartyAnimal",
-    ]
+    racers = [RacerState(i, name) for i, name in enumerate(roster)]
+    eng = GameEngine(GameState(racers), random.Random(42))
 
-    engine = build_engine(starting_racers, seed=42)
-    engine.run_race()
+    for r in racers:
+        eng.update_racer_abilities(r.idx, set(RACER_ABILITIES[r.name]))
 
-    logger.info(
-        "Final positions: %s",
-        [(r.idx, r.name, r.position) for r in engine.state.racers],
-    )
-    logger.info(
-        "VP totals: %s",
-        [(r.idx, r.name, r.victory_points) for r in engine.state.racers],
-    )
+    eng.run_race()
+
+    logger.info("Race Results:")
+    for r in eng.state.racers:
+        logger.info(
+            f"{r.name}: Pos {r.position}, VP {r.victory_points}, Finished: {r.finished}"
+        )
