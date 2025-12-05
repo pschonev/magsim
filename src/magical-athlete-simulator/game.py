@@ -109,11 +109,9 @@ class RacerState:
     name: RacerName
     position: int = 0
     tripped: bool = False
+    reroll_count: int = 0
     finished: bool = False
     abilities: set[AbilityName] = field(default_factory=set)
-
-    # Temp state for re-roll logic (e.g. Magician can only use power once per turn)
-    reroll_used_this_turn: bool = False
 
     @property
     def repr(self) -> str:
@@ -355,7 +353,7 @@ class GameEngine:
         self.history.clear()
         cr = self.state.current_racer_idx
         racer = self.state.racers[cr]
-        racer.reroll_used_this_turn = False  # Reset turn-based flags
+        racer.reroll_count = 0
 
         log_context.start_turn_log(racer.repr)
         logger.info(f"=== START TURN: {racer.repr} ===")
@@ -692,11 +690,13 @@ class AbilityPartyPull(Ability):
             return False
 
         party_animal = engine.get_racer(owner_idx)
-        logger.info(f"{self.name}: Pulling everyone closer!")
+        any_affected = False
 
+        # CHANGED: We only log and return True if we actually queue a move.
         for r in engine.state.racers:
             if r.idx == owner_idx or r.finished:
                 continue
+
             direction = 0
             if r.position < party_animal.position:
                 direction = 1
@@ -705,8 +705,41 @@ class AbilityPartyPull(Ability):
 
             if direction != 0:
                 engine.push_move(r.idx, direction, self.name, phase=Phase.PRE_MAIN)
+                any_affected = True
 
-        return True
+        if any_affected:
+            logger.info(f"{self.name}: Pulling everyone closer!")
+            return True
+
+        # If nobody moved (e.g. everyone is on the same tile), ability did not "happen".
+        return False
+
+
+class AbilityMagicalReroll(Ability):
+    """Example: Can reroll any die up to TWO times per turn."""
+
+    name = "MagicalReroll"
+    triggers = (RollModificationWindowEvent,)
+
+    def execute(
+        self, event: RollModificationWindowEvent, owner_idx: int, engine: "GameEngine"
+    ):
+        me = engine.get_racer(owner_idx)
+
+        if (
+            event.racer_idx == owner_idx
+            and event.current_roll_val <= 3
+            and me.reroll_count < 2
+        ):
+            me.reroll_count += 1
+            engine.emit_ability_trigger(
+                owner_idx, self.name, f"Disliked roll of {event.current_roll_val}"
+            )
+            engine.trigger_reroll(owner_idx, "MagicalReroll")
+            # Return True so Scoocher sees this event
+            return True
+
+        return False
 
 
 class AbilityCopyLead(Ability):
@@ -773,33 +806,6 @@ class ModifierPartyBoost(Modifier):
             )
 
 
-# --- New Re-roll Ability Example (Magician) ---
-
-
-class AbilityMagicalReroll(Ability):
-    """Example: Can reroll any die once per turn."""
-
-    name = "MagicalReroll"
-    triggers = (RollModificationWindowEvent,)
-
-    def execute(
-        self, event: RollModificationWindowEvent, owner_idx: int, engine: "GameEngine"
-    ):
-        me = engine.get_racer(owner_idx)
-
-        # Logic: Reroll if I rolled a 1 or 2
-        if (
-            event.racer_idx == owner_idx
-            and event.current_roll_val <= 2
-            and not me.reroll_used_this_turn
-        ):
-            me.reroll_used_this_turn = True
-            engine.emit_ability_trigger(
-                owner_idx, self.name, f"Disliked roll of {event.current_roll_val}"
-            )
-            engine.trigger_reroll(owner_idx, "MagicalReroll")
-
-
 # ------------------------------
 # 7. Setup
 # ------------------------------
@@ -829,7 +835,7 @@ RACER_ABILITIES = {
 if __name__ == "__main__":
     roster: list[RacerName] = ["PartyAnimal", "Scoocher", "Magician", "HugeBaby"]
     racers = [RacerState(i, n) for i, n in enumerate(roster)]
-    eng = GameEngine(GameState(racers), random.Random(42))
+    eng = GameEngine(GameState(racers), random.Random(1))
 
     for r in racers:
         eng.update_racer_abilities(r.idx, RACER_ABILITIES.get(r.name, set()))
