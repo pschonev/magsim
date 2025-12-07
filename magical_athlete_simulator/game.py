@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Literal, Callable, Any
 
+
 # ------------------------------
 # 1. Logging & Context
 # ------------------------------
@@ -63,9 +64,11 @@ handler.addFilter(ContextFilter())
 logger.addHandler(handler)
 logger.propagate = False
 
+
 # ------------------------------
 # 2. Config
 # ------------------------------
+
 
 RacerName = Literal[
     "Centaur",
@@ -89,7 +92,9 @@ AbilityName = Literal[
     "MagicalReroll",
 ]
 
+
 FINISH_SPACE: int = 20
+
 
 # ------------------------------
 # 3. Game State
@@ -185,6 +190,7 @@ class MoveCmdEvent(GameEvent):
     racer_idx: int
     distance: int
     source: str
+    phase: int
 
 
 @dataclass(frozen=True)
@@ -192,6 +198,7 @@ class WarpCmdEvent(GameEvent):
     racer_idx: int
     target_tile: int
     source: str
+    phase: int
 
 
 @dataclass(frozen=True)
@@ -237,6 +244,7 @@ class ScheduledEvent:
 # ------------------------------
 # 5. Engine Core
 # ------------------------------
+
 
 AbilityCallback = Callable[[Any, int, "GameEngine"], None]
 
@@ -295,15 +303,19 @@ class GameEngine:
         sched = ScheduledEvent(phase, 0, self._serial, event)
         heapq.heappush(self.queue, sched)
 
+        # --- In GameEngine Class ---
+
     def push_move(self, racer_idx: int, distance: int, source: str, phase: int):
         if distance == 0:
-            return  # Explicit NO-OP
-        self.push_event(MoveCmdEvent(racer_idx, distance, source), phase=phase)
+            return
+        # Pass phase into the event data
+        self.push_event(MoveCmdEvent(racer_idx, distance, source, phase), phase=phase)
 
     def push_warp(self, racer_idx: int, target: int, source: str, phase: int):
         if self.get_racer(racer_idx).position == target:
             return
-        self.push_event(WarpCmdEvent(racer_idx, target, source), phase=phase)
+        # Pass phase into the event data
+        self.push_event(WarpCmdEvent(racer_idx, target, source, phase), phase=phase)
 
     def emit_ability_trigger(
         self, source_idx: int, ability: AbilityName, log_context: str
@@ -322,9 +334,13 @@ class GameEngine:
         )
         # Increment serial to kill any pending ResolveMainMove events
         self.state.roll_state.serial_id += 1
-        # Queue a new roll immediately
+
+        # CHANGED: We schedule the new roll at Phase.REACTION + 1.
+        # This guarantees that any AbilityTriggeredEvents (Phase 25) caused by the
+        # act of triggering the reroll (e.g. Scoocher moving) are processed
+        # BEFORE the dice are rolled again.
         self.push_event(
-            PerformRollEvent(self.state.current_racer_idx), phase=Phase.ROLL_DICE
+            PerformRollEvent(self.state.current_racer_idx), phase=Phase.REACTION + 1
         )
 
     # --- Event Loop ---
@@ -452,10 +468,9 @@ class GameEngine:
 
         logger.info(f"Move: {racer.repr} {start}->{end} ({evt.source})")
 
-        # Passing logic
         if evt.distance > 0:
             for tile in range(start + 1, min(end, FINISH_SPACE) + 1):
-                if tile < end:  # Must pass completely
+                if tile < end:
                     victims = [
                         r
                         for r in self.state.racers
@@ -469,7 +484,10 @@ class GameEngine:
         racer.position = end
         if self._check_finish(racer):
             return
-        self.push_event(LandingEvent(racer.idx, end), phase=Phase.BOARD)
+
+        # CHANGED: Use the phase from the movement event, not Phase.BOARD (40).
+        # This ensures if we move in Phase 10, we Land in Phase 10 (before the roll at 15).
+        self.push_event(LandingEvent(racer.idx, end), phase=evt.phase)
 
     def _handle_warp(self, evt: WarpCmdEvent):
         racer = self.get_racer(evt.racer_idx)
@@ -479,7 +497,9 @@ class GameEngine:
         racer.position = evt.target_tile
         if self._check_finish(racer):
             return
-        self.push_event(LandingEvent(racer.idx, evt.target_tile), phase=Phase.BOARD)
+
+        # CHANGED: Use the phase from the warp event
+        self.push_event(LandingEvent(racer.idx, evt.target_tile), phase=evt.phase)
 
     def _check_finish(self, racer: RacerState) -> bool:
         if not racer.finished and racer.position > FINISH_SPACE:
@@ -629,26 +649,35 @@ class AbilityHugeBabyPush(Ability):
     def execute(
         self, event: LandingEvent, owner_idx: int, engine: "GameEngine"
     ) -> bool:
-        # Logic: Trigger if someone lands on me
-        if event.mover_idx == owner_idx:
-            return False
-
         owner = engine.get_racer(owner_idx)
 
-        # Rule: Cannot push if I am on Start
+        # Rule: I cannot push if I am on Start
         if owner.position == 0:
             return False
 
-        if owner.position != event.tile_idx:
+        # Check if the event happened at my current location
+        # (Should always be true if I just landed there, or someone landed on me)
+        if event.tile_idx != owner.position:
             return False
 
-        victim = engine.get_racer(event.mover_idx)
+        # Identify victims: Anyone at my position who isn't me
+        victims = [
+            r
+            for r in engine.state.racers
+            if r.idx != owner_idx and r.position == owner.position and not r.finished
+        ]
+
+        if not victims:
+            return False
+
         target = max(0, owner.position - 1)
 
-        logger.info(
-            f"{self.name}: {victim.repr} landed on HugeBaby. Pushing back to {target}."
-        )
-        engine.push_warp(victim.idx, target, self.name, phase=Phase.REACTION)
+        for v in victims:
+            logger.info(
+                f"{self.name}: {v.repr} is sharing space with HugeBaby. Pushing back to {target}."
+            )
+            engine.push_warp(v.idx, target, self.name, phase=Phase.REACTION)
+
         return True
 
 
@@ -716,8 +745,6 @@ class AbilityPartyPull(Ability):
 
 
 class AbilityMagicalReroll(Ability):
-    """Example: Can reroll any die up to TWO times per turn."""
-
     name = "MagicalReroll"
     triggers = (RollModificationWindowEvent,)
 
@@ -732,12 +759,16 @@ class AbilityMagicalReroll(Ability):
             and me.reroll_count < 2
         ):
             me.reroll_count += 1
+
+            # We manually emit because we want the custom log message ("Disliked roll...")
             engine.emit_ability_trigger(
                 owner_idx, self.name, f"Disliked roll of {event.current_roll_val}"
             )
             engine.trigger_reroll(owner_idx, "MagicalReroll")
-            # Return True so Scoocher sees this event
-            return True
+
+            # CHANGED: Return False to prevent the base class from emitting
+            # a second, generic "Reacting to..." trigger event.
+            return False
 
         return False
 
@@ -810,6 +841,7 @@ class ModifierPartyBoost(Modifier):
 # 7. Setup
 # ------------------------------
 
+
 ABILITY_CLASSES = {
     "Trample": AbilityTrample,
     "HugeBabyPush": AbilityHugeBabyPush,
@@ -821,6 +853,7 @@ ABILITY_CLASSES = {
 }
 MODIFIER_CLASSES = {"PartyBoost": ModifierPartyBoost, "Slime": ModifierSlime}
 
+
 RACER_ABILITIES = {
     "Centaur": {"Trample"},
     "HugeBaby": {"HugeBabyPush"},
@@ -831,6 +864,7 @@ RACER_ABILITIES = {
     "PartyAnimal": {"PartyPull", "PartyBoost"},
     "Magician": {"MagicalReroll"},
 }
+
 
 if __name__ == "__main__":
     roster: list[RacerName] = ["PartyAnimal", "Scoocher", "Magician", "HugeBaby"]
