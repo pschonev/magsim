@@ -1,15 +1,65 @@
 import heapq
 import logging
 import random
+import re
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Literal, Callable, Any
+from typing import Literal, Callable, Any, get_args
+
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.text import Text
+
+
+RacerName = Literal[
+    "Centaur",
+    "HugeBaby",
+    "Scoocher",
+    "Banana",
+    "Copycat",
+    "Gunk",
+    "PartyAnimal",
+    "Magician",
+]
+AbilityName = Literal[
+    "Trample",
+    "HugeBabyPush",
+    "BananaTrip",
+    "ScoochStep",
+    "CopyLead",
+    "Slime",
+    "PartyPull",
+    "PartyBoost",
+    "MagicalReroll",
+]
 
 
 # ------------------------------
 # 1. Logging & Context
 # ------------------------------
+
+
+# Derived name sets from Literals for dynamic regex creation
+RACER_NAMES = set(get_args(RacerName))
+ABILITY_NAMES = set(get_args(AbilityName))
+
+
+# Precompiled regex patterns for highlighting
+ABILITY_PATTERN = re.compile(rf"\b({'|'.join(map(re.escape, ABILITY_NAMES))})\b")
+RACER_PATTERN = re.compile(rf"\b({'|'.join(map(re.escape, RACER_NAMES))})\b")
+
+
+# Simple color theme for Rich
+COLOR = {
+    "move": "bold green",
+    "warp": "bold magenta",
+    "warning": "bold red",
+    "ability": "bold blue",
+    "racer": "yellow",
+    "prefix": "dim",
+    "level": "bold",
+}
 
 
 class GlobalLogState:
@@ -49,48 +99,70 @@ class ContextFilter(logging.Filter):
         return True
 
 
-class CustomFormatter(logging.Formatter):
+class RichMarkupFormatter(logging.Formatter):
+    """
+    Formatter that converts a log record into a Rich markup string.
+    """
+
     def format(self, record: logging.LogRecord) -> str:
         prefix = f"{record.total_turn}.{record.racer_repr}.{record.turn_log_count}"
-        msg = record.getMessage()
-        return f"{prefix} - {record.levelname} - {msg}"
+        message = record.getMessage()
+
+        # --- movement highlighting (see next section) ---
+        styled = message
+        # Highlight all movement-related words
+        styled = re.sub(r"\bMove\b", f"[{COLOR['move']}]Move[/{COLOR['move']}]", styled)
+        styled = re.sub(
+            r"\bMoving\b", f"[{COLOR['move']}]Moving[/{COLOR['move']}]", styled
+        )
+        styled = re.sub(
+            r"\bPushing\b", f"[{COLOR['move']}]Pushing[/{COLOR['move']}]", styled
+        )
+        styled = re.sub(
+            r"\bMainMove\b", f"[{COLOR['move']}]MainMove[/{COLOR['move']}]", styled
+        )
+        styled = re.sub(r"\bWarp\b", f"[{COLOR['warp']}]Warp[/{COLOR['warp']}]", styled)
+
+        # Abilities and racer names
+        styled = ABILITY_PATTERN.sub(
+            rf"[{COLOR['ability']}]\1[/{COLOR['ability']}]", styled
+        )
+        styled = RACER_PATTERN.sub(rf"[{COLOR['racer']}]\1[/{COLOR['racer']}]", styled)
+
+        # Emphasis for "!!!"
+        styled = re.sub(r"!!!", f"[{COLOR['warning']}]!!![/{COLOR['warning']}]", styled)
+
+        # VP
+        styled = re.sub(r"\bVP:\b", "[bold yellow]VP:[/]", styled)
+        styled = re.sub(r"\b\+1 VP\b", "[bold green]+1 VP[/]", styled)
+        styled = re.sub(r"\b-1 VP\b", "[bold red]-1 VP[/]", styled)
+
+        # If warning or higher, tint whole message
+        if record.levelno >= logging.WARNING:
+            styled = f"[{COLOR['warning']}]{styled}[/{COLOR['warning']}]"
+
+        # Final string: prefix + message (no level, RichHandler already shows it)
+        return f"[{COLOR['prefix']}]{prefix}[/{COLOR['prefix']}]  {styled}"
 
 
+# --- Final Logger Setup ---
 logger = logging.getLogger("magical_athlete")
 logger.setLevel(logging.INFO)
-handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(CustomFormatter())
-handler.addFilter(ContextFilter())
-logger.addHandler(handler)
+
+# Use the standard RichHandler, which understands markup strings
+rich_handler = RichHandler(markup=True, show_path=False, show_time=False)
+rich_handler.setFormatter(RichMarkupFormatter())
+rich_handler.addFilter(ContextFilter())
+
+# Clear any previous handlers and add the new one
+logger.handlers.clear()
+logger.addHandler(rich_handler)
 logger.propagate = False
 
 
 # ------------------------------
 # 2. Config
 # ------------------------------
-
-
-RacerName = Literal[
-    "Centaur",
-    "HugeBaby",
-    "Scoocher",
-    "Banana",
-    "Copycat",
-    "Gunk",
-    "PartyAnimal",
-    "Magician",
-]
-AbilityName = Literal[
-    "Trample",
-    "HugeBabyPush",
-    "BananaTrip",
-    "ScoochStep",
-    "CopyLead",
-    "Slime",
-    "PartyPull",
-    "PartyBoost",
-    "MagicalReroll",
-]
 
 
 FINISH_SPACE: int = 20
@@ -113,6 +185,7 @@ class RacerState:
     idx: int
     name: RacerName
     position: int = 0
+    victory_points: int = 0
     tripped: bool = False
     reroll_count: int = 0
     finished: bool = False
@@ -511,8 +584,18 @@ class GameEngine:
             if len(self.state.finished_order) >= 2:
                 self.race_over = True
                 self.queue.clear()
+                self._log_final_standings()
             return True
         return False
+
+    def _log_final_standings(self):
+        logger.info("=== FINAL STANDINGS ===")
+        for _, racer in enumerate(self.state.racers):
+            logger.info(
+                f"Result: {racer.repr} pos={racer.position} ",
+                f"vp={getattr(racer, 'vp', 0)} ",
+                f"finished={racer.finished}",
+            )
 
     def advance_turn(self):
         if self.race_over:
