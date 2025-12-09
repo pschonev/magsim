@@ -1,0 +1,65 @@
+from tests.test_utils import RacerConfig
+
+
+def test_banana_landing_on_is_not_passing(scenario):
+    """
+    Scenario: Racer starts at 0, Banana at 4. Racer rolls 4.
+    Verify: Racer lands ON Banana. Does NOT trip.
+    """
+    game = scenario(
+        [
+            RacerConfig(0, "Centaur", {"Trample"}, start_pos=0),
+            RacerConfig(1, "Banana", {"BananaTrip"}, start_pos=4),
+        ],
+        dice_rolls=[4],
+    )
+    game.run_turn()
+
+    racer = game.get_racer(0)
+    assert racer.position == 4
+    assert racer.tripped is False
+
+
+def test_banana_trip_mechanic_full_cycle(scenario):
+    """
+    Scenario:
+    1. Racer passes Banana -> Gets Tripped.
+    2. Racer attempts next turn -> Skips roll, Recovers.
+    3. Racer attempts 3rd turn -> Rolls normally.
+    """
+    game = scenario(
+        [
+            RacerConfig(0, "Centaur", {}, start_pos=0),
+            RacerConfig(1, "Banana", {"BananaTrip"}, start_pos=2),
+        ],
+        dice_rolls=[
+            6,  # Centaur
+            1,  # Banana
+            1,  # Banana
+            6,  # Centaur
+        ],
+    )
+
+    # --- Turn 1: Pass Banana ---
+    game.run_turn()  # Centaur
+    game.run_turn()  # Banana (skip)
+
+    racer = game.get_racer(0)
+    assert racer.position == 6
+    assert racer.tripped is True
+
+    # --- Turn 2: Skip Turn ---
+    game.run_turn()  # Centaur (Tripped)
+
+    # Should NOT have moved (6 + 6 = 12 would be wrong)
+    assert racer.position == 6
+    # Should allow movement next time
+    assert racer.tripped is False
+
+    game.run_turn()  # Banana (skip)
+
+    # --- Turn 3: Normal Move ---
+    game.run_turn()  # Centaur
+
+    # Now moves 6->12
+    assert racer.position == 12
