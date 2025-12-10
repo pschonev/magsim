@@ -2,14 +2,11 @@ import heapq
 import logging
 import random
 import re
-import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Literal, Callable, Any, get_args
 
-from rich.console import Console
 from rich.logging import RichHandler
-from rich.text import Text
 
 
 RacerName = Literal[
@@ -228,6 +225,12 @@ class Phase:
     REACTION = 25
     MOVE_EXEC = 30
     BOARD = 40
+
+
+@dataclass(frozen=True)
+class RacerFinishedEvent(GameEvent):
+    racer_idx: int
+    finishing_position: int  # 1st, 2nd, etc.
 
 
 @dataclass(frozen=True)
@@ -541,6 +544,7 @@ class GameEngine:
 
         logger.info(f"Move: {racer.repr} {start}->{end} ({evt.source})")
 
+        # Process passing events for tiles we moved through
         if evt.distance > 0:
             for tile in range(start + 1, min(end, FINISH_SPACE) + 1):
                 if tile < end:
@@ -555,36 +559,50 @@ class GameEngine:
                         )
 
         racer.position = end
-        if self._check_finish(racer):
-            return
 
-        # CHANGED: Use the phase from the movement event, not Phase.BOARD (40).
-        # This ensures if we move in Phase 10, we Land in Phase 10 (before the roll at 15).
+        # Check if they crossed the finish line
+        if self._check_finish(racer):
+            return  # <--- STOP HERE. No landing event.
+
+        # Only emit LandingEvent if they're still on the board
         self.push_event(LandingEvent(racer.idx, end), phase=evt.phase)
 
     def _handle_warp(self, evt: WarpCmdEvent):
         racer = self.get_racer(evt.racer_idx)
         if racer.finished:
             return
+
         logger.info(f"Warp: {racer.repr} -> {evt.target_tile} ({evt.source})")
         racer.position = evt.target_tile
-        if self._check_finish(racer):
-            return
 
-        # CHANGED: Use the phase from the warp event
+        if self._check_finish(racer):
+            return  # <--- No landing for finished racers
+
         self.push_event(LandingEvent(racer.idx, evt.target_tile), phase=evt.phase)
 
     def _check_finish(self, racer: RacerState) -> bool:
+        """
+        Check if racer crossed finish line. If yes, mark them and emit event.
+        Returns True if they finished (so caller can short-circuit).
+        """
         if not racer.finished and racer.position > FINISH_SPACE:
             racer.finished = True
+            finishing_position = len(self.state.finished_order) + 1
             self.state.finished_order.append(racer.idx)
-            logger.info(
-                f"!!! {racer.repr} FINISHED rank {len(self.state.finished_order)} !!!"
+
+            logger.info(f"!!! {racer.repr} FINISHED rank {finishing_position} !!!")
+
+            # Emit the finish event at high priority so Prophet can react immediately
+            self.push_event(
+                RacerFinishedEvent(racer.idx, finishing_position), phase=Phase.REACTION
             )
+
+            # Check if race is over (2+ finishers)
             if len(self.state.finished_order) >= 2:
                 self.race_over = True
                 self.queue.clear()
                 self._log_final_standings()
+
             return True
         return False
 
@@ -937,7 +955,7 @@ ABILITY_CLASSES = {
 MODIFIER_CLASSES = {"PartyBoost": ModifierPartyBoost, "Slime": ModifierSlime}
 
 
-RACER_ABILITIES = {
+RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Centaur": {"Trample"},
     "HugeBaby": {"HugeBabyPush"},
     "Scoocher": {"ScoochStep"},
