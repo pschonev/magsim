@@ -90,15 +90,15 @@ def test_centaur_trample_triggers_on_passive_move(scenario: type[GameScenario]):
     assert game.get_racer(1).position == 1
 
 
-def test_centaur_trample_ignores_warp(scenario):
+def test_centaur_trample_ignores_warp(scenario: type[GameScenario]):
     """
     Scenario: Centaur is moved passively (0->4) via a WarpCmdEvent (e.g., "Portal").
     Verify: Passing logic does NOT fire, Scoocher is safe.
     """
     game = scenario(
         [
-            RacerConfig(0, "Centaur", {"Trample"}, start_pos=0),
-            RacerConfig(1, "Scoocher", {}, start_pos=2),  # Victim at 2
+            RacerConfig(0, "Centaur", start_pos=0),
+            RacerConfig(1, "Scoocher", start_pos=2),  # Victim at 2
         ],
         dice_rolls=[1],
     )

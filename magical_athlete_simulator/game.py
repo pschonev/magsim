@@ -1,10 +1,11 @@
+from collections import defaultdict
 import heapq
 import logging
 import random
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Literal, Callable, Any, get_args
+from typing import Literal, Callable, Any, Protocol, get_args, override
 
 from rich.logging import RichHandler
 
@@ -158,11 +159,249 @@ logger.propagate = False
 
 
 # ------------------------------
-# 2. Config
+# 2. Board
 # ------------------------------
+class SpaceModifier(ABC):
+    """
+    Interface for spatial effects that modify movement or trigger upon landing.
+    """
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Unique identifier for logging."""
+        pass
+
+    @property
+    @abstractmethod
+    def priority(self) -> int:
+        """
+        Determines resolution order:
+        - 0-9: Static board features (walls, lava)
+        - 10+: Dynamic racer effects (Huge Baby)
+        """
+        pass
+
+    def on_approach(self, target: int, mover_idx: int, engine: "GameEngine") -> int:
+        """
+        Intercepts movement BEFORE landing.
+        Returns the modified destination (or target unchanged if no effect).
+        """
+        return target  # Default: no redirection
+
+    def on_land(self, tile: int, racer_idx: int, phase: int, engine: "GameEngine"):
+        """
+        Triggers AFTER a racer commits to the space.
+        Queue secondary moves via engine.push_move() if needed.
+        """
+        pass  # Default: no effect
+
+    @override
+    def __eq__(self, other):
+        if not isinstance(other, SpaceModifier):
+            return NotImplemented
+        # Modifiers are equal if they have the same name (and effectively the same logic)
+        return self.name == other.name
+
+    @override
+    def __hash__(self):
+        return hash(self.name)
 
 
-FINISH_SPACE: int = 20
+class MoveDeltaTile(SpaceModifier):
+    """
+    On landing, queue a move of +delta (forward) or -delta (backward).
+    """
+
+    def __init__(self, delta: int):
+        self.delta = delta
+
+    @property
+    def name(self) -> str:
+        sign = "+" if self.delta >= 0 else ""
+        return f"MoveDelta({sign}{self.delta})"
+
+    @property
+    def priority(self) -> int:
+        # Board feature priority range (e.g. 0–9)
+        return 5
+
+    def on_land(
+        self, tile: int, racer_idx: int, phase: int, engine: "GameEngine"
+    ) -> None:
+        if self.delta == 0:
+            return
+        racer = engine.get_racer(racer_idx)  # uses existing GameEngine API.[file:1]
+        logger.info(f"{self.name}: Queuing {self.delta} move for {racer.repr}")
+        # New move is a separate event, not part of the original main move.[file:1]
+        engine.push_move(racer_idx, self.delta, source=self.name, phase=Phase.BOARD)
+
+
+class TripTile(SpaceModifier):
+    """
+    On landing, trip the racer (they skip their next main move).
+    """
+
+    @property
+    def name(self) -> str:
+        return "TripTile"
+
+    @property
+    def priority(self) -> int:
+        return 5
+
+    def on_land(
+        self, tile: int, racer_idx: int, phase: int, engine: "GameEngine"
+    ) -> None:
+        racer = engine.get_racer(racer_idx)[file:1]
+        if racer.tripped:
+            return
+        racer.tripped = True
+        logger.info(f"{self.name}: {racer.repr} is now Tripped.")
+
+
+class VictoryPointTile(SpaceModifier):
+    """
+    On landing, grant +1 VP (or a configured amount).
+    """
+
+    def __init__(self, amount: int = 1):
+        self.amount = amount
+
+    @property
+    def name(self) -> str:
+        return f"VP(+{self.amount})"
+
+    @property
+    def priority(self) -> int:
+        return 5
+
+    def on_land(
+        self, tile: int, racer_idx: int, phase: int, engine: "GameEngine"
+    ) -> None:
+        racer = engine.get_racer(racer_idx)[file:1]
+        racer.victory_points += self.amount
+        logger.info(
+            f"{self.name}: {racer.repr} gains +{self.amount} VP "
+            f"(now {racer.victory_points})."
+        )
+
+
+@dataclass(slots=True)
+class Board:
+    """
+    Manages track topology and spatial modifiers (static and dynamic).
+    """
+
+    length: int
+    static_features: dict[int, list["SpaceModifier"]]
+    dynamic_modifiers: defaultdict[int, set["SpaceModifier"]] = field(
+        init=False,
+        default_factory=lambda: defaultdict(set),
+    )
+
+    @property
+    def finish_space(self) -> int:
+        return self.length
+
+    def register_modifier(self, tile: int, modifier: "SpaceModifier") -> None:
+        modifiers = self.dynamic_modifiers[tile]
+        if modifier not in modifiers:
+            modifiers.add(modifier)
+            logger.debug("Registered %s at tile %s", modifier.name, tile)
+
+    def unregister_modifier(self, tile: int, modifier: "SpaceModifier") -> None:
+        modifiers = self.dynamic_modifiers.get(tile)
+        if not modifiers or modifier not in modifiers:
+            return
+
+        modifiers.remove(modifier)
+        logger.debug("Unregistered %s from tile %s", modifier.name, tile)
+
+        if not modifiers:
+            self.dynamic_modifiers.pop(tile, None)
+
+    def get_modifiers_at(self, tile: int) -> list["SpaceModifier"]:
+        static = self.static_features.get(tile, ())
+        dynamic = self.dynamic_modifiers.get(tile, ())
+        return sorted((*static, *dynamic), key=lambda m: m.priority)
+
+    def resolve_position(
+        self,
+        target: int,
+        mover_idx: int,
+        engine: "GameEngine",
+    ) -> int:
+        visited: set[int] = set()
+        current = target
+
+        while current not in visited:
+            visited.add(current)
+            new_target = current
+
+            for mod in self.get_modifiers_at(current):
+                redirected = mod.on_approach(current, mover_idx, engine)
+                if redirected != current:
+                    logger.debug(
+                        "%s redirected %s from %s -> %s",
+                        mod.name,
+                        mover_idx,
+                        current,
+                        redirected,
+                    )
+                    new_target = redirected
+                    break
+
+            if new_target == current:
+                return current
+
+            current = new_target
+
+        logger.warning("resolve_position loop detected, settling on %s", current)
+        return current
+
+    def trigger_on_land(
+        self,
+        tile: int,
+        racer_idx: int,
+        phase: int,
+        engine: "GameEngine",
+    ) -> None:
+        for mod in self.get_modifiers_at(tile):
+            current_pos = engine.get_racer_pos(racer_idx)
+            if current_pos != tile:
+                break
+            mod.on_land(tile, racer_idx, phase, engine)
+
+
+def build_action_lane_board() -> Board:
+    """
+    Example board using all three static tile types.
+    - Tile 3: Move forward 2.
+    - Tile 6: Move back 2.
+    - Tile 9: Trip.
+    - Tile 12: +1 VP.
+    """
+    return Board(
+        length=30,
+        static_features={
+            3: [MoveDeltaTile(+2)],
+            6: [MoveDeltaTile(-2)],
+            9: [TripTile()],
+            12: [VictoryPointTile(+1)],
+        },
+    )
+
+
+BoardFactory = Callable[[], Board]
+
+BOARD_DEFINITIONS: dict[str, BoardFactory] = {
+    "standard": lambda: Board(
+        length=30,
+        static_features={},
+    ),
+    "wild_wilds": build_action_lane_board,
+}
 
 
 # ------------------------------
@@ -335,6 +574,7 @@ class Subscriber:
 class GameEngine:
     state: GameState
     rng: random.Random
+    board: Board = field(default_factory=BOARD_DEFINITIONS["standard"])
     queue: list[ScheduledEvent] = field(default_factory=list)
     subscribers: dict[type[GameEvent], list[Subscriber]] = field(default_factory=dict)
     modifiers: list[tuple["Modifier", int]] = field(default_factory=list)
@@ -354,23 +594,70 @@ class GameEngine:
         self.modifiers.append((modifier, owner_idx))
 
     def update_racer_abilities(self, racer_idx: int, new_abilities: set[AbilityName]):
+        """
+        Updates a racer's abilities, handling the lifecycle of 'gained' and 'lost'
+        abilities to ensure side effects (like board modifiers) are managed correctly.
+        """
         racer = self.get_racer(racer_idx)
-        racer.abilities = new_abilities
-        # Unsubscribe old
-        for et in self.subscribers:
-            self.subscribers[et] = [
-                s for s in self.subscribers[et] if s.owner_idx != racer_idx
+        oldabilities = racer.abilities
+
+        # 1. Calculate diffs to identify what actually changed
+        removed = oldabilities - new_abilities
+        added = new_abilities - oldabilities
+
+        # 2. Lifecycle Hook: Loss
+        # Trigger cleanup for abilities being removed (e.g., Huge Baby leaving a tile).
+        for an in removed:
+            # We look up the class to call the static on_loss hook
+            ability_cls = ABILITY_CLASSES.get(an)
+            if ability_cls and hasattr(ability_cls, "on_loss"):
+                ability_cls.on_loss(self, racer_idx)
+
+        # 3. Infrastructure Cleanup: Wipe Listeners
+        # Clear event subscribers for this racer
+        for event_type in self.subscribers:
+            self.subscribers[event_type] = [
+                sub
+                for sub in self.subscribers[event_type]
+                if sub.owner_idx != racer_idx
             ]
-        self.modifiers = [m for m in self.modifiers if m[1] != racer_idx]
-        # Register new
+
+        # Clear roll modifiers for this racer
+        self.modifiers = [
+            mod_tuple for mod_tuple in self.modifiers if mod_tuple[1] != racer_idx
+        ]
+
+        # 4. Update State
+        racer.abilities = new_abilities
+
+        # 5. Infrastructure Setup & Lifecycle Hook: Gain
         for an in new_abilities:
-            if an in ABILITY_CLASSES:
-                ABILITY_CLASSES[an]().register(self, racer_idx)
+            # --- FIX 1: Decouple Ability checks from Modifier checks ---
+
+            # A. Register Event Listeners (if it's an Ability)
+            ability_cls = ABILITY_CLASSES.get(an)
+            if ability_cls:
+                # Create a fresh instance for the event handler
+                ability_instance = ability_cls()
+                ability_instance.register(self, racer_idx)
+
+                # Lifecycle Hook: Gain (Only for truly NEW abilities)
+                if an in added and hasattr(ability_cls, "on_gain"):
+                    ability_cls.on_gain(self, racer_idx)
+
+            # B. Register Roll Modifiers (if it's a Modifier)
+            # We check MODIFIER_CLASSES separately so we don't skip pure modifiers like Slime
             if an in MODIFIER_CLASSES:
-                self.register_modifier(MODIFIER_CLASSES[an](), racer_idx)
+                # --- FIX 2: Instantiate the modifier class ---
+                # Previously: self.register_modifier(MODIFIER_CLASSES[an], ...) -> BUG
+                mod_instance = MODIFIER_CLASSES[an]()
+                self.register_modifier(mod_instance, racer_idx)
 
     def get_racer(self, idx: int) -> RacerState:
         return self.state.racers[idx]
+
+    def get_racer_pos(self, idx: int) -> int:
+        return self.state.racers[idx].position
 
     # --- Action Queuing ---
 
@@ -540,13 +827,16 @@ class GameEngine:
             return
 
         start = racer.position
-        end = start + evt.distance
+        # OLD: end = start + evt.distance
+        # NEW: Calculate intended destination, then resolve through board
+        intended = start + evt.distance
+        end = self.board.resolve_position(intended, evt.racer_idx, self)
 
         logger.info(f"Move: {racer.repr} {start}->{end} ({evt.source})")
 
-        # Process passing events for tiles we moved through
+        # Process passing events (unchanged logic)
         if evt.distance > 0:
-            for tile in range(start + 1, min(end, FINISH_SPACE) + 1):
+            for tile in range(start + 1, min(end, self.board.length)):
                 if tile < end:
                     victims = [
                         r
@@ -560,11 +850,13 @@ class GameEngine:
 
         racer.position = end
 
-        # Check if they crossed the finish line
         if self._check_finish(racer):
-            return  # <--- STOP HERE. No landing event.
+            return
 
-        # Only emit LandingEvent if they're still on the board
+        # NEW: Trigger board features after landing
+        self.board.trigger_on_land(end, racer.idx, evt.phase, self)
+
+        # Emit landing event for abilities to react
         self.push_event(LandingEvent(racer.idx, end), phase=evt.phase)
 
     def _handle_warp(self, evt: WarpCmdEvent):
@@ -572,20 +864,28 @@ class GameEngine:
         if racer.finished:
             return
 
-        logger.info(f"Warp: {racer.repr} -> {evt.target_tile} ({evt.source})")
-        racer.position = evt.target_tile
+        # NEW: Even warps should respect spatial modifiers
+        # (e.g., if someone warps onto Huge Baby's tile, they get redirected)
+        resolved_target = self.board.resolve_position(
+            evt.target_tile, evt.racer_idx, self
+        )
+
+        logger.info(f"Warp: {racer.repr} -> {resolved_target} ({evt.source})")
+        racer.position = resolved_target
 
         if self._check_finish(racer):
-            return  # <--- No landing for finished racers
+            return
 
-        self.push_event(LandingEvent(racer.idx, evt.target_tile), phase=evt.phase)
+        # Trigger board effects and emit landing
+        self.board.trigger_on_land(resolved_target, racer.idx, evt.phase, self)
+        self.push_event(LandingEvent(racer.idx, resolved_target), phase=evt.phase)
 
     def _check_finish(self, racer: RacerState) -> bool:
         """
         Check if racer crossed finish line. If yes, mark them and emit event.
         Returns True if they finished (so caller can short-circuit).
         """
-        if not racer.finished and racer.position > FINISH_SPACE:
+        if not racer.finished and racer.position >= self.board.length:
             racer.finished = True
             finishing_position = len(self.state.finished_order) + 1
             self.state.finished_order.append(racer.idx)
@@ -647,7 +947,7 @@ class Ability(ABC):
     @abstractmethod
     def name(self) -> AbilityName:
         """The unique name of the ability (e.g. 'Trample', 'ScoochStep')."""
-        pass
+        raise NotImplementedError
 
     def register(self, engine: "GameEngine", owner_idx: int):
         """Subscribes this ability to the engine events defined in `triggers`."""
@@ -677,6 +977,18 @@ class Ability(ABC):
         Core logic. Returns True if the ability actually fired/affected game state,
         False if conditions weren't met (e.g. wrong target).
         """
+        pass
+
+
+class LifecycleManagedMixin(ABC):
+    @staticmethod
+    @abstractmethod
+    def on_gain(engine: "GameEngine", owner_idx: int) -> None:
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def on_loss(engine: "GameEngine", owner_idx: int) -> None:
         pass
 
 
@@ -735,52 +1047,100 @@ class AbilityBananaTrip(Ability):
         return True
 
 
-class AbilityHugeBabyPush(Ability):
-    name = "HugeBabyPush"
-    triggers = (LandingEvent,)
+class HugeBabyPush(Ability, LifecycleManagedMixin, SpaceModifier):
+    name: AbilityName = "HugeBabyPush"
+    triggers: tuple[GameEvent] = (MoveCmdEvent, WarpCmdEvent, LandingEvent)
 
-    def execute(
-        self, event: LandingEvent, owner_idx: int, engine: "GameEngine"
-    ) -> bool:
-        owner = engine.get_racer(owner_idx)
+    priority: int = 10  # Higher than board features (0-9)
 
-        # Rule: I cannot push if I am on Start
-        if owner.position == 0:
-            return False
+    @override
+    @staticmethod
+    def on_gain(engine: GameEngine, owner_idx: int):
+        """
+        LIFECYCLE HOOK: Called when a racer gains this ability.
+        Immediately registers the modifier at the racer's current location.
+        """
+        racer = engine.get_racer(owner_idx)
 
-        # Check if the event happened at my current location
-        # (Should always be true if I just landed there, or someone landed on me)
-        if event.tile_idx != owner.position:
-            return False
-
-        # Identify victims: Anyone at my position who isn't me
-        victims = [
-            r
-            for r in engine.state.racers
-            if r.idx != owner_idx and r.position == owner.position and not r.finished
-        ]
-
-        if not victims:
-            return False
-
-        target = max(0, owner.position - 1)
-
-        for v in victims:
+        if racer.position > 0:
+            engine.board.register_modifier(racer.position, HugeBabyPush())
             logger.info(
-                f"{self.name}: {v.repr} is sharing space with HugeBaby. Pushing back to {target}."
+                f"HugeBabyPush gained by {racer.repr}.\nRegistering modifier at tile {racer.position}.",
             )
-            engine.push_warp(v.idx, target, self.name, phase=Phase.REACTION)
 
-        return True
+    @override
+    @staticmethod
+    def on_loss(engine: GameEngine, owner_idx: int):
+        """
+        LIFECYCLE HOOK: Called when a racer loses this ability.
+        Immediately unregisters the modifier from the racer's current location.
+        """
+        racer = engine.get_racer(owner_idx)
+
+        engine.board.unregister_modifier(racer.position, HugeBabyPush())
+        logger.info(
+            f"HugeBabyPush lost by {racer.repr}. ",
+            f"Unregistering modifier from tile {racer.position}.",
+        )
+
+    def on_approach(self, target: int, mover_idx: int, engine: "GameEngine") -> int:
+        if target == 0:
+            return target
+        logger.info(f"Huge Baby already occupies {target}!")
+        return max(0, target - 1)
+
+    def execute(self, event: GameEvent, owner_idx: int, engine: "GameEngine") -> bool:
+        me = engine.get_racer(owner_idx)
+
+        # CASE 1: Departure (Unregister)
+        if isinstance(event, (MoveCmdEvent, WarpCmdEvent)):
+            if event.racer_idx != owner_idx:
+                return False
+
+            engine.board.unregister_modifier(me.position, self)
+            return False
+
+        # CASE 2: Arrival (Register + Push)
+        if isinstance(event, LandingEvent):
+            if event.mover_idx != owner_idx:
+                return False
+
+            if event.tile_idx == 0:
+                return False
+
+            # A. Register
+            engine.board.register_modifier(event.tile_idx, self)
+
+            # B. The "Active" Push
+            victims = [
+                r
+                for r in engine.state.racers
+                if r.position == event.tile_idx
+                and r.idx != owner_idx
+                and not r.finished
+            ]
+
+            triggered_push = False
+            for v in victims:
+                target = max(0, event.tile_idx - 1)
+                engine.push_warp(v.idx, target, source=self.name, phase=Phase.REACTION)
+                logger.info(f"Huge Baby pushes {v.repr} to {target}")
+                triggered_push = True
+
+            return triggered_push
+
+        return False
 
 
 class AbilityScoochStep(Ability):
     name = "ScoochStep"
     triggers = (AbilityTriggeredEvent,)
 
-    def execute(
-        self, event: AbilityTriggeredEvent, owner_idx: int, engine: "GameEngine"
-    ) -> bool:
+    @override
+    def execute(self, event: GameEvent, owner_idx: int, engine: "GameEngine") -> bool:
+        if not isinstance(event, AbilityTriggeredEvent):
+            return False
+
         # Logic: Trigger on ANY ability, except my own
         if event.source_racer_idx == owner_idx:
             return False
