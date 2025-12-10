@@ -161,71 +161,54 @@ logger.propagate = False
 # ------------------------------
 # 2. Board
 # ------------------------------
+@dataclass
 class SpaceModifier(ABC):
-    """
-    Interface for spatial effects that modify movement or trigger upon landing.
-    """
+    owner_idx: int | None = None  # New field to track specific source
 
     @property
     @abstractmethod
     def name(self) -> str:
-        """Unique identifier for logging."""
         pass
 
     @property
     @abstractmethod
     def priority(self) -> int:
-        """
-        Determines resolution order:
-        - 0-9: Static board features (walls, lava)
-        - 10+: Dynamic racer effects (Huge Baby)
-        """
         pass
 
     def on_approach(self, target: int, mover_idx: int, engine: "GameEngine") -> int:
-        """
-        Intercepts movement BEFORE landing.
-        Returns the modified destination (or target unchanged if no effect).
-        """
-        return target  # Default: no redirection
+        return target
 
     def on_land(self, tile: int, racer_idx: int, phase: int, engine: "GameEngine"):
-        """
-        Triggers AFTER a racer commits to the space.
-        Queue secondary moves via engine.push_move() if needed.
-        """
-        pass  # Default: no effect
+        pass
 
     @override
     def __eq__(self, other):
         if not isinstance(other, SpaceModifier):
             return NotImplemented
-        # Modifiers are equal if they have the same name (and effectively the same logic)
-        return self.name == other.name
+        # Equality now requires matching Owner ID
+        return self.name == other.name and self.owner_idx == other.owner_idx
 
     @override
     def __hash__(self):
-        return hash(self.name)
+        return hash((self.name, self.owner_idx))
 
 
+@dataclass
 class MoveDeltaTile(SpaceModifier):
     """
     On landing, queue a move of +delta (forward) or -delta (backward).
     """
 
-    def __init__(self, delta: int):
-        self.delta = delta
+    delta: int
+    priority: int = 5
 
     @property
+    @override
     def name(self) -> str:
-        sign = "+" if self.delta >= 0 else ""
+        sign = "+" if self.delta >= 0 else "-"
         return f"MoveDelta({sign}{self.delta})"
 
-    @property
-    def priority(self) -> int:
-        # Board feature priority range (e.g. 0–9)
-        return 5
-
+    @override
     def on_land(
         self, tile: int, racer_idx: int, phase: int, engine: "GameEngine"
     ) -> None:
@@ -237,53 +220,49 @@ class MoveDeltaTile(SpaceModifier):
         engine.push_move(racer_idx, self.delta, source=self.name, phase=Phase.BOARD)
 
 
+@dataclass
 class TripTile(SpaceModifier):
     """
     On landing, trip the racer (they skip their next main move).
     """
 
-    @property
-    def name(self) -> str:
-        return "TripTile"
+    name: str = "TripTile"
+    priority: int = 5
 
-    @property
-    def priority(self) -> int:
-        return 5
-
+    @override
     def on_land(
         self, tile: int, racer_idx: int, phase: int, engine: "GameEngine"
     ) -> None:
-        racer = engine.get_racer(racer_idx)[file:1]
+        racer = engine.get_racer(racer_idx)
         if racer.tripped:
             return
         racer.tripped = True
         logger.info(f"{self.name}: {racer.repr} is now Tripped.")
 
 
+@dataclass
 class VictoryPointTile(SpaceModifier):
     """
     On landing, grant +1 VP (or a configured amount).
     """
 
-    def __init__(self, amount: int = 1):
-        self.amount = amount
+    amount: int
+    priority: int = 5
 
     @property
+    @override
     def name(self) -> str:
         return f"VP(+{self.amount})"
 
-    @property
-    def priority(self) -> int:
-        return 5
-
+    @override
     def on_land(
         self, tile: int, racer_idx: int, phase: int, engine: "GameEngine"
     ) -> None:
-        racer = engine.get_racer(racer_idx)[file:1]
+        racer = engine.get_racer(racer_idx)
         racer.victory_points += self.amount
         logger.info(
-            f"{self.name}: {racer.repr} gains +{self.amount} VP "
-            f"(now {racer.victory_points})."
+            f"{self.name}: {racer.repr} gains +{self.amount} VP ",
+            f"(now {racer.victory_points}).",
         )
 
 
@@ -319,7 +298,7 @@ class Board:
         logger.debug("Unregistered %s from tile %s", modifier.name, tile)
 
         if not modifiers:
-            self.dynamic_modifiers.pop(tile, None)
+            _ = self.dynamic_modifiers.pop(tile, None)
 
     def get_modifiers_at(self, tile: int) -> list["SpaceModifier"]:
         static = self.static_features.get(tile, ())
@@ -1053,35 +1032,25 @@ class HugeBabyPush(Ability, LifecycleManagedMixin, SpaceModifier):
 
     priority: int = 10  # Higher than board features (0-9)
 
+    def __init__(self, owner_idx: int | None = None):
+        self.owner_idx = owner_idx
+
     @override
     @staticmethod
-    def on_gain(engine: GameEngine, owner_idx: int):
-        """
-        LIFECYCLE HOOK: Called when a racer gains this ability.
-        Immediately registers the modifier at the racer's current location.
-        """
+    def on_gain(engine: "GameEngine", owner_idx: int):
         racer = engine.get_racer(owner_idx)
-
         if racer.position > 0:
-            engine.board.register_modifier(racer.position, HugeBabyPush())
-            logger.info(
-                f"HugeBabyPush gained by {racer.repr}.\nRegistering modifier at tile {racer.position}.",
-            )
+            # Register with explicit owner identity
+            mod = HugeBabyPush(owner_idx=owner_idx)
+            engine.board.register_modifier(racer.position, mod)
 
     @override
     @staticmethod
-    def on_loss(engine: GameEngine, owner_idx: int):
-        """
-        LIFECYCLE HOOK: Called when a racer loses this ability.
-        Immediately unregisters the modifier from the racer's current location.
-        """
+    def on_loss(engine: "GameEngine", owner_idx: int):
         racer = engine.get_racer(owner_idx)
-
-        engine.board.unregister_modifier(racer.position, HugeBabyPush())
-        logger.info(
-            f"HugeBabyPush lost by {racer.repr}. ",
-            f"Unregistering modifier from tile {racer.position}.",
-        )
+        # Unregister finding the exact same identity
+        mod = HugeBabyPush(owner_idx=owner_idx)
+        engine.board.unregister_modifier(racer.position, mod)
 
     def on_approach(self, target: int, mover_idx: int, engine: "GameEngine") -> int:
         if target == 0:
