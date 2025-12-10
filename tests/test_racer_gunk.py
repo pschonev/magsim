@@ -1,15 +1,15 @@
-from tests.test_utils import RacerConfig
+from tests.test_utils import GameScenario, RacerConfig
 
 
-def test_gunk_slime_reduces_movement(scenario):
+def test_gunk_slime_reduces_movement(scenario: type[GameScenario]):
     """
     Scenario: Gunk is present. Another racer rolls.
     Verify: Final move is Base - 1.
     """
     game = scenario(
         [
-            RacerConfig(0, "Centaur", {}, start_pos=0),
-            RacerConfig(1, "Gunk", {"Slime"}, start_pos=0),
+            RacerConfig(0, "Centaur", start_pos=0),
+            RacerConfig(1, "Gunk", start_pos=0),
         ],
         dice_rolls=[4],  # Centaur rolls 4
     )
@@ -19,18 +19,18 @@ def test_gunk_slime_reduces_movement(scenario):
     assert game.get_racer(0).position == 3
 
 
-def test_gunk_does_not_slime_self(scenario):
+def test_gunk_does_not_slime_self(scenario: type[GameScenario]):
     """
     Scenario: Gunk rolls.
     Verify: No reduction.
     """
-    game = scenario([RacerConfig(0, "Gunk", {"Slime"}, start_pos=0)], dice_rolls=[4])
+    game = scenario([RacerConfig(0, "Gunk", start_pos=0)], dice_rolls=[4])
 
     game.run_turn()
     assert game.get_racer(0).position == 4
 
 
-def test_gunk_triggers_scoocher(scenario):
+def test_gunk_triggers_scoocher(scenario: type[GameScenario]):
     """
     Scenario: Gunk slimes Centaur. Scoocher is watching.
     Verify:
@@ -41,9 +41,9 @@ def test_gunk_triggers_scoocher(scenario):
     # Setup: Scoocher at 10. Centaur at 0. Gunk at 0.
     game = scenario(
         [
-            RacerConfig(0, "Centaur", {}, start_pos=0),
-            RacerConfig(1, "Gunk", {"Slime"}, start_pos=0),
-            RacerConfig(2, "Scoocher", {"ScoochStep"}, start_pos=10),
+            RacerConfig(0, "Centaur", start_pos=0),
+            RacerConfig(1, "Gunk", start_pos=0),
+            RacerConfig(2, "Scoocher", start_pos=10),
         ],
         dice_rolls=[5],  # Centaur rolls
     )

@@ -6,7 +6,7 @@ from tests.test_utils import GameScenario
 def scenario():
     """Factory fixture to create scenarios."""
 
-    def _builder(racers_config, dice_rolls):
+    def _builder(racers_config, dice_rolls) -> GameScenario:
         return GameScenario(racers_config, dice_rolls)
 
     return _builder

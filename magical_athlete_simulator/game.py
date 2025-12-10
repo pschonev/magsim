@@ -663,19 +663,11 @@ class Ability(ABC):
         if engine.state.racers[owner_idx].finished:
             return
 
-        # 2. execute() returns True if the ability actually "did something"
-        #    or we can assume if it didn't return explicitly False, it ran.
-        #    For now, let's assume if execute runs without returning early, it happened.
-        #    To support "conditional" emission, execute could return a bool.
-        #    Let's implement a 'did_trigger' return expectation for better logging accuracy.
-
+        # 2. Execute
         did_trigger = self.execute(event, owner_idx, engine)
 
         # 3. Automatic Emission
         if did_trigger:
-            # We construct a generic context string. Subclasses can be more specific
-            # if we refactor execute to return a context string, but for now,
-            # the Event type is a good enough default context.
             ctx = f"Reacting to {event.__class__.__name__}"
             engine.emit_ability_trigger(owner_idx, self.name, ctx)
 
@@ -942,18 +934,13 @@ class ModifierPartyBoost(Modifier):
 # 7. Setup
 # ------------------------------
 
-
-ABILITY_CLASSES = {
-    "Trample": AbilityTrample,
-    "HugeBabyPush": AbilityHugeBabyPush,
-    "BananaTrip": AbilityBananaTrip,
-    "ScoochStep": AbilityScoochStep,
-    "PartyPull": AbilityPartyPull,
-    "CopyLead": AbilityCopyLead,
-    "MagicalReroll": AbilityMagicalReroll,
+# Build these automatically at module load
+ABILITY_CLASSES: dict[AbilityName, type[Ability]] = {
+    cls.name: cls for cls in Ability.__subclasses__()
 }
-MODIFIER_CLASSES = {"PartyBoost": ModifierPartyBoost, "Slime": ModifierSlime}
-
+MODIFIER_CLASSES: dict[AbilityName, type[Modifier]] = {
+    cls.name: cls for cls in Modifier.__subclasses__()
+}
 
 RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Centaur": {"Trample"},

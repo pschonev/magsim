@@ -1,7 +1,7 @@
-from tests.test_utils import RacerConfig
+from tests.test_utils import GameScenario, RacerConfig
 
 
-def test_magician_reroll_scoocher_interaction(scenario):
+def test_magician_reroll_scoocher_interaction(scenario: type[GameScenario]):
     """
     Scenario: Magician rolls a 1 (triggers reroll), then a 6.
     Verify: Scoocher moves EXACTLY ONCE for the reroll event.

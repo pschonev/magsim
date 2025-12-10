@@ -1,15 +1,15 @@
-from tests.test_utils import RacerConfig
+from tests.test_utils import GameScenario, RacerConfig
 
 
-def test_banana_landing_on_is_not_passing(scenario):
+def test_banana_landing_on_is_not_passing(scenario: type[GameScenario]):
     """
     Scenario: Racer starts at 0, Banana at 4. Racer rolls 4.
     Verify: Racer lands ON Banana. Does NOT trip.
     """
     game = scenario(
         [
-            RacerConfig(0, "Centaur", {"Trample"}, start_pos=0),
-            RacerConfig(1, "Banana", {"BananaTrip"}, start_pos=4),
+            RacerConfig(0, "Centaur", start_pos=0),
+            RacerConfig(1, "Banana", start_pos=4),
         ],
         dice_rolls=[4],
     )
@@ -20,7 +20,7 @@ def test_banana_landing_on_is_not_passing(scenario):
     assert racer.tripped is False
 
 
-def test_banana_trip_mechanic_full_cycle(scenario):
+def test_banana_trip_mechanic_full_cycle(scenario: type[GameScenario]):
     """
     Scenario:
     1. Racer passes Banana -> Gets Tripped.
@@ -29,8 +29,8 @@ def test_banana_trip_mechanic_full_cycle(scenario):
     """
     game = scenario(
         [
-            RacerConfig(0, "Centaur", {}, start_pos=0),
-            RacerConfig(1, "Banana", {"BananaTrip"}, start_pos=2),
+            RacerConfig(0, "Centaur", start_pos=0),
+            RacerConfig(1, "Banana", start_pos=2),
         ],
         dice_rolls=[
             6,  # Centaur

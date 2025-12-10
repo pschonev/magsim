@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from unittest.mock import MagicMock
 from magical_athlete_simulator.game import (
     GameEngine,
@@ -6,6 +6,7 @@ from magical_athlete_simulator.game import (
     RacerName,
     RacerState,
     AbilityName,
+    RACER_ABILITIES,
 )
 
 
@@ -13,8 +14,26 @@ from magical_athlete_simulator.game import (
 class RacerConfig:
     idx: int
     name: RacerName
-    abilities: set[AbilityName]
-    start_pos: int = 0  # Default to 0, so we don't always have to type it
+    # Default to None to signal "use defaults"
+    abilities: set[AbilityName] | None = None
+    start_pos: int = 0
+
+    def __post_init__(self):
+        if self.abilities is None:
+            # Enforce that the racer exists in our definition
+            if self.name not in RACER_ABILITIES:
+                raise ValueError(f"Racer '{self.name}' not found in RACER_ABILITIES. ")
+
+            # Fetch default abilities
+            defaults = RACER_ABILITIES[self.name]
+
+            # Enforce that defaults aren't empty
+            if not defaults:
+                raise ValueError(
+                    f"Racer '{self.name}' has no default abilities defined."
+                )
+
+            self.abilities = defaults.copy()
 
 
 class GameScenario:
