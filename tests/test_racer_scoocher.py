@@ -34,3 +34,30 @@ def test_scoocher_productive_loop_duplicate(scenario: type[GameScenario]):
 
     assert game.get_racer(1).position == 22
     assert game.get_racer(2).position == 30
+
+
+def test_scoocher_reacts_to_every_huge_baby_push(scenario: type[GameScenario]):
+    """
+    Scenario: Huge Baby moves onto a tile with two other racers.
+    Verify: Scoocher reacts to BOTH push events and moves twice.
+    """
+    game = scenario(
+        [
+            RacerConfig(0, "HugeBaby", start_pos=5),
+            RacerConfig(1, "Centaur", start_pos=8),  # Victim 1
+            RacerConfig(2, "Banana", start_pos=8),  # Victim 2
+            RacerConfig(3, "Scoocher", start_pos=20),  # Observer
+        ],
+        dice_rolls=[3],  # Huge Baby moves 5 -> 8
+    )
+
+    game.run_turn()
+
+    # Centaur and Banana are pushed from 8 to 7.
+    assert game.get_racer(1).position == 7
+    assert game.get_racer(2).position == 7
+
+    # Scoocher should have moved twice (20 -> 22).
+    assert game.get_racer(3).position == 22, (
+        f"Scoocher should be at 22 but is at {game.get_racer(3).position}"
+    )

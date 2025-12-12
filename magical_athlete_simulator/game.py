@@ -1074,8 +1074,7 @@ class GameEngine:
         logger.info("=== FINAL STANDINGS ===")
         for _, racer in enumerate(self.state.racers):
             logger.info(
-                f"Result: {racer.repr} pos={racer.position} "
-                f"vp={racer.victory_points} finished={racer.finished}",
+                f"Result: {racer.repr} pos={racer.position} \nvp={racer.victory_points} finished={racer.finished}",
             )
 
     def advance_turn(self):
@@ -1294,15 +1293,17 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
                 if r.position == end_tile and r.idx != owner_idx and not r.finished
             ]
 
-            triggered_push = False
             for v in victims:
-                target = max(0, end_tile - 1)
+                target = max(0, event.end_tile - 1)
                 engine.push_warp(v.idx, target, source=self.name, phase=event.phase)
                 logger.info(f"Huge Baby pushes {v.repr} to {target}")
-                triggered_push = True
 
-            # Return True if we pushed anyone, triggering Scoocher, etc.
-            return triggered_push
+                # Explicitly emit a trigger for THIS push.
+                engine.emit_ability_trigger(owner_idx, self.name, f"Pushing {v.repr}")
+
+            # Return False because we handled our own emissions.
+            # This prevents the `_wrapped_handler` from firing a generic event.
+            return False
 
         return False
 
@@ -1553,7 +1554,14 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
 
 
 if __name__ == "__main__":
-    roster: list[RacerName] = ["PartyAnimal", "Scoocher", "Magician", "HugeBaby"]
+    roster: list[RacerName] = [
+        "PartyAnimal",
+        "Scoocher",
+        "Magician",
+        "HugeBaby",
+        "Centaur",
+        "Banana",
+    ]
     racers = [RacerState(i, n) for i, n in enumerate(roster)]
     eng = GameEngine(GameState(racers), random.Random(1))
 
