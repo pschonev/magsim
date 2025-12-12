@@ -60,10 +60,6 @@ class GameScenario:
         self.state = GameState(racers)
         self.engine = GameEngine(self.state, self.mock_rng)
 
-        # 4. Register Abilities
-        for cfg in racers_config:
-            self.engine.update_racer_abilities(cfg.idx, cfg.abilities)
-
         if dice_rolls:
             self.set_dice_rolls(dice_rolls)
 
