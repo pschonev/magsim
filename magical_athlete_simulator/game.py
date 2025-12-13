@@ -59,20 +59,16 @@ COLOR = {
     "level": "bold",
 }
 
+logger = logging.getLogger("magical_athlete")
 
-class GlobalLogState:
-    _instance = None
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(GlobalLogState, cls).__new__(cls)
-            cls._instance.reset()
-        return cls._instance
+@dataclass(slots=True)
+class LogContext:
+    """Per-game logging state. No longer global."""
 
-    def reset(self):
-        self.total_turn = 0
-        self.turn_log_count = 0
-        self.current_racer_repr = "_"
+    total_turn: int = 0
+    turn_log_count: int = 0
+    current_racer_repr: str = "_"
 
     def new_round(self):
         self.total_turn += 1
@@ -85,15 +81,20 @@ class GlobalLogState:
         self.turn_log_count += 1
 
 
-log_context = GlobalLogState()
-
-
 class ContextFilter(logging.Filter):
-    def filter(self, record):
-        record.total_turn = log_context.total_turn
-        record.turn_log_count = log_context.turn_log_count
-        record.racer_repr = log_context.current_racer_repr
-        log_context.inc_log_count()
+    """Inject per-engine runtime context into every log record."""
+
+    def __init__(self, engine: "GameEngine", name: str = "") -> None:
+        super().__init__(name)  # name is for logger-name filtering; keep default
+        self.engine = engine  # store the existing engine instance
+
+    @override
+    def filter(self, record: logging.LogRecord) -> bool:
+        logctx: LogContext = self.engine.log_context
+        record.total_turn = logctx.total_turn
+        record.turn_log_count = logctx.turn_log_count
+        record.racer_repr = logctx.current_racer_repr
+        logctx.inc_log_count()
         return True
 
 
@@ -102,6 +103,7 @@ class RichMarkupFormatter(logging.Formatter):
     Formatter that converts a log record into a Rich markup string.
     """
 
+    @override
     def format(self, record: logging.LogRecord) -> str:
         prefix = f"{record.total_turn}.{record.racer_repr}.{record.turn_log_count}"
         message = record.getMessage()
@@ -144,18 +146,7 @@ class RichMarkupFormatter(logging.Formatter):
 
 
 # --- Final Logger Setup ---
-logger = logging.getLogger("magical_athlete")
-logger.setLevel(logging.INFO)
 
-# Use the standard RichHandler, which understands markup strings
-rich_handler = RichHandler(markup=True, show_path=False, show_time=False)
-rich_handler.setFormatter(RichMarkupFormatter())
-rich_handler.addFilter(ContextFilter())
-
-# Clear any previous handlers and add the new one
-logger.handlers.clear()
-logger.addHandler(rich_handler)
-logger.propagate = False
 
 # ------------------------------
 # 1b. AI Core & Decision Context
@@ -302,7 +293,9 @@ class MoveDeltaTile(SpaceModifier, LandingHookMixin):
     ) -> None:
         if self.delta == 0:
             return
-        racer = engine.get_racer(racer_idx)  # uses existing GameEngine API.[file:1]
+        racer: RacerState = engine.get_racer(
+            racer_idx
+        )  # uses existing GameEngine API.[file:1]
         logger.info(f"{self.name}: Queuing {self.delta} move for {racer.repr}")
         # New move is a separate event, not part of the original main move.[file:1]
         engine.push_move(racer_idx, self.delta, source=self.name, phase=Phase.BOARD)
@@ -526,12 +519,28 @@ class RacerState:
     victory_points: int = 0
     tripped: bool = False
     reroll_count: int = 0
-    finished: bool = False
-    abilities: set[AbilityName] = field(default_factory=set)
+    finish_position: int | None = None
+    eliminated: bool = False
+
+    modifiers: list[RacerModifier] = field(default_factory=list)
+    active_abilities: dict[AbilityName, "Ability"] = field(default_factory=dict)
 
     @property
     def repr(self) -> str:
         return f"{self.idx}:{self.name}"
+
+    @property
+    def abilities(self) -> set[AbilityName]:
+        """Derive from active instances."""
+        return set(self.active_abilities.keys())
+
+    @property
+    def finished(self) -> bool:
+        return self.finish_position is not None
+
+    @property
+    def active(self) -> bool:
+        return not self.finished and not self.eliminated
 
 
 @dataclass(slots=True)
@@ -539,13 +548,30 @@ class GameState:
     racers: list[RacerState]
     current_racer_idx: int = 0
     roll_state: RollState = field(default_factory=RollState)
-    finished_order: list[int] = field(default_factory=list)
+    board: Board = field(default_factory=BOARD_DEFINITIONS["standard"])
 
     def get_state_hash(self) -> int:
-        # We hash the roll serial so loops within a specific roll attempt are detected,
-        # but re-rolling (which changes serial) breaks the loop history.
-        data = tuple((r.position, r.tripped, r.finished) for r in self.racers)
-        return hash(data + (self.roll_state.serial_id,))
+        """Hash entire game state including all racer data."""
+        racer_data = tuple(
+            (
+                r.idx,
+                r.position,
+                r.tripped,
+                r.finish_position,
+                r.eliminated,
+                r.victory_points,
+                frozenset(r.abilities),
+                frozenset(m.name for m in r.modifiers),
+            )
+            for r in self.racers
+        )
+
+        board_data = frozenset(
+            (tile, frozenset(m.name for m in mods))
+            for tile, mods in self.board.dynamic_modifiers.items()
+        )
+
+        return hash((racer_data, board_data))
 
 
 # ------------------------------
@@ -755,6 +781,7 @@ class SmartAgent(Agent):
         # We MUST have the board to make smart lookahead decisions
         self.board = board
 
+    @override
     def make_boolean_decision(self, ctx: BooleanDecision) -> bool:
         if ctx.reason == DecisionReason.MAGICAL_REROLL:
             # Pass the board specifically for the reroll calculation
@@ -762,6 +789,7 @@ class SmartAgent(Agent):
 
         return False  # Default safe option for unknown decisions
 
+    @override
     def make_selection_decision(self, ctx: SelectionDecision) -> int:
         if ctx.reason == DecisionReason.COPY_LEAD_TARGET:
             return ai_choose_copy_target(ctx)
@@ -789,46 +817,61 @@ class GameEngine:
     board: Board = field(default_factory=BOARD_DEFINITIONS["standard"])
     queue: list[ScheduledEvent] = field(default_factory=list)
     subscribers: dict[type[GameEvent], list[Subscriber]] = field(default_factory=dict)
-    active_abilities: defaultdict[int, dict[AbilityName, "Ability"]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
-    racer_modifiers: defaultdict[int, list[RacerModifier]] = field(
-        default_factory=lambda: defaultdict(list)
-    )
     agents: dict[int, Agent] = field(default_factory=dict)
+
+    logging_enabled: bool = True
+    log_context: LogContext = field(default_factory=LogContext)
 
     _serial: int = 0
     race_over: bool = False
     history: set[tuple[int, int]] = field(default_factory=set)
 
     def __post_init__(self) -> None:
-        """
-        Assigns starting abilities to all racers and fires on_gain hooks.
-        Safe to call even if abilities are already set to the same values.
-        """
-        log_context.reset()
+        """Assigns starting abilities to all racers and fires on_gain hooks."""
 
-        for racer in self.state.racers:
-            if racer.idx not in self.agents:
-                # Give them a SmartAgent that knows about the board
-                self.agents[racer.idx] = SmartAgent(self.board)
+        # Setup logging with this engine instance
+        if self.logging_enabled:
+            rich_handler = RichHandler(markup=True, show_path=False, show_time=False)
+            rich_handler.setFormatter(RichMarkupFormatter())
+            rich_handler.addFilter(ContextFilter(self))
+            logger.handlers.clear()
+            logger.addHandler(rich_handler)
+            logger.propagate = False
 
+        # Assign starting abilities
         for racer in self.state.racers:
             initial = RACER_ABILITIES.get(racer.name, set())
             self.update_racer_abilities(racer.idx, initial)
+
+        # Rebuild subscribers
+        self._rebuild_subscribers()
+
+        for racer in self.state.racers:
+            _ = self.agents.setdefault(racer.idx, SmartAgent(self.board))
+
+    def _rebuild_subscribers(self):
+        """Rebuild event subscriptions from each racer's active_abilities."""
+        self.subscribers.clear()
+        for racer in self.state.racers:
+            for ability in racer.active_abilities.values():
+                ability.register(self, racer.idx)
 
     def get_agent(self, racer_idx: int) -> Agent:
         return self.agents[racer_idx]
 
     def add_racer_modifier(self, target_idx: int, modifier: RacerModifier):
-        if modifier not in self.racer_modifiers[target_idx]:
-            self.racer_modifiers[target_idx].append(modifier)
-            logger.info(f"ENGINE: Added {modifier.name} to Racer {target_idx}")
+        racer = self.get_racer(target_idx)
+        if modifier not in racer.modifiers:
+            racer.modifiers.append(modifier)
+            if self.logging_enabled:
+                logger.info(f"ENGINE: Added {modifier.name} to {racer.repr}")
 
     def remove_racer_modifier(self, target_idx: int, modifier: RacerModifier):
-        if modifier in self.racer_modifiers[target_idx]:
-            self.racer_modifiers[target_idx].remove(modifier)
-            logger.info(f"ENGINE: Removed {modifier.name} from Racer {target_idx}")
+        racer = self.get_racer(target_idx)
+        if modifier in racer.modifiers:
+            racer.modifiers.remove(modifier)
+            if self.logging_enabled:
+                logger.info(f"ENGINE: Removed {modifier.name} from {racer.repr}")
 
     def subscribe(
         self, event_type: type[GameEvent], callback: AbilityCallback, owner_idx: int
@@ -839,7 +882,7 @@ class GameEngine:
 
     def update_racer_abilities(self, racer_idx: int, new_abilities: set[AbilityName]):
         racer = self.get_racer(racer_idx)
-        current_instances = self.active_abilities[racer_idx]
+        current_instances = racer.active_abilities
         old_names = set(current_instances.keys())
 
         removed = old_names - new_abilities
@@ -849,7 +892,6 @@ class GameEngine:
         for name in removed:
             instance = current_instances.pop(name)
 
-            # Lifecycle Hook (This removes modifiers via on_loss)
             if isinstance(instance, LifecycleManagedMixin):
                 instance.__class__.on_loss(self, racer_idx)
 
@@ -864,10 +906,7 @@ class GameEngine:
                     )
                 ]
 
-        # 2. Update State
-        racer.abilities = new_abilities
-
-        # 3. Handle Added
+        # 2. Handle Added
         for name in added:
             ability_cls = ABILITY_CLASSES.get(name)
             if ability_cls:
@@ -878,7 +917,6 @@ class GameEngine:
                 instance.register(self, racer_idx)
                 current_instances[name] = instance
 
-                # Lifecycle Hook (This adds modifiers via on_gain)
                 if isinstance(instance, LifecycleManagedMixin):
                     instance.__class__.on_gain(self, racer_idx)
 
@@ -952,7 +990,6 @@ class GameEngine:
             sub.callback(event, sub.owner_idx, self)
 
     def run_race(self):
-        log_context.reset()
         while not self.race_over:
             self.run_turn()
             self.advance_turn()
@@ -963,11 +1000,13 @@ class GameEngine:
         racer = self.state.racers[cr]
         racer.reroll_count = 0
 
-        log_context.start_turn_log(racer.repr)
-        logger.info(f"=== START TURN: {racer.repr} ===")
+        self.log_context.start_turn_log(racer.repr)
+        if self.logging_enabled:
+            logger.info(f"=== START TURN: {racer.repr} ===")
 
         if racer.tripped:
-            logger.info(f"{racer.repr} recovers from Trip.")
+            if self.logging_enabled:
+                logger.info(f"{racer.repr} recovers from Trip.")
             racer.tripped = False
             self.push_event(TurnStartEvent(cr), phase=Phase.SYSTEM)
         else:
@@ -1020,7 +1059,7 @@ class GameEngine:
         query = MoveDistanceQuery(event.racer_idx, base)
 
         # Apply ALL modifiers attached to this racer
-        for mod in self.racer_modifiers[event.racer_idx]:
+        for mod in self.get_racer(event.racer_idx).modifiers:
             if isinstance(mod, RollModificationMixin):
                 mod.modify_roll(query, mod.owner_idx, self)
 
@@ -1181,36 +1220,55 @@ class GameEngine:
         )
 
     def _check_finish(self, racer: RacerState) -> bool:
-        if not racer.finished and racer.position >= self.board.length:
-            racer.finished = True
-            finishing_position = len(self.state.finished_order) + 1
-            self.state.finished_order.append(racer.idx)
+        if racer.finished:
+            return False
 
-            logger.info(f"!!! {racer.repr} FINISHED rank {finishing_position} !!!")
+        if racer.position >= self.state.board.length:
+            # Count how many finished before this one
+            finishing_position = sum(1 for r in self.state.racers if r.finished) + 1
+            racer.finish_position = finishing_position
 
-            # Emit finish event so others can react (Mastermind, etc.)
+            if self.logging_enabled:
+                logger.info(f"!!! {racer.repr} FINISHED rank {finishing_position} !!!")
+
+            # Emit finish event
             self.push_event(
                 RacerFinishedEvent(racer.idx, finishing_position),
                 phase=Phase.REACTION,
             )
 
-            # NEW: strip all abilities from this racer and fire on_loss hooks
+            # Strip abilities
             self.update_racer_abilities(racer.idx, set())
 
-            # existing race_over logic...
-            if len(self.state.finished_order) >= 2:
+            # Check if race is over (2 finishers)
+            finished_count = sum(1 for r in self.state.racers if r.finished)
+            if finished_count >= 2:
                 self.race_over = True
+                # Mark remaining as eliminated
+                for r in self.state.racers:
+                    if not r.finished:
+                        r.eliminated = True
                 self.queue.clear()
                 self._log_final_standings()
 
             return True
+
         return False
 
     def _log_final_standings(self):
+        if not self.logging_enabled:
+            return
         logger.info("=== FINAL STANDINGS ===")
-        for _, racer in enumerate(self.state.racers):
+        for racer in sorted(
+            self.state.racers,
+            key=lambda r: r.finish_position if r.finish_position else 999,
+        ):
+            if racer.finish_position:
+                status = f"Rank {racer.finish_position}"
+            else:
+                status = "Eliminated"
             logger.info(
-                f"Result: {racer.repr} pos={racer.position} \nvp={racer.victory_points} finished={racer.finished}",
+                f"Result: {racer.repr} pos={racer.position} vp={racer.victory_points} {status}"
             )
 
     def advance_turn(self):
@@ -1219,12 +1277,12 @@ class GameEngine:
         curr = self.state.current_racer_idx
         n = len(self.state.racers)
         next_idx = (curr + 1) % n
-        while self.state.racers[next_idx].finished:
+        while not self.state.racers[next_idx].active:  # Skip finished/eliminated
             next_idx = (next_idx + 1) % n
             if next_idx == curr:
                 break
         if next_idx < curr:
-            log_context.new_round()
+            self.log_context.new_round()
         self.state.current_racer_idx = next_idx
 
 

@@ -42,23 +42,28 @@ def test_centaur_floor_clamping(scenario: type[GameScenario]):
 
 def test_centaur_ignore_finished_racers(scenario: type[GameScenario]):
     """
-    Scenario: Centaur passes a racer who has already finished (pos > 20).
+    Scenario: Centaur passes a racer who has already finished (pos >= 30).
     Verify: Finished racer is NOT affected.
     """
     game = scenario(
         [
-            RacerConfig(0, "Centaur", start_pos=18),
-            RacerConfig(1, "Scoocher", start_pos=21),  # Finished
+            RacerConfig(0, "Centaur", start_pos=27),
+            RacerConfig(1, "Scoocher", start_pos=30),  # Finished
         ],
         dice_rolls=[6],  # Moves 18->24
     )
     # Manually mark as finished to simulate game state
-    game.get_racer(1).finished = True
+    game.get_racer(1).finish_position = 1
 
     game.run_turn()
 
-    assert game.get_racer(1).position == 21
-    assert game.get_racer(1).finished is True
+    assert game.get_racer(1).position == 30
+    assert (
+        game.get_racer(1).finished is True
+    )  # Scoocher is still finished and on position 30
+
+    assert game.get_racer(0).finished is True  # Centaur also finished
+    assert game.get_racer(0).finish_position == 2
 
 
 def test_centaur_trample_triggers_on_passive_move(scenario: type[GameScenario]):
