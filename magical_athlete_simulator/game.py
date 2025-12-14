@@ -1,14 +1,15 @@
-from collections import defaultdict
+import copy
 import heapq
 import logging
 import random
 import re
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Literal, Callable, Any, Protocol, final, get_args, override
+from enum import Enum, auto
+from typing import Any, Callable, Literal, final, get_args, override
 
 from rich.logging import RichHandler
-
 
 RacerName = Literal[
     "Centaur",
@@ -148,10 +149,20 @@ class RichMarkupFormatter(logging.Formatter):
 # --- Final Logger Setup ---
 
 
+@dataclass(frozen=True)
+class TurnOutcome:
+    """Result of simulating exactly one turn for a specific racer."""
+
+    vp_delta: list[int]  # per racer: final_vp - start_vp
+    position: list[int]  # per racer final positions
+    tripped: list[bool]  # per racer tripped flags at end of turn
+    eliminated: list[bool]  # per racer eliminated flags at end of turn
+    start_position: list[int]  # per racer start positions
+
+
 # ------------------------------
 # 1b. AI Core & Decision Context
 # ------------------------------
-from enum import Enum, auto
 
 
 class DecisionReason(Enum):
@@ -777,9 +788,9 @@ class SmartAgent(Agent):
     A concrete agent that uses deterministic functions to make decisions.
     """
 
-    def __init__(self, board: "Board"):
+    def __init__(self, board: Board):
         # We MUST have the board to make smart lookahead decisions
-        self.board = board
+        self.board: Board = board
 
     @override
     def make_boolean_decision(self, ctx: BooleanDecision) -> bool:
@@ -814,7 +825,6 @@ class Subscriber:
 class GameEngine:
     state: GameState
     rng: random.Random
-    board: Board = field(default_factory=BOARD_DEFINITIONS["standard"])
     queue: list[ScheduledEvent] = field(default_factory=list)
     subscribers: dict[type[GameEvent], list[Subscriber]] = field(default_factory=dict)
     agents: dict[int, Agent] = field(default_factory=dict)
@@ -847,7 +857,7 @@ class GameEngine:
         self._rebuild_subscribers()
 
         for racer in self.state.racers:
-            _ = self.agents.setdefault(racer.idx, SmartAgent(self.board))
+            _ = self.agents.setdefault(racer.idx, SmartAgent(self.state.board))
 
     def _rebuild_subscribers(self):
         """Rebuild event subscriptions from each racer's active_abilities."""
@@ -1125,7 +1135,9 @@ class GameEngine:
 
         # 2. Resolve spatial modifiers (Huge Baby etc.)
         intended = start + distance
-        end = self.board.resolve_position(intended, evt.racer_idx, self)  # [file:1]
+        end = self.state.board.resolve_position(
+            intended, evt.racer_idx, self
+        )  # [file:1]
 
         # If you get fully blocked back to your start, treat as “no movement”
         if end == start:
@@ -1135,7 +1147,7 @@ class GameEngine:
 
         # 3. Passing events (unchanged from your current logic)
         if distance > 0:
-            for tile in range(start + 1, min(end, self.board.length)):
+            for tile in range(start + 1, min(end, self.state.board.length)):
                 if tile < end:
                     victims = [
                         r
@@ -1156,7 +1168,7 @@ class GameEngine:
             return
 
         # 5. Board “on land” hooks (Trip, VP, MoveDelta, etc.)
-        self.board.trigger_on_land(end, racer.idx, evt.phase, self)  # [file:1]
+        self.state.board.trigger_on_land(end, racer.idx, evt.phase, self)  # [file:1]
 
         # 6. Arrival hook
         self.publish_to_subscribers(
@@ -1192,7 +1204,7 @@ class GameEngine:
         )
 
         # 2. Resolve spatial modifiers on the target
-        resolved = self.board.resolve_position(
+        resolved = self.state.board.resolve_position(
             evt.target_tile, evt.racer_idx, self
         )  # [file:1]
 
@@ -1206,7 +1218,9 @@ class GameEngine:
             return
 
         # 3. Board hooks on landing
-        self.board.trigger_on_land(resolved, racer.idx, evt.phase, self)  # [file:1]
+        self.state.board.trigger_on_land(
+            resolved, racer.idx, evt.phase, self
+        )  # [file:1]
 
         # 4. Arrival hook
         self.publish_to_subscribers(
@@ -1284,6 +1298,15 @@ class GameEngine:
         if next_idx < curr:
             self.log_context.new_round()
         self.state.current_racer_idx = next_idx
+
+    # simulation
+    def simulate_turn_for(self, racer_idx: int) -> TurnOutcome:
+        """
+        Public helper: deep-copy current state into a SandboxEngine
+        and simulate one turn for `racer_idx`.
+        """
+        sandbox = SandboxEngine.from_engine(self)
+        return sandbox.run_turn_for(racer_idx)
 
 
 # ------------------------------
@@ -1435,14 +1458,14 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
         racer = engine.get_racer(owner_idx)
         if racer.position > 0:
             mod = HugeBabyModifier(owner_idx=owner_idx)
-            engine.board.register_modifier(racer.position, mod)
+            engine.state.board.register_modifier(racer.position, mod)
 
     @override
     @staticmethod
     def on_loss(engine: "GameEngine", owner_idx: int):
         racer = engine.get_racer(owner_idx)
         mod = HugeBabyModifier(owner_idx=owner_idx)
-        engine.board.unregister_modifier(racer.position, mod)
+        engine.state.board.unregister_modifier(racer.position, mod)
 
     # --- REWRITTEN: The core logic is now split into clear phases ---
     @override
@@ -1461,7 +1484,7 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
 
             # Clean up the blocker from the tile we are leaving
             mod_to_remove = self._get_modifier(owner_idx)
-            engine.board.unregister_modifier(start_tile, mod_to_remove)
+            engine.state.board.unregister_modifier(start_tile, mod_to_remove)
 
             # This is a cleanup action, so it should not trigger other abilities
             return False
@@ -1478,7 +1501,7 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
 
             # 1. Place a new blocker at the destination
             mod_to_add = self._get_modifier(owner_idx)
-            engine.board.register_modifier(end_tile, mod_to_add)
+            engine.state.board.register_modifier(end_tile, mod_to_add)
 
             # 2. "Active Push": Eject any racers already on this tile
             victims = [
@@ -1751,6 +1774,91 @@ class AbilityPartyBoost(Ability, LifecycleManagedMixin):
     def on_loss(engine: GameEngine, owner_idx: int):
         engine.remove_racer_modifier(
             owner_idx, ModifierPartySelfBoost(owner_idx=owner_idx)
+        )
+
+
+# -----
+# Simulation
+# -----
+
+
+class SandboxEngine:
+    def __init__(self, engine: "GameEngine"):
+        self.engine = engine
+
+    @classmethod
+    def from_engine(cls, src: "GameEngine") -> "SandboxEngine":
+        state_copy = copy.deepcopy(src.state)
+        queue_copy = copy.deepcopy(src.queue)
+
+        eng = GameEngine(
+            state=state_copy,
+            rng=src.rng,
+            agents=src.agents,  # keep original agents
+            logging_enabled=False,
+        )
+        eng.queue = queue_copy
+
+        # Make sure serial is safe if sandbox pushes new events
+        eng._serial = max((se.serial for se in eng.queue), default=eng._serial)
+
+        # Re-register abilities to rebuild subscribers (no separate subscriber logic needed)
+        cls._rebuild_subscribers_via_update_abilities(eng)
+
+        return cls(eng)
+
+    @staticmethod
+    def _rebuild_subscribers_via_update_abilities(eng: "GameEngine") -> None:
+        # Clear whatever was there (fresh engine usually has empty subscribers anyway)
+        eng.subscribers.clear()
+
+        for racer in eng.state.racers:
+            idx = racer.idx
+
+            # Use whatever is the source of truth in your refactor:
+            # - if you still store names: racer.abilities
+            # - if you store instances: set(racer.active_abilities.keys())
+            current_names = set(racer.abilities)
+
+            # Force a full teardown + rebuild
+            eng.update_racer_abilities(idx, set())
+            eng.update_racer_abilities(idx, current_names)
+
+    def run_turn_for(self, racer_idx: int) -> TurnOutcome:
+        """
+        Simulate exactly one turn for `racer_idx` inside this sandbox.
+        - Does not mutate the real game (sandbox owns a copied state/queue).
+        - Returns a TurnOutcome with per-racer deltas/snapshots.
+        """
+
+        eng = self.engine
+
+        # Ensure we're simulating the intended racer
+        eng.state.current_racer_idx = racer_idx
+
+        # Snapshot BEFORE
+        before_vp = [r.victory_points for r in eng.state.racers]
+        before_pos = [r.position for r in eng.state.racers]
+
+        # Run exactly one turn using the engine’s normal logic
+        eng.run_turn()
+
+        # Snapshot AFTER
+        after_vp = [r.victory_points for r in eng.state.racers]
+        after_pos = [r.position for r in eng.state.racers]
+        tripped = [r.tripped for r in eng.state.racers]
+
+        # If you track eliminated explicitly, keep it; otherwise default to False.
+        eliminated = [getattr(r, "eliminated", False) for r in eng.state.racers]
+
+        vp_delta = [a - b for a, b in zip(after_vp, before_vp)]
+
+        return TurnOutcome(
+            vp_delta=vp_delta,
+            position=after_pos,
+            tripped=tripped,
+            eliminated=eliminated,
+            start_position=before_pos,
         )
 
 

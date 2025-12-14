@@ -18,7 +18,7 @@ def test_redirect_into_trap(scenario: type[GameScenario]):
     )
 
     # Manually inject a trap at tile 4
-    game.engine.board.static_features[4] = [TripTile(None)]
+    game.engine.state.board.static_features[4] = [TripTile(None)]
 
     game.run_turn()
 

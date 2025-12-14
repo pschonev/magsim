@@ -80,7 +80,8 @@ def test_copycat_ability_loss_and_modifier_cleanup(scenario: type[GameScenario])
     # We can verify by checking the board state directly.
     assert game.get_racer(1).position == 2
     blocker_found = any(
-        mod.name == "HugeBabyBlocker" for mod in game.engine.board.get_modifiers_at(4)
+        mod.name == "HugeBabyBlocker"
+        for mod in game.engine.state.board.get_modifiers_at(4)
     )
     assert not blocker_found, "Copycat's old HugeBabyBlocker was not cleaned up!"
 
