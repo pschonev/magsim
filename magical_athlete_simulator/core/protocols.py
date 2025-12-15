@@ -410,4 +410,6 @@ class GameState:
             for tile, mods in self.board.dynamic_modifiers.items()
         )
 
-        return hash((racer_data, board_data))
+        roll_data = (self.roll_state.serial_id, self.roll_state.base_value)
+
+        return hash((racer_data, board_data, roll_data))

@@ -87,7 +87,7 @@ def test_turnoutcome_consistent_shapes(scenario: type[GameScenario]):
             RacerConfig(1, "Centaur", start_pos=0),
             RacerConfig(2, "Banana", start_pos=0),
         ],
-        dice_rolls=[2],
+        dice_rolls=[2, 4],
     )
 
     outcome = game.engine.simulate_turn_for(0)
