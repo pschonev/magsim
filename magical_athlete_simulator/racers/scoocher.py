@@ -5,10 +5,10 @@ from magical_athlete_simulator.core import LOGGER_NAME
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import AbilityTriggeredEvent, GameEvent
 from magical_athlete_simulator.core.types import AbilityName, Phase
-from magical_athlete_simulator.engine.game_engine import GameEngine
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.engine.game_engine import GameEngine
 
 logger = logging.getLogger(LOGGER_NAME)
 

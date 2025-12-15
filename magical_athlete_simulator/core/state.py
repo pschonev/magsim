@@ -1,9 +1,11 @@
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.core.abilities import Ability
-from magical_athlete_simulator.core.modifiers import RacerModifier
-from magical_athlete_simulator.core.types import AbilityName, RacerName
-from magical_athlete_simulator.engine.board import Board
+if TYPE_CHECKING:
+    from magical_athlete_simulator.core.abilities import Ability
+    from magical_athlete_simulator.core.modifiers import RacerModifier
+    from magical_athlete_simulator.core.types import AbilityName, RacerName
+    from magical_athlete_simulator.engine.board import Board
 
 
 @dataclass(slots=True)

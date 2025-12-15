@@ -1,3 +1,4 @@
+from magical_athlete_simulator.ai.sandbox import simulate_turn_for
 from tests.test_utils import GameScenario, RacerConfig
 
 
@@ -31,8 +32,9 @@ def test_sandbox_turn_matches_real_turn(scenario: type[GameScenario]):
     # Sandbox game (fresh instance, same starting config, same dice roll)
     game_sandbox = scenario(racer_cfgs, dice_rolls=[4])
 
-    outcome = game_sandbox.engine.simulate_turn_for(
-        game_sandbox.engine.state.current_racer_idx
+    outcome = simulate_turn_for(
+        racer_idx=game_sandbox.engine.state.current_racer_idx,
+        engine=game_sandbox.engine
     )
 
     assert outcome.position == real_positions
@@ -63,7 +65,7 @@ def test_sandbox_does_not_mutate_original_state(scenario: type[GameScenario]):
         game.get_racer(1).eliminated,
     ]
 
-    _ = game.engine.simulate_turn_for(game.engine.state.current_racer_idx)
+    _ = simulate_turn_for(racer_idx=game.engine.state.current_racer_idx, engine=game.engine,)
 
     assert [game.get_racer(0).position, game.get_racer(1).position] == orig_positions
     assert [
@@ -90,7 +92,7 @@ def test_turnoutcome_consistent_shapes(scenario: type[GameScenario]):
         dice_rolls=[2, 4],
     )
 
-    outcome = game.engine.simulate_turn_for(0)
+    outcome = simulate_turn_for(racer_idx=0, engine=game.engine,)
 
     n = 3
     assert len(outcome.vp_delta) == n

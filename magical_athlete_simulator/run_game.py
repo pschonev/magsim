@@ -1,9 +1,12 @@
 import random
+from typing import TYPE_CHECKING
 
 from magical_athlete_simulator.core.state import GameState, LogContext, RacerState
-from magical_athlete_simulator.core.types import RacerName
 from magical_athlete_simulator.engine.board import BOARD_DEFINITIONS
 from magical_athlete_simulator.engine.game_engine import GameEngine
+
+if TYPE_CHECKING:
+    from magical_athlete_simulator.core.types import RacerName
 
 if __name__ == "__main__":
     roster: list[RacerName] = [
