@@ -1,6 +1,6 @@
 import random
 
-from magical_athlete_simulator.core.protocols import GameState, LogContext, RacerState
+from magical_athlete_simulator.core.state import GameState, LogContext, RacerState
 from magical_athlete_simulator.core.types import RacerName
 from magical_athlete_simulator.engine.board import BOARD_DEFINITIONS
 from magical_athlete_simulator.engine.game_engine import GameEngine

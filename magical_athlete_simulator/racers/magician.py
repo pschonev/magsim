@@ -2,12 +2,9 @@ import logging
 from typing import ClassVar, override
 
 from magical_athlete_simulator.core import LOGGER_NAME
+from magical_athlete_simulator.core.abilities import Ability
+from magical_athlete_simulator.core.agent import BooleanDecision, DecisionReason
 from magical_athlete_simulator.core.events import GameEvent, RollModificationWindowEvent
-from magical_athlete_simulator.core.protocols import (
-    Ability,
-    BooleanDecision,
-    DecisionReason,
-)
 from magical_athlete_simulator.core.types import AbilityName
 from magical_athlete_simulator.engine.game_engine import GameEngine
 

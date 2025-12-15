@@ -5,7 +5,8 @@ import pkgutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.core.protocols import Ability, RacerModifier
+from magical_athlete_simulator.core.abilities import Ability
+from magical_athlete_simulator.core.modifiers import RacerModifier
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import AbilityName

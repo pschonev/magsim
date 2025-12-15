@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from unittest.mock import MagicMock
 
-from magical_athlete_simulator.core.protocols import GameState, LogContext, RacerState
 from magical_athlete_simulator.core.registry import RACER_ABILITIES
+from magical_athlete_simulator.core.state import GameState, LogContext, RacerState
 from magical_athlete_simulator.core.types import AbilityName, RacerName
 from magical_athlete_simulator.engine.board import BOARD_DEFINITIONS
 from magical_athlete_simulator.engine.game_engine import GameEngine

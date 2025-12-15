@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import ClassVar, override
 
 from magical_athlete_simulator.core import LOGGER_NAME
+from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
     GameEvent,
     PostMoveEvent,
@@ -10,12 +11,11 @@ from magical_athlete_simulator.core.events import (
     PreMoveEvent,
     PreWarpEvent,
 )
-from magical_athlete_simulator.core.protocols import (
-    Ability,
+from magical_athlete_simulator.core.mixins import (
     ApproachHookMixin,
     LifecycleManagedMixin,
-    SpaceModifier,
 )
+from magical_athlete_simulator.core.modifiers import SpaceModifier
 from magical_athlete_simulator.core.types import AbilityName
 from magical_athlete_simulator.engine.game_engine import GameEngine
 

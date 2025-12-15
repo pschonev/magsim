@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import heapq
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -28,13 +29,15 @@ from magical_athlete_simulator.core.events import (
     TurnStartEvent,
     WarpCmdEvent,
 )
-from magical_athlete_simulator.core.protocols import (
+from magical_athlete_simulator.core.mixins import (
     LifecycleManagedMixin,
-    LogContext,
     RollModificationMixin,
-    TurnOutcome,
 )
 from magical_athlete_simulator.core.registry import RACER_ABILITIES
+from magical_athlete_simulator.core.state import (
+    LogContext,
+    TurnOutcome,
+)
 from magical_athlete_simulator.core.types import AbilityName, ModifierName, Phase
 from magical_athlete_simulator.engine.logging import (
     ContextFilter,
@@ -45,15 +48,17 @@ from magical_athlete_simulator.racers import get_ability_classes
 if TYPE_CHECKING:
     import random
 
-    from magical_athlete_simulator.core.protocols import (
-        AbilityCallback,
-        Agent,
+    from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.modifiers import RacerModifier
+    from magical_athlete_simulator.core.state import (
         GameState,
-        RacerModifier,
         RacerState,
     )
 
+
 logger = logging.getLogger(LOGGER_NAME)
+
+AbilityCallback = Callable[[GameEvent, int, "GameEngine"], None]
 
 
 @dataclass

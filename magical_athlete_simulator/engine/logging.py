@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast, get_args, override
 from magical_athlete_simulator.core.types import AbilityName, RacerName
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.protocols import LogContext
+    from magical_athlete_simulator.core.state import LogContext
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 RACER_NAMES = set(get_args(RacerName))

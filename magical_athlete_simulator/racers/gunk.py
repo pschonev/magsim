@@ -3,13 +3,13 @@ from dataclasses import dataclass
 from typing import ClassVar, override
 
 from magical_athlete_simulator.core import LOGGER_NAME
+from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import GameEvent, MoveDistanceQuery
-from magical_athlete_simulator.core.protocols import (
-    Ability,
+from magical_athlete_simulator.core.mixins import (
     LifecycleManagedMixin,
-    RacerModifier,
     RollModificationMixin,
 )
+from magical_athlete_simulator.core.modifiers import RacerModifier
 from magical_athlete_simulator.core.types import AbilityName
 from magical_athlete_simulator.engine.game_engine import GameEngine
 

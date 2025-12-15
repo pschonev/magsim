@@ -7,15 +7,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, override
 
 from magical_athlete_simulator.core import LOGGER_NAME
-from magical_athlete_simulator.core.protocols import (
-    ApproachHookMixin,
-    LandingHookMixin,
-    SpaceModifier,
-)
+from magical_athlete_simulator.core.mixins import ApproachHookMixin, LandingHookMixin
+from magical_athlete_simulator.core.modifiers import SpaceModifier
 from magical_athlete_simulator.core.types import AbilityName, Phase
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.protocols import RacerState
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 logger = logging.getLogger(LOGGER_NAME)
