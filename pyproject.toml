@@ -15,3 +15,6 @@ ignore = ["D", "ANN", "PLR", "E501", "G004", "TRY003", "EM101", "S311"]
 
 [tool.ruff]
 exclude = ["tests"]
+
+[tool.basedpyright]
+reportImportCycles = "none"
