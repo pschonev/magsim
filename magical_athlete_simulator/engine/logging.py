@@ -2,32 +2,40 @@ import logging
 import re
 from typing import TYPE_CHECKING, get_args, override
 
+from rich.highlighter import Highlighter
 from rich.logging import RichHandler
 
-from magical_athlete_simulator.core.types import AbilityName, RacerName
+from magical_athlete_simulator.core.types import AbilityName, ModifierName, RacerName
 
 if TYPE_CHECKING:
+    from rich.text import Text
+
     from magical_athlete_simulator.core.state import LogContext
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 RACER_NAMES = set(get_args(RacerName))
 ABILITY_NAMES = set(get_args(AbilityName))
-
+MODIFIER_NAMES = set(get_args(ModifierName))
 
 # Precompiled regex patterns for highlighting
 ABILITY_PATTERN = re.compile(rf"\b({'|'.join(map(re.escape, ABILITY_NAMES))})\b")
+MODIFIER_PATTERN = re.compile(rf"\b({'|'.join(map(re.escape, MODIFIER_NAMES))})\b")
 RACER_PATTERN = re.compile(rf"(?<!\[)\b({'|'.join(map(re.escape, RACER_NAMES))})\b")
 
 
 # Simple color theme for Rich
 COLOR = {
     "move": "bold green",
-    "warp": "bold magenta",
+    "warp": "bold green3",
+    "main_move": "bold magenta3",
     "warning": "bold red",
     "ability": "bold blue",
     "racer": "yellow",
     "prefix": "dim",
     "level": "bold",
+    "modifier": "bold cyan",
+    "board": "bold",
+    "dice_roll": "bold magenta",
 }
 
 
@@ -65,44 +73,42 @@ class RichMarkupFormatter(logging.Formatter):
         )
 
         message = record.getMessage()
-        styled = message
+        return f"[{COLOR['prefix']}]{prefix}[/{COLOR['prefix']}]  {message}"
 
-        # Movement
-        styled = re.sub(r"\bMove\b", f"[{COLOR['move']}]Move[/{COLOR['move']}]", styled)
-        styled = re.sub(
-            r"\bMoving\b", f"[{COLOR['move']}]Moving[/{COLOR['move']}]", styled
-        )
-        styled = re.sub(
-            r"\bPushing\b", f"[{COLOR['move']}]Pushing[/{COLOR['move']}]", styled
-        )
-        styled = re.sub(
-            r"\bMainMove\b", f"[{COLOR['move']}]MainMove[/{COLOR['move']}]", styled
-        )
-        styled = re.sub(r"\bWarp\b", f"[{COLOR['warp']}]Warp[/{COLOR['warp']}]", styled)
 
-        # Abilities
-        styled = ABILITY_PATTERN.sub(
-            rf"[{COLOR['ability']}]\1[/{COLOR['ability']}]", styled
-        )
+class GameLogHighlighter(Highlighter):
+    @override
+    def highlight(self, text: Text) -> None:
+        # Movement-related words
+        text.highlight_regex(r"\bMove\b", COLOR["move"])
+        text.highlight_regex(r"\bMoving\b", COLOR["move"])
+        text.highlight_regex(r"\bPushing\b", COLOR["warp"])
+        text.highlight_regex(r"\bMainMove\b", COLOR["main_move"])
+        text.highlight_regex(r"\bWarp\b", COLOR["warp"])
+        text.highlight_regex(r"\bBOARD\b", COLOR["board"])
+        text.highlight_regex(r"\bDice Roll\b", COLOR["dice_roll"])
 
-        # !!! and VP
-        styled = re.sub(r"!!!", f"[{COLOR['warning']}]!!![/{COLOR['warning']}]", styled)
-        styled = re.sub(r"\bVP:\b", "[bold yellow]VP:[/]", styled)
-        styled = re.sub(r"\b\+1 VP\b", "[bold green]+1 VP[/]", styled)
-        styled = re.sub(r"\b-1 VP\b", "[bold red]-1 VP[/]", styled)
+        # Abilities and racer names
+        text.highlight_regex(ABILITY_PATTERN, COLOR["ability"])
+        text.highlight_regex(MODIFIER_PATTERN, COLOR["modifier"])
+        text.highlight_regex(RACER_PATTERN, COLOR["racer"])
 
-        styled = RACER_PATTERN.sub(rf"[{COLOR['racer']}]\1[/{COLOR['racer']}]", styled)
-
-        if record.levelno >= logging.WARNING:
-            styled = f"[{COLOR['warning']}]{styled}[/{COLOR['warning']}]"
-
-        return f"[{COLOR['prefix']}]{prefix}[/{COLOR['prefix']}]  {styled}"
+        # Emphasis and VP
+        text.highlight_regex(r"!!!", COLOR["warning"])
+        text.highlight_regex(r"\bVP:\b", "bold yellow")
+        text.highlight_regex(r"\b\+1 VP\b", "bold green")
+        text.highlight_regex(r"\b-1 VP\b", "bold red")
 
 
 def configure_logging() -> None:
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    handler = RichHandler(markup=True, show_path=False, show_time=False)
+    handler = RichHandler(
+        markup=True,
+        show_path=False,
+        show_time=False,
+        highlighter=GameLogHighlighter(),
+    )
     handler.setFormatter(RichMarkupFormatter())
     logger.handlers.clear()
     logger.addHandler(handler)

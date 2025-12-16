@@ -12,7 +12,7 @@ from magical_athlete_simulator.core.mixins import (
     RollModificationMixin,
 )
 from magical_athlete_simulator.core.modifiers import RacerModifier
-from magical_athlete_simulator.core.types import AbilityName, Phase
+from magical_athlete_simulator.core.types import AbilityName, ModifierName, Phase
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     emit_ability_trigger,
@@ -66,7 +66,7 @@ class AbilityPartyPull(Ability):
 class ModifierPartySelfBoost(RacerModifier, RollModificationMixin):
     """Applied TO Party Animal. Boosts their own roll based on neighbors."""
 
-    name: ClassVar[AbilityName | str] = "PartySelfBoost"
+    name: ClassVar[AbilityName | ModifierName] = "PartySelfBoost"
 
     @override
     def modify_roll(

@@ -18,7 +18,7 @@ from magical_athlete_simulator.engine.abilities import emit_ability_trigger
 from magical_athlete_simulator.engine.movement import push_warp
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.types import AbilityName
+    from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -28,7 +28,7 @@ class HugeBabyModifier(SpaceModifier, ApproachHookMixin):
     Blocks others from entering the tile by redirecting them backward.
     """
 
-    name: ClassVar[AbilityName | str] = "HugeBabyBlocker"
+    name: ClassVar[AbilityName | ModifierName] = "HugeBabyBlocker"
     priority: int = 10
 
     @override
@@ -37,7 +37,7 @@ class HugeBabyModifier(SpaceModifier, ApproachHookMixin):
         if target == 0:
             return target
 
-        engine.log_info(f"Huge Baby already occupies {target}!")
+        engine.log_info(f"HugeBaby already occupies {target}!")
         # Redirect to the previous tile
         return max(0, target - 1)
 
@@ -115,7 +115,7 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
             for v in victims:
                 target = max(0, event.end_tile - 1)
                 push_warp(engine, v.idx, target, source=self.name, phase=event.phase)
-                engine.log_info(f"Huge Baby pushes {v.repr} to {target}")
+                engine.log_info(f"HugeBaby pushes {v.repr} to {target}")
 
                 # Explicitly emit a trigger for THIS push.
                 emit_ability_trigger(engine, owner_idx, self.name, f"Pushing {v.repr}")

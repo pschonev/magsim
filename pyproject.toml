@@ -20,3 +20,4 @@ exclude = ["tests"]
 reportImportCycles = "none"
 reportAny = "none"
 reportExplicitAny = "none"
+reportUnusedCallResult = "none"

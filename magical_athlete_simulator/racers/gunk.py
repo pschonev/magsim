@@ -15,7 +15,7 @@ from magical_athlete_simulator.engine.abilities import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import GameEvent, MoveDistanceQuery
-    from magical_athlete_simulator.core.types import AbilityName
+    from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -25,7 +25,7 @@ class ModifierSlime(RacerModifier, RollModificationMixin):
     Owned by Gunk.
     """
 
-    name: ClassVar[AbilityName | str] = "Slime"
+    name: ClassVar[AbilityName | ModifierName] = "Slime"
 
     @override
     def modify_roll(

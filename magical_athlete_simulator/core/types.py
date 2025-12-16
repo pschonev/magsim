@@ -23,7 +23,7 @@ AbilityName = Literal[
     "MagicalReroll",
 ]
 
-ModifierName = Literal["PartySelfBoost"]
+ModifierName = Literal["PartySelfBoost", "HugeBabyBlocker", "TripTile"]
 
 
 class Phase(IntEnum):

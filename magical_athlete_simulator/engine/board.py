@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar, override
 
 from magical_athlete_simulator.core.mixins import ApproachHookMixin, LandingHookMixin
 from magical_athlete_simulator.core.modifiers import SpaceModifier
-from magical_athlete_simulator.core.types import AbilityName, Phase
+from magical_athlete_simulator.core.types import AbilityName, ModifierName, Phase
 from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
@@ -178,7 +178,7 @@ class MoveDeltaTile(SpaceModifier, LandingHookMixin):
 class TripTile(SpaceModifier, LandingHookMixin):
     """On landing, trip the racer (they skip their next main move)."""
 
-    name: ClassVar[AbilityName | str] = "TripTile"
+    name: ClassVar[AbilityName | ModifierName] = "TripTile"
     priority: int = 5
 
     @override

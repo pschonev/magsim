@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, override
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.types import AbilityName
+    from magical_athlete_simulator.core.types import AbilityName, ModifierName
 
 
 @dataclass
@@ -11,7 +11,7 @@ class Modifier(ABC):
     """Base class for all persistent effects."""
 
     owner_idx: int | None
-    name: ClassVar[AbilityName | str]
+    name: ClassVar[AbilityName | ModifierName]
 
     @property
     def display_name(self) -> str:  # instance-level, can be dynamic

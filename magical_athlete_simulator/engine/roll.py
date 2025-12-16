@@ -69,7 +69,7 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
 def trigger_reroll(engine: GameEngine, source_idx: int, reason: str):
     """Cancels the current roll resolution and schedules a new roll immediately."""
     engine.log_info(
-        f"!!! RE-ROLL TRIGGERED by {engine.get_racer(source_idx).name} ({reason}) !!!",
+        f"RE-ROLL TRIGGERED by {engine.get_racer(source_idx).name} ({reason})",
     )
     # Increment serial to kill any pending ResolveMainMove events
     engine.state.roll_state.serial_id += 1
