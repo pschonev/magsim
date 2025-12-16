@@ -1,8 +1,7 @@
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, override
 
-from magical_athlete_simulator.core import LOGGER_NAME
+from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
     GameEvent,
@@ -16,12 +15,12 @@ from magical_athlete_simulator.core.mixins import (
     LifecycleManagedMixin,
 )
 from magical_athlete_simulator.core.modifiers import SpaceModifier
+from magical_athlete_simulator.engine.abilities import emit_ability_trigger
+from magical_athlete_simulator.engine.movement import push_warp
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
-
-logger = logging.getLogger(LOGGER_NAME)
 
 
 @dataclass(eq=False)
@@ -116,11 +115,11 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
 
             for v in victims:
                 target = max(0, event.end_tile - 1)
-                engine.push_warp(v.idx, target, source=self.name, phase=event.phase)
+                push_warp(engine, v.idx, target, source=self.name, phase=event.phase)
                 logger.info(f"Huge Baby pushes {v.repr} to {target}")
 
                 # Explicitly emit a trigger for THIS push.
-                engine.emit_ability_trigger(owner_idx, self.name, f"Pushing {v.repr}")
+                emit_ability_trigger(engine, owner_idx, self.name, f"Pushing {v.repr}")
 
             # Return False because we handled our own emissions.
             # This prevents the `_wrapped_handler` from firing a generic event.

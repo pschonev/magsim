@@ -1,21 +1,22 @@
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, override
 
-from magical_athlete_simulator.core import LOGGER_NAME
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.mixins import (
     LifecycleManagedMixin,
     RollModificationMixin,
 )
 from magical_athlete_simulator.core.modifiers import RacerModifier
+from magical_athlete_simulator.engine.abilities import (
+    add_racer_modifier,
+    emit_ability_trigger,
+    remove_racer_modifier,
+)
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import GameEvent, MoveDistanceQuery
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
-
-logger = logging.getLogger(LOGGER_NAME)
 
 
 @dataclass(eq=False)
@@ -37,7 +38,8 @@ class ModifierSlime(RacerModifier, RollModificationMixin):
         # owner_idx is Gunk, query.racer_idx is the victim
         query.modifiers.append(-1)
         query.modifier_sources.append((self.name, -1))
-        engine.emit_ability_trigger(
+        emit_ability_trigger(
+            engine,
             owner_idx,
             self.name,
             f"Sliming {engine.get_racer(query.racer_idx).name}",
@@ -54,11 +56,11 @@ class AbilitySlime(Ability, LifecycleManagedMixin):
         # Apply debuff to ALL other active racers
         for r in engine.state.racers:
             if r.idx != owner_idx and not r.finished:
-                engine.add_racer_modifier(r.idx, ModifierSlime(owner_idx=owner_idx))
+                add_racer_modifier(engine, r.idx, ModifierSlime(owner_idx=owner_idx))
 
     @override
     @staticmethod
     def on_loss(engine: GameEngine, owner_idx: int) -> None:
         # Clean up debuff from everyone
         for r in engine.state.racers:
-            engine.remove_racer_modifier(r.idx, ModifierSlime(owner_idx=owner_idx))
+            remove_racer_modifier(engine, r.idx, ModifierSlime(owner_idx=owner_idx))

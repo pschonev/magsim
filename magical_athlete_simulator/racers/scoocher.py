@@ -1,16 +1,14 @@
-import logging
 from typing import TYPE_CHECKING, ClassVar, assert_never, override
 
-from magical_athlete_simulator.core import LOGGER_NAME
+from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import AbilityTriggeredEvent, GameEvent
 from magical_athlete_simulator.core.types import AbilityName, Phase
+from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.engine.game_engine import GameEngine
-
-logger = logging.getLogger(LOGGER_NAME)
 
 
 class AbilityScoochStep(Ability):
@@ -35,7 +33,7 @@ class AbilityScoochStep(Ability):
         cause_msg = f"Saw {source_racer.name} use {event.ability_name}"
 
         logger.info(f"{self.name}: {cause_msg} -> Moving 1")
-        engine.push_move(owner_idx, 1, self.name, phase=Phase.REACTION)
+        push_move(engine, owner_idx, 1, self.name, phase=Phase.REACTION)
 
         # Returns True, so ScoochStep will emit an AbilityTriggeredEvent.
         # This is fine, because the NEXT ScoochStep check will see source_idx == owner_idx

@@ -1,19 +1,17 @@
-import logging
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, override
 
-from magical_athlete_simulator.core import LOGGER_NAME
+from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.mixins import ApproachHookMixin, LandingHookMixin
 from magical_athlete_simulator.core.modifiers import SpaceModifier
 from magical_athlete_simulator.core.types import AbilityName, Phase
+from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.engine.game_engine import GameEngine
-
-logger = logging.getLogger(LOGGER_NAME)
 
 
 @dataclass(slots=True)
@@ -164,7 +162,7 @@ class MoveDeltaTile(SpaceModifier, LandingHookMixin):
         )  # uses existing GameEngine API.[file:1]
         logger.info(f"{self.name}: Queuing {self.delta} move for {racer.repr}")
         # New move is a separate event, not part of the original main move.[file:1]
-        engine.push_move(racer_idx, self.delta, source=self.name, phase=Phase.BOARD)
+        push_move(engine, racer_idx, self.delta, source=self.name, phase=Phase.BOARD)
 
 
 @dataclass

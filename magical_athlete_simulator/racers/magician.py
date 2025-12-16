@@ -1,16 +1,14 @@
-import logging
 from typing import TYPE_CHECKING, ClassVar, override
 
-from magical_athlete_simulator.core import LOGGER_NAME
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import BooleanDecision, DecisionReason
 from magical_athlete_simulator.core.events import GameEvent, RollModificationWindowEvent
+from magical_athlete_simulator.engine.abilities import emit_ability_trigger
+from magical_athlete_simulator.engine.roll import trigger_reroll
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
-
-logger = logging.getLogger(LOGGER_NAME)
 
 
 class AbilityMagicalReroll(Ability):
@@ -42,12 +40,13 @@ class AbilityMagicalReroll(Ability):
 
         if should_reroll:
             me.reroll_count += 1
-            engine.emit_ability_trigger(
+            emit_ability_trigger(
+                engine,
                 owner_idx,
                 self.name,
                 f"Disliked roll of {event.current_roll_val}",
             )
-            engine.trigger_reroll(owner_idx, "MagicalReroll")
+            trigger_reroll(engine, owner_idx, "MagicalReroll")
             # Return False to prevent generic emission, as we handled it via emit_ability_trigger
             return False
 

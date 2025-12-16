@@ -1,15 +1,12 @@
-import logging
 from typing import TYPE_CHECKING, ClassVar, override
 
-from magical_athlete_simulator.core import LOGGER_NAME
+from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import GameEvent, PassingEvent
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
-
-logger = logging.getLogger(LOGGER_NAME)
 
 
 class AbilityBananaTrip(Ability):

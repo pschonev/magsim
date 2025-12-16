@@ -68,7 +68,7 @@ class GameScenario:
 
     def run_turn(self):
         self.engine.run_turn()
-        self.engine.advance_turn()
+        self.engine._advance_turn()
 
     def get_racer(self, idx: int) -> RacerState:
         return self.engine.get_racer(idx)

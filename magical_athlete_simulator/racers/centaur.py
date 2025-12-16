@@ -1,15 +1,13 @@
-import logging
 from typing import TYPE_CHECKING, ClassVar, override
 
-from magical_athlete_simulator.core import LOGGER_NAME
+from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import GameEvent, PassingEvent
 from magical_athlete_simulator.core.types import AbilityName, Phase
+from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.engine.game_engine import GameEngine
-
-logger = logging.getLogger(LOGGER_NAME)
 
 
 class AbilityTrample(Ability):
@@ -30,5 +28,5 @@ class AbilityTrample(Ability):
             return False
 
         logger.info(f"{self.name}: Centaur passed {victim.repr}. Queuing -2 move.")
-        engine.push_move(victim.idx, -2, self.name, phase=Phase.REACTION)
+        push_move(engine, victim.idx, -2, self.name, phase=Phase.REACTION)
         return True

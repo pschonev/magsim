@@ -1,8 +1,7 @@
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, assert_never, override
 
-from magical_athlete_simulator.core import LOGGER_NAME
+from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
     GameEvent,
@@ -15,11 +14,15 @@ from magical_athlete_simulator.core.mixins import (
 )
 from magical_athlete_simulator.core.modifiers import RacerModifier
 from magical_athlete_simulator.core.types import AbilityName, Phase
+from magical_athlete_simulator.engine.abilities import (
+    add_racer_modifier,
+    emit_ability_trigger,
+    remove_racer_modifier,
+)
+from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.engine.game_engine import GameEngine
-
-logger = logging.getLogger(LOGGER_NAME)
 
 
 class AbilityPartyPull(Ability):
@@ -49,7 +52,7 @@ class AbilityPartyPull(Ability):
                 direction = -1
 
             if direction != 0:
-                engine.push_move(r.idx, direction, self.name, phase=Phase.PRE_MAIN)
+                push_move(engine, r.idx, direction, self.name, phase=Phase.PRE_MAIN)
                 any_affected = True
 
         if any_affected:
@@ -92,7 +95,8 @@ class ModifierPartySelfBoost(RacerModifier, RollModificationMixin):
             bonus = len(guests)
             query.modifiers.append(bonus)
             query.modifier_sources.append((self.name, bonus))
-            engine.emit_ability_trigger(
+            emit_ability_trigger(
+                engine,
                 owner_idx,
                 self.name,
                 f"Boosted by {bonus} guests",
@@ -107,7 +111,8 @@ class AbilityPartyBoost(Ability, LifecycleManagedMixin):
     @staticmethod
     def on_gain(engine: GameEngine, owner_idx: int):
         # Apply the "Check for Neighbors" modifier to MYSELF
-        engine.add_racer_modifier(
+        add_racer_modifier(
+            engine,
             owner_idx,
             ModifierPartySelfBoost(owner_idx=owner_idx),
         )
@@ -115,7 +120,8 @@ class AbilityPartyBoost(Ability, LifecycleManagedMixin):
     @override
     @staticmethod
     def on_loss(engine: GameEngine, owner_idx: int):
-        engine.remove_racer_modifier(
+        remove_racer_modifier(
+            engine,
             owner_idx,
             ModifierPartySelfBoost(owner_idx=owner_idx),
         )
