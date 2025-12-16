@@ -3,7 +3,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, override
 
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.mixins import ApproachHookMixin, LandingHookMixin
 from magical_athlete_simulator.core.modifiers import SpaceModifier
 from magical_athlete_simulator.core.types import AbilityName, Phase
@@ -29,24 +28,34 @@ class Board:
     def finish_space(self) -> int:
         return self.length
 
-    def register_modifier(self, tile: int, modifier: SpaceModifier) -> None:
+    def register_modifier(
+        self,
+        tile: int,
+        modifier: SpaceModifier,
+        engine: GameEngine,
+    ) -> None:
         modifiers = self.dynamic_modifiers[tile]
         if modifier not in modifiers:
             modifiers.add(modifier)
-            logger.info(
+            engine.log_info(
                 f"BOARD: Registered {modifier.name} (owner={modifier.owner_idx}) at tile {tile}",
             )
 
-    def unregister_modifier(self, tile: int, modifier: SpaceModifier) -> None:
+    def unregister_modifier(
+        self,
+        tile: int,
+        modifier: SpaceModifier,
+        engine: GameEngine,
+    ) -> None:
         modifiers = self.dynamic_modifiers.get(tile)
         if not modifiers or modifier not in modifiers:
-            logger.warning(
+            engine.log_warning(
                 f"BOARD: Failed to unregister {modifier.name} from {tile} - not found.",
             )
             return
 
         modifiers.remove(modifier)
-        logger.info(
+        engine.log_info(
             f"BOARD: Unregistered {modifier.name} (owner={modifier.owner_idx}) from tile {tile}",
         )
 
@@ -78,7 +87,7 @@ class Board:
             ):
                 redirected = mod.on_approach(current, mover_idx, engine)
                 if redirected != current:
-                    logger.debug(
+                    engine.log_debug(
                         "%s redirected %s from %s -> %s",
                         mod.name,
                         mover_idx,
@@ -93,7 +102,7 @@ class Board:
 
             current = new_target
 
-        logger.warning("resolve_position loop detected, settling on %s", current)
+        engine.log_warning("resolve_position loop detected, settling on %s", current)
         return current
 
     def trigger_on_land(
@@ -113,14 +122,14 @@ class Board:
                 break
             mod.on_land(tile, racer_idx, phase, engine)
 
-    def dump_state(self):
+    def dump_state(self, engine: GameEngine):
         """Log the location of all dynamic modifiers currently on the board.
 
         Useful for debugging test failures.
         """
-        logger.info("=== BOARD STATE DUMP ===")
+        engine.log_info("=== BOARD STATE DUMP ===")
         if not self.dynamic_modifiers:
-            logger.info("  (Board is empty of dynamic modifiers)")
+            engine.log_info("  (Board is empty of dynamic modifiers)")
             return
 
         # Sort by tile index for readability
@@ -130,8 +139,8 @@ class Board:
             if mods:
                 # Format each modifier as "Name(owner=ID)"
                 mod_strs = [f"{m.name}(owner={m.owner_idx})" for m in mods]
-                logger.info(f"  Tile {tile:02d}: {', '.join(mod_strs)}")
-        logger.info("========================")
+                engine.log_info(f"  Tile {tile:02d}: {', '.join(mod_strs)}")
+        engine.log_info("========================")
 
 
 @dataclass
@@ -160,7 +169,7 @@ class MoveDeltaTile(SpaceModifier, LandingHookMixin):
         racer: RacerState = engine.get_racer(
             racer_idx,
         )  # uses existing GameEngine API.[file:1]
-        logger.info(f"{self.name}: Queuing {self.delta} move for {racer.repr}")
+        engine.log_info(f"{self.name}: Queuing {self.delta} move for {racer.repr}")
         # New move is a separate event, not part of the original main move.[file:1]
         push_move(engine, racer_idx, self.delta, source=self.name, phase=Phase.BOARD)
 
@@ -184,7 +193,7 @@ class TripTile(SpaceModifier, LandingHookMixin):
         if racer.tripped:
             return
         racer.tripped = True
-        logger.info(f"{self.name}: {racer.repr} is now Tripped.")
+        engine.log_info(f"{self.name}: {racer.repr} is now Tripped.")
 
 
 @dataclass
@@ -209,7 +218,7 @@ class VictoryPointTile(SpaceModifier, LandingHookMixin):
     ) -> None:
         racer = engine.get_racer(racer_idx)
         racer.victory_points += self.amount
-        logger.info(
+        engine.log_info(
             f"{self.name}: {racer.repr} gains +{self.amount} VP ",
             f"(now {racer.victory_points}).",
         )

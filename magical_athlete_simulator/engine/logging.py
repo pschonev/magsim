@@ -1,7 +1,9 @@
 import logging
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast, get_args, override
+from typing import TYPE_CHECKING, get_args, override
+
+from rich.logging import RichHandler
 
 from magical_athlete_simulator.core.types import AbilityName, RacerName
 
@@ -47,19 +49,14 @@ class ContextFilter(logging.Filter):
         return True
 
 
-@dataclass
-class ContextLogRecord(logging.LogRecord):
-    total_turn: int
-    turn_log_count: int
-    racer_repr: str
-
-
 class RichMarkupFormatter(logging.Formatter):
     @override
     def format(self, record: logging.LogRecord) -> str:
-        r = record  # keep runtime object
-        cr = cast("ContextLogRecord", r)
-        prefix = f"{cr.total_turn}.{cr.racer_repr}.{cr.turn_log_count}"
+        total_turn = getattr(record, "total_turn", 0)
+        turn_log_count = getattr(record, "turn_log_count", 0)
+        racer_repr = getattr(record, "racer_repr", "_")
+
+        prefix = f"{total_turn}.{racer_repr}.{turn_log_count}"
 
         message = record.getMessage()
 
@@ -105,3 +102,13 @@ class RichMarkupFormatter(logging.Formatter):
 
         # Final string: prefix + message (no level, RichHandler already shows it)
         return f"[{COLOR['prefix']}]{prefix}[/{COLOR['prefix']}]  {styled}"
+
+
+def configure_logging() -> None:
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    handler = RichHandler(markup=True, show_path=False, show_time=False)
+    handler.setFormatter(RichMarkupFormatter())
+    logger.handlers.clear()
+    logger.addHandler(handler)
+    logger.propagate = False

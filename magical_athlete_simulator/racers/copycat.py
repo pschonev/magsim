@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, ClassVar, override
 
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import DecisionReason, SelectionDecision
 from magical_athlete_simulator.core.events import (
@@ -37,7 +36,7 @@ class AbilityCopyLead(Ability):
         ]
 
         if not potential_targets:
-            logger.info(f"{self.name}: No one ahead to copy.")
+            engine.log_info(f"{self.name}: No one ahead to copy.")
             return False
 
         # 2. Find the highest position among those ahead
@@ -61,7 +60,7 @@ class AbilityCopyLead(Ability):
         if me.abilities == target.abilities:
             return False
 
-        logger.info(f"{self.name}: {me.repr} decided to copy {target.repr}.")
+        engine.log_info(f"{self.name}: {me.repr} decided to copy {target.repr}.")
 
         engine.update_racer_abilities(owner_idx, target.abilities)
         return True

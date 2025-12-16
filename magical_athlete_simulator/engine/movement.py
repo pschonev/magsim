@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.events import (
     MoveCmdEvent,
     PassingEvent,
@@ -52,7 +51,7 @@ def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
     if end == start:
         return
 
-    logger.info(f"Move: {racer.repr} {start}->{end} ({evt.source})")  # [file:1]
+    engine.log_info(f"Move: {racer.repr} {start}->{end} ({evt.source})")  # [file:1]
 
     # 3. Passing events (unchanged from your current logic)
     if distance > 0:
@@ -123,7 +122,7 @@ def handle_warp_cmd(engine: GameEngine, evt: WarpCmdEvent):
     if resolved == start:
         return
 
-    logger.info(f"Warp: {racer.repr} -> {resolved} ({evt.source})")  # [file:1]
+    engine.log_info(f"Warp: {racer.repr} -> {resolved} ({evt.source})")  # [file:1]
     racer.position = resolved
 
     if check_finish(engine, racer):

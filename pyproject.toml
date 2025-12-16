@@ -18,3 +18,5 @@ exclude = ["tests"]
 
 [tool.basedpyright]
 reportImportCycles = "none"
+reportAny = "none"
+reportExplicitAny = "none"

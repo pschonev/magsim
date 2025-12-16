@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, ClassVar, override
 
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import GameEvent, PassingEvent
 from magical_athlete_simulator.core.types import AbilityName, Phase
@@ -27,6 +26,6 @@ class AbilityTrample(Ability):
         if victim.finished:
             return False
 
-        logger.info(f"{self.name}: Centaur passed {victim.repr}. Queuing -2 move.")
+        engine.log_info(f"{self.name}: Centaur passed {victim.repr}. Queuing -2 move.")
         push_move(engine, victim.idx, -2, self.name, phase=Phase.REACTION)
         return True

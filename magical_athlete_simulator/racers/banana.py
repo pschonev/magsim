@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, ClassVar, override
 
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import GameEvent, PassingEvent
 
@@ -26,6 +25,6 @@ class AbilityBananaTrip(Ability):
         if mover.finished:
             return False
 
-        logger.info(f"{self.name}: {mover.repr} passed Banana! Tripping mover.")
+        engine.log_info(f"{self.name}: {mover.repr} passed Banana! Tripping mover.")
         mover.tripped = True
         return True

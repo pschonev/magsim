@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.events import AbilityTriggeredEvent
 from magical_athlete_simulator.core.types import AbilityName, ModifierName, Phase
 
@@ -13,16 +12,14 @@ def add_racer_modifier(engine: GameEngine, target_idx: int, modifier: RacerModif
     racer = engine.get_racer(target_idx)
     if modifier not in racer.modifiers:
         racer.modifiers.append(modifier)
-        if engine.logging_enabled:
-            logger.info(f"ENGINE: Added {modifier.name} to {racer.repr}")
+        engine.log_info(f"ENGINE: Added {modifier.name} to {racer.repr}")
 
 
 def remove_racer_modifier(engine: GameEngine, target_idx: int, modifier: RacerModifier):
     racer = engine.get_racer(target_idx)
     if modifier in racer.modifiers:
         racer.modifiers.remove(modifier)
-        if engine.logging_enabled:
-            logger.info(f"ENGINE: Removed {modifier.name} from {racer.repr}")
+        engine.log_info(f"ENGINE: Removed {modifier.name} from {racer.repr}")
 
 
 def emit_ability_trigger(

@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.events import (
     MoveDistanceQuery,
     PerformRollEvent,
@@ -36,11 +35,11 @@ def handle_perform_roll(engine: GameEngine, event: PerformRollEvent) -> None:
         parts = [f"{name}:{delta:+d}" for (name, delta) in query.modifier_sources]
         mods_str = ", ".join(parts)
         total_delta = sum(delta for _, delta in query.modifier_sources)
-        logger.info(
+        engine.log_info(
             f"Dice Roll: {base} (Mods: {total_delta} [{mods_str}]) -> Result: {final}",
         )
     else:
-        logger.info(f"Dice Roll: {base} (Mods: 0) -> Result: {final}")
+        engine.log_info(f"Dice Roll: {base} (Mods: 0) -> Result: {final}")
 
     # 3. Fire the 'Window' event. Listeners can call trigger_reroll() here.
     engine.push_event(
@@ -59,7 +58,7 @@ def handle_perform_roll(engine: GameEngine, event: PerformRollEvent) -> None:
 def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
     # If serial doesn't match, it means a re-roll happened.
     if event.roll_serial != engine.state.roll_state.serial_id:
-        logger.debug("Ignoring stale roll resolution (Re-roll occurred).")
+        engine.log_debug("Ignoring stale roll resolution (Re-roll occurred).")
         return
 
     dist = engine.state.roll_state.final_value
@@ -69,7 +68,7 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
 
 def trigger_reroll(engine: GameEngine, source_idx: int, reason: str):
     """Cancels the current roll resolution and schedules a new roll immediately."""
-    logger.info(
+    engine.log_info(
         f"!!! RE-ROLL TRIGGERED by {engine.get_racer(source_idx).name} ({reason}) !!!",
     )
     # Increment serial to kill any pending ResolveMainMove events

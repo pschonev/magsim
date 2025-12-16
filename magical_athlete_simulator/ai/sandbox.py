@@ -17,7 +17,7 @@ class SandboxEngine:
             state=state_copy,
             rng=src.rng,
             agents=src.agents,  # keep original agents
-            logging_enabled=False,
+            verbose=False,
             log_context=LogContext(),
         )
         eng.state.queue = queue_copy

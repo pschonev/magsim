@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, assert_never, override
 
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
     GameEvent,
@@ -56,7 +55,7 @@ class AbilityPartyPull(Ability):
                 any_affected = True
 
         if any_affected:
-            logger.info(f"{self.name}: Pulling everyone closer!")
+            engine.log_info(f"{self.name}: Pulling everyone closer!")
             return True
 
         # If nobody moved (e.g. everyone is on the same tile), ability did not "happen".

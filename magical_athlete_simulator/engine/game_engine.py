@@ -1,12 +1,10 @@
 import heapq
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
-
-from rich.logging import RichHandler
+from typing import TYPE_CHECKING, Any
 
 from magical_athlete_simulator.ai.smart_agent import SmartAgent
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     GameEvent,
@@ -24,10 +22,7 @@ from magical_athlete_simulator.core.mixins import (
 )
 from magical_athlete_simulator.core.registry import RACER_ABILITIES
 from magical_athlete_simulator.core.types import AbilityName, Phase
-from magical_athlete_simulator.engine.logging import (
-    ContextFilter,
-    RichMarkupFormatter,
-)
+from magical_athlete_simulator.engine.logging import ContextFilter
 from magical_athlete_simulator.engine.movement import handle_move_cmd, handle_warp_cmd
 from magical_athlete_simulator.engine.roll import handle_perform_roll, resolve_main_move
 from magical_athlete_simulator.racers import get_ability_classes
@@ -59,17 +54,17 @@ class GameEngine:
     log_context: LogContext
     subscribers: dict[type[GameEvent], list[Subscriber]] = field(default_factory=dict)
     agents: dict[int, Agent] = field(default_factory=dict)
-    logging_enabled: bool = True
+
+    verbose: bool = True
+    _logger: logging.Logger = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         """Assigns starting abilities to all racers and fires on_gain hooks."""
-        if self.logging_enabled:
-            rich_handler = RichHandler(markup=True, show_path=False, show_time=False)
-            rich_handler.setFormatter(RichMarkupFormatter())
-            rich_handler.addFilter(ContextFilter(self))
-            logger.handlers.clear()
-            logger.addHandler(rich_handler)
-            logger.propagate = False
+        base = logging.getLogger("magical_athlete")  # or LOGGER_NAME
+        self._logger = base.getChild(f"engine.{id(self)}")
+
+        if self.verbose:
+            self._logger.addFilter(ContextFilter(self))
 
         # Assign starting abilities
         for racer in self.state.racers:
@@ -95,12 +90,10 @@ class GameEngine:
         racer.reroll_count = 0
 
         self.log_context.start_turn_log(racer.repr)
-        if self.logging_enabled:
-            logger.info(f"=== START TURN: {racer.repr} ===")
+        self.log_info(f"=== START TURN: {racer.repr} ===")
 
         if racer.tripped:
-            if self.logging_enabled:
-                logger.info(f"{racer.repr} recovers from Trip.")
+            self.log_info(f"{racer.repr} recovers from Trip.")
             racer.tripped = False
             self.push_event(TurnStartEvent(cr), phase=Phase.SYSTEM)
         else:
@@ -114,7 +107,7 @@ class GameEngine:
             state_hash = self.state.get_state_hash()
             event_sig = hash(repr(sched.event))
             if (state_hash, event_sig) in self.state.history:
-                logger.warning(f"Loop detected for {sched.event}. Discarding.")
+                self.log_warning(f"Loop detected for {sched.event}. Discarding.")
                 continue
             self.state.history.add((state_hash, event_sig))
 
@@ -243,3 +236,23 @@ class GameEngine:
 
     def get_racer_pos(self, idx: int) -> int:
         return self.state.racers[idx].position
+
+    # -- Logging --
+    def _log(self, level: int, msg: str, *args: Any, **kwargs: Any) -> None:
+        """Core logging helper; respects engine verbosity."""
+        if not self.verbose:
+            return
+        # Delegate to underlying logger; *args/kwargs support normal %-formatting or extra=
+        self._logger.log(level, msg, *args, **kwargs)
+
+    def log_debug(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        self._log(logging.DEBUG, msg, *args, **kwargs)
+
+    def log_info(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        self._log(logging.INFO, msg, *args, **kwargs)
+
+    def log_warning(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        self._log(logging.WARNING, msg, *args, **kwargs)
+
+    def log_error(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        self._log(logging.ERROR, msg, *args, **kwargs)

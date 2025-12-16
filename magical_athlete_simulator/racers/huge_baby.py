@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, override
 
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
     GameEvent,
@@ -38,7 +37,7 @@ class HugeBabyModifier(SpaceModifier, ApproachHookMixin):
         if target == 0:
             return target
 
-        logger.info(f"Huge Baby already occupies {target}!")
+        engine.log_info(f"Huge Baby already occupies {target}!")
         # Redirect to the previous tile
         return max(0, target - 1)
 
@@ -63,14 +62,14 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
         racer = engine.get_racer(owner_idx)
         if racer.position > 0:
             mod = HugeBabyModifier(owner_idx=owner_idx)
-            engine.state.board.register_modifier(racer.position, mod)
+            engine.state.board.register_modifier(racer.position, mod, engine)
 
     @override
     @staticmethod
     def on_loss(engine: GameEngine, owner_idx: int):
         racer = engine.get_racer(owner_idx)
         mod = HugeBabyModifier(owner_idx=owner_idx)
-        engine.state.board.unregister_modifier(racer.position, mod)
+        engine.state.board.unregister_modifier(racer.position, mod, engine)
 
     # --- REWRITTEN: The core logic is now split into clear phases ---
     @override
@@ -87,7 +86,7 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
 
             # Clean up the blocker from the tile we are leaving
             mod_to_remove = self._get_modifier(owner_idx)
-            engine.state.board.unregister_modifier(start_tile, mod_to_remove)
+            engine.state.board.unregister_modifier(start_tile, mod_to_remove, engine)
 
             # This is a cleanup action, so it should not trigger other abilities
             return False
@@ -104,7 +103,7 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
 
             # 1. Place a new blocker at the destination
             mod_to_add = self._get_modifier(owner_idx)
-            engine.state.board.register_modifier(end_tile, mod_to_add)
+            engine.state.board.register_modifier(end_tile, mod_to_add, engine)
 
             # 2. "Active Push": Eject any racers already on this tile
             victims = [
@@ -116,7 +115,7 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
             for v in victims:
                 target = max(0, event.end_tile - 1)
                 push_warp(engine, v.idx, target, source=self.name, phase=event.phase)
-                logger.info(f"Huge Baby pushes {v.repr} to {target}")
+                engine.log_info(f"Huge Baby pushes {v.repr} to {target}")
 
                 # Explicitly emit a trigger for THIS push.
                 emit_ability_trigger(engine, owner_idx, self.name, f"Pushing {v.repr}")

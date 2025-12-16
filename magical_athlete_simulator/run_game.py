@@ -19,7 +19,7 @@ if __name__ == "__main__":
     ]
     racers = [RacerState(i, n) for i, n in enumerate(roster)]
     eng = GameEngine(
-        GameState(racers, board=BOARD_DEFINITIONS["standard"]()),
+        GameState(racers=racers, board=BOARD_DEFINITIONS["standard"]()),
         random.Random(1),
         log_context=LogContext(),
     )

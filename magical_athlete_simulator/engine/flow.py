@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.events import RacerFinishedEvent
 from magical_athlete_simulator.core.types import Phase
 
@@ -18,8 +17,7 @@ def check_finish(engine: GameEngine, racer: RacerState) -> bool:
         finishing_position = sum(1 for r in engine.state.racers if r.finished) + 1
         racer.finish_position = finishing_position
 
-        if engine.logging_enabled:
-            logger.info(f"!!! {racer.repr} FINISHED rank {finishing_position} !!!")
+        engine.log_info(f"!!! {racer.repr} FINISHED rank {finishing_position} !!!")
 
         # Emit finish event
         engine.push_event(
@@ -47,9 +45,9 @@ def check_finish(engine: GameEngine, racer: RacerState) -> bool:
 
 
 def log_final_standings(engine: GameEngine):
-    if not engine.logging_enabled:
+    if not engine.verbose:
         return
-    logger.info("=== FINAL STANDINGS ===")
+    engine.log_info("=== FINAL STANDINGS ===")
     for racer in sorted(
         engine.state.racers,
         key=lambda r: r.finish_position if r.finish_position else 999,
@@ -58,6 +56,6 @@ def log_final_standings(engine: GameEngine):
             status = f"Rank {racer.finish_position}"
         else:
             status = "Eliminated"
-        logger.info(
+        engine.log_info(
             f"Result: {racer.repr} pos={racer.position} vp={racer.victory_points} {status}",
         )

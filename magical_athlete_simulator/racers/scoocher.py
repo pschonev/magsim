@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, ClassVar, assert_never, override
 
-from magical_athlete_simulator.core import logger
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import AbilityTriggeredEvent, GameEvent
 from magical_athlete_simulator.core.types import AbilityName, Phase
@@ -32,7 +31,7 @@ class AbilityScoochStep(Ability):
         source_racer: RacerState = engine.get_racer(event.source_racer_idx)
         cause_msg = f"Saw {source_racer.name} use {event.ability_name}"
 
-        logger.info(f"{self.name}: {cause_msg} -> Moving 1")
+        engine.log_info(f"{self.name}: {cause_msg} -> Moving 1")
         push_move(engine, owner_idx, 1, self.name, phase=Phase.REACTION)
 
         # Returns True, so ScoochStep will emit an AbilityTriggeredEvent.
