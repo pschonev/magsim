@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.abilities import Ability
+    from magical_athlete_simulator.core.events import ScheduledEvent
     from magical_athlete_simulator.core.modifiers import RacerModifier
     from magical_athlete_simulator.core.types import AbilityName, RacerName
     from magical_athlete_simulator.engine.board import Board
@@ -54,6 +55,11 @@ class GameState:
     current_racer_idx: int = 0
     roll_state: RollState = field(default_factory=RollState)
 
+    queue: list[ScheduledEvent] = field(default_factory=list)
+    serial: int = 0
+    race_over: bool = False
+    history: set[tuple[int, int]] = field(default_factory=set)
+
     def get_state_hash(self) -> int:
         """Hash entire game state including all racer data."""
         racer_data = tuple(
@@ -93,7 +99,7 @@ class TurnOutcome:
 
 @dataclass(slots=True)
 class LogContext:
-    """Per-game logging state. No longer global."""
+    """Per-game logging state."""
 
     total_turn: int = 0
     turn_log_count: int = 0

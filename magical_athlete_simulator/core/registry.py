@@ -1,4 +1,7 @@
-from magical_athlete_simulator.core.types import AbilityName, RacerName
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from magical_athlete_simulator.core.types import AbilityName, RacerName
 
 RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Centaur": {"Trample"},

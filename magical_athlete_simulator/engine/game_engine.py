@@ -66,19 +66,12 @@ class GameEngine:
     state: GameState
     rng: random.Random
     log_context: LogContext
-    queue: list[ScheduledEvent] = field(default_factory=list)
     subscribers: dict[type[GameEvent], list[Subscriber]] = field(default_factory=dict)
     agents: dict[int, Agent] = field(default_factory=dict)
-
     logging_enabled: bool = True
-
-    serial: int = 0
-    race_over: bool = False
-    history: set[tuple[int, int]] = field(default_factory=set)
 
     def __post_init__(self) -> None:
         """Assigns starting abilities to all racers and fires on_gain hooks."""
-        # Setup logging with this engine instance
         if self.logging_enabled:
             rich_handler = RichHandler(markup=True, show_path=False, show_time=False)
             rich_handler.setFormatter(RichMarkupFormatter())
@@ -179,9 +172,9 @@ class GameEngine:
     # --- Action Queuing ---
 
     def push_event(self, event: GameEvent, *, phase: int):
-        self.serial += 1
-        sched = ScheduledEvent(phase, 0, self.serial, event)
-        heapq.heappush(self.queue, sched)
+        self.state.serial += 1
+        sched = ScheduledEvent(phase, 0, self.state.serial, event)
+        heapq.heappush(self.state.queue, sched)
 
         # --- In GameEngine Class ---
 
@@ -242,12 +235,12 @@ class GameEngine:
             sub.callback(event, sub.owner_idx, self)
 
     def run_race(self):
-        while not self.race_over:
+        while not self.state.race_over:
             self.run_turn()
             self.advance_turn()
 
     def run_turn(self):
-        self.history.clear()
+        self.state.history.clear()
         cr = self.state.current_racer_idx
         racer = self.state.racers[cr]
         racer.reroll_count = 0
@@ -265,16 +258,16 @@ class GameEngine:
             self.push_event(TurnStartEvent(cr), phase=Phase.SYSTEM)
             self.push_event(PerformRollEvent(cr), phase=Phase.ROLL_DICE)
 
-        while self.queue and not self.race_over:
-            sched = heapq.heappop(self.queue)
+        while self.state.queue and not self.state.race_over:
+            sched = heapq.heappop(self.state.queue)
 
             # Loop Detection
             state_hash = self.state.get_state_hash()
             event_sig = hash(repr(sched.event))
-            if (state_hash, event_sig) in self.history:
+            if (state_hash, event_sig) in self.state.history:
                 logger.warning(f"Loop detected for {sched.event}. Discarding.")
                 continue
-            self.history.add((state_hash, event_sig))
+            self.state.history.add((state_hash, event_sig))
 
             self.handle_event(sched.event)
 
@@ -507,12 +500,12 @@ class GameEngine:
             # Check if race is over (2 finishers)
             finished_count = sum(1 for r in self.state.racers if r.finished)
             if finished_count >= 2:
-                self.race_over = True
+                self.state.race_over = True
                 # Mark remaining as eliminated
                 for r in self.state.racers:
                     if not r.finished:
                         r.eliminated = True
-                self.queue.clear()
+                self.state.queue.clear()
                 self._log_final_standings()
 
             return True
@@ -536,7 +529,7 @@ class GameEngine:
             )
 
     def advance_turn(self):
-        if self.race_over:
+        if self.state.race_over:
             return
         curr = self.state.current_racer_idx
         n = len(self.state.racers)

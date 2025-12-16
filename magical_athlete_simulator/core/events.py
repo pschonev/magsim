@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.core.types import AbilityName, ModifierName
+if TYPE_CHECKING:
+    from magical_athlete_simulator.core.types import AbilityName, ModifierName
 
 
 class GameEvent:

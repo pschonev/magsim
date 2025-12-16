@@ -11,7 +11,7 @@ class SandboxEngine:
     @classmethod
     def from_engine(cls, src: GameEngine) -> "SandboxEngine":  # noqa: UP037
         state_copy = copy.deepcopy(src.state)
-        queue_copy = copy.deepcopy(src.queue)
+        queue_copy = copy.deepcopy(src.state.queue)
 
         eng = GameEngine(
             state=state_copy,
@@ -20,10 +20,13 @@ class SandboxEngine:
             logging_enabled=False,
             log_context=LogContext(),
         )
-        eng.queue = queue_copy
+        eng.state.queue = queue_copy
 
         # Make sure serial is safe if sandbox pushes new events
-        eng.serial = max((se.serial for se in eng.queue), default=eng.serial)
+        eng.state.serial = max(
+            (se.serial for se in eng.state.queue),
+            default=eng.state.serial,
+        )
 
         # Re-register abilities to rebuild subscribers (no separate subscriber logic needed)
         cls._rebuild_subscribers_via_update_abilities(eng)
