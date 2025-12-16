@@ -1,8 +1,20 @@
 from dataclasses import dataclass, field
+from enum import IntEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import AbilityName, ModifierName
+
+
+class Phase(IntEnum):
+    SYSTEM = 0
+    PRE_MAIN = 10
+    ROLL_DICE = 15
+    ROLL_WINDOW = 18  # Hook for re-rolls
+    MAIN_ACT = 20
+    REACTION = 25
+    MOVE_EXEC = 30
+    BOARD = 40
 
 
 class GameEvent:

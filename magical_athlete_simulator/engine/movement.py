@@ -3,13 +3,13 @@ from typing import TYPE_CHECKING
 from magical_athlete_simulator.core.events import (
     MoveCmdEvent,
     PassingEvent,
+    Phase,
     PostMoveEvent,
     PostWarpEvent,
     PreMoveEvent,
     PreWarpEvent,
     WarpCmdEvent,
 )
-from magical_athlete_simulator.core.types import Phase
 from magical_athlete_simulator.engine.flow import check_finish
 
 if TYPE_CHECKING:

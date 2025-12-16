@@ -3,13 +3,14 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, override
 
+from magical_athlete_simulator.core.events import Phase
 from magical_athlete_simulator.core.mixins import ApproachHookMixin, LandingHookMixin
 from magical_athlete_simulator.core.modifiers import SpaceModifier
-from magical_athlete_simulator.core.types import AbilityName, ModifierName, Phase
 from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 

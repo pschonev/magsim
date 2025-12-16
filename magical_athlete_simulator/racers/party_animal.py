@@ -5,6 +5,7 @@ from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
     GameEvent,
     MoveDistanceQuery,
+    Phase,
     TurnStartEvent,
 )
 from magical_athlete_simulator.core.mixins import (
@@ -12,7 +13,6 @@ from magical_athlete_simulator.core.mixins import (
     RollModificationMixin,
 )
 from magical_athlete_simulator.core.modifiers import RacerModifier
-from magical_athlete_simulator.core.types import AbilityName, ModifierName, Phase
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     emit_ability_trigger,
@@ -21,6 +21,7 @@ from magical_athlete_simulator.engine.abilities import (
 from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
+    from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 

@@ -1,5 +1,5 @@
 from magical_athlete_simulator.core.events import MoveCmdEvent, WarpCmdEvent
-from magical_athlete_simulator.core.types import Phase
+from magical_athlete_simulator.core.events import Phase
 from tests.test_utils import GameScenario, RacerConfig
 
 

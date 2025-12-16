@@ -3,11 +3,11 @@ from typing import TYPE_CHECKING
 from magical_athlete_simulator.core.events import (
     MoveDistanceQuery,
     PerformRollEvent,
+    Phase,
     ResolveMainMoveEvent,
     RollModificationWindowEvent,
 )
 from magical_athlete_simulator.core.mixins import RollModificationMixin
-from magical_athlete_simulator.core.types import Phase
 from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:

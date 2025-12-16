@@ -1,12 +1,16 @@
 from typing import TYPE_CHECKING, ClassVar, assert_never, override
 
 from magical_athlete_simulator.core.abilities import Ability
-from magical_athlete_simulator.core.events import AbilityTriggeredEvent, GameEvent
-from magical_athlete_simulator.core.types import AbilityName, Phase
+from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEvent,
+    GameEvent,
+    Phase,
+)
 from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 

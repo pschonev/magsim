@@ -1,7 +1,6 @@
 from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.core.events import RacerFinishedEvent
-from magical_athlete_simulator.core.types import Phase
+from magical_athlete_simulator.core.events import Phase, RacerFinishedEvent
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.state import RacerState

@@ -1,10 +1,10 @@
 from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.core.events import AbilityTriggeredEvent
-from magical_athlete_simulator.core.types import AbilityName, ModifierName, Phase
+from magical_athlete_simulator.core.events import AbilityTriggeredEvent, Phase
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.modifiers import RacerModifier
+    from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
