@@ -15,6 +15,7 @@ from magical_athlete_simulator.engine.abilities import emit_ability_trigger
 from magical_athlete_simulator.engine.flow import check_finish
 
 if TYPE_CHECKING:
+    from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -51,17 +52,29 @@ def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
 
     if end < 0:
         engine.log_info(
-            f"Attempted to move to {end}. Instead moving to starting tile (0)."
+            f"Attempted to move to {end}. Instead moving to starting tile (0).",
         )
         end = 0
 
     # If you get fully blocked back to your start, treat as “no movement”
-    if end == start:
+    if standing_still := (end == start):
         return
+
+    if evt.trigger_ability_on_resolution:
+        ability_triggered = (
+            not standing_still
+        ) or engine.state.rules.count_0_moves_for_ability_triggered
+
+        if ability_triggered:
+            emit_ability_trigger(
+                engine=engine,
+                source_idx=evt.racer_idx,
+                ability=evt.trigger_ability_on_resolution,
+                log_context=f"Post-Move: {evt.trigger_ability_on_resolution}",
+            )
 
     engine.log_info(f"Move: {racer.repr} {start}->{end} ({evt.source})")  # [file:1]
 
-    # 3. Passing events (unchanged from your current logic)
     # 3. Passing events
     if distance != 0:
         # Determine step direction: 1 for forward, -1 for backward
@@ -140,12 +153,20 @@ def handle_warp_cmd(engine: GameEngine, evt: WarpCmdEvent):
 
     if resolved < 0:
         engine.log_info(
-            f"Attempted to warp to {resolved}. Instead moving to starting tile (0)."
+            f"Attempted to warp to {resolved}. Instead moving to starting tile (0).",
         )
         resolved = 0
 
     if resolved == start:
         return
+
+    if evt.trigger_ability_on_resolution:
+        emit_ability_trigger(
+            engine=engine,
+            source_idx=evt.racer_idx,
+            ability=evt.trigger_ability_on_resolution,
+            log_context=f"Post-Warp: {evt.trigger_ability_on_resolution}",
+        )
 
     engine.log_info(f"Warp: {racer.repr} -> {resolved} ({evt.source})")  # [file:1]
     racer.position = resolved
@@ -184,12 +205,12 @@ def handle_trip_cmd(engine: GameEngine, evt: TripCmdEvent):
     racer.tripped = True
     engine.log_info(f"{evt.source}: {racer.repr} is now Tripped.")
 
-    if evt.source_racer_idx is not None:
+    if evt.trigger_ability_on_resolution is not None:
         emit_ability_trigger(
             engine,
             evt.source_racer_idx,
-            evt.source,  # Ability Name (e.g. "BananaTrip")
-            f"Tripped {racer.repr}",
+            evt.trigger_ability_on_resolution,  # Ability Name (e.g. "BananaTrip")
+            f"Tripped {racer.repr} by {evt.trigger_ability_on_resolution}",
         )
 
 
@@ -200,12 +221,19 @@ def push_move(
     source: str,
     phase: int,
     owner_idx: int | None,
+    trigger_ability_on_resolution: AbilityName | None = None,
 ):
     if distance == 0:
         return
     # Pass phase into the event data
     engine.push_event(
-        MoveCmdEvent(racer_idx, distance, source, phase),
+        MoveCmdEvent(
+            racer_idx,
+            distance,
+            source,
+            phase,
+            trigger_ability_on_resolution=trigger_ability_on_resolution,
+        ),
         phase=phase,
         owner_idx=owner_idx,
     )
@@ -218,12 +246,19 @@ def push_warp(
     source: str,
     phase: int,
     owner_idx: int | None,
+    trigger_ability_on_resolution: AbilityName | ModifierName | None = None,
 ):
     if engine.get_racer(racer_idx).position == target:
         return
     # Pass phase into the event data
     engine.push_event(
-        WarpCmdEvent(racer_idx, target, source, phase),
+        WarpCmdEvent(
+            racer_idx,
+            target,
+            source,
+            phase,
+            trigger_ability_on_resolution=trigger_ability_on_resolution,
+        ),
         phase=phase,
         owner_idx=owner_idx,
     )

@@ -38,6 +38,7 @@ class AbilityBananaTrip(Ability):
                 racer_idx=mover.idx,
                 source=self.name,
                 source_racer_idx=owner_idx,
+                trigger_ability_on_resolution="BananaTrip",
             ),
             phase=Phase.REACTION,  # Reactions happen in their own phase
             owner_idx=owner_idx,

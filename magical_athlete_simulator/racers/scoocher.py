@@ -43,7 +43,13 @@ class AbilityScoochStep(Ability):
 
         engine.log_info(f"{self.name}: {cause_msg} -> Queue Moving 1")
         push_move(
-            engine, owner_idx, 1, self.name, phase=Phase.REACTION, owner_idx=owner_idx
+            engine,
+            owner_idx,
+            1,
+            self.name,
+            phase=Phase.REACTION,
+            owner_idx=owner_idx,
+            trigger_ability_on_resolution=self.name,
         )
 
         # Returns True, so ScoochStep will emit an AbilityTriggeredEvent.
@@ -52,4 +58,4 @@ class AbilityScoochStep(Ability):
         # If two Scoochers exist, they WILL infinite loop off each other.
         # That is actually consistent with the board game rules (infinite loop -> execute once -> stop).
         # Our Engine loop detector handles the "Stop" part.
-        return True
+        return False

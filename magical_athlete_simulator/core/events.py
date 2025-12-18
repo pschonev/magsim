@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import TYPE_CHECKING
+from functools import cached_property
+from typing import TYPE_CHECKING, Self
 
 if TYPE_CHECKING:
+    from magical_athlete_simulator.core.state import TimingMode
     from magical_athlete_simulator.core.types import AbilityName, ModifierName
 
 
@@ -68,6 +70,7 @@ class MoveCmdEvent(GameEvent):
     distance: int
     source: str
     phase: int
+    trigger_ability_on_resolution: AbilityName | ModifierName | None = None
 
 
 @dataclass(frozen=True)
@@ -76,6 +79,7 @@ class WarpCmdEvent(GameEvent):
     target_tile: int
     source: str
     phase: int
+    trigger_ability_on_resolution: AbilityName | ModifierName | None = None
 
 
 @dataclass(frozen=True)
@@ -83,6 +87,7 @@ class TripCmdEvent(GameEvent):
     racer_idx: int
     source: str
     source_racer_idx: int | None = None
+    trigger_ability_on_resolution: AbilityName | ModifierName | None = None
 
 
 @dataclass(frozen=True)
@@ -141,9 +146,33 @@ class MoveDistanceQuery:
         return max(0, self.base_amount + sum(self.modifiers))
 
 
-@dataclass(order=True)
+@dataclass(order=False)
 class ScheduledEvent:
     phase: int
+    depth: int
     priority: int
     serial: int
-    event: GameEvent = field(compare=False)
+    event: GameEvent
+    mode: TimingMode = "FLAT"
+
+    @cached_property
+    def sort_key(self):
+        """Calculates the comparison tuple once per instance."""
+        if self.mode == "FLAT":
+            # Ignore depth
+            return (self.phase, 0, self.priority, self.serial)
+
+        if self.mode == "BFS":
+            # Phase -> Depth (Ascending/Ripple) -> Priority
+            return (self.phase, self.depth, self.priority, self.serial)
+
+        if self.mode == "DFS":
+            # Phase -> Depth (Descending/Rabbit Hole) -> Priority
+            # We use -depth because small numbers come first in heaps.
+            return (self.phase, -self.depth, self.priority, self.serial)
+
+        return (self.phase, 0, self.priority, self.serial)
+
+    def __lt__(self, other: Self) -> bool:
+        # Extremely fast comparison of pre-calculated tuples
+        return self.sort_key < other.sort_key

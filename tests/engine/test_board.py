@@ -1,7 +1,6 @@
 from magical_athlete_simulator.engine.board import TripTile
 from tests.test_utils import GameScenario, RacerConfig
 from magical_athlete_simulator.engine.board import Board, MoveDeltaTile
-from tests.test_utils import GameScenario, RacerConfig
 
 
 

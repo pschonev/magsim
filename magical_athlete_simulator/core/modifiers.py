@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, override
+from typing import TYPE_CHECKING, override
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import AbilityName, ModifierName

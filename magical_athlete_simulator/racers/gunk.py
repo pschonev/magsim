@@ -25,7 +25,7 @@ class ModifierSlime(RacerModifier, RollModificationMixin):
     Owned by Gunk.
     """
 
-    name: ClassVar[AbilityName | ModifierName] = "Slime"
+    name: AbilityName | ModifierName = "Slime"
 
     @override
     def modify_roll(

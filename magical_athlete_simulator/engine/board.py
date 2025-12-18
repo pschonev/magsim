@@ -1,7 +1,7 @@
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, override
+from typing import TYPE_CHECKING, override
 
 from magical_athlete_simulator.core.events import Phase
 from magical_athlete_simulator.core.mixins import ApproachHookMixin, LandingHookMixin
@@ -249,10 +249,10 @@ def build_action_lane_board() -> Board:
     return Board(
         length=30,
         static_features={
-            3: [MoveDeltaTile(None, 2)],
-            6: [MoveDeltaTile(None, -2)],
+            3: [MoveDeltaTile(None, delta=2)],
+            6: [MoveDeltaTile(None, delta=-2)],
             9: [TripTile(None)],
-            12: [VictoryPointTile(None, 1)],
+            12: [VictoryPointTile(None, amount=1)],
         },
     )
 

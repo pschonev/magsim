@@ -74,7 +74,7 @@ class AbilityPartyPull(Ability):
 class ModifierPartySelfBoost(RacerModifier, RollModificationMixin):
     """Applied TO Party Animal. Boosts their own roll based on neighbors."""
 
-    name: ClassVar[AbilityName | ModifierName] = "PartySelfBoost"
+    name: AbilityName | ModifierName = "PartySelfBoost"
 
     @override
     def modify_roll(

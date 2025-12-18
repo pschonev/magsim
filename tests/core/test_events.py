@@ -1,6 +1,4 @@
-import pytest
-from magical_athlete_simulator.core.events import Phase
-from magical_athlete_simulator.engine.board import Board, MoveDeltaTile, TripTile, VictoryPointTile
+from magical_athlete_simulator.engine.board import Board, MoveDeltaTile
 from tests.test_utils import GameScenario, RacerConfig
 
 # 1. Define the custom board matching your graphic
