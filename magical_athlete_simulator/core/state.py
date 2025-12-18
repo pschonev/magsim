@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.abilities import Ability
@@ -8,10 +8,14 @@ if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import AbilityName, RacerName
     from magical_athlete_simulator.engine.board import Board
 
+TimingMode = Literal["FLAT", "DFS", "BFS"]
+
 
 @dataclass(slots=True)
 class GameRules:
     winner_vp: tuple[int, int] = (4, 2)
+    timing_mode: TimingMode = "FLAT"
+    count_0_moves_for_ability_triggered: bool = False
 
 
 @dataclass(slots=True)

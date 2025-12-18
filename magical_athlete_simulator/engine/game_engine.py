@@ -58,6 +58,7 @@ class GameEngine:
     state: GameState
     rng: random.Random
     log_context: LogContext
+    current_processing_event: ScheduledEvent | None = None
     subscribers: dict[type[GameEvent], list[Subscriber]] = field(default_factory=dict)
     agents: dict[int, Agent] = field(default_factory=dict)
 
@@ -110,7 +111,7 @@ class GameEngine:
             # 2. Check for cycle
             if current_hash in self.state.history:
                 self.log_warning(
-                    "Infinite loop detected (state + queue cycle). Aborting turn."
+                    "Infinite loop detected (state + queue cycle). Aborting turn.",
                 )
                 break
 
@@ -118,6 +119,7 @@ class GameEngine:
 
             # 3. Proceed
             sched = heapq.heappop(self.state.queue)
+            self.current_processing_event = sched
             self._handle_event(sched.event)
 
     def _advance_turn(self):
@@ -146,18 +148,25 @@ class GameEngine:
                        Pass None for Board/System events (highest priority).
         """
 
-        # Calculate Priority
+        # Calculate Priority based on turn order
         if owner_idx is None:
             # Board/System => Priority 0 (Highest)
             priority = 0
         else:
-            # Player => Priority 1 + Turn Order Distance
             curr = self.state.current_racer_idx
             count = len(self.state.racers)
             priority = 1 + ((owner_idx - curr) % count)
 
+        if (
+            self.current_processing_event
+            and self.current_processing_event.phase == phase
+        ):
+            new_depth = self.current_processing_event.depth + 1
+        else:
+            new_depth = 0
+
         self.state.serial += 1
-        sched = ScheduledEvent(phase, priority, self.state.serial, event)
+        sched = ScheduledEvent(phase, new_depth, priority, self.state.serial, event)
         heapq.heappush(self.state.queue, sched)
 
     def _rebuild_subscribers(self):
