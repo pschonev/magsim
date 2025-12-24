@@ -11,7 +11,6 @@ from magical_athlete_simulator.core.events import (
     MoveCmdEvent,
     PassingEvent,
     PerformRollEvent,
-    Phase,
     ResolveMainMoveEvent,
     RollModificationWindowEvent,
     ScheduledEvent,
@@ -99,10 +98,28 @@ class GameEngine:
         if racer.tripped:
             self.log_info(f"{racer.repr} recovers from Trip.")
             racer.tripped = False
-            self.push_event(TurnStartEvent(cr), phase=Phase.SYSTEM, owner_idx=cr)
+            self.push_event(
+                TurnStartEvent(
+                    target_racer_idx=cr,
+                    responsible_racer_idx=None,
+                    source="System",
+                ),
+            )
         else:
-            self.push_event(TurnStartEvent(cr), phase=Phase.SYSTEM, owner_idx=cr)
-            self.push_event(PerformRollEvent(cr), phase=Phase.ROLL_DICE, owner_idx=cr)
+            self.push_event(
+                TurnStartEvent(
+                    target_racer_idx=cr,
+                    responsible_racer_idx=None,
+                    source="System",
+                ),
+            )
+            self.push_event(
+                PerformRollEvent(
+                    target_racer_idx=cr,
+                    responsible_racer_idx=None,
+                    source="System",
+                ),
+            )
 
         while self.state.queue and not self.state.race_over:
             # 1. Snapshot the FULL state (racers + board + queue semantics)
@@ -137,7 +154,10 @@ class GameEngine:
         self.state.current_racer_idx = next_idx
 
     # --- Event Management ---
-    def push_event(self, event: GameEvent, *, phase: int, owner_idx: int | None):
+    def push_event(
+        self,
+        event: GameEvent,
+    ):
         """
         Pushes an event to the queue with automatic turn-order priority.
 
@@ -149,17 +169,17 @@ class GameEngine:
         """
 
         # Calculate Priority based on turn order
-        if owner_idx is None:
+        if event.responsible_racer_idx is None:
             # Board/System => Priority 0 (Highest)
             priority = 0
         else:
             curr = self.state.current_racer_idx
             count = len(self.state.racers)
-            priority = 1 + ((owner_idx - curr) % count)
+            priority = 1 + ((event.responsible_racer_idx - curr) % count)
 
         if (
             self.current_processing_event
-            and self.current_processing_event.phase == phase
+            and self.current_processing_event.event.phase == event.phase
         ):
             new_depth = self.current_processing_event.depth + 1
         else:
@@ -167,7 +187,6 @@ class GameEngine:
 
         self.state.serial += 1
         sched = ScheduledEvent(
-            phase,
             new_depth,
             priority,
             self.state.serial,

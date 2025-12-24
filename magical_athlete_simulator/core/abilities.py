@@ -1,7 +1,10 @@
 from abc import ABC
 from typing import TYPE_CHECKING, ClassVar
 
-from magical_athlete_simulator.engine.abilities import emit_ability_trigger
+from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEvent,
+    AbilityTriggeredEventEmission,
+)
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import GameEvent
@@ -36,16 +39,20 @@ class Ability(ABC):
             return
 
         # 2. Execute
-        did_trigger = self.execute(event, owner_idx, engine)
+        ability_triggered_event = self.execute(event, owner_idx, engine)
 
         # 3. Automatic Emission
-        if did_trigger:
-            ctx = f"Reacting to {event.__class__.__name__}"
-            emit_ability_trigger(engine, owner_idx, self.name, ctx)
+        if isinstance(ability_triggered_event, AbilityTriggeredEvent):
+            engine.push_event(event=ability_triggered_event)
 
-    def execute(self, event: GameEvent, owner_idx: int, engine: GameEngine) -> bool:
+    def execute(
+        self,
+        event: GameEvent,
+        owner_idx: int,
+        engine: GameEngine,
+    ) -> AbilityTriggeredEventEmission:
         """Core logic. Returns True if the ability actually fired/affected game state,
         False if conditions weren't met (e.g. wrong target).
         """
         _ = event, owner_idx, engine
-        return False
+        return "skip_trigger"

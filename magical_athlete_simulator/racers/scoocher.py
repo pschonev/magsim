@@ -1,10 +1,11 @@
-from typing import TYPE_CHECKING, ClassVar, assert_never, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
+    AbilityTriggeredEventEmission,
     GameEvent,
-    Phase,
+    HasTargetRacer,
 )
 from magical_athlete_simulator.engine.movement import push_move
 
@@ -19,37 +20,43 @@ class AbilityScoochStep(Ability):
     triggers: tuple[type[GameEvent], ...] = (AbilityTriggeredEvent,)
 
     @override
-    def execute(self, event: GameEvent, owner_idx: int, engine: GameEngine) -> bool:
+    def execute(
+        self,
+        event: GameEvent,
+        owner_idx: int,
+        engine: GameEngine,
+    ) -> AbilityTriggeredEventEmission:
         if not isinstance(event, AbilityTriggeredEvent):
-            return False
+            return "skip_trigger"
 
         # Logic: Trigger on ANY ability, except my own
-        if event.source_racer_idx == owner_idx:
-            return False
+        if event.responsible_racer_idx == owner_idx:
+            return "skip_trigger"
 
         # Correct code
         me = engine.get_racer(owner_idx)  # <--- Get MY state
         if me.finished:
-            return False
+            return "skip_trigger"
 
         source_racer = engine.get_racer(owner_idx)
-        if event.source_racer_idx is None:
-            _ = assert_never
-            raise ValueError("AbilityTriggeredEvent should always have a source racer.")
 
         # Logging context
-        source_racer: RacerState = engine.get_racer(event.source_racer_idx)
-        cause_msg = f"Saw {source_racer.repr} use {event.ability_name}"
+        source_racer: RacerState = engine.get_racer(event.responsible_racer_idx)
+
+        target_msg = ""
+        if isinstance(event, HasTargetRacer):
+            target_msg = f" on {event.target_racer_idx}"
+
+        cause_msg = f"Saw {source_racer.repr} use {event.source}{target_msg}"
 
         engine.log_info(f"{self.name}: {cause_msg} -> Queue Moving 1")
         push_move(
             engine,
-            owner_idx,
             1,
-            self.name,
-            phase=Phase.REACTION,
-            owner_idx=owner_idx,
-            trigger_ability_on_resolution=self.name,
+            phase=event.phase,
+            moved_racer_idx=owner_idx,
+            source=self.name,
+            responsible_racer_idx=owner_idx,
         )
 
         # Returns True, so ScoochStep will emit an AbilityTriggeredEvent.
@@ -58,4 +65,8 @@ class AbilityScoochStep(Ability):
         # If two Scoochers exist, they WILL infinite loop off each other.
         # That is actually consistent with the board game rules (infinite loop -> execute once -> stop).
         # Our Engine loop detector handles the "Stop" part.
-        return False
+        return AbilityTriggeredEvent(
+            responsible_racer_idx=owner_idx,
+            source=self.name,
+            phase=event.phase,
+        )

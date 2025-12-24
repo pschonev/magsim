@@ -1,6 +1,8 @@
 from typing import TYPE_CHECKING
 
 from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEvent,
+    EventTriggerMode,
     MoveCmdEvent,
     PassingEvent,
     Phase,
@@ -11,16 +13,15 @@ from magical_athlete_simulator.core.events import (
     TripCmdEvent,
     WarpCmdEvent,
 )
-from magical_athlete_simulator.engine.abilities import emit_ability_trigger
 from magical_athlete_simulator.engine.flow import check_finish
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.types import AbilityName, ModifierName
+    from magical_athlete_simulator.core.types import Source
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
 def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
-    racer = engine.get_racer(evt.racer_idx)
+    racer = engine.get_racer(evt.target_racer_idx)
     if not racer.active:
         return
 
@@ -34,11 +35,12 @@ def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
     # 1. Departure hook
     engine.publish_to_subscribers(
         PreMoveEvent(
-            racer_idx=evt.racer_idx,
+            target_racer_idx=evt.target_racer_idx,
             start_tile=start,
             distance=distance,
             source=evt.source,
             phase=evt.phase,
+            responsible_racer_idx=evt.responsible_racer_idx,
         ),
     )
 
@@ -46,8 +48,9 @@ def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
     intended = start + distance
     end = engine.state.board.resolve_position(
         intended,
-        evt.racer_idx,
+        evt.target_racer_idx,
         engine,
+        event=evt,
     )  # [file:1]
 
     if end < 0:
@@ -60,17 +63,14 @@ def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
     if standing_still := (end == start):
         return
 
-    if evt.trigger_ability_on_resolution:
+    if evt.emit_ability_triggered == "after_resolution":
         ability_triggered = (
             not standing_still
         ) or engine.state.rules.count_0_moves_for_ability_triggered
 
         if ability_triggered:
-            emit_ability_trigger(
-                engine=engine,
-                source_idx=evt.racer_idx,
-                ability=evt.trigger_ability_on_resolution,
-                log_context=f"Post-Move: {evt.trigger_ability_on_resolution}",
+            engine.push_event(
+                event=AbilityTriggeredEvent.from_event(evt),
             )
 
     engine.log_info(f"Move: {racer.repr} {start}->{end} ({evt.source})")  # [file:1]
@@ -91,9 +91,13 @@ def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
                 ]
                 for v in victims:
                     engine.push_event(
-                        PassingEvent(racer.idx, v.idx, current),
-                        phase=Phase.REACTION,
-                        owner_idx=racer.idx,
+                        PassingEvent(
+                            responsible_racer_idx=racer.idx,
+                            target_racer_idx=v.idx,
+                            phase=evt.phase,
+                            source=evt.source,
+                            tile_idx=current,
+                        ),
                     )
             current += step
             # Safety break if we overshoot (shouldn't happen with step logic but good practice)
@@ -113,17 +117,18 @@ def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
     # 6. Arrival hook
     engine.publish_to_subscribers(
         PostMoveEvent(
-            racer_idx=evt.racer_idx,
+            target_racer_idx=evt.target_racer_idx,
             start_tile=start,
             end_tile=end,
             source=evt.source,
             phase=evt.phase,
+            responsible_racer_idx=evt.responsible_racer_idx,
         ),
     )
 
 
 def handle_warp_cmd(engine: GameEngine, evt: WarpCmdEvent):
-    racer = engine.get_racer(evt.racer_idx)
+    racer = engine.get_racer(evt.target_racer_idx)
     if not racer.active:
         return
 
@@ -136,19 +141,21 @@ def handle_warp_cmd(engine: GameEngine, evt: WarpCmdEvent):
     # 1. Departure hook
     engine.publish_to_subscribers(
         PreWarpEvent(
-            racer_idx=evt.racer_idx,
+            target_racer_idx=evt.target_racer_idx,
             start_tile=start,
             target_tile=evt.target_tile,
             source=evt.source,
             phase=evt.phase,
+            responsible_racer_idx=evt.responsible_racer_idx,
         ),
     )
 
     # 2. Resolve spatial modifiers on the target
     resolved = engine.state.board.resolve_position(
         evt.target_tile,
-        evt.racer_idx,
+        evt.target_racer_idx,
         engine,
+        event=evt,
     )  # [file:1]
 
     if resolved < 0:
@@ -160,12 +167,9 @@ def handle_warp_cmd(engine: GameEngine, evt: WarpCmdEvent):
     if resolved == start:
         return
 
-    if evt.trigger_ability_on_resolution:
-        emit_ability_trigger(
-            engine=engine,
-            source_idx=evt.racer_idx,
-            ability=evt.trigger_ability_on_resolution,
-            log_context=f"Post-Warp: {evt.trigger_ability_on_resolution}",
+    if evt.emit_ability_triggered == "after_resolution":
+        engine.push_event(
+            event=AbilityTriggeredEvent.from_event(evt),
         )
 
     engine.log_info(f"Warp: {racer.repr} -> {resolved} ({evt.source})")  # [file:1]
@@ -185,17 +189,18 @@ def handle_warp_cmd(engine: GameEngine, evt: WarpCmdEvent):
     # 4. Arrival hook
     engine.publish_to_subscribers(
         PostWarpEvent(
-            racer_idx=evt.racer_idx,
+            target_racer_idx=evt.target_racer_idx,
             start_tile=start,
             end_tile=resolved,
             source=evt.source,
             phase=evt.phase,
+            responsible_racer_idx=evt.responsible_racer_idx,
         ),
     )
 
 
 def handle_trip_cmd(engine: GameEngine, evt: TripCmdEvent):
-    racer = engine.get_racer(evt.racer_idx)
+    racer = engine.get_racer(evt.target_racer_idx)
 
     # If already tripped or finished, do nothing AND emit nothing.
     if not racer.active or racer.tripped:
@@ -205,60 +210,71 @@ def handle_trip_cmd(engine: GameEngine, evt: TripCmdEvent):
     racer.tripped = True
     engine.log_info(f"{evt.source}: {racer.repr} is now Tripped.")
 
-    if evt.trigger_ability_on_resolution is not None:
-        emit_ability_trigger(
-            engine,
-            evt.source_racer_idx,
-            evt.trigger_ability_on_resolution,  # Ability Name (e.g. "BananaTrip")
-            f"Tripped {racer.repr} by {evt.trigger_ability_on_resolution}",
+    if evt.emit_ability_triggered != "never":
+        engine.push_event(
+            event=AbilityTriggeredEvent.from_event(evt),
         )
 
 
 def push_move(
     engine: GameEngine,
-    racer_idx: int,
     distance: int,
-    source: str,
-    phase: int,
-    owner_idx: int | None,
-    trigger_ability_on_resolution: AbilityName | None = None,
+    phase: Phase,
+    *,
+    moved_racer_idx: int,
+    source: Source,
+    responsible_racer_idx: int | None,
+    emit_ability_triggered: EventTriggerMode = "after_resolution",
 ):
-    if distance == 0:
-        return
-    # Pass phase into the event data
     engine.push_event(
         MoveCmdEvent(
-            racer_idx,
-            distance,
-            source,
-            phase,
-            trigger_ability_on_resolution=trigger_ability_on_resolution,
+            target_racer_idx=moved_racer_idx,
+            distance=distance,
+            source=source,
+            phase=phase,
+            emit_ability_triggered=emit_ability_triggered,
+            responsible_racer_idx=responsible_racer_idx,
         ),
-        phase=phase,
-        owner_idx=owner_idx,
     )
 
 
 def push_warp(
     engine: GameEngine,
-    racer_idx: int,
     target: int,
-    source: str,
-    phase: int,
-    owner_idx: int | None,
-    trigger_ability_on_resolution: AbilityName | ModifierName | None = None,
+    phase: Phase,
+    *,
+    warped_racer_idx: int,
+    source: Source,
+    responsible_racer_idx: int | None,
+    emit_ability_triggered: EventTriggerMode = "after_resolution",
 ):
-    if engine.get_racer(racer_idx).position == target:
-        return
-    # Pass phase into the event data
     engine.push_event(
         WarpCmdEvent(
-            racer_idx,
-            target,
-            source,
-            phase,
-            trigger_ability_on_resolution=trigger_ability_on_resolution,
+            target_racer_idx=warped_racer_idx,
+            target_tile=target,
+            source=source,
+            phase=phase,
+            emit_ability_triggered=emit_ability_triggered,
+            responsible_racer_idx=responsible_racer_idx,
         ),
-        phase=phase,
-        owner_idx=owner_idx,
+    )
+
+
+def push_trip(
+    engine: GameEngine,
+    phase: Phase,
+    *,
+    tripped_racer_idx: int,
+    source: Source,
+    responsible_racer_idx: int | None,
+    emit_ability_triggered: EventTriggerMode = "after_resolution",
+):
+    engine.push_event(
+        TripCmdEvent(
+            target_racer_idx=tripped_racer_idx,
+            source=source,
+            phase=phase,
+            emit_ability_triggered=emit_ability_triggered,
+            responsible_racer_idx=responsible_racer_idx,
+        ),
     )

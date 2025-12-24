@@ -23,7 +23,7 @@ def test_full_race_6_racers_finishes_correctly(scenario: type[GameScenario]):
     # Use an infinite cycle of dice rolls to ensure the race can complete.
     infinite_dice = itertools.cycle([4, 5, 6, 3, 2, 4])
     game = scenario(racers, dice_rolls=list(itertools.islice(infinite_dice, 100))) 
-    game.engine.rng.randint.side_effect = infinite_dice 
+    game.engine.rng.randint.side_effect = infinite_dice   # pyright: ignore[reportAttributeAccessIssue]
 
     # Run the entire race to completion
     game.engine.run_race()

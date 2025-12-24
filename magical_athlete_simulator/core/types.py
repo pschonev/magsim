@@ -29,3 +29,7 @@ ModifierName = Literal[
     "VictoryPointTile",
     "MoveDeltaTile",
 ]
+
+SystemSource = Literal["Board", "System"]
+
+Source = AbilityName | ModifierName | SystemSource

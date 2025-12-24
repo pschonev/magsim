@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING, ClassVar, assert_never, override
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEvent,
+    AbilityTriggeredEventEmission,
     GameEvent,
     MoveDistanceQuery,
     Phase,
@@ -15,7 +17,6 @@ from magical_athlete_simulator.core.mixins import (
 from magical_athlete_simulator.core.modifiers import RacerModifier
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
-    emit_ability_trigger,
     remove_racer_modifier,
 )
 from magical_athlete_simulator.engine.movement import push_move
@@ -30,12 +31,17 @@ class AbilityPartyPull(Ability):
     triggers: tuple[type[GameEvent], ...] = (TurnStartEvent,)
 
     @override
-    def execute(self, event: GameEvent, owner_idx: int, engine: GameEngine) -> bool:
+    def execute(
+        self,
+        event: GameEvent,
+        owner_idx: int,
+        engine: GameEngine,
+    ) -> AbilityTriggeredEventEmission:
         if not isinstance(event, TurnStartEvent):
-            return False
+            return "skip_trigger"
 
-        if event.racer_idx != owner_idx:
-            return False
+        if event.target_racer_idx != owner_idx:
+            return "skip_trigger"
 
         party_animal = engine.get_racer(owner_idx)
         any_affected = False
@@ -54,20 +60,20 @@ class AbilityPartyPull(Ability):
             if direction != 0:
                 push_move(
                     engine,
-                    r.idx,
                     direction,
-                    self.name,
-                    phase=Phase.PRE_MAIN,
-                    owner_idx=owner_idx,
+                    event.phase,
+                    moved_racer_idx=r.idx,
+                    source=self.name,
+                    responsible_racer_idx=owner_idx,
                 )
                 any_affected = True
 
         if any_affected:
             engine.log_info(f"{self.name}: Pulling everyone closer!")
-            return True
+            return AbilityTriggeredEvent(owner_idx, self.name, event.phase)
 
         # If nobody moved (e.g. everyone is on the same tile), ability did not "happen".
-        return False
+        return "skip_trigger"
 
 
 @dataclass(eq=False)
@@ -102,11 +108,8 @@ class ModifierPartySelfBoost(RacerModifier, RollModificationMixin):
             bonus = len(guests)
             query.modifiers.append(bonus)
             query.modifier_sources.append((self.name, bonus))
-            emit_ability_trigger(
-                engine,
-                owner_idx,
-                self.name,
-                f"Boosted by {bonus} guests",
+            engine.push_event(
+                AbilityTriggeredEvent(owner_idx, self.name, Phase.ROLL_WINDOW),
             )
 
 

@@ -1,11 +1,14 @@
+from abc import ABC
 from dataclasses import dataclass, field
 from enum import IntEnum
 from functools import cached_property
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Annotated, Literal, Self, get_args
+
+from magical_athlete_simulator.core.types import AbilityName, ModifierName, SystemSource
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.state import TimingMode
-    from magical_athlete_simulator.core.types import AbilityName, ModifierName
+    from magical_athlete_simulator.core.types import Source
 
 
 class Phase(IntEnum):
@@ -14,124 +17,141 @@ class Phase(IntEnum):
     ROLL_DICE = 15
     ROLL_WINDOW = 18  # Hook for re-rolls
     MAIN_ACT = 20
+    MOVE_EXEC = 21
     BOARD = 22
     REACTION = 25
-    MOVE_EXEC = 30
 
 
-class GameEvent:
-    pass
+EventTriggerMode = Literal[
+    "never",
+    "immediately",
+    "after_resolution",
+]
 
 
 @dataclass(frozen=True)
-class RacerFinishedEvent(GameEvent):
-    racer_idx: int
+class GameEvent(ABC):
+    responsible_racer_idx: int | None
+    source: Source
+    phase: Phase
+
+
+@dataclass(frozen=True)
+class EmitsAbilityTriggeredEvent:
+    """Mixin for events that emit an AbilityTriggeredEvent"""
+
+    emit_ability_triggered: EventTriggerMode
+
+
+@dataclass(frozen=True)
+class HasTargetRacer:
+    """Mixin for events that have a racer as a target"""
+
+    target_racer_idx: int
+
+
+@dataclass(frozen=True)
+class RacerFinishedEvent(GameEvent, HasTargetRacer):
     finishing_position: int  # 1st, 2nd, etc.
 
 
-@dataclass(frozen=True)
-class TurnStartEvent(GameEvent):
-    racer_idx: int
+@dataclass(frozen=True, kw_only=True)
+class TurnStartEvent(GameEvent, HasTargetRacer):
+    phase: Phase = Phase.SYSTEM
 
 
-@dataclass(frozen=True)
-class PerformRollEvent(GameEvent):
-    racer_idx: int
+@dataclass(frozen=True, kw_only=True)
+class PerformRollEvent(GameEvent, HasTargetRacer):
+    phase: Phase = Phase.ROLL_DICE
 
 
-@dataclass(frozen=True)
-class RollModificationWindowEvent(GameEvent):
+@dataclass(frozen=True, kw_only=True)
+class RollModificationWindowEvent(GameEvent, HasTargetRacer):
     """
     Fired after a roll is calculated but before it is finalized.
     Listeners can inspect `engine.state.roll_state` and call `engine.trigger_reroll()`.
     """
 
-    racer_idx: int
     current_roll_val: int
     roll_serial: int
+    phase: Phase = Phase.ROLL_WINDOW
 
 
-@dataclass(frozen=True)
-class ResolveMainMoveEvent(GameEvent):
-    racer_idx: int
+@dataclass(frozen=True, kw_only=True)
+class ResolveMainMoveEvent(GameEvent, HasTargetRacer):
     roll_serial: int
+    phase: Phase = Phase.MAIN_ACT
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PassingEvent(GameEvent):
-    mover_idx: int
-    victim_idx: int
+    responsible_racer_idx: Annotated[int, "The ID of the racer that is passing"]
+    target_racer_idx: Annotated[int, "The ID of the racer that is being passed."]
     tile_idx: int
+    phase: Phase = Phase.ROLL_DICE
 
 
-@dataclass(frozen=True)
-class MoveCmdEvent(GameEvent):
-    racer_idx: int
+@dataclass(frozen=True, kw_only=True)
+class MoveCmdEvent(GameEvent, EmitsAbilityTriggeredEvent, HasTargetRacer):
     distance: int
-    source: str
-    phase: int
-    trigger_ability_on_resolution: AbilityName | ModifierName | None = None
+    emit_ability_triggered: EventTriggerMode = "after_resolution"
 
 
-@dataclass(frozen=True)
-class WarpCmdEvent(GameEvent):
-    racer_idx: int
+@dataclass(frozen=True, kw_only=True)
+class WarpCmdEvent(GameEvent, EmitsAbilityTriggeredEvent, HasTargetRacer):
     target_tile: int
-    source: str
-    phase: int
-    trigger_ability_on_resolution: AbilityName | ModifierName | None = None
+    emit_ability_triggered: EventTriggerMode = "after_resolution"
 
 
 @dataclass(frozen=True)
-class TripCmdEvent(GameEvent):
-    racer_idx: int
-    source: str
-    source_racer_idx: int | None = None
-    trigger_ability_on_resolution: AbilityName | ModifierName | None = None
+class TripCmdEvent(GameEvent, EmitsAbilityTriggeredEvent, HasTargetRacer): ...
 
 
 @dataclass(frozen=True)
-class PreMoveEvent(GameEvent):
-    racer_idx: int
+class PreMoveEvent(GameEvent, HasTargetRacer):
     start_tile: int
     distance: int
-    source: str
-    phase: int
 
 
 @dataclass(frozen=True)
-class PreWarpEvent(GameEvent):
-    racer_idx: int
+class PreWarpEvent(GameEvent, HasTargetRacer):
     start_tile: int
     target_tile: int
-    source: str
-    phase: int
 
 
 @dataclass(frozen=True)
-class PostMoveEvent(GameEvent):
-    racer_idx: int
+class PostMoveEvent(GameEvent, HasTargetRacer):
     start_tile: int
     end_tile: int
-    source: str
-    phase: int
 
 
 @dataclass(frozen=True)
-class PostWarpEvent(GameEvent):
-    racer_idx: int
+class PostWarpEvent(GameEvent, HasTargetRacer):
     start_tile: int
     end_tile: int
-    source: str
-    phase: int
 
 
 @dataclass(frozen=True)
 class AbilityTriggeredEvent(GameEvent):
-    source_racer_idx: int | None
-    ability_name: AbilityName | ModifierName | str
-    # Human-readable context for logs
-    log_context: str
+    responsible_racer_idx: int
+    source: AbilityName | ModifierName
+
+    @classmethod
+    def from_event(cls, event: GameEvent) -> Self:
+        if event.responsible_racer_idx is None:
+            raise ValueError(
+                "Expected source racer ID in AbilityTriggeredEvent but got None.",
+            )
+        if event.source in get_args(SystemSource):
+            msg = f"Expected source ability/modifier in AbilityTriggeredEvent but got {event.source}"
+            raise ValueError(
+                msg,
+            )
+        return cls(
+            responsible_racer_idx=event.responsible_racer_idx,
+            source=event.source,  # pyright: ignore[reportArgumentType]
+            phase=event.phase,
+        )
 
 
 @dataclass(frozen=True)
@@ -148,7 +168,6 @@ class MoveDistanceQuery:
 
 @dataclass(order=False)
 class ScheduledEvent:
-    phase: int
     depth: int
     priority: int
     serial: int
@@ -160,19 +179,22 @@ class ScheduledEvent:
         """Calculates the comparison tuple once per instance."""
         if self.mode == "FLAT":
             # Ignore depth
-            return (self.phase, 0, self.priority, self.serial)
+            return (self.event.phase, 0, self.priority, self.serial)
 
         if self.mode == "BFS":
             # Phase -> Depth (Ascending/Ripple) -> Priority
-            return (self.phase, self.depth, self.priority, self.serial)
+            return (self.event.phase, self.depth, self.priority, self.serial)
 
         if self.mode == "DFS":
             # Phase -> Depth (Descending/Rabbit Hole) -> Priority
             # We use -depth because small numbers come first in heaps.
-            return (self.phase, -self.depth, self.priority, self.serial)
+            return (self.event.phase, -self.depth, self.priority, self.serial)
 
-        return (self.phase, 0, self.priority, self.serial)
+        return (self.event.phase, 0, self.priority, self.serial)
 
     def __lt__(self, other: Self) -> bool:
         # Extremely fast comparison of pre-calculated tuples
         return self.sort_key < other.sort_key
+
+
+AbilityTriggeredEventEmission = Literal["skip_trigger"] | AbilityTriggeredEvent

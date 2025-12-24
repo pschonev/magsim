@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, override
 
 from magical_athlete_simulator.core.abilities import Ability
+from magical_athlete_simulator.core.events import AbilityTriggeredEvent, Phase
 from magical_athlete_simulator.core.mixins import (
     LifecycleManagedMixin,
     RollModificationMixin,
@@ -9,7 +10,6 @@ from magical_athlete_simulator.core.mixins import (
 from magical_athlete_simulator.core.modifiers import RacerModifier
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
-    emit_ability_trigger,
     remove_racer_modifier,
 )
 
@@ -38,11 +38,9 @@ class ModifierSlime(RacerModifier, RollModificationMixin):
         # owner_idx is Gunk, query.racer_idx is the victim
         query.modifiers.append(-1)
         query.modifier_sources.append((self.name, -1))
-        emit_ability_trigger(
-            engine,
-            owner_idx,
-            self.name,
-            f"Sliming {engine.get_racer(query.racer_idx).name}",
+
+        engine.push_event(
+            AbilityTriggeredEvent(query.racer_idx, self.name, phase=Phase.ROLL_WINDOW),
         )
 
 

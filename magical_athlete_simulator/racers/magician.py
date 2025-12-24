@@ -2,8 +2,12 @@ from typing import TYPE_CHECKING, ClassVar, override
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import BooleanDecision, DecisionReason
-from magical_athlete_simulator.core.events import GameEvent, RollModificationWindowEvent
-from magical_athlete_simulator.engine.abilities import emit_ability_trigger
+from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEvent,
+    AbilityTriggeredEventEmission,
+    GameEvent,
+    RollModificationWindowEvent,
+)
 from magical_athlete_simulator.engine.roll import trigger_reroll
 
 if TYPE_CHECKING:
@@ -16,17 +20,22 @@ class AbilityMagicalReroll(Ability):
     triggers: tuple[type[GameEvent], ...] = (RollModificationWindowEvent,)
 
     @override
-    def execute(self, event: GameEvent, owner_idx: int, engine: GameEngine):
+    def execute(
+        self,
+        event: GameEvent,
+        owner_idx: int,
+        engine: GameEngine,
+    ) -> AbilityTriggeredEventEmission:
         if not isinstance(event, RollModificationWindowEvent):
-            return False
+            return "skip_trigger"
 
         me = engine.get_racer(owner_idx)
 
         # 1. Eligibility Check
-        if event.racer_idx != owner_idx:
-            return False
+        if event.target_racer_idx != owner_idx:
+            return "skip_trigger"
         if me.reroll_count >= 2:
-            return False
+            return "skip_trigger"
 
         # 2. Ask the Agent
         agent = engine.get_agent(owner_idx)
@@ -40,14 +49,15 @@ class AbilityMagicalReroll(Ability):
 
         if should_reroll:
             me.reroll_count += 1
-            emit_ability_trigger(
-                engine,
-                owner_idx,
-                self.name,
-                f"Disliked roll of {event.current_roll_val}",
+            engine.push_event(
+                AbilityTriggeredEvent(
+                    owner_idx,
+                    source=self.name,
+                    phase=event.phase,
+                ),
             )
             trigger_reroll(engine, owner_idx, "MagicalReroll")
             # Return False to prevent generic emission, as we handled it via emit_ability_trigger
-            return False
+            return "skip_trigger"
 
-        return False
+        return "skip_trigger"

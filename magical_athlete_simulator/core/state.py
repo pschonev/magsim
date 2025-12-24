@@ -94,7 +94,7 @@ class GameState:
         roll_data = (self.roll_state.serial_id, self.roll_state.base_value)
 
         queue_data = tuple(
-            sorted((se.phase, se.priority, repr(se.event)) for se in self.queue),
+            sorted((se.event.phase, se.priority, repr(se.event)) for se in self.queue),
         )
 
         return hash((racer_data, board_data, roll_data, queue_data))

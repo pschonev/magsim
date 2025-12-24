@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING, ClassVar, override
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEvent,
+    AbilityTriggeredEventEmission,
     GameEvent,
     PostMoveEvent,
     PostWarpEvent,
@@ -14,7 +16,6 @@ from magical_athlete_simulator.core.mixins import (
     LifecycleManagedMixin,
 )
 from magical_athlete_simulator.core.modifiers import SpaceModifier
-from magical_athlete_simulator.engine.abilities import emit_ability_trigger
 from magical_athlete_simulator.engine.movement import push_warp
 
 if TYPE_CHECKING:
@@ -32,16 +33,23 @@ class HugeBabyModifier(SpaceModifier, ApproachHookMixin):
     priority: int = 10
 
     @override
-    def on_approach(self, target: int, mover_idx: int, engine: GameEngine) -> int:
+    def on_approach(
+        self,
+        target: int,
+        mover_idx: int,
+        engine: GameEngine,
+        event: GameEvent,
+    ) -> int:
         # Prevent others from entering the tile
         if target == 0:
             return target
 
-        emit_ability_trigger(
-            engine,
-            mover_idx,
-            self.name,
-            f"HugeBaby already occupies {target}!",
+        engine.push_event(
+            AbilityTriggeredEvent(
+                mover_idx,
+                source=self.name,
+                phase=event.phase,
+            ),
         )
         # Redirect to the previous tile
         return max(0, target - 1)
@@ -78,33 +86,38 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
 
     # --- REWRITTEN: The core logic is now split into clear phases ---
     @override
-    def execute(self, event: GameEvent, owner_idx: int, engine: GameEngine) -> bool:
+    def execute(
+        self,
+        event: GameEvent,
+        owner_idx: int,
+        engine: GameEngine,
+    ) -> AbilityTriggeredEventEmission:
         # --- DEPARTURE LOGIC: Triggered BEFORE the move happens ---
         if isinstance(event, (PreMoveEvent, PreWarpEvent)):
-            if event.racer_idx != owner_idx:
-                return False
+            if event.target_racer_idx != owner_idx:
+                return "skip_trigger"
 
             start_tile = event.start_tile
             # No blocker to clean up at the start line
             if start_tile == 0:
-                return False
+                return "skip_trigger"
 
             # Clean up the blocker from the tile we are leaving
             mod_to_remove = self._get_modifier(owner_idx)
             engine.state.board.unregister_modifier(start_tile, mod_to_remove, engine)
 
             # This is a cleanup action, so it should not trigger other abilities
-            return False
+            return "skip_trigger"
 
         # --- ARRIVAL LOGIC: Triggered AFTER the move is complete ---
         if isinstance(event, (PostMoveEvent, PostWarpEvent)):
-            if event.racer_idx != owner_idx:
-                return False
+            if event.target_racer_idx != owner_idx:
+                return "skip_trigger"
 
             end_tile = event.end_tile
             # Huge Baby does not place a blocker at the start line
             if end_tile == 0:
-                return False
+                return "skip_trigger"
 
             # 1. Place a new blocker at the destination
             mod_to_add = self._get_modifier(owner_idx)
@@ -121,19 +134,21 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
                 target = max(0, event.end_tile - 1)
                 push_warp(
                     engine,
-                    v.idx,
                     target,
-                    source=self.name,
                     phase=event.phase,
-                    owner_idx=None,
+                    warped_racer_idx=v.idx,
+                    source=self.name,
+                    responsible_racer_idx=None,
                 )
                 engine.log_info(f"HugeBaby pushes {v.repr} to {target}")
 
                 # Explicitly emit a trigger for THIS push.
-                emit_ability_trigger(engine, owner_idx, self.name, f"Pushing {v.repr}")
+                engine.push_event(
+                    AbilityTriggeredEvent(owner_idx, self.name, event.phase),
+                )
 
             # Return False because we handled our own emissions.
             # This prevents the `_wrapped_handler` from firing a generic event.
-            return False
+            return "skip_trigger"
 
-        return False
+        return "skip_trigger"

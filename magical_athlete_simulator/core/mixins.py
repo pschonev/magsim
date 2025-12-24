@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.events import MoveDistanceQuery
+    from magical_athlete_simulator.core.events import GameEvent, MoveDistanceQuery
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -23,7 +23,13 @@ class ApproachHookMixin(ABC):
     """Allows a modifier to redirect incoming racers (e.g., Huge Baby blocking)."""
 
     @abstractmethod
-    def on_approach(self, target: int, mover_idx: int, engine: GameEngine) -> int:
+    def on_approach(
+        self,
+        target: int,
+        mover_idx: int,
+        engine: GameEngine,
+        event: GameEvent,
+    ) -> int:
         pass
 
 

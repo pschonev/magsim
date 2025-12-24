@@ -83,10 +83,8 @@ def test_centaur_trample_triggers_on_passive_move(scenario: type[GameScenario]):
     # Inject a passive MOVE (0 -> 0+4 = 4)
     game.engine.push_event(
         MoveCmdEvent(
-            racer_idx=0, distance=4, source="AnonymousMoveEvent", phase=Phase.BOARD
+            target_racer_idx=0, distance=4, source="System", phase=Phase.BOARD, responsible_racer_idx=None,
         ),
-        phase=Phase.BOARD,
-        owner_idx=1,
     )
 
     game.run_turn()
@@ -114,10 +112,8 @@ def test_centaur_trample_ignores_warp(scenario: type[GameScenario]):
     # Warps set position directly, they don't use distance.
     game.engine.push_event(
         WarpCmdEvent(
-            racer_idx=0, target_tile=4, source="AnonymousWarpEvent", phase=Phase.PRE_MAIN
+            target_racer_idx=0, target_tile=4, source="System", phase=Phase.PRE_MAIN, responsible_racer_idx=None
         ),
-        phase=Phase.PRE_MAIN,
-        owner_idx=1,
     )
 
     game.run_turn()

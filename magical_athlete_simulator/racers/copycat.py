@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING, ClassVar, override
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import DecisionReason, SelectionDecision
 from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEvent,
+    AbilityTriggeredEventEmission,
     GameEvent,
     PostMoveEvent,
     PostWarpEvent,
@@ -23,9 +25,14 @@ class AbilityCopyLead(Ability):
     )
 
     @override
-    def execute(self, event: GameEvent, owner_idx: int, engine: GameEngine) -> bool:
+    def execute(
+        self,
+        event: GameEvent,
+        owner_idx: int,
+        engine: GameEngine,
+    ) -> AbilityTriggeredEventEmission:
         if not isinstance(event, (TurnStartEvent, PostWarpEvent, PostMoveEvent)):
-            return False
+            return "skip_trigger"
 
         me = engine.get_racer(owner_idx)
         racers = engine.state.racers
@@ -37,7 +44,7 @@ class AbilityCopyLead(Ability):
 
         if not potential_targets:
             engine.log_info(f"{self.name}: No one ahead to copy.")
-            return False
+            return "skip_trigger"
 
         # 2. Find the highest position among those ahead
         max_pos = max(r.position for r in potential_targets)
@@ -58,9 +65,9 @@ class AbilityCopyLead(Ability):
 
         # Avoid redundant updates
         if me.abilities == target.abilities:
-            return False
+            return "skip_trigger"
 
         engine.log_info(f"{self.name}: {me.repr} decided to copy {target.repr}.")
 
         engine.update_racer_abilities(owner_idx, target.abilities)
-        return True
+        return AbilityTriggeredEvent(owner_idx, self.name, phase=event.phase)

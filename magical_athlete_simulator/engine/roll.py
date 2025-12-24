@@ -11,6 +11,7 @@ from magical_athlete_simulator.core.mixins import RollModificationMixin
 from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
+    from magical_athlete_simulator.core.types import Source
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -19,10 +20,10 @@ def handle_perform_roll(engine: GameEngine, event: PerformRollEvent) -> None:
     current_serial = engine.state.roll_state.serial_id
 
     base = engine.rng.randint(1, 6)
-    query = MoveDistanceQuery(event.racer_idx, base)
+    query = MoveDistanceQuery(event.target_racer_idx, base)
 
     # Apply ALL modifiers attached to this racer
-    for mod in engine.get_racer(event.racer_idx).modifiers:
+    for mod in engine.get_racer(event.target_racer_idx).modifiers:
         if isinstance(mod, RollModificationMixin):
             mod.modify_roll(query, mod.owner_idx, engine)
 
@@ -43,17 +44,24 @@ def handle_perform_roll(engine: GameEngine, event: PerformRollEvent) -> None:
 
     # 3. Fire the 'Window' event. Listeners can call trigger_reroll() here.
     engine.push_event(
-        RollModificationWindowEvent(event.racer_idx, final, current_serial),
-        phase=Phase.ROLL_WINDOW,
-        owner_idx=event.racer_idx,
+        RollModificationWindowEvent(
+            target_racer_idx=event.target_racer_idx,
+            current_roll_val=final,
+            roll_serial=current_serial,
+            responsible_racer_idx=event.target_racer_idx,
+            source=event.source,
+        ),
     )
 
     # 4. Schedule the resolution. If trigger_reroll() was called in step 3,
     # serial_id will increment, and this event will be ignored in _resolve_main_move.
     engine.push_event(
-        ResolveMainMoveEvent(event.racer_idx, current_serial),
-        phase=Phase.MAIN_ACT,
-        owner_idx=event.racer_idx,
+        ResolveMainMoveEvent(
+            target_racer_idx=event.target_racer_idx,
+            roll_serial=current_serial,
+            responsible_racer_idx=event.responsible_racer_idx,
+            source=event.source,
+        ),
     )
 
 
@@ -66,29 +74,29 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
     dist = engine.state.roll_state.final_value
     if dist > 0:
         push_move(
-            engine,
-            event.racer_idx,
-            dist,
-            "MainMove",
+            engine=engine,
+            moved_racer_idx=event.target_racer_idx,
+            distance=dist,
             phase=Phase.MOVE_EXEC,
-            owner_idx=event.racer_idx,
+            source=event.source,
+            responsible_racer_idx=event.responsible_racer_idx,
+            emit_ability_triggered="never",
         )
 
 
-def trigger_reroll(engine: GameEngine, source_idx: int, reason: str):
+def trigger_reroll(engine: GameEngine, source_idx: int, source: Source):
     """Cancels the current roll resolution and schedules a new roll immediately."""
     engine.log_info(
-        f"RE-ROLL TRIGGERED by {engine.get_racer(source_idx).name} ({reason})",
+        f"RE-ROLL TRIGGERED by {engine.get_racer(source_idx).name} ({source})",
     )
     # Increment serial to kill any pending ResolveMainMove events
     engine.state.roll_state.serial_id += 1
 
-    # CHANGED: We schedule the new roll at Phase.REACTION + 1.
-    # This guarantees that any AbilityTriggeredEvents (Phase 25) caused by the
-    # act of triggering the reroll (e.g. Scoocher moving) are processed
-    # BEFORE the dice are rolled again.
     engine.push_event(
-        PerformRollEvent(engine.state.current_racer_idx),
-        phase=Phase.REACTION + 1,
-        owner_idx=engine.state.current_racer_idx,
+        PerformRollEvent(
+            target_racer_idx=engine.state.current_racer_idx,
+            phase=Phase.REACTION,
+            source=source,
+            responsible_racer_idx=engine.state.current_racer_idx,
+        ),
     )

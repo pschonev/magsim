@@ -2,11 +2,11 @@ from typing import TYPE_CHECKING, ClassVar, override
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEventEmission,
     GameEvent,
     PassingEvent,
-    Phase,
-    TripCmdEvent,
 )
+from magical_athlete_simulator.engine.movement import push_trip
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import AbilityName
@@ -18,30 +18,32 @@ class AbilityBananaTrip(Ability):
     triggers: tuple[type[GameEvent]] = (PassingEvent,)
 
     @override
-    def execute(self, event: GameEvent, owner_idx: int, engine: GameEngine) -> bool:
+    def execute(
+        self,
+        event: GameEvent,
+        owner_idx: int,
+        engine: GameEngine,
+    ) -> AbilityTriggeredEventEmission:
         if not isinstance(event, PassingEvent):
-            return False
+            return "skip_trigger"
 
         # Only trigger if *I* (Banana) am the victim
-        if event.victim_idx != owner_idx:
-            return False
+        if event.target_racer_idx != owner_idx:
+            return "skip_trigger"
 
-        mover = engine.get_racer(event.mover_idx)
+        mover = engine.get_racer(event.responsible_racer_idx)
         if mover.finished:
-            return False
+            return "skip_trigger"
 
         engine.log_info(f"{self.name}: Queuing TripCmd for {mover.repr}.")
 
         # Push a command to the queue instead of mutating state directly
-        engine.push_event(
-            TripCmdEvent(
-                racer_idx=mover.idx,
-                source=self.name,
-                source_racer_idx=owner_idx,
-                trigger_ability_on_resolution="BananaTrip",
-            ),
-            phase=Phase.REACTION,  # Reactions happen in their own phase
-            owner_idx=owner_idx,
+        push_trip(
+            engine,
+            tripped_racer_idx=owner_idx,
+            source=self.name,
+            responsible_racer_idx=owner_idx,
+            phase=event.phase,
         )
 
-        return False  # delay this until we know whether the tripping happened
+        return "skip_trigger"  # delay this until we know whether the tripping happened

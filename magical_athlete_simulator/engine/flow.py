@@ -21,9 +21,13 @@ def check_finish(engine: GameEngine, racer: RacerState) -> bool:
 
         # Emit finish event
         engine.push_event(
-            RacerFinishedEvent(racer.idx, finishing_position),
-            phase=Phase.REACTION,
-            owner_idx=None,
+            RacerFinishedEvent(
+                target_racer_idx=racer.idx,
+                finishing_position=finishing_position,
+                phase=Phase.REACTION,
+                responsible_racer_idx=None,
+                source="System",
+            ),
         )
 
         # Strip abilities

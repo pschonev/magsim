@@ -3,7 +3,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, override
 
-from magical_athlete_simulator.core.events import Phase
+from magical_athlete_simulator.core.events import GameEvent, Phase
 from magical_athlete_simulator.core.mixins import ApproachHookMixin, LandingHookMixin
 from magical_athlete_simulator.core.modifiers import SpaceModifier
 from magical_athlete_simulator.engine.movement import push_move
@@ -73,6 +73,7 @@ class Board:
         target: int,
         mover_idx: int,
         engine: GameEngine,
+        event: GameEvent,
     ) -> int:
         visited: set[int] = set()
         current = target
@@ -86,7 +87,7 @@ class Board:
                 for mod in self.get_modifiers_at(current)
                 if isinstance(mod, ApproachHookMixin)
             ):
-                redirected = mod.on_approach(current, mover_idx, engine)
+                redirected = mod.on_approach(current, mover_idx, engine, event)
                 if redirected != current:
                     engine.log_debug(
                         "%s redirected %s from %s -> %s",
@@ -177,11 +178,11 @@ class MoveDeltaTile(SpaceModifier, LandingHookMixin):
         # New move is a separate event, not part of the original main move.[file:1]
         push_move(
             engine,
-            racer_idx,
             self.delta,
-            source=self.name,
             phase=Phase.BOARD,
-            owner_idx=None,
+            moved_racer_idx=racer_idx,
+            source=self.name,
+            responsible_racer_idx=None,
         )
 
 
