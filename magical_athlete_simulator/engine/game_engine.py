@@ -155,10 +155,7 @@ class GameEngine:
         self.state.current_racer_idx = next_idx
 
     # --- Event Management ---
-    def push_event(
-        self,
-        event: GameEvent,
-    ):
+    def push_event(self, event: GameEvent, priority: int | None = None):
         """
         Pushes an event to the queue with automatic turn-order priority.
 
@@ -170,7 +167,9 @@ class GameEngine:
         """
 
         # Calculate Priority based on turn order
-        if event.responsible_racer_idx is None:
+        if priority is not None:
+            _priority = priority
+        elif event.responsible_racer_idx is None:
             if (
                 isinstance(event, EmitsAbilityTriggeredEvent)
                 and event.emit_ability_triggered != "never"
@@ -178,11 +177,11 @@ class GameEngine:
                 msg = f"Received a {event.__class__.__name__} with no responsible racer ID and ability trigger mode {event.emit_ability_triggered}. AbilityTriggeredEvent can only be sent by racers."
                 raise ValueError(msg)
             # Board/System => Priority 0 (Highest)
-            priority = 0
+            _priority = 0
         else:
             curr = self.state.current_racer_idx
             count = len(self.state.racers)
-            priority = 1 + ((event.responsible_racer_idx - curr) % count)
+            _priority = 1 + ((event.responsible_racer_idx - curr) % count)
 
         if (
             self.current_processing_event
@@ -203,7 +202,7 @@ class GameEngine:
         self.state.serial += 1
         sched = ScheduledEvent(
             new_depth,
-            priority,
+            _priority,
             self.state.serial,
             event,
             mode=self.state.rules.timing_mode,
