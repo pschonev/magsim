@@ -95,7 +95,7 @@ def trigger_reroll(engine: GameEngine, source_idx: int, source: Source):
     engine.push_event(
         PerformRollEvent(
             target_racer_idx=engine.state.current_racer_idx,
-            phase=Phase.REACTION,
+            phase=Phase.ROLL_DICE,
             source=source,
             responsible_racer_idx=engine.state.current_racer_idx,
         ),
