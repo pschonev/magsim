@@ -4,12 +4,14 @@ if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import AbilityName, RacerName
 
 RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
-    "Centaur": {"Trample"},
-    "HugeBaby": {"HugeBabyPush"},
-    "Scoocher": {"ScoochStep"},
+    "BabaYaga": {"BabaYagaTrip"},
     "Banana": {"BananaTrip"},
+    "Centaur": {"CentaurTrample"},
     "Copycat": {"CopyLead"},
-    "Gunk": {"Slime"},
-    "PartyAnimal": {"PartyPull", "PartyBoost"},
+    "FlipFlop": {"FlipFlopSwap"},
+    "Gunk": {"GunkSlime"},
+    "HugeBaby": {"HugeBabyPush"},
     "Magician": {"MagicalReroll"},
+    "PartyAnimal": {"PartyPull", "PartyBoost"},
+    "Scoocher": {"ScoochStep"},
 }

@@ -60,7 +60,7 @@ class TurnStartEvent(GameEvent, HasTargetRacer):
 
 
 @dataclass(frozen=True, kw_only=True)
-class PerformRollEvent(GameEvent, HasTargetRacer):
+class PerformMainRollEvent(GameEvent, HasTargetRacer):
     phase: Phase = Phase.ROLL_DICE
 
 

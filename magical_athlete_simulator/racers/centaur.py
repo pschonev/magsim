@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class AbilityTrample(Ability):
-    name: AbilityName = "Trample"
+    name: AbilityName = "CentaurTrample"
     triggers: tuple[type[GameEvent]] = (PassingEvent,)
 
     @override

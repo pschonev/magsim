@@ -84,11 +84,10 @@ def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
         while current != end:
             # Check bounds just in case
             if 0 <= current < engine.state.board.length:
-                victims = [
-                    r
-                    for r in engine.state.racers
-                    if r.position == current and r.idx != racer.idx and not r.finished
-                ]
+                victims = engine.get_racers_at_position(
+                    tile_idx=current,
+                    except_racer_idx=racer.idx,
+                )
                 for v in victims:
                     engine.push_event(
                         PassingEvent(

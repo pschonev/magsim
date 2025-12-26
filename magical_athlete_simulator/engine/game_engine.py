@@ -11,7 +11,7 @@ from magical_athlete_simulator.core.events import (
     GameEvent,
     MoveCmdEvent,
     PassingEvent,
-    PerformRollEvent,
+    PerformMainRollEvent,
     ResolveMainMoveEvent,
     RollModificationWindowEvent,
     ScheduledEvent,
@@ -29,7 +29,10 @@ from magical_athlete_simulator.engine.movement import (
     handle_trip_cmd,
     handle_warp_cmd,
 )
-from magical_athlete_simulator.engine.roll import handle_perform_roll, resolve_main_move
+from magical_athlete_simulator.engine.roll import (
+    handle_perform_main_roll,
+    resolve_main_move,
+)
 from magical_athlete_simulator.racers import get_ability_classes
 
 if TYPE_CHECKING:
@@ -95,10 +98,12 @@ class GameEngine:
 
         self.log_context.start_turn_log(racer.repr)
         self.log_info(f"=== START TURN: {racer.repr} ===")
+        racer.main_move_consumed = False
 
         if racer.tripped:
             self.log_info(f"{racer.repr} recovers from Trip.")
             racer.tripped = False
+            racer.main_move_consumed = True
             self.push_event(
                 TurnStartEvent(
                     target_racer_idx=cr,
@@ -115,7 +120,7 @@ class GameEngine:
                 ),
             )
             self.push_event(
-                PerformRollEvent(
+                PerformMainRollEvent(
                     target_racer_idx=cr,
                     responsible_racer_idx=None,
                     source="System",
@@ -303,8 +308,8 @@ class GameEngine:
             case WarpCmdEvent():
                 handle_warp_cmd(self, event)
 
-            case PerformRollEvent():
-                handle_perform_roll(self, event)
+            case PerformMainRollEvent():
+                handle_perform_main_roll(self, event)
 
             case ResolveMainMoveEvent():
                 resolve_main_move(self, event)
@@ -321,6 +326,20 @@ class GameEngine:
 
     def get_racer_pos(self, idx: int) -> int:
         return self.state.racers[idx].position
+
+    def get_racers_at_position(
+        self,
+        tile_idx: int,
+        except_racer_idx: int | None = None,
+    ) -> list[RacerState]:
+        if except_racer_idx is None:
+            return [r for r in self.state.racers if r.position == tile_idx and r.active]
+        else:
+            return [
+                r
+                for r in self.state.racers
+                if r.position == tile_idx and r.idx != except_racer_idx and r.active
+            ]
 
     # -- Logging --
     def _log(self, level: int, msg: str, *args: Any, **kwargs: Any) -> None:

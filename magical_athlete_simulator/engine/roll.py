@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from magical_athlete_simulator.core.events import (
     MoveDistanceQuery,
-    PerformRollEvent,
+    PerformMainRollEvent,
     Phase,
     ResolveMainMoveEvent,
     RollModificationWindowEvent,
@@ -15,7 +15,12 @@ if TYPE_CHECKING:
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
-def handle_perform_roll(engine: GameEngine, event: PerformRollEvent) -> None:
+def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) -> None:
+    racer = engine.get_racer(event.target_racer_idx)
+    if racer.main_move_consumed:
+        engine.log_info(f"Skipping roll because {racer.repr} already used main move.")
+        return
+
     engine.state.roll_state.serial_id += 1
     current_serial = engine.state.roll_state.serial_id
 
@@ -93,7 +98,7 @@ def trigger_reroll(engine: GameEngine, source_idx: int, source: Source):
     engine.state.roll_state.serial_id += 1
 
     engine.push_event(
-        PerformRollEvent(
+        PerformMainRollEvent(
             target_racer_idx=engine.state.current_racer_idx,
             phase=Phase.ROLL_DICE,
             source=source,

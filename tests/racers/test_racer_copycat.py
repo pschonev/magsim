@@ -44,8 +44,8 @@ def test_copycat_deterministic_tie_break(scenario: type[GameScenario]):
     # If Copycat copies Centaur, it moves 4. If it copies Gunk, it moves 4.
     # The proof is in the abilities set.
     copycat_abilities = game.get_racer(0).abilities
-    assert "Trample" in copycat_abilities
-    assert "Slime" not in copycat_abilities
+    assert "CentaurTrample" in copycat_abilities
+    assert "GunkSlime" not in copycat_abilities
 
 
 def test_copycat_ability_loss_and_modifier_cleanup(scenario: type[GameScenario]):
@@ -99,13 +99,13 @@ def test_copycat_copies_nothing_when_leading(scenario: type[GameScenario]):
         dice_rolls=[4],
     )
     # Manually give Copycat an ability to start with
-    game.engine.update_racer_abilities(0, {"Slime"})
+    game.engine.update_racer_abilities(0, {"GunkSlime"})
 
     game.run_turn()  # Copycat's turn
 
     # Verify abilities have not changed to Centaur's
-    assert "Slime" in game.get_racer(0).abilities
-    assert "Trample" not in game.get_racer(0).abilities
+    assert "GunkSlime" in game.get_racer(0).abilities
+    assert "CentaurTrample" not in game.get_racer(0).abilities
 
 
 def test_copycat_copies_party_pull_and_triggers_scoocher(scenario: type[GameScenario]):

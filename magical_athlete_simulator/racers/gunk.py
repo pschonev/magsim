@@ -25,7 +25,7 @@ class ModifierSlime(RacerModifier, RollModificationMixin):
     Owned by Gunk.
     """
 
-    name: AbilityName | ModifierName = "Slime"
+    name: AbilityName | ModifierName = "GunkSlimeModifier"
 
     @override
     def modify_roll(
@@ -46,7 +46,7 @@ class ModifierSlime(RacerModifier, RollModificationMixin):
 
 @dataclass
 class AbilitySlime(Ability, LifecycleManagedMixin):
-    name: AbilityName = "Slime"
+    name: AbilityName = "GunkSlime"
     triggers: tuple[type[GameEvent], ...] = ()
 
     @override

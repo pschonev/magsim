@@ -32,6 +32,7 @@ class RacerState:
     position: int = 0
     victory_points: int = 0
     tripped: bool = False
+    main_move_consumed: bool = False
     reroll_count: int = 0
     finish_position: int | None = None
     eliminated: bool = False

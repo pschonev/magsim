@@ -1,33 +1,38 @@
 from typing import Literal
 
 RacerName = Literal[
+    "BabaYaga",
+    "Banana",
     "Centaur",
+    "Copycat",
+    "FlipFlop",
+    "Gunk",
     "HugeBaby",
     "Scoocher",
-    "Banana",
-    "Copycat",
-    "Gunk",
     "PartyAnimal",
     "Magician",
 ]
 AbilityName = Literal[
-    "Trample",
-    "HugeBabyPush",
+    "BabaYagaTrip",
     "BananaTrip",
-    "ScoochStep",
+    "CentaurTrample",
     "CopyLead",
-    "Slime",
+    "FlipFlopSwap",
+    "GunkSlime",
+    "HugeBabyPush",
+    "MagicalReroll",
     "PartyPull",
     "PartyBoost",
-    "MagicalReroll",
+    "ScoochStep",
 ]
 
 ModifierName = Literal[
-    "PartySelfBoost",
+    "GunkSlimeModifier",
     "HugeBabyBlocker",
-    "TripTile",
-    "VictoryPointTile",
-    "MoveDeltaTile",
+    "MoveDeltaTile",  # board tile
+    "PartySelfBoost",
+    "TripTile",  # board tile
+    "VictoryPointTile",  # board tile
 ]
 
 SystemSource = Literal["Board", "System"]
