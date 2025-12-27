@@ -39,8 +39,10 @@ class ModifierSlime(RacerModifier, RollModificationMixin):
         query.modifiers.append(-1)
         query.modifier_sources.append((self.name, -1))
 
+        if owner_idx is None:
+            raise ValueError("owner_idx should never be None for ModifierSlime")
         engine.push_event(
-            AbilityTriggeredEvent(query.racer_idx, self.name, phase=Phase.ROLL_WINDOW),
+            AbilityTriggeredEvent(owner_idx, self.name, phase=Phase.ROLL_WINDOW),
         )
 
 

@@ -12,6 +12,7 @@ from magical_athlete_simulator.core.events import (
     MoveCmdEvent,
     PassingEvent,
     PerformMainRollEvent,
+    RacerFinishedEvent,
     ResolveMainMoveEvent,
     RollModificationWindowEvent,
     ScheduledEvent,
@@ -302,6 +303,7 @@ class GameEngine:
                 | PassingEvent()
                 | AbilityTriggeredEvent()
                 | RollModificationWindowEvent()
+                | RacerFinishedEvent()
             ):
                 self.publish_to_subscribers(event)
             case TripCmdEvent():

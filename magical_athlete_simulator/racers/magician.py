@@ -44,6 +44,7 @@ class AbilityMagicalReroll(Ability):
             return "skip_trigger"
 
         should_reroll = agent.make_boolean_decision(
+            engine,
             ctx=DecisionContext(
                 source=self,
                 game_state=engine.state,
@@ -67,5 +68,9 @@ class AbilityMagicalReroll(Ability):
         return "skip_trigger"
 
     @override
-    def get_auto_boolean_decision(self, ctx: DecisionContext) -> bool:
+    def get_auto_boolean_decision(
+        self,
+        engine: GameEngine,
+        ctx: DecisionContext,
+    ) -> bool:
         return ctx.game_state.roll_state.base_value <= 3

@@ -13,6 +13,7 @@ from magical_athlete_simulator.core.events import (
 )
 
 if TYPE_CHECKING:
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -58,6 +59,7 @@ class AbilityCopyLead(Ability):
         agent = engine.get_agent(owner_idx)
 
         target = agent.make_selection_decision(
+            engine,
             SelectionDecisionContext(
                 source=self,
                 game_state=engine.state,
@@ -74,9 +76,10 @@ class AbilityCopyLead(Ability):
         return AbilityTriggeredEvent(owner_idx, self.name, phase=event.phase)
 
     @override
-    def get_auto_selection_decision[RacerState](
+    def get_auto_selection_decision(
         self,
-        ctx: SelectionDecisionContext[RacerState],
+        engine: GameEngine,
+        ctx: SelectionDecisionContext,
     ) -> RacerState:
         # always return the first
         return ctx.options[0]
