@@ -16,6 +16,7 @@ from magical_athlete_simulator.core.events import (
     TurnStartEvent,
 )
 from magical_athlete_simulator.core.state import RacerState
+from magical_athlete_simulator.engine.flow import mark_finished
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.state import RacerState
@@ -80,9 +81,6 @@ class AbilityMastermindPredict(Ability, DefaultAutosolvableMixin):
                 return "skip_trigger"
 
             winner = engine.state.racers[self.prediction]
-            engine.log_info(
-                f"{owner.repr} saw {winner.repr} finish in position {event.finishing_position}",
-            )
 
             if event.target_racer_idx != self.prediction:
                 engine.log_info(f"{owner.repr} predicted wrong!")
@@ -92,21 +90,20 @@ class AbilityMastermindPredict(Ability, DefaultAutosolvableMixin):
                     f"{owner.repr}'s prediction was correct! {winner.repr} won!",
                 )
 
-                # If Mastermind hasn't finished yet, they take 2nd place immediately.
                 if not owner.finished:
-                    owner.finish_position = 2
-                    owner.victory_points += engine.state.rules.winner_vp[1]
-                    engine.log_info("Mastermind claims 2nd place immediately!")
-
-                    engine.push_event(
-                        RacerFinishedEvent(
-                            responsible_racer_idx=None,
-                            target_racer_idx=owner_idx,
-                            finishing_position=2,
-                            phase=Phase.SYSTEM,
-                            source="System",
-                        ),
-                    )
+                    if engine.state.rules.hr_mastermind_steal_1st:
+                        # house rule lets Mastermind steal 1st place instead
+                        engine.log_info("Mastermind steals 1st place!")
+                        mark_finished(
+                            engine,
+                            racer=engine.get_racer(event.target_racer_idx),
+                            rank=2,
+                        )
+                        mark_finished(engine, owner, 1)
+                    else:
+                        # If Mastermind hasn't finished yet, they take 2nd place immediately.
+                        engine.log_info("Mastermind claims 2nd place immediately!")
+                        mark_finished(engine, owner, 2)
 
         return "skip_trigger"
 
