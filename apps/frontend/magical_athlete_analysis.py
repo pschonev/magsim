@@ -164,8 +164,8 @@ def _(
     dice_rolls_text = mo.ui.text(
         value=get_dice_rolls_text(),
         on_change=set_dice_rolls_text,
-        label="Dice rolls (e.g. 4,5,6,3,2,4)",
-        placeholder="Comma/space separated, values 1-6",
+        label="Dice rolls: ",
+        placeholder="e.g. 4,5,6,3,2,4",
     )
 
 
@@ -287,13 +287,14 @@ def _(
         for i, racer in enumerate(selected_racer_names)
     ]
 
+    dice_input = dice_rolls_text if use_scripted_dice.value else mo.md("")
+
     mo.vstack(
         [
             mo.md("## Configure Race"),
             mo.hstack([scenario_seed, reset_button], justify="start", gap=2),
             mo.md("### Scripted dice"),
-            use_scripted_dice,
-            (dice_rolls_text if use_scripted_dice.value else None),
+            mo.hstack([use_scripted_dice, dice_input], justify="start", gap=2),
             mo.md("### Selected Racers"),
             mo.vstack(racer_list_items, gap=0.5),
             mo.hstack([add_racer_dropdown, add_button], justify="start", gap=1),
@@ -482,8 +483,11 @@ def _(
 
         # Group racers by position
         occupancy = {}
+        max_space = len(positions_map) - 1  # 29 for a 30-space track
+
         for idx, pos in enumerate(turn_data["positions"]):
-            occupancy.setdefault(pos, []).append(
+            draw_pos = min(pos, max_space)  # clamp finishers onto the goal space
+            occupancy.setdefault(draw_pos, []).append(
                 {
                     "name": turn_data["names"][idx],
                     "color": racer_colors.get(turn_data["names"][idx], "#888"),
@@ -492,10 +496,9 @@ def _(
                 }
             )
 
+
         # Draw racers
         for space_idx, racers_here in occupancy.items():
-            if space_idx >= 30:
-                continue
 
             bx, by, brot = positions_map[space_idx]
             count = len(racers_here)
