@@ -1,5 +1,5 @@
 import itertools
-from test_utils import GameScenario, RacerConfig
+from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 
 def test_mastermind_predicts_winner_and_takes_second(scenario: type[GameScenario]):

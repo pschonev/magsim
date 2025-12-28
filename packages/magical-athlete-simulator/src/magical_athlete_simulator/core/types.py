@@ -12,7 +12,6 @@ RacerName = Literal[
     "Scoocher",
     "PartyAnimal",
     "Magician",
-    # New Racers
     "Skipper",
     "Genius",
     "Legs",
@@ -37,7 +36,6 @@ AbilityName = Literal[
     "PartyBoost",
     "RomanticMove",
     "ScoochStep",
-    # New Abilities
     "SkipperTurn",
     "GeniusPrediction",
     "LegsMove5",

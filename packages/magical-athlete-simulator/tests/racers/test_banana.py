@@ -1,4 +1,4 @@
-from test_utils import GameScenario, RacerConfig
+from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 
 def test_banana_landing_on_is_not_passing(scenario: type[GameScenario]):

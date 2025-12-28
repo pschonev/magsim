@@ -1,4 +1,4 @@
-from test_utils import GameScenario, RacerConfig
+from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 
 def test_scoocher_ignores_own_ability(scenario: type[GameScenario]):

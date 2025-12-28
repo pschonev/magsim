@@ -32,7 +32,7 @@ ignore = [
 ]
 
 [tool.ruff]
-exclude = ["packages/magical-athlete-simulator/tests"]
+exclude = ["packages/magical-athlete-simulator/tests", "apps/frontend"]
 
 [tool.basedpyright]
 include = [
@@ -43,6 +43,8 @@ executionEnvironments = [
     { root = "packages/magical-athlete-simulator/src" },
     { root = "packages/magical-athlete-simulator/tests" },
 ]
+exclude = ["apps/frontend"]
+
 reportImportCycles = "none"
 reportAny = "none"
 reportExplicitAny = "none"

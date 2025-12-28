@@ -1,4 +1,4 @@
-from test_utils import GameScenario, RacerConfig
+from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 def test_flip_flop_swaps_with_best_target(scenario: type[GameScenario]):
     """Flip Flop should choose the target closest to start line among valid candidates (>=6 spaces ahead)."""

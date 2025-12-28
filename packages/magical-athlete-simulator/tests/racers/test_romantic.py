@@ -1,4 +1,4 @@
-from test_utils import GameScenario, RacerConfig
+from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 def test_romantic_triggers_on_pair_formation(scenario: type[GameScenario]):
     """Romantic moves +2 when someone lands to create a pair (Romantic lands on someone)."""

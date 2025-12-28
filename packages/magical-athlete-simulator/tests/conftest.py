@@ -2,7 +2,7 @@ from typing import Callable
 import pytest
 from magical_athlete_simulator.core.state import GameRules
 from magical_athlete_simulator.engine.board import Board
-from test_utils import GameScenario, RacerConfig
+from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 
 @pytest.fixture

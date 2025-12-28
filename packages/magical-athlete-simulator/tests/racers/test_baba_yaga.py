@@ -1,4 +1,4 @@
-from test_utils import GameScenario, RacerConfig
+from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 def test_baba_yaga_trips_multiple_arrivals(scenario: type[GameScenario]):
     """Baba Yaga arriving on a space with others should trip them."""

@@ -1,4 +1,4 @@
-from test_utils import GameScenario, RacerConfig
+from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 
 def test_huge_baby_push_timing_and_subsequent_move(scenario: type[GameScenario]):

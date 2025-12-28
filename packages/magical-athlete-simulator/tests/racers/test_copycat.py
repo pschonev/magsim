@@ -1,6 +1,6 @@
 from typing import cast
 from magical_athlete_simulator.racers.mastermind import AbilityMastermindPredict
-from test_utils import GameScenario, RacerConfig
+from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 
 def test_copycat_basic_ability_gain(scenario: type[GameScenario]):
