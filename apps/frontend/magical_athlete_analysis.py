@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.18.4"
-app = marimo.App(width="medium")
+app = marimo.App(width="full")
 
 
 @app.cell
@@ -21,24 +21,37 @@ def _(math):
 
     # Fixed colors for specific known names
     racer_colors = {
-        "Banana": "#FFD700",      # Gold
-        "Centaur": "#8B4513",     # Brown
-        "Magician": "#9370DB",    # Purple
-        "Scoocher": "#FF6347",    # Tomato
-        "Gunk": "#228B22",        # Forest Green
-        "HugeBaby": "#FF69B4",    # Hot Pink
-        "Copycat": "#4682B4",     # Steel Blue
-        "Mermaid": "#00CED1",     # Dark Turquoise
-        "Amazon": "#DC143C",      # Crimson
-        "Ninja": "#2F4F4F",       # Dark Slate Gray
+        "Banana": "#FFD700",  # Gold
+        "Centaur": "#8B4513",  # Brown
+        "Magician": "#9370DB",  # Purple
+        "Scoocher": "#FF6347",  # Tomato
+        "Gunk": "#228B22",  # Forest Green
+        "HugeBaby": "#FF69B4",  # Hot Pink
+        "Copycat": "#4682B4",  # Steel Blue
+        "Mermaid": "#00CED1",  # Dark Turquoise
+        "Amazon": "#DC143C",  # Crimson
+        "Ninja": "#2F4F4F",  # Dark Slate Gray
     }
 
     # Extended palette for generated/unknown racers
     FALLBACK_PALETTE = [
-        "#8A2BE2", "#5F9EA0", "#D2691E", "#FF8C00", "#2E8B57",
-        "#1E90FF", "#FF1493", "#9ACD32", "#A0522D", "#00BFFF",
-        "#8B008B", "#4B0082", "#2F4F4F", "#556B2F", "#B8860B",
+        "#8A2BE2",
+        "#5F9EA0",
+        "#D2691E",
+        "#FF8C00",
+        "#2E8B57",
+        "#1E90FF",
+        "#FF1493",
+        "#9ACD32",
+        "#A0522D",
+        "#00BFFF",
+        "#8B008B",
+        "#4B0082",
+        "#2F4F4F",
+        "#556B2F",
+        "#B8860B",
     ]
+
 
     def get_racer_color(name):
         if name in racer_colors:
@@ -50,7 +63,10 @@ def _(math):
         except Exception:
             return "#888888"
 
-    def generate_racetrack_positions(num_spaces, start_x, start_y, straight_len, radius):
+
+    def generate_racetrack_positions(
+        num_spaces, start_x, start_y, straight_len, radius
+    ):
         positions = []
         perimeter = (2 * straight_len) + (2 * math.pi * radius)
         step_distance = perimeter / num_spaces
@@ -90,6 +106,7 @@ def _(math):
             positions.append((x, y, angle))
         return positions
 
+
     board_positions = generate_racetrack_positions(
         num_spaces=30, start_x=120, start_y=350, straight_len=350, radius=100
     )
@@ -119,7 +136,9 @@ def _(mo):
     )
 
     # Scripted dice
-    get_use_scripted_dice, set_use_scripted_dice = mo.state(False, allow_self_loops=True)
+    get_use_scripted_dice, set_use_scripted_dice = mo.state(
+        False, allow_self_loops=True
+    )
     get_dice_rolls_text, set_dice_rolls_text = mo.state("", allow_self_loops=True)
     return (
         get_dice_rolls_text,
@@ -158,7 +177,9 @@ def _(
     start_positions = get_start_positions()
 
     reset_button = mo.ui.button(label="🔄 Reset Simulation")
-    scenario_seed = mo.ui.number(start=1, stop=10000, value=42, label="Random Seed")
+    scenario_seed = mo.ui.number(
+        start=1, stop=10000, value=42, label="Random Seed"
+    )
 
     use_scripted_dice = mo.ui.checkbox(
         value=get_use_scripted_dice(),
@@ -182,10 +203,13 @@ def _(
         allow_select_none=True,
     )
 
+
     def _sync_start_positions_for_roster(roster: list[str]):
         def _update(cur: dict[str, int]):
             return {name: int(cur.get(name, 0)) for name in roster}
+
         set_start_positions(_update)
+
 
     def _add_racer(_btn_value):
         racer = get_racer_to_add()
@@ -202,7 +226,9 @@ def _(
         set_racer_to_add(None)
         return _btn_value
 
+
     add_button = mo.ui.button(label="➕ Add", value=0, on_click=_add_racer)
+
 
     def _make_remove_handler(racer_name: str):
         def _remove(_btn_value):
@@ -214,7 +240,9 @@ def _(
             set_selected_racers(_update_roster)
             _sync_start_positions_for_roster(get_selected_racers())
             return _btn_value
+
         return _remove
+
 
     remove_buttons = {
         racer: mo.ui.button(
@@ -226,6 +254,7 @@ def _(
         for racer in selected_racer_names
     }
 
+
     def _make_start_pos_handler(racer_name: str):
         def _set_pos(new_value):
             try:
@@ -233,7 +262,9 @@ def _(
             except Exception:
                 v = 0
             set_start_positions(lambda cur: {**cur, racer_name: v})
+
         return _set_pos
+
 
     start_pos_inputs = {
         racer: mo.ui.number(
@@ -328,7 +359,9 @@ def _(
 
     # --- LOGGING SETUP FIX ---
     # We attach to the ROOT logger to ensure we catch all library logs.
-    log_console = Console(record=True, width=120, force_terminal=True, color_system="truecolor")
+    log_console = Console(
+        record=True, width=120, force_terminal=True, color_system="truecolor"
+    )
 
     # Clear existing handlers to prevent duplicates
     root_logger = logging.getLogger()
@@ -368,7 +401,9 @@ def _(
                 dice_error = "Could not parse dice rolls. Use integers separated by commas/spaces/newlines."
 
     if dice_error is not None:
-        mo.md(f"⚠️ **Dice-roll input error:** {dice_error}\n\nFalling back to seed-based randomness.")
+        mo.md(
+            f"⚠️ **Dice-roll input error:** {dice_error}\n\nFalling back to seed-based randomness."
+        )
 
     scenario = GameScenario(
         racers_config=[
@@ -387,7 +422,9 @@ def _(
     engine = scenario.engine
     game_history = []
 
-    with mo.status.spinner(title="Simulating game...", subtitle="Running turns", remove_on_exit=True):
+    with mo.status.spinner(
+        title="Simulating game...", subtitle="Running turns", remove_on_exit=True
+    ):
         while not engine.state.race_over:
             snapshot = {
                 "turn": len(game_history),
@@ -396,12 +433,21 @@ def _(
                 "tripped": [r.tripped for r in engine.state.racers],
                 "current_racer": engine.state.current_racer_idx,
                 "victory_points": [r.victory_points for r in engine.state.racers],
-                "main_move_consumed": [r.main_move_consumed for r in engine.state.racers],
+                "main_move_consumed": [
+                    r.main_move_consumed for r in engine.state.racers
+                ],
                 "reroll_count": [r.reroll_count for r in engine.state.racers],
-                "finish_position": [r.finish_position for r in engine.state.racers],
+                "finish_position": [
+                    r.finish_position for r in engine.state.racers
+                ],
                 "eliminated": [r.eliminated for r in engine.state.racers],
-                "modifiers": [list(getattr(r, "modifiers", [])) for r in engine.state.racers],
-                "abilities": [sorted(list(getattr(r, "abilities", set()))) for r in engine.state.racers],
+                "modifiers": [
+                    list(getattr(r, "modifiers", [])) for r in engine.state.racers
+                ],
+                "abilities": [
+                    sorted(list(getattr(r, "abilities", set())))
+                    for r in engine.state.racers
+                ],
             }
 
             # Clear buffer before running turn so we only capture NEW logs
@@ -411,7 +457,7 @@ def _(
 
             # Export HTML immediately
             snapshot["log_html"] = log_console.export_html(
-                clear=False, # Don't clear here, we clear at start of loop
+                clear=False,  # Don't clear here, we clear at start of loop
                 inline_styles=True,
                 code_format="{code}",
             )
@@ -422,7 +468,9 @@ def _(
                 break
 
     total_turns = len(game_history)
-    mo.md(f"✅ **Simulation complete!** {len(_selected_racer_names)} racers, {total_turns} turns")
+    mo.md(
+        f"✅ **Simulation complete!** {len(_selected_racer_names)} racers, {total_turns} turns"
+    )
     return (game_history,)
 
 
@@ -455,14 +503,7 @@ def _(turn_slider):
 
 
 @app.cell
-def _(
-    board_positions,
-    current_turn_data,
-    get_racer_color,
-    math,
-    mo,
-    space_colors,
-):
+def _(get_racer_color, math):
     def render_game_track(turn_data, positions_map, colors_map):
         import html as _html
         import json as _json
@@ -490,7 +531,7 @@ def _(
         legend_start_y = 20
         legend_col_width = 110
         legend_row_height = 20
-        items_per_col = 4 # Keep columns short so they don't hit the track
+        items_per_col = 4  # Keep columns short so they don't hit the track
 
         # Calculate total width needed
         num_items = len(turn_data["names"])
@@ -505,7 +546,7 @@ def _(
             f'fill="white" stroke="#bbb" stroke-width="1" />'
             f'<text x="{legend_start_x}" y="{legend_start_y + 10}" font-family="sans-serif" font-size="12" '
             f'font-weight="700" fill="#333">Legend</text>'
-            f'</g>'
+            f"</g>"
         )
 
         for i, name in enumerate(turn_data["names"]):
@@ -546,8 +587,12 @@ def _(
                     "reroll_count": turn_data["reroll_count"][idx],
                     "finish_position": turn_data["finish_position"][idx],
                     "eliminated": turn_data["eliminated"][idx],
-                    "modifiers": [str(m) for m in (turn_data["modifiers"][idx] or [])],
-                    "abilities": [str(a) for a in (turn_data["abilities"][idx] or [])],
+                    "modifiers": [
+                        str(m) for m in (turn_data["modifiers"][idx] or [])
+                    ],
+                    "abilities": [
+                        str(a) for a in (turn_data["abilities"][idx] or [])
+                    ],
                 }
             )
 
@@ -595,7 +640,7 @@ def _(
 
                 svg_elements.append(
                     f'<g>'
-                    f'<title>{_html.escape(tooltip_text)}</title>' # Native tooltip
+                    f'<title>{_html.escape(tooltip_text)}</title>'  # Native tooltip
                     f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="8" '
                     f'fill="{racer["color"]}" stroke="{stroke_color}" stroke-width="{stroke_width}" />'
                     f'<text x="{cx:.1f}" y="{cy + 20:.1f}" font-family="sans-serif" font-size="13" '
@@ -620,27 +665,52 @@ def _(
           </svg>
         </div>
         """
+    return (render_game_track,)
 
-    mo.Html(render_game_track(current_turn_data, board_positions, space_colors))
+
+@app.cell
+def _(
+    board_positions,
+    current_turn_data,
+    log_ui,
+    mo,
+    render_game_track,
+    space_colors,
+):
+    mo.hstack(
+        [
+            mo.Html(
+                render_game_track(current_turn_data, board_positions, space_colors)
+            ),
+            log_ui,
+        ],
+        gap=3
+    )
     return
 
 
 @app.cell
 def _(current_turn_data, mo):
-    log_html = (current_turn_data.get("log_html") or "").strip() if current_turn_data else ""
+    log_html = (
+        (current_turn_data.get("log_html") or "").strip()
+        if current_turn_data
+        else ""
+    )
 
     log_ui = (
-        mo.Html(f'''
+        mo.Html(f"""
             <div style="max-height: 400px; overflow-y: auto; background: #1e1e1e; color: #ccc; padding: 10px; border-radius: 6px; border: 1px solid #444; font-family: monospace; white-space: pre-wrap;">
             {log_html}
             </div>
-        ''')
+        """)
         if log_html
-        else mo.md("_No logs for this turn_" if current_turn_data else "_No logs available yet._")
+        else mo.md(
+            "_No logs for this turn_"
+            if current_turn_data
+            else "_No logs available yet._"
+        )
     )
-
-    log_ui
-    return
+    return (log_ui,)
 
 
 @app.cell
@@ -653,8 +723,12 @@ def _(current_turn_data, mo):
         |-------|----------|--------|
         """
         for idx, name in enumerate(current_turn_data["names"]):
-            status = "🔴 Tripped" if current_turn_data["tripped"][idx] else "✅ Active"
-            status_md += f"| {name} | {current_turn_data['positions'][idx]} | {status} |\n"
+            status = (
+                "🔴 Tripped" if current_turn_data["tripped"][idx] else "✅ Active"
+            )
+            status_md += (
+                f"| {name} | {current_turn_data['positions'][idx]} | {status} |\n"
+            )
 
         mo.md(status_md)
     else:
