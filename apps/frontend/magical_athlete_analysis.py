@@ -19,18 +19,38 @@ def _(math):
     space_colors = ["#4CAF50"] + ["#F5F5F5", "#E0E0E0"] * 14 + ["#F44336"]
     space_colors = space_colors[:30]
 
-    # Racer colors (map racer names to colors)
+    # Fixed colors for specific known names
     racer_colors = {
-        "Banana": "#FFD700",  # Gold
-        "Centaur": "#8B4513",  # Brown
-        "Magician": "#9370DB",  # Purple
-        "Scoocher": "#FF6347",  # Tomato
-        "Gunk": "#228B22",  # Forest Green
+        "Banana": "#FFD700",      # Gold
+        "Centaur": "#8B4513",     # Brown
+        "Magician": "#9370DB",    # Purple
+        "Scoocher": "#FF6347",    # Tomato
+        "Gunk": "#228B22",        # Forest Green
+        "HugeBaby": "#FF69B4",    # Hot Pink
+        "Copycat": "#4682B4",     # Steel Blue
+        "Mermaid": "#00CED1",     # Dark Turquoise
+        "Amazon": "#DC143C",      # Crimson
+        "Ninja": "#2F4F4F",       # Dark Slate Gray
     }
 
-    def generate_racetrack_positions(
-        num_spaces, start_x, start_y, straight_len, radius
-    ):
+    # Extended palette for generated/unknown racers
+    FALLBACK_PALETTE = [
+        "#8A2BE2", "#5F9EA0", "#D2691E", "#FF8C00", "#2E8B57",
+        "#1E90FF", "#FF1493", "#9ACD32", "#A0522D", "#00BFFF",
+        "#8B008B", "#4B0082", "#2F4F4F", "#556B2F", "#B8860B",
+    ]
+
+    def get_racer_color(name):
+        if name in racer_colors:
+            return racer_colors[name]
+        # Deterministic color based on name hash
+        try:
+            h = hash(name)
+            return FALLBACK_PALETTE[(h % len(FALLBACK_PALETTE))]
+        except Exception:
+            return "#888888"
+
+    def generate_racetrack_positions(num_spaces, start_x, start_y, straight_len, radius):
         positions = []
         perimeter = (2 * straight_len) + (2 * math.pi * radius)
         step_distance = perimeter / num_spaces
@@ -68,13 +88,12 @@ def _(math):
                 angle = math.degrees(theta_rad) + 90
 
             positions.append((x, y, angle))
-
         return positions
 
     board_positions = generate_racetrack_positions(
         num_spaces=30, start_x=120, start_y=350, straight_len=350, radius=100
     )
-    return board_positions, racer_colors, space_colors
+    return board_positions, get_racer_color, space_colors
 
 
 @app.cell
@@ -85,15 +104,12 @@ def _(mo):
         allow_self_loops=True,
     )
 
-    # Dropdown selection state (lets us clear it after adding)
-    get_racer_to_add, set_racer_to_add = mo.state(
-        None,
-        allow_self_loops=True,
-    )
+    # Dropdown selection state
+    get_racer_to_add, set_racer_to_add = mo.state(None, allow_self_loops=True)
 
-    # Start positions, by racer name
+    # Start positions
     get_start_positions, set_start_positions = mo.state(
-        {  # defaults for initial racers
+        {
             "Banana": 0,
             "Centaur": 0,
             "Magician": 0,
@@ -102,15 +118,9 @@ def _(mo):
         allow_self_loops=True,
     )
 
-    # Scripted dice controls
-    get_use_scripted_dice, set_use_scripted_dice = mo.state(
-        False,
-        allow_self_loops=True,
-    )
-    get_dice_rolls_text, set_dice_rolls_text = mo.state(
-        "",
-        allow_self_loops=True,
-    )
+    # Scripted dice
+    get_use_scripted_dice, set_use_scripted_dice = mo.state(False, allow_self_loops=True)
+    get_dice_rolls_text, set_dice_rolls_text = mo.state("", allow_self_loops=True)
     return (
         get_dice_rolls_text,
         get_racer_to_add,
@@ -144,17 +154,12 @@ def _(
 
     AVAILABLE_RACERS = sorted(list(get_args(RacerName)))
 
-    # Snapshot for this run; because allow_self_loops=True this cell will rerun
-    # after add/remove and refresh the UI.
     selected_racer_names = get_selected_racers()
     start_positions = get_start_positions()
 
     reset_button = mo.ui.button(label="🔄 Reset Simulation")
-    scenario_seed = mo.ui.number(
-        start=1, stop=10000, value=42, label="Random Seed"
-    )
+    scenario_seed = mo.ui.number(start=1, stop=10000, value=42, label="Random Seed")
 
-    # Dice-roll scripting controls
     use_scripted_dice = mo.ui.checkbox(
         value=get_use_scripted_dice(),
         on_change=set_use_scripted_dice,
@@ -164,10 +169,9 @@ def _(
     dice_rolls_text = mo.ui.text(
         value=get_dice_rolls_text(),
         on_change=set_dice_rolls_text,
-        label="Dice rolls: ",
+        label="Dice rolls:",
         placeholder="e.g. 4,5,6,3,2,4",
     )
-
 
     add_racer_dropdown = mo.ui.dropdown(
         options=[r for r in AVAILABLE_RACERS if r not in selected_racer_names],
@@ -179,10 +183,8 @@ def _(
     )
 
     def _sync_start_positions_for_roster(roster: list[str]):
-        # Keep only keys in roster; add defaults for new racers
         def _update(cur: dict[str, int]):
-            out = {name: int(cur.get(name, 0)) for name in roster}
-            return out
+            return {name: int(cur.get(name, 0)) for name in roster}
         set_start_positions(_update)
 
     def _add_racer(_btn_value):
@@ -196,9 +198,8 @@ def _(
             return cur + [racer]
 
         set_selected_racers(_update_roster)
-        # Ensure start_positions has the new racer
         _sync_start_positions_for_roster(get_selected_racers())
-        set_racer_to_add(None)  # clear dropdown
+        set_racer_to_add(None)
         return _btn_value
 
     add_button = mo.ui.button(label="➕ Add", value=0, on_click=_add_racer)
@@ -213,7 +214,6 @@ def _(
             set_selected_racers(_update_roster)
             _sync_start_positions_for_roster(get_selected_racers())
             return _btn_value
-
         return _remove
 
     remove_buttons = {
@@ -228,12 +228,10 @@ def _(
 
     def _make_start_pos_handler(racer_name: str):
         def _set_pos(new_value):
-            # mo.ui.number may emit int/float; normalize
             try:
                 v = int(new_value)
             except Exception:
                 v = 0
-
             set_start_positions(lambda cur: {**cur, racer_name: v})
         return _set_pos
 
@@ -287,7 +285,7 @@ def _(
         for i, racer in enumerate(selected_racer_names)
     ]
 
-    dice_input = dice_rolls_text if use_scripted_dice.value else mo.md("")
+    dice_input = dice_rolls_text if use_scripted_dice.value else mo.Html("")
 
     mo.vstack(
         [
@@ -319,7 +317,6 @@ def _(
 ):
     import logging
     import re
-    from io import StringIO
     from rich.console import Console
     from rich.logging import RichHandler
     from magical_athlete_simulator.engine.logging import (
@@ -327,12 +324,16 @@ def _(
         GameLogHighlighter,
     )
 
-    # Trigger re-run when reset is clicked
     reset_button.value
 
-    # Create log capture
-    log_buffer = StringIO()
-    log_console = Console(file=log_buffer, width=120)
+    # --- LOGGING SETUP FIX ---
+    # We attach to the ROOT logger to ensure we catch all library logs.
+    log_console = Console(record=True, width=120, force_terminal=True, color_system="truecolor")
+
+    # Clear existing handlers to prevent duplicates
+    root_logger = logging.getLogger()
+    for h in root_logger.handlers[:]:
+        root_logger.removeHandler(h)
 
     log_handler = RichHandler(
         console=log_console,
@@ -343,16 +344,12 @@ def _(
     )
     log_handler.setFormatter(RichMarkupFormatter())
 
-    base_logger = logging.getLogger("magical_athlete")
-    base_logger.handlers.clear()
-    base_logger.addHandler(log_handler)
-    base_logger.setLevel(logging.INFO)
+    root_logger.addHandler(log_handler)
+    root_logger.setLevel(logging.INFO)
 
-    # Local var name avoids marimo "multiple definitions" with the UI cell
     _selected_racer_names = get_selected_racers()
     _start_positions = get_start_positions()
 
-    # Parse scripted dice rolls
     dice_rolls = None
     dice_error = None
     if get_use_scripted_dice():
@@ -388,48 +385,52 @@ def _(
     )
 
     engine = scenario.engine
-
-    # PRE-SIMULATE THE ENTIRE GAME
     game_history = []
 
-    with mo.status.spinner(
-        title="Simulating game...", subtitle="Running turns", remove_on_exit=True
-    ):
+    with mo.status.spinner(title="Simulating game...", subtitle="Running turns", remove_on_exit=True):
         while not engine.state.race_over:
-            log_start_pos = log_buffer.tell()
-
             snapshot = {
                 "turn": len(game_history),
                 "positions": [r.position for r in engine.state.racers],
                 "names": [r.name for r in engine.state.racers],
                 "tripped": [r.tripped for r in engine.state.racers],
                 "current_racer": engine.state.current_racer_idx,
-                "log_start": log_start_pos,
+                "victory_points": [r.victory_points for r in engine.state.racers],
+                "main_move_consumed": [r.main_move_consumed for r in engine.state.racers],
+                "reroll_count": [r.reroll_count for r in engine.state.racers],
+                "finish_position": [r.finish_position for r in engine.state.racers],
+                "eliminated": [r.eliminated for r in engine.state.racers],
+                "modifiers": [list(getattr(r, "modifiers", [])) for r in engine.state.racers],
+                "abilities": [sorted(list(getattr(r, "abilities", set()))) for r in engine.state.racers],
             }
+
+            # Clear buffer before running turn so we only capture NEW logs
+            log_console.clear()
 
             scenario.run_turn()
 
-            snapshot["log_end"] = log_buffer.tell()
+            # Export HTML immediately
+            snapshot["log_html"] = log_console.export_html(
+                clear=False, # Don't clear here, we clear at start of loop
+                inline_styles=True,
+                code_format="{code}",
+            )
+
             game_history.append(snapshot)
 
-            # Safety limit
             if len(game_history) > 200:
                 break
 
     total_turns = len(game_history)
-
-    mo.md(
-        f"✅ **Simulation complete!** {len(_selected_racer_names)} racers, {total_turns} turns"
-    )
-    return game_history, log_buffer, total_turns
+    mo.md(f"✅ **Simulation complete!** {len(_selected_racer_names)} racers, {total_turns} turns")
+    return (game_history,)
 
 
 @app.cell
-def _(mo, total_turns):
-    # Slider dynamically sized to the actual game length
+def _(game_history, mo):
     turn_slider = mo.ui.slider(
         start=0,
-        stop=max(0, total_turns - 1),
+        stop=max(0, len(game_history) - 1),
         step=1,
         label="Turn to View",
         value=0,
@@ -457,19 +458,22 @@ def _(turn_slider):
 def _(
     board_positions,
     current_turn_data,
+    get_racer_color,
     math,
     mo,
-    racer_colors,
     space_colors,
 ):
     def render_game_track(turn_data, positions_map, colors_map):
+        import html as _html
+        import json as _json
+
         if not turn_data:
             return "<p>No game data yet. Move the slider.</p>"
 
         svg_elements = []
         rw, rh = 50, 30
 
-        # Draw track spaces
+        # Track spaces
         for i, (cx, cy, rot) in enumerate(positions_map):
             transform = f"rotate({rot}, {cx}, {cy})"
             svg_elements.append(
@@ -481,25 +485,74 @@ def _(
                 f'text-anchor="middle" fill="#333" transform="{transform}">{i}</text>'
             )
 
-        # Group racers by position
+        # --- LEGEND FIX: Grid Layout expanding to the RIGHT ---
+        legend_start_x = 20
+        legend_start_y = 20
+        legend_col_width = 110
+        legend_row_height = 20
+        items_per_col = 4 # Keep columns short so they don't hit the track
+
+        # Calculate total width needed
+        num_items = len(turn_data["names"])
+        num_cols = math.ceil(num_items / items_per_col)
+        legend_bg_width = num_cols * legend_col_width + 10
+        legend_bg_height = (items_per_col * legend_row_height) + 30
+
+        # Legend Background
+        svg_elements.append(
+            f'<g opacity="0.95">'
+            f'<rect x="{legend_start_x - 5}" y="{legend_start_y - 5}" width="{legend_bg_width}" height="{legend_bg_height}" rx="6" '
+            f'fill="white" stroke="#bbb" stroke-width="1" />'
+            f'<text x="{legend_start_x}" y="{legend_start_y + 10}" font-family="sans-serif" font-size="12" '
+            f'font-weight="700" fill="#333">Legend</text>'
+            f'</g>'
+        )
+
+        for i, name in enumerate(turn_data["names"]):
+            c = get_racer_color(name)
+
+            # Grid math
+            col_idx = i // items_per_col
+            row_idx = i % items_per_col
+
+            x = legend_start_x + (col_idx * legend_col_width)
+            y = legend_start_y + 30 + (row_idx * legend_row_height)
+
+            svg_elements.append(
+                f'<circle cx="{x + 6}" cy="{y - 4}" r="5" fill="{c}" stroke="#555" stroke-width="1" />'
+            )
+            svg_elements.append(
+                f'<text x="{x + 18}" y="{y}" font-family="sans-serif" font-size="12" '
+                f'font-weight="600" fill="#333">{_html.escape(name)}</text>'
+            )
+
+        # Group racers
         occupancy = {}
-        max_space = len(positions_map) - 1  # 29 for a 30-space track
+        max_space = len(positions_map) - 1
 
         for idx, pos in enumerate(turn_data["positions"]):
-            draw_pos = min(pos, max_space)  # clamp finishers onto the goal space
+            draw_pos = min(pos, max_space)
+            name = turn_data["names"][idx]
             occupancy.setdefault(draw_pos, []).append(
                 {
-                    "name": turn_data["names"][idx],
-                    "color": racer_colors.get(turn_data["names"][idx], "#888"),
+                    "idx": idx,
+                    "name": name,
+                    "color": get_racer_color(name),
+                    "pos": pos,
                     "tripped": turn_data["tripped"][idx],
                     "is_current": idx == turn_data["current_racer"],
+                    "victory_points": turn_data["victory_points"][idx],
+                    "main_move_consumed": turn_data["main_move_consumed"][idx],
+                    "reroll_count": turn_data["reroll_count"][idx],
+                    "finish_position": turn_data["finish_position"][idx],
+                    "eliminated": turn_data["eliminated"][idx],
+                    "modifiers": [str(m) for m in (turn_data["modifiers"][idx] or [])],
+                    "abilities": [str(a) for a in (turn_data["abilities"][idx] or [])],
                 }
             )
 
-
         # Draw racers
         for space_idx, racers_here in occupancy.items():
-
             bx, by, brot = positions_map[space_idx]
             count = len(racers_here)
 
@@ -523,25 +576,49 @@ def _(
                 rot_ox = ox * math.cos(rad) - oy * math.sin(rad)
                 rot_oy = ox * math.sin(rad) + oy * math.cos(rad)
 
-                stroke_color = "yellow" if racer["is_current"] else "white"
-                stroke_width = "2.5" if racer["is_current"] else "1.5"
+                cx = bx + rot_ox
+                cy = by + rot_oy
+
+                is_current = racer["is_current"]
+                stroke_color = "yellow" if is_current else "white"
+                stroke_width = "2.5" if is_current else "1.5"
+
+                # --- TOOLTIP FIX: Standard SVG <title> ---
+                tooltip_text = (
+                    f"{racer['name']} (ID: {racer['idx']})\n"
+                    f"Pos: {racer['pos']} | Finish: {racer['finish_position']}\n"
+                    f"VP: {racer['victory_points']} | Rerolls: {racer['reroll_count']}\n"
+                    f"Tripped: {racer['tripped']} | Elim: {racer['eliminated']}\n"
+                    f"Abilities: {racer['abilities']}\n"
+                    f"Modifiers: {racer['modifiers']}"
+                )
 
                 svg_elements.append(
-                    f'<circle cx="{bx + rot_ox:.1f}" cy="{by + rot_oy:.1f}" r="7" '
+                    f'<g>'
+                    f'<title>{_html.escape(tooltip_text)}</title>' # Native tooltip
+                    f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="8" '
                     f'fill="{racer["color"]}" stroke="{stroke_color}" stroke-width="{stroke_width}" />'
+                    f'<text x="{cx:.1f}" y="{cy + 20:.1f}" font-family="sans-serif" font-size="13" '
+                    f'font-weight="900" text-anchor="middle" fill="{racer["color"]}" '
+                    f'style="paint-order: stroke; stroke: rgba(255,255,255,0.9); stroke-width: 4px;">'
+                    f'{_html.escape(racer["name"])}</text>'
+                    f'</g>'
                 )
 
                 if racer["tripped"]:
                     svg_elements.append(
-                        f'<text x="{bx + rot_ox:.1f}" y="{by + rot_oy:.1f}" dy="4" '
-                        f'font-size="14" font-weight="bold" fill="red" text-anchor="middle">X</text>'
+                        f'<text x="{cx:.1f}" y="{cy:.1f}" dy="4" '
+                        f'font-size="16" font-weight="bold" fill="red" text-anchor="middle">X</text>'
                     )
 
         return f"""
-        <svg width="600" height="500" style="background: #eef; border: 2px solid #ccc; border-radius: 8px;">
-            <ellipse cx="295" cy="250" rx="150" ry="70" fill="#C8E6C9" stroke="none" />
-            {"".join(svg_elements)}
-        </svg>
+        <div style="position: relative; width: 700px;">
+          <svg class="track-svg" width="700" height="520"
+               style="background:#eef; border:2px solid #ccc; border-radius:8px;">
+              <ellipse cx="350" cy="260" rx="150" ry="70" fill="#C8E6C9" stroke="none" />
+              {"".join(svg_elements)}
+          </svg>
+        </div>
         """
 
     mo.Html(render_game_track(current_turn_data, board_positions, space_colors))
@@ -549,28 +626,21 @@ def _(
 
 
 @app.cell
-def _(current_turn_data, log_buffer, mo):
-    def render_turn_logs(turn_data, log_buf):
-        if not turn_data:
-            return mo.md("_No logs available yet._")
-
-        full_logs = log_buf.getvalue()
-
-        start = turn_data["log_start"]
-        end = turn_data["log_end"]
-        turn_log_text = full_logs[start:end].strip()
-
-        if not turn_log_text:
-            return mo.md("_No logs for this turn._")
-
-        return mo.ui.code_editor(
-            value=turn_log_text,
-            language="text",
-            disabled=True,
-            label=f"Turn {turn_data['turn']} - {turn_data['names'][turn_data['current_racer']]}",
-        )
-
-    render_turn_logs(current_turn_data, log_buffer)
+def _(current_turn_data, mo):
+    if not current_turn_data:
+        mo.md("_No logs available yet._")
+    else:
+        html_block = (current_turn_data.get("log_html") or "").strip()
+        if not html_block:
+            mo.md("_No logs for this turn._")
+        else:
+            mo.Html(
+                f"""
+                <div style="max-height: 320px; overflow: auto; border: 1px solid #ddd; border-radius: 6px; padding: 12px; background: #1e1e1e; color: #d4d4d4;">
+                  <pre style="margin: 0; white-space: pre-wrap; font-family: Menlo, Consolas, monospace;">{html_block}</pre>
+                </div>
+                """
+            )
     return
 
 
@@ -579,20 +649,13 @@ def _(current_turn_data, mo):
     if current_turn_data:
         status_md = f"""
         ## Turn {current_turn_data['turn']} Summary
-
         **Current Racer:** {current_turn_data['names'][current_turn_data['current_racer']]}
-
         | Racer | Position | Status |
         |-------|----------|--------|
         """
-
         for idx, name in enumerate(current_turn_data["names"]):
-            status = (
-                "🔴 Tripped" if current_turn_data["tripped"][idx] else "✅ Active"
-            )
-            status_md += (
-                f"| {name} | {current_turn_data['positions'][idx]} | {status} |\n"
-            )
+            status = "🔴 Tripped" if current_turn_data["tripped"][idx] else "✅ Active"
+            status_md += f"| {name} | {current_turn_data['positions'][idx]} | {status} |\n"
 
         mo.md(status_md)
     else:
