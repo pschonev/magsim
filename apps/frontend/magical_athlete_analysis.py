@@ -77,15 +77,104 @@ def _(math):
 
 @app.cell
 def _(mo):
-    # Reset button to restart the simulation
-    reset_button = mo.ui.button(label="🔄 Reset Simulation")
+    from typing import get_args
+    from magical_athlete_simulator.core.types import RacerName
 
-    # Scenario configuration
+    # Get all available racer names
+    AVAILABLE_RACERS = sorted(list(get_args(RacerName)))
+
+    # Initialize state for selected racers
+    get_selected_racers, set_selected_racers = mo.state(
+        ["Banana", "Centaur", "Magician", "Scoocher"]
+    )
+
+    # Reset button and seed
+    reset_button = mo.ui.button(label="🔄 Reset Simulation")
     scenario_seed = mo.ui.number(start=1, stop=10000, value=42, label="Random Seed")
 
-    mo.hstack([reset_button, scenario_seed], justify="start")
+    # Dropdown for adding racers
+    add_racer_dropdown = mo.ui.dropdown(
+        options=[r for r in AVAILABLE_RACERS if r not in get_selected_racers()],
+        label="Select racer to add",
+        searchable=True,
+        allow_select_none=True,
+    )
 
-    return reset_button, scenario_seed
+    add_button = mo.ui.button(label="➕ Add")
+
+    # Create remove buttons for each racer
+    remove_buttons = {
+        racer: mo.ui.button(label="✖", disabled=len(get_selected_racers()) <= 1)
+        for racer in get_selected_racers()
+    }
+
+    return (
+        AVAILABLE_RACERS,
+        add_button,
+        add_racer_dropdown,
+        get_selected_racers,
+        remove_buttons,
+        reset_button,
+        scenario_seed,
+        set_selected_racers,
+    )
+
+
+@app.cell
+def _(
+    AVAILABLE_RACERS,
+    add_button,
+    add_racer_dropdown,
+    get_selected_racers,
+    remove_buttons,
+    set_selected_racers,
+):
+    # Handle add button click
+    if add_button.value and add_racer_dropdown.value:
+        current = get_selected_racers().copy()
+        if add_racer_dropdown.value not in current and len(current) < len(AVAILABLE_RACERS):
+            current.append(add_racer_dropdown.value)
+            set_selected_racers(current)
+
+    # Handle remove button clicks
+    for racer, button in remove_buttons.items():
+        if button.value:
+            current = get_selected_racers().copy()
+            if racer in current and len(current) > 1:
+                current.remove(racer)
+                set_selected_racers(current)
+                break
+
+    return
+
+
+@app.cell
+def _(
+    add_button,
+    add_racer_dropdown,
+    get_selected_racers,
+    mo,
+    remove_buttons,
+    reset_button,
+    scenario_seed,
+):
+    racer_list_items = [
+        mo.hstack([
+            mo.md(f"**{i+1}.** {racer}"),
+            remove_buttons[racer]
+        ], justify="space-between", widths=[10, 1])
+        for i, racer in enumerate(get_selected_racers())
+    ]
+
+    mo.vstack([
+        mo.md("## Configure Race"),
+        mo.hstack([scenario_seed, reset_button], justify="start", gap=2),
+        mo.md("### Selected Racers"),
+        mo.vstack(racer_list_items, gap=0.5),
+        mo.hstack([add_racer_dropdown, add_button], justify="start", gap=1),
+    ], gap=1.5)
+
+    return
 
 
 @app.cell
@@ -93,6 +182,7 @@ def _(
     BOARD_DEFINITIONS,
     GameScenario,
     RacerConfig,
+    get_selected_racers,
     mo,
     reset_button,
     scenario_seed,
@@ -124,13 +214,13 @@ def _(
     base_logger.addHandler(log_handler)
     base_logger.setLevel(logging.INFO)
 
-    # Create scenario
+    # Create scenario with dynamically selected racers
+    selected_racer_names = get_selected_racers()
+
     scenario = GameScenario(
         racers_config=[
-            RacerConfig(idx=0, name="Banana", start_pos=0),
-            RacerConfig(idx=1, name="Centaur", start_pos=0),
-            RacerConfig(idx=2, name="Magician", start_pos=0),
-            RacerConfig(idx=3, name="Scoocher", start_pos=0),
+            RacerConfig(idx=i, name=name, start_pos=0)
+            for i, name in enumerate(selected_racer_names)
         ],
         seed=scenario_seed.value,
         board=BOARD_DEFINITIONS["standard"](),
@@ -159,13 +249,14 @@ def _(
             snapshot["log_end"] = log_buffer.tell()
             game_history.append(snapshot)
         
-            # Safety limit to prevent infinite loops
+            # Safety limit
             if len(game_history) > 200:
                 break
 
     total_turns = len(game_history)
 
-    mo.md(f"✅ **Simulation complete!** Total turns: {total_turns}")
+    mo.md(f"✅ **Simulation complete!** {len(selected_racer_names)} racers, {total_turns} turns")
+
     return game_history, log_buffer, total_turns
 
 
