@@ -1,5 +1,6 @@
 """Testing utilities for creating reproducible game scenarios."""
 
+import itertools
 import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -74,9 +75,8 @@ class GameScenario:
 
         # Choose RNG strategy
         if self.dice_rolls is not None:
-            # Use mock for scripted dice rolls
             self.mock_rng = MagicMock()
-            self.mock_rng.randint.side_effect = self.dice_rolls
+            self.mock_rng.randint.side_effect = itertools.cycle(self.dice_rolls)
             rng = self.mock_rng
         elif self.seed is not None:
             # Use seeded random for reproducible but natural randomness
@@ -107,11 +107,10 @@ class GameScenario:
         )
 
     def set_dice_rolls(self, rolls: list[int]):
-        """Script the dice rolls (e.g., [1, 6, 3]). Only works if using mock RNG."""
         if self.mock_rng is None:
             msg = "Cannot set dice rolls when using a real Random instance. Create scenario with dice_rolls parameter instead."
             raise ValueError(msg)
-        self.mock_rng.randint.side_effect = rolls
+        self.mock_rng.randint.side_effect = itertools.cycle(rolls)
 
     def run_turn(self):
         """Run one turn and advance to the next racer."""

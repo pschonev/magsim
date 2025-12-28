@@ -90,21 +90,54 @@ def _(mo):
         None,
         allow_self_loops=True,
     )
+
+    # Start positions, by racer name
+    get_start_positions, set_start_positions = mo.state(
+        {  # defaults for initial racers
+            "Banana": 0,
+            "Centaur": 0,
+            "Magician": 0,
+            "Scoocher": 0,
+        },
+        allow_self_loops=True,
+    )
+
+    # Scripted dice controls
+    get_use_scripted_dice, set_use_scripted_dice = mo.state(
+        False,
+        allow_self_loops=True,
+    )
+    get_dice_rolls_text, set_dice_rolls_text = mo.state(
+        "",
+        allow_self_loops=True,
+    )
     return (
+        get_dice_rolls_text,
         get_racer_to_add,
         get_selected_racers,
+        get_start_positions,
+        get_use_scripted_dice,
+        set_dice_rolls_text,
         set_racer_to_add,
         set_selected_racers,
+        set_start_positions,
+        set_use_scripted_dice,
     )
 
 
 @app.cell
 def _(
+    get_dice_rolls_text,
     get_racer_to_add,
     get_selected_racers,
+    get_start_positions,
+    get_use_scripted_dice,
     mo,
+    set_dice_rolls_text,
     set_racer_to_add,
     set_selected_racers,
+    set_start_positions,
+    set_use_scripted_dice,
 ):
     from typing import get_args
     from magical_athlete_simulator.core.types import RacerName
@@ -114,11 +147,27 @@ def _(
     # Snapshot for this run; because allow_self_loops=True this cell will rerun
     # after add/remove and refresh the UI.
     selected_racer_names = get_selected_racers()
+    start_positions = get_start_positions()
 
     reset_button = mo.ui.button(label="🔄 Reset Simulation")
     scenario_seed = mo.ui.number(
         start=1, stop=10000, value=42, label="Random Seed"
     )
+
+    # Dice-roll scripting controls
+    use_scripted_dice = mo.ui.checkbox(
+        value=get_use_scripted_dice(),
+        on_change=set_use_scripted_dice,
+        label="Use scripted dice rolls (overrides seed)",
+    )
+
+    dice_rolls_text = mo.ui.text(
+        value=get_dice_rolls_text(),
+        on_change=set_dice_rolls_text,
+        label="Dice rolls (e.g. 4,5,6,3,2,4)",
+        placeholder="Comma/space separated, values 1-6",
+    )
+
 
     add_racer_dropdown = mo.ui.dropdown(
         options=[r for r in AVAILABLE_RACERS if r not in selected_racer_names],
@@ -129,25 +178,40 @@ def _(
         allow_select_none=True,
     )
 
+    def _sync_start_positions_for_roster(roster: list[str]):
+        # Keep only keys in roster; add defaults for new racers
+        def _update(cur: dict[str, int]):
+            out = {name: int(cur.get(name, 0)) for name in roster}
+            return out
+        set_start_positions(_update)
+
     def _add_racer(_btn_value):
         racer = get_racer_to_add()
         if racer is None:
             return _btn_value
 
-        set_selected_racers(lambda cur: cur if racer in cur else cur + [racer])
+        def _update_roster(cur: list[str]):
+            if racer in cur:
+                return cur
+            return cur + [racer]
+
+        set_selected_racers(_update_roster)
+        # Ensure start_positions has the new racer
+        _sync_start_positions_for_roster(get_selected_racers())
         set_racer_to_add(None)  # clear dropdown
         return _btn_value
 
-    # Give the button a value so on_click has something to pass through
     add_button = mo.ui.button(label="➕ Add", value=0, on_click=_add_racer)
 
     def _make_remove_handler(racer_name: str):
         def _remove(_btn_value):
-            set_selected_racers(
-                lambda cur: cur
-                if len(cur) <= 1
-                else [r for r in cur if r != racer_name]
-            )
+            def _update_roster(cur: list[str]):
+                if len(cur) <= 1:
+                    return cur
+                return [r for r in cur if r != racer_name]
+
+            set_selected_racers(_update_roster)
+            _sync_start_positions_for_roster(get_selected_racers())
             return _btn_value
 
         return _remove
@@ -161,13 +225,39 @@ def _(
         )
         for racer in selected_racer_names
     }
+
+    def _make_start_pos_handler(racer_name: str):
+        def _set_pos(new_value):
+            # mo.ui.number may emit int/float; normalize
+            try:
+                v = int(new_value)
+            except Exception:
+                v = 0
+
+            set_start_positions(lambda cur: {**cur, racer_name: v})
+        return _set_pos
+
+    start_pos_inputs = {
+        racer: mo.ui.number(
+            start=0,
+            stop=1000,
+            step=1,
+            value=int(start_positions.get(racer, 0)),
+            label="Start pos",
+            on_change=_make_start_pos_handler(racer),
+        )
+        for racer in selected_racer_names
+    }
     return (
         add_button,
         add_racer_dropdown,
+        dice_rolls_text,
         remove_buttons,
         reset_button,
         scenario_seed,
         selected_racer_names,
+        start_pos_inputs,
+        use_scripted_dice,
     )
 
 
@@ -175,20 +265,24 @@ def _(
 def _(
     add_button,
     add_racer_dropdown,
+    dice_rolls_text,
     mo,
     remove_buttons,
     reset_button,
     scenario_seed,
     selected_racer_names,
+    start_pos_inputs,
+    use_scripted_dice,
 ):
     racer_list_items = [
         mo.hstack(
             [
                 mo.md(f"**{i+1}.** {racer}"),
+                mo.hstack([mo.md("Start:"), start_pos_inputs[racer]], gap=1),
                 remove_buttons[racer],
             ],
             justify="space-between",
-            widths=[10, 1],
+            widths=[7, 5, 1],
         )
         for i, racer in enumerate(selected_racer_names)
     ]
@@ -197,11 +291,14 @@ def _(
         [
             mo.md("## Configure Race"),
             mo.hstack([scenario_seed, reset_button], justify="start", gap=2),
+            mo.md("### Scripted dice"),
+            use_scripted_dice,
+            (dice_rolls_text if use_scripted_dice.value else None),
             mo.md("### Selected Racers"),
             mo.vstack(racer_list_items, gap=0.5),
             mo.hstack([add_racer_dropdown, add_button], justify="start", gap=1),
         ],
-        gap=1.5,
+        gap=1.25,
     )
     return
 
@@ -211,12 +308,16 @@ def _(
     BOARD_DEFINITIONS,
     GameScenario,
     RacerConfig,
+    get_dice_rolls_text,
     get_selected_racers,
+    get_start_positions,
+    get_use_scripted_dice,
     mo,
     reset_button,
     scenario_seed,
 ):
     import logging
+    import re
     from io import StringIO
     from rich.console import Console
     from rich.logging import RichHandler
@@ -246,15 +347,42 @@ def _(
     base_logger.addHandler(log_handler)
     base_logger.setLevel(logging.INFO)
 
-    # IMPORTANT: local var name avoids marimo "multiple definitions" with the UI cell
+    # Local var name avoids marimo "multiple definitions" with the UI cell
     _selected_racer_names = get_selected_racers()
+    _start_positions = get_start_positions()
+
+    # Parse scripted dice rolls
+    dice_rolls = None
+    dice_error = None
+    if get_use_scripted_dice():
+        raw = (get_dice_rolls_text() or "").strip()
+        if raw == "":
+            dice_error = "Scripted dice enabled, but no dice rolls provided."
+        else:
+            try:
+                tokens = [t for t in re.split(r"[,\s]+", raw) if t]
+                parsed = [int(t) for t in tokens]
+                if any(r < 1 or r > 6 for r in parsed):
+                    dice_error = "Dice rolls must be integers between 1 and 6."
+                else:
+                    dice_rolls = parsed
+            except Exception:
+                dice_error = "Could not parse dice rolls. Use integers separated by commas/spaces/newlines."
+
+    if dice_error is not None:
+        mo.md(f"⚠️ **Dice-roll input error:** {dice_error}\n\nFalling back to seed-based randomness.")
 
     scenario = GameScenario(
         racers_config=[
-            RacerConfig(idx=i, name=name, start_pos=0)
+            RacerConfig(
+                idx=i,
+                name=name,
+                start_pos=int(_start_positions.get(name, 0)),
+            )
             for i, name in enumerate(_selected_racer_names)
         ],
-        seed=scenario_seed.value,
+        dice_rolls=dice_rolls,
+        seed=None if dice_rolls is not None else scenario_seed.value,
         board=BOARD_DEFINITIONS["standard"](),
     )
 
