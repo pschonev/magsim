@@ -627,20 +627,19 @@ def _(
 
 @app.cell
 def _(current_turn_data, mo):
-    if not current_turn_data:
-        mo.md("_No logs available yet._")
-    else:
-        html_block = (current_turn_data.get("log_html") or "").strip()
-        if not html_block:
-            mo.md("_No logs for this turn._")
-        else:
-            mo.Html(
-                f"""
-                <div style="max-height: 320px; overflow: auto; border: 1px solid #ddd; border-radius: 6px; padding: 12px; background: #1e1e1e; color: #d4d4d4;">
-                  <pre style="margin: 0; white-space: pre-wrap; font-family: Menlo, Consolas, monospace;">{html_block}</pre>
-                </div>
-                """
-            )
+    log_html = (current_turn_data.get("log_html") or "").strip() if current_turn_data else ""
+
+    log_ui = (
+        mo.Html(f'''
+            <div style="max-height: 400px; overflow-y: auto; background: #1e1e1e; color: #ccc; padding: 10px; border-radius: 6px; border: 1px solid #444; font-family: monospace; white-space: pre-wrap;">
+            {log_html}
+            </div>
+        ''')
+        if log_html
+        else mo.md("_No logs for this turn_" if current_turn_data else "_No logs available yet._")
+    )
+
+    log_ui
     return
 
 
