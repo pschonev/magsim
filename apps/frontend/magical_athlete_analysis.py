@@ -36,13 +36,11 @@ def _():
         GameLogHighlighter,
         GameScenario,
         MoveCmdEvent,
-        PerformMainRollEvent,
         RacerConfig,
         RacerName,
         RichHandler,
         RichMarkupFormatter,
         TripCmdEvent,
-        TurnStartEvent,
         WarpCmdEvent,
         get_args,
         logging,
@@ -234,7 +232,6 @@ def _(get_racer_color, math):
             <ellipse cx="350" cy="260" rx="150" ry="70" fill="#C8E6C9" stroke="none"/>
             {"".join(svg_elements)}
         </svg>"""
-
     return (render_game_track,)
 
 
@@ -293,7 +290,7 @@ def _(
         label="Dice rolls", placeholder="e.g. 4,5,6"
     )
 
-    # Racer Selection (Restored Functional Update Pattern)
+    # Racer Selection (Functional Update Pattern)
     current_roster = get_selected_racers()
     available_options = [r for r in AVAILABLE_RACERS if r not in current_roster]
 
@@ -310,11 +307,7 @@ def _(
                 return cur + [r]
             set_selected_racers(_update)
 
-            # Sync start pos needs new roster, so we assume update passes
-            # In paste.txt logic, we just updated state. Here we do it carefully.
             cur_pos = get_start_positions()
-            # We don't have the new roster synchronously, but we can just set the key
-            # or rely on the next render. But to be safe and immediate:
             set_start_positions({**cur_pos, r: 0})
 
             set_racer_to_add(None)
@@ -400,12 +393,10 @@ def _(
     GameLogHighlighter,
     GameScenario,
     MoveCmdEvent,
-    PerformMainRollEvent,
     RacerConfig,
     RichHandler,
     RichMarkupFormatter,
     TripCmdEvent,
-    TurnStartEvent,
     WarpCmdEvent,
     get_dice_rolls_text,
     get_selected_racers,
@@ -449,7 +440,7 @@ def _(
     step_history = []
     turn_map = {} 
 
-    VISUAL_EVENTS = (MoveCmdEvent, WarpCmdEvent, TripCmdEvent, PerformMainRollEvent, TurnStartEvent)
+    VISUAL_EVENTS = (MoveCmdEvent, WarpCmdEvent, TripCmdEvent)
 
     sim_turn_counter = {"current": 0}
 
@@ -495,13 +486,15 @@ def _(
     engine = scenario.engine
     with mo.status.spinner(title="Simulating..."):
         while not engine.state.race_over:
-            # FIX: Clear logs from previous turn so we don't accumulate history
+            # FIX 1: Clear logs from previous turn
             log_console.export_html(clear=True)
 
             scenario.run_turn()
 
             capture_snapshot(engine, "TurnEnd", is_turn_end=True)
-            scenario.engine._advance_turn()
+
+            # FIX 2: REMOVED _advance_turn() to prevent double skipping
+            # scenario.engine._advance_turn()
 
             sim_turn_counter["current"] += 1
 
@@ -590,7 +583,6 @@ def _(get_step_idx, mo, set_step_idx, step_history, turn_map):
         start=0, stop=nav_max_turn, value=current_turn_idx, step=1, 
         label="Turn Timeline", on_change=on_slider_change, full_width=True
     )
-
     return (
         btn_next_step,
         btn_next_turn,
@@ -624,7 +616,6 @@ def _(
         mo.hstack([btn_prev_turn, turn_slider, btn_next_turn], justify="center", gap=1),
         mo.hstack([btn_prev_step, status_text, btn_next_step], justify="center", gap=1)
     ])
-
     return (nav_ui,)
 
 
@@ -642,16 +633,29 @@ def _(current_data, current_turn_idx, mo, step_history, turn_map):
             if t not in turn_map: continue
 
             is_active = (t == current_turn_idx)
+
+            # --- FIX LOGIC: Always get the FULL log for this turn (from the end-of-turn snapshot) ---
+            end_of_turn_idx = turn_map[t][-1]
+            full_turn_log = step_history[end_of_turn_idx]["log_html"]
+
             if is_active:
-                raw_html = current_data["log_html"]
                 bg, border, opacity = "#000000", "#00FF00", "1.0"
-                marker = '<div style="color:red; font-size:10px; border-top:1px dashed red; margin-top:4px;">▲ CURRENT STATE</div>'
-                content_html = raw_html.replace("\n", "<br>") + marker
+
+                # Split lines to insert marker (Rich logs use \n internally)
+                lines = full_turn_log.split('\n')
+                target_line = current_data["log_line_index"]
+
+                # Insert marker
+                marker = '<div style="color:red; font-size:10px; border-top:1px dashed red; margin-top:2px; margin-bottom:2px;">▲ CURRENT STEP</div>'
+
+                # Ensure we don't crash if index is out of bounds
+                safe_idx = min(len(lines), target_line + 1)
+                lines.insert(safe_idx, marker)
+
+                content_html = "<br>".join(lines)
             else:
-                end_idx = turn_map[t][-1]
-                raw_html = step_history[end_idx]["log_html"]
                 bg, border, opacity = "#1e1e1e", "#333", "0.5"
-                content_html = raw_html.replace("\n", "<br>")
+                content_html = full_turn_log.replace("\n", "<br>")
 
             segments.append(f'''
             <div id="turn-log-{t}" style="padding:4px; border-left:4px solid {border}; background:{bg}; opacity:{opacity}; border-bottom:1px solid #333;">
@@ -702,7 +706,6 @@ def _(
     if not current_data:
         layout = mo.md("Waiting for simulation...")
     else:
-        # Dice widget removed since it is now in SVG
         track_svg = mo.Html(render_game_track(current_data, board_positions, space_colors))
 
         layout = mo.hstack([
