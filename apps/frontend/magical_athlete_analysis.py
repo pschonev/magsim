@@ -111,7 +111,7 @@ def _(math):
 
 @app.cell
 def _(get_racer_color, math):
-    # --- RENDERER (Restored Legend & Tooltips) ---
+    # --- RENDERER ---
     def render_game_track(turn_data, positions_map, colors_map):
         import html as _html
 
@@ -132,7 +132,7 @@ def _(get_racer_color, math):
                 f'text-anchor="middle" fill="#333" transform="{transform}">{i}</text>'
             )
 
-        # 2. Legend (Restored from paste.txt logic)
+        # 2. Legend
         legend_start_x = 20
         legend_start_y = 20
         legend_col_width = 110
@@ -174,8 +174,7 @@ def _(get_racer_color, math):
             draw_pos = min(pos, len(positions_map)-1)
             name = turn_data["names"][idx]
 
-            # --- Tooltip Data Construction ---
-            # Safe access to optional fields
+            # --- Tooltip ---
             mods = turn_data.get("modifiers", [])
             abils = turn_data.get("abilities", [])
             mod_str = str(mods[idx]) if idx < len(mods) else "[]"
@@ -214,7 +213,6 @@ def _(get_racer_color, math):
                 stroke = "yellow" if racer["is_current"] else "white"
                 width = "3" if racer["is_current"] else "1.5"
 
-                # SVG Group for tooltip
                 svg_elements.append(f'<g>')
                 svg_elements.append(f'<title>{_html.escape(racer["tooltip"])}</title>')
 
@@ -226,24 +224,23 @@ def _(get_racer_color, math):
 
                 svg_elements.append(f'</g>')
 
-        # 4. Dice Roll Overlay (Top Right)
+        # 4. Dice Roll Overlay (TOP RIGHT, Tight layout)
         roll = turn_data.get("last_roll", "-")
         svg_elements.append(
-            f'<text x="550" y="50" font-size="40" text-anchor="end" fill="#333">🎲 {roll}</text>'
+            f'<text x="680" y="50" font-size="40" text-anchor="end" fill="#333">🎲 {roll}</text>'
         )
 
-
-        return f"""<svg width="600" height="450" style="background:#eef; border:2px solid #ccc; border-radius:8px;">
+        return f"""<svg width="700" height="400" style="background:#eef; border:2px solid #ccc; border-radius:8px;">
             <ellipse cx="350" cy="260" rx="150" ry="70" fill="#C8E6C9" stroke="none"/>
             {"".join(svg_elements)}
         </svg>"""
+
     return (render_game_track,)
 
 
 @app.cell
 def _(mo):
     # --- CONFIG STATE ---
-    # allow_self_loops needed for UI interaction
     get_selected_racers, set_selected_racers = mo.state(["Banana", "Centaur", "Magician", "Scoocher"], allow_self_loops=True)
     get_racer_to_add, set_racer_to_add = mo.state(None, allow_self_loops=True)
     get_start_positions, set_start_positions = mo.state(
@@ -296,7 +293,7 @@ def _(
         label="Dice rolls", placeholder="e.g. 4,5,6"
     )
 
-    # Racer Selection Logic
+    # Racer Selection (Restored Functional Update Pattern)
     current_roster = get_selected_racers()
     available_options = [r for r in AVAILABLE_RACERS if r not in current_roster]
 
@@ -308,27 +305,36 @@ def _(
     def _add_racer(v):
         r = get_racer_to_add()
         if r and r not in get_selected_racers():
-            new_roster = get_selected_racers() + [r]
-            set_selected_racers(new_roster)
+            def _update(cur):
+                if r in cur: return cur
+                return cur + [r]
+            set_selected_racers(_update)
+
+            # Sync start pos needs new roster, so we assume update passes
+            # In paste.txt logic, we just updated state. Here we do it carefully.
             cur_pos = get_start_positions()
-            set_start_positions({n: int(cur_pos.get(n, 0)) for n in new_roster})
+            # We don't have the new roster synchronously, but we can just set the key
+            # or rely on the next render. But to be safe and immediate:
+            set_start_positions({**cur_pos, r: 0})
+
             set_racer_to_add(None)
         return v
 
     add_button = mo.ui.button(label="➕ Add", on_click=_add_racer)
 
-    # We need to define closure factories to properly capture the loop variable 'r'
+    # Factories for robust closure capture
     def _remover_factory(name):
         def _remover(_):
-            new_list = [x for x in get_selected_racers() if x != name]
-            set_selected_racers(new_list)
+            set_selected_racers(lambda cur: [x for x in cur if x != name])
         return _remover
 
     def _pos_setter_factory(name):
         def _pos_setter(v):
-            current_map = get_start_positions().copy()
-            current_map[name] = int(v)
-            set_start_positions(current_map)
+            def _update_pos(cur_map):
+                new_map = cur_map.copy()
+                new_map[name] = int(v)
+                return new_map
+            set_start_positions(_update_pos)
         return _pos_setter
 
     racer_list_items = []
@@ -343,7 +349,6 @@ def _(
             on_click=_remover_factory(r),
             disabled=(len(current_roster) <= 1)
         )
-        # Using widths to fix justification
         racer_list_items.append(
             mo.hstack(
                 [mo.md(f"**{i+1}.** {r}"), mo.hstack([mo.md("Start:"), pos_input], gap=1), rem_btn], 
@@ -490,7 +495,9 @@ def _(
     engine = scenario.engine
     with mo.status.spinner(title="Simulating..."):
         while not engine.state.race_over:
-            log_console.clear() 
+            # FIX: Clear logs from previous turn so we don't accumulate history
+            log_console.export_html(clear=True)
+
             scenario.run_turn()
 
             capture_snapshot(engine, "TurnEnd", is_turn_end=True)
@@ -583,6 +590,7 @@ def _(get_step_idx, mo, set_step_idx, step_history, turn_map):
         start=0, stop=nav_max_turn, value=current_turn_idx, step=1, 
         label="Turn Timeline", on_change=on_slider_change, full_width=True
     )
+
     return (
         btn_next_step,
         btn_next_turn,
@@ -616,6 +624,7 @@ def _(
         mo.hstack([btn_prev_turn, turn_slider, btn_next_turn], justify="center", gap=1),
         mo.hstack([btn_prev_step, status_text, btn_next_step], justify="center", gap=1)
     ])
+
     return (nav_ui,)
 
 
@@ -693,9 +702,7 @@ def _(
     if not current_data:
         layout = mo.md("Waiting for simulation...")
     else:
-        # Dice roll is now handled in the SVG overlay, but we can keep it here too if desired, 
-        # or remove it since it's redundant. Let's remove the dedicated widget to be cleaner.
-
+        # Dice widget removed since it is now in SVG
         track_svg = mo.Html(render_game_track(current_data, board_positions, space_colors))
 
         layout = mo.hstack([
