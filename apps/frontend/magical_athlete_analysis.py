@@ -677,7 +677,6 @@ def _(
         while not engine.state.race_over:
             log_console.export_html(clear=True)
             scenario.run_turn()
-            capture_snapshot(engine, "TurnEnd", is_turn_end=True)
             sim_turn_counter["current"] += 1
             if len(step_history) > 1000:
                 break
