@@ -388,11 +388,8 @@ def _(
             # update the saved positions state (this will be read by the simulator)
             set_saved_positions(lambda cur: {**cur, racer_name: v})
             # reset the timeline to start (turn 0 / first step)
-            try:
-                set_step_idx(0)
-            except Exception:
-                raise ValueError("Attempted to reset turn to 0 but failed.")
-            return new_val
+            set_step_idx(0)
+
 
         return _on_change
 
@@ -428,10 +425,8 @@ def _(
             set_selected_racers(
                 lambda cur: [x for x in cur if x != racer_to_remove]
             )
-            try:
-                set_step_idx(0)
-            except Exception:
-                raise ValueError("Attempted to reset turn to 0 but failed.")
+            set_step_idx(0)
+
 
         return _remover
 
@@ -463,10 +458,8 @@ def _(
             set_saved_positions(new_pos)
             set_selected_racers(lambda cur: cur + [r])
             set_racer_to_add(None)
-            try:
-                set_step_idx(0)
-            except Exception:
-                raise ValueError("Attempted to reset turn to 0 but failed.")
+            set_step_idx(0)
+
         return v
 
 
@@ -486,7 +479,6 @@ def _(
     return (
         add_button,
         add_racer_dropdown,
-        all_positions_ui,
         current_roster,
         debug_mode_ui,
         dice_rolls_text_ui,
@@ -539,7 +531,6 @@ def _(
     RichMarkupFormatter,
     TripCmdEvent,
     WarpCmdEvent,
-    all_positions_ui,
     current_roster,
     get_debug_mode,
     get_dice_rolls_text,
@@ -551,12 +542,6 @@ def _(
     reset_button,
     scenario_seed,
 ):
-    # --- SIMULATION ---
-    # Dependencies:
-    # 1. all_positions_ui.value -> DIRECT CONNECTION. No state bridge.
-    # 2. scenario_seed.value
-    # 3. reset_button.value
-    # --- REACTIVITY ANCHORS (DO NOT REMOVE) ---
     reset_button.value
     scenario_seed.value
     get_saved_positions()
@@ -583,11 +568,6 @@ def _(
     log_level = logging.DEBUG if get_debug_mode() else logging.INFO
     root_logger.setLevel(log_level)  # ← Changed from hardcoded logging.INFO
 
-
-    # DIRECT READ: The .value here is a dictionary of {racer_name: int_value}
-    # It updates instantly because 'all_positions_ui' is a mo.ui.dictionary.
-    current_pos_values = all_positions_ui.value
-
     dice_rolls = None
     if get_use_scripted_dice():
         raw = get_dice_rolls_text().strip()
@@ -599,7 +579,7 @@ def _(
 
     scenario = GameScenario(
         racers_config=[
-            RacerConfig(i, n, start_pos=int(current_pos_values.get(n, 0)))
+            RacerConfig(i, n, start_pos=int(get_saved_positions().get(n, 0)))
             for i, n in enumerate(current_roster)
         ],
         dice_rolls=dice_rolls,
@@ -701,7 +681,6 @@ def _(get_step_idx, mo, set_step_idx, step_history, turn_map):
         current_data, current_turn_idx, max_s = None, 0, 0
     else:
         current_step_idx = min(max(0, current_step_idx), len(step_history) - 1)
-        current_data = step_history[current_step_idx]
         current_data = step_history[current_step_idx]
         current_turn_idx = current_data["turn_index"]
         max_s = len(step_history) - 1
@@ -882,35 +861,6 @@ def _(
             align="start",
         )
     layout
-    return
-
-
-@app.cell
-def _(all_positions_ui, current_roster, get_saved_positions, mo):
-    # --- DEBUG OUTPUT ---
-    import json
-
-    debug_info = mo.md(f"""
-    ## 🔍 Debug Info
-
-    **Current Roster:** {current_roster}
-
-    **all_positions_ui.value:** 
-    ```
-    {json.dumps(all_positions_ui.value, indent=2)}
-    ```
-
-    **get_saved_positions():**
-    ```
-    {json.dumps(get_saved_positions(), indent=2)}
-    ```
-
-    **Type of all_positions_ui:** {type(all_positions_ui)}
-
-    **Type of all_positions_ui.value:** {type(all_positions_ui.value)}
-    """)
-
-    debug_info
     return
 
 
