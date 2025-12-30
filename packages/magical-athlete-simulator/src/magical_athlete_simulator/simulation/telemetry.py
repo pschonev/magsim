@@ -118,3 +118,101 @@ class AbilityTriggerCounter:
         if isinstance(event, AbilityTriggeredEvent):
             idx = event.responsible_racer_idx
             self.counts[idx] = self.counts.get(idx, 0) + 1
+
+
+@dataclass(slots=True)
+class RacerStats:
+    """Accumulator for run-time statistics per racer."""
+
+    turns_taken: int = 0
+    total_dice_rolled: int = 0
+    ability_triggers: int = 0
+
+
+@dataclass(slots=True)
+class RaceMetrics:
+    """Final immutable metrics for one racer in one race configuration."""
+
+    racer_idx: int
+    racer_name: str
+    final_vp: int
+    turns_taken: int
+    total_dice_rolled: int
+    ability_trigger_count: int
+    finished: bool
+    finish_position: int | None
+    eliminated: bool
+
+
+@dataclass(slots=True)
+class TurnRecord:
+    """Lightweight record of a single turn's key outcome."""
+
+    turn_index: int
+    racer_idx: int
+    dice_roll: int
+
+
+@dataclass(slots=True)
+class MetricsAggregator:
+    """
+    Type-safe sink for simulation runner.
+    Uses dataclasses for all state to ensure type safety.
+    """
+
+    # Map racer_idx -> RacerStats dataclass (instead of multiple dicts)
+    racer_stats: dict[int, RacerStats] = field(default_factory=dict)
+
+    # Log of turn outcomes
+    turn_history: list[TurnRecord] = field(default_factory=list)
+
+    def _get_stats(self, racer_idx: int) -> RacerStats:
+        """Helper to ensure we always have a stats object for a racer."""
+        if racer_idx not in self.racer_stats:
+            self.racer_stats[racer_idx] = RacerStats()
+        return self.racer_stats[racer_idx]
+
+    def on_event(self, event: GameEvent) -> None:
+        """Count specific events using exact type checks."""
+        if isinstance(event, AbilityTriggeredEvent):
+            idx = event.responsible_racer_idx
+            stats = self._get_stats(idx)
+            stats.ability_triggers += 1
+
+    def on_turn_end(self, engine: GameEngine, *, turn_index: int) -> None:
+        """Update stats at the end of a turn."""
+        racer_idx = engine.state.current_racer_idx
+        roll_val = engine.state.roll_state.base_value
+
+        # Update type-safe accumulator
+        stats = self._get_stats(racer_idx)
+        stats.turns_taken += 1
+        stats.total_dice_rolled += roll_val
+
+        # Record turn history
+        self.turn_history.append(
+            TurnRecord(turn_index=turn_index, racer_idx=racer_idx, dice_roll=roll_val),
+        )
+
+    def export_race_metrics(self, engine: GameEngine) -> list[RaceMetrics]:
+        """Convert accumulators into final immutable metrics."""
+        results: list[RaceMetrics] = []
+
+        for racer in engine.state.racers:
+            stats = self._get_stats(racer.idx)
+
+            results.append(
+                RaceMetrics(
+                    racer_idx=racer.idx,
+                    racer_name=racer.name,
+                    final_vp=racer.victory_points,
+                    turns_taken=stats.turns_taken,
+                    total_dice_rolled=stats.total_dice_rolled,
+                    ability_trigger_count=stats.ability_triggers,
+                    finished=racer.finished,
+                    finish_position=racer.finish_position,
+                    eliminated=racer.eliminated,
+                ),
+            )
+
+        return results

@@ -10,7 +10,11 @@ from magical_athlete_simulator.engine.movement import push_move
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import GameEvent, Phase
     from magical_athlete_simulator.core.state import RacerState
-    from magical_athlete_simulator.core.types import AbilityName, ModifierName
+    from magical_athlete_simulator.core.types import (
+        AbilityName,
+        BoardName,
+        ModifierName,
+    )
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -234,8 +238,7 @@ class VictoryPointTile(SpaceModifier, LandingHookMixin):
         racer = engine.get_racer(racer_idx)
         racer.victory_points += self.amount
         engine.log_info(
-            f"{self.display_name}: {racer.repr} gains +{self.amount} VP ",
-            f"(now {racer.victory_points}).",
+            f"{self.display_name}: {racer.repr} gains +{self.amount} VP (now {racer.victory_points}).",
         )
 
 
@@ -260,7 +263,7 @@ def build_action_lane_board() -> Board:
 
 BoardFactory = Callable[[], Board]
 
-BOARD_DEFINITIONS: dict[str, BoardFactory] = {
+BOARD_DEFINITIONS: dict[BoardName, BoardFactory] = {
     "standard": lambda: Board(
         length=30,
         static_features={},

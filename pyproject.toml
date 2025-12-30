@@ -4,13 +4,19 @@ version = "0.1.0"
 description = "A workspace for Magical Athlete simulation"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = ["magical-athlete-simulator"]
+dependencies = ["magical-athlete-simulator", "simul_runner"]
 
 [tool.uv.workspace]
-members = ["packages/magical-athlete-simulator", "apps/frontend"]
+members = [
+    "packages/magical-athlete-simulator",
+    "apps/frontend",
+    "apps/simul_runner",
+]
 
 [tool.uv.sources]
 magical-athlete-simulator = { workspace = true }
+simul_runner = { workspace = true }
+
 
 [dependency-groups]
 dev = ["pytest>=9.0.2", "ruff==0.8.4", "basedpyright==1.23.0"]
@@ -38,12 +44,15 @@ exclude = ["packages/magical-athlete-simulator/tests", "apps/frontend"]
 include = [
     "packages/magical-athlete-simulator/src",
     "packages/magical-athlete-simulator/tests",
+    "apps/simul_runner/simul_runner",
 ]
+exclude = ["apps/frontend"]
 executionEnvironments = [
     { root = "packages/magical-athlete-simulator/src" },
     { root = "packages/magical-athlete-simulator/tests" },
+    { root = "apps/simul_runner" },
 ]
-exclude = ["apps/frontend"]
+
 
 reportImportCycles = "none"
 reportAny = "none"

@@ -58,5 +58,7 @@ ModifierName = Literal[
     "MastermindPrediction",
 ]
 
+BoardName = Literal["standard", "wild_wilds"]
+
 SystemSource = Literal["Board", "System"]
 Source = AbilityName | ModifierName | SystemSource
