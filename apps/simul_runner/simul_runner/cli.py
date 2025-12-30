@@ -17,6 +17,9 @@ from simul_runner.runner import run_single_simulation
 # Suppress game engine logs at module level
 logging.getLogger("magical_athlete").setLevel(logging.CRITICAL)
 
+# Performance Tuning: Write to disk every N simulations
+BATCH_SIZE = 1000
+
 
 @dataclass
 class Args:
@@ -88,81 +91,108 @@ class Args:
         completed = 0
         skipped = 0
         aborted = 0
+        unsaved_changes = 0
 
-        # Progress bar
-        with tqdm(desc="Simulating", unit="race") as pbar:
-            for game_config in combo_gen:
-                config_hash = game_config.compute_hash()
+        try:
+            # Progress bar
+            with tqdm(desc="Simulating", unit="race") as pbar:
+                for game_config in combo_gen:
+                    config_hash = game_config.compute_hash()
 
-                # Idempotency Check:
-                # If we have already seen/calculated this exact configuration hash,
-                # we skip it. This allows "filling in the gaps" of a partial run
-                # without re-calculating everything.
-                if config_hash in seen_hashes:
-                    skipped += 1
-                    # Don't update pbar to keep "Simulating" count relevant to work done
-                    continue
+                    # Idempotency Check
+                    if config_hash in seen_hashes:
+                        skipped += 1
+                        continue
 
-                seen_hashes.add(config_hash)
+                    seen_hashes.add(config_hash)
 
-                # Run simulation
-                result = run_single_simulation(game_config, max_turns)
+                    # Run simulation
+                    result = run_single_simulation(game_config, max_turns)
 
-                if result.aborted:
-                    aborted += 1
-                else:
-                    completed += 1
+                    if result.aborted:
+                        aborted += 1
+                    else:
+                        completed += 1
+                        unsaved_changes += 1
 
-                    # Save Result to DB
-                    # Create Race object
-                    race_record = Race(
-                        config_hash=result.config_hash,
-                        seed=game_config.seed,
-                        board=game_config.board,
-                        racer_names=",".join(game_config.racers),
-                        racer_count=len(game_config.racers),
-                        timestamp=result.timestamp,
-                        execution_time_ms=result.execution_time_ms,
-                        aborted=result.aborted,
-                        total_turns=result.turn_count,
+                        # 1. Determine Rank (1st, 2nd, None)
+                        # We sort a copy to determine standing, but keep original metrics order
+                        standings = sorted(
+                            result.metrics,
+                            key=lambda m: (m.finished, m.final_vp, -m.turns_taken),
+                            reverse=True,
+                        )
+
+                        rank_map = {}
+                        if len(standings) > 0 and standings[0].finished:
+                            rank_map[standings[0].racer_name] = 1
+                        if len(standings) > 1 and standings[1].finished:
+                            rank_map[standings[1].racer_name] = 2
+
+                        # 2. Create Race Record
+                        race_record = Race(
+                            config_hash=result.config_hash,
+                            seed=game_config.seed,
+                            board=game_config.board,
+                            # Save names in ID/Turn Order for reconstruction
+                            racer_names=",".join(game_config.racers),
+                            racer_count=len(game_config.racers),
+                            timestamp=result.timestamp,
+                            execution_time_ms=result.execution_time_ms,
+                            aborted=result.aborted,
+                            total_turns=result.turn_count,
+                        )
+
+                        # 3. Create Racer Results (Preserving ID/Turn Order)
+                        racer_records = []
+                        for m in result.metrics:
+                            racer_records.append(
+                                RacerResult(
+                                    config_hash=result.config_hash,
+                                    racer_name=m.racer_name,
+                                    final_vp=m.final_vp,
+                                    turns_taken=m.turns_taken,
+                                    total_dice_rolled=m.total_dice_rolled,
+                                    ability_trigger_count=m.ability_trigger_count,
+                                    finished=m.finished,
+                                    eliminated=m.eliminated,
+                                    rank=rank_map.get(m.racer_name),  # 1, 2, or None
+                                )
+                            )
+
+                        # 4. Save to Memory
+                        db.save_simulation(race_record, racer_records)
+
+                        # 5. Batch Flush to Disk
+                        if unsaved_changes >= BATCH_SIZE:
+                            db.flush_to_parquet()
+                            unsaved_changes = 0
+
+                    # Print result
+                    status = "ABORTED" if result.aborted else "COMPLETED"
+                    tqdm.write(
+                        f"[{result.config_hash[:8]}] {status} "
+                        f"in {result.execution_time_ms:.2f}ms "
+                        f"({result.turn_count} turns)"
                     )
 
-                    # Create RacerResult objects
-                    racer_records = [
-                        RacerResult(
-                            config_hash=result.config_hash,
-                            racer_name=m.racer_name,
-                            final_vp=m.final_vp,
-                            turns_taken=m.turns_taken,
-                            total_dice_rolled=m.total_dice_rolled,
-                            ability_trigger_count=m.ability_trigger_count,
-                            finished=m.finished,
-                            eliminated=m.eliminated,
-                            rank=idx + 1,  # Rank is 1-based index in metrics list
-                        )
-                        for idx, m in enumerate(result.metrics)
-                    ]
+                    if not result.aborted:
+                        for metric in result.metrics:
+                            rank_str = f"#{rank_map.get(metric.racer_name, '-')}"
+                            tqdm.write(
+                                f"  {rank_str:<3} {metric.racer_name}: VP={metric.final_vp}, "
+                                f"turns={metric.turns_taken}, "
+                                f"dice={metric.total_dice_rolled}, "
+                                f"abilities={metric.ability_trigger_count}"
+                            )
 
-                    db.save_simulation(race_record, racer_records)
+                    pbar.update(1)
 
-                # Print result
-                status = "ABORTED" if result.aborted else "COMPLETED"
-                tqdm.write(
-                    f"[{result.config_hash[:8]}] {status} "
-                    f"in {result.execution_time_ms:.2f}ms "
-                    f"({result.turn_count} turns)",
-                )
-
-                if not result.aborted:
-                    for metric in result.metrics:
-                        tqdm.write(
-                            f"  {metric.racer_name}: VP={metric.final_vp}, "
-                            f"turns={metric.turns_taken}, "
-                            f"dice={metric.total_dice_rolled}, "
-                            f"abilities={metric.ability_trigger_count}",
-                        )
-
-                pbar.update(1)
+        finally:
+            # Always flush remaining data on exit/crash/Ctrl+C
+            if unsaved_changes > 0:
+                print(f"\n💾 Flushing {unsaved_changes} remaining records to disk...")
+                db.flush_to_parquet()
 
         print(f"\n✅ Completed: {completed}")
         print(f"⏭️  Skipped:   {skipped} (Already in DB)")

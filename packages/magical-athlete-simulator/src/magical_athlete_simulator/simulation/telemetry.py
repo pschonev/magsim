@@ -179,12 +179,22 @@ class MetricsAggregator:
             stats = self._get_stats(idx)
             stats.ability_triggers += 1
 
-    def on_turn_end(self, engine: GameEngine, *, turn_index: int) -> None:
+    def on_turn_end(
+        self,
+        engine: GameEngine,
+        *,
+        turn_index: int,
+        active_racer_idx: int | None = None,
+    ) -> None:
         """Update stats at the end of a turn."""
-        racer_idx = engine.state.current_racer_idx
+        # Use the passed index if available, otherwise trust the engine (risky if advanced)
+        racer_idx = (
+            active_racer_idx
+            if active_racer_idx is not None
+            else engine.state.current_racer_idx
+        )
         roll_val = engine.state.roll_state.base_value
 
-        # Update type-safe accumulator
         stats = self._get_stats(racer_idx)
         stats.turns_taken += 1
         stats.total_dice_rolled += roll_val

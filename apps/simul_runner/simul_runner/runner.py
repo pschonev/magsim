@@ -34,13 +34,6 @@ def run_single_simulation(
 ) -> SimulationResult:
     """
     Execute one race and return aggregated metrics.
-
-    Args:
-        config: The game configuration to run
-        max_turns: Abort if race exceeds this many turns
-
-    Returns:
-        SimulationResult with metrics or abort flag
     """
     start_time = time.perf_counter()
     timestamp = time.time()
@@ -61,10 +54,7 @@ def run_single_simulation(
     )
 
     engine = scenario.engine
-
-    # Attach metrics collector
     aggregator = MetricsAggregator()
-
     turn_counter = 0
 
     def on_event(_: GameEngine, event: GameEvent):
@@ -72,12 +62,17 @@ def run_single_simulation(
 
     engine.on_event_processed = on_event
 
-    # Run race with turn limit
     aborted = False
 
     while not engine.state.race_over:
+        active_racer_idx = engine.state.current_racer_idx
         scenario.run_turn()
-        aggregator.on_turn_end(engine, turn_index=turn_counter)
+        aggregator.on_turn_end(
+            engine,
+            turn_index=turn_counter,
+            active_racer_idx=active_racer_idx,
+        )
+
         turn_counter += 1
 
         if turn_counter >= max_turns:
@@ -87,7 +82,8 @@ def run_single_simulation(
     end_time = time.perf_counter()
     execution_time_ms = (end_time - start_time) * 1000
 
-    # Export metrics only if not aborted
+    # Note: We return raw metrics here in ID order.
+    # Sorting/Ranking happens in CLI to keep runner pure.
     metrics = [] if aborted else aggregator.export_race_metrics(engine)
 
     return SimulationResult(
