@@ -211,7 +211,7 @@ def _(get_racer_color, math):
             abil_str = str(abils[idx]) if idx < len(abils) else "[]"
 
             tooltip_text = (
-                f"{name} (ID: {idx})\n"
+                f"{name} (ID: {idx}) - VP: {turn_data['vp'][idx]}\n"
                 f"Pos: {pos} | Tripped: {turn_data['tripped'][idx]}\n"
                 f"Abilities: {abil_str}\n"
                 f"Modifiers: {mod_str}"
@@ -618,6 +618,7 @@ def _(
             "event_name": event_name,
             "positions": [r.position for r in engine.state.racers],
             "tripped": [r.tripped for r in engine.state.racers],
+            "vp": [r.victory_points for r in engine.state.racers],
             "last_roll": last_roll,
             "current_racer": engine.state.current_racer_idx,
             "names": [r.name for r in engine.state.racers],
