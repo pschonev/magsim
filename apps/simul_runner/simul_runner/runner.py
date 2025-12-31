@@ -25,7 +25,7 @@ class SimulationResult:
     execution_time_ms: float
     aborted: bool
     turn_count: int
-    metrics: list[RaceMetrics]  # Will be list[RaceMetrics] when not aborted
+    metrics: list[RaceMetrics]
 
 
 def run_single_simulation(
@@ -65,14 +65,15 @@ def run_single_simulation(
     aborted = False
 
     while not engine.state.race_over:
+        # Capture active racer BEFORE turn execution (to avoid off-by-one from _advance_turn)
         active_racer_idx = engine.state.current_racer_idx
-        scenario.run_turn()
-        aggregator.on_turn_end(
-            engine,
-            turn_index=turn_counter,
-            active_racer_idx=active_racer_idx,
-        )
 
+        scenario.run_turn()
+
+        # Pass explicit racer index to prevent turn attribution shift
+        aggregator.on_turn_end(
+            engine, turn_index=turn_counter, active_racer_idx=active_racer_idx
+        )
         turn_counter += 1
 
         if turn_counter >= max_turns:

@@ -30,7 +30,7 @@ class Race(SQLModel, table=True):
 
     # Created at (for sorting/archival)
     created_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.UTC),
+        default_factory=lambda: datetime.datetime.now(datetime.UTC)
     )
 
 
@@ -42,19 +42,26 @@ class RacerResult(SQLModel, table=True):
 
     __tablename__ = "racer_results"  # pyright: ignore[reportAssignmentType, reportUnannotatedClassAttribute]
 
-    # Composite Primary Key (config_hash + racer_name)
+    # Composite Primary Key (config_hash + racer_id)
     config_hash: str = Field(primary_key=True)
-    racer_name: str = Field(primary_key=True)
+    racer_id: int = Field(primary_key=True)
+
+    # Racer Identity
+    racer_name: str
 
     # Results
     final_vp: int
     turns_taken: int
-    total_dice_rolled: int
+    recovery_turns: int
+    sum_dice_rolled: int
+
+    # abilities
     ability_trigger_count: int
+    ability_self_target_count: int
+    ability_target_count: int
 
     # Status
-    finished: bool
     eliminated: bool
 
-    # Ranking (1st, 2nd, etc. - useful for analysis)
+    # Ranking (1st, 2nd, or NULL for everyone else)
     rank: int | None = None

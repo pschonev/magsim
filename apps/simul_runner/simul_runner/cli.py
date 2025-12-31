@@ -8,10 +8,10 @@ from pathlib import Path
 import cappa
 from tqdm import tqdm
 
-from simul_runner.combinations import generate_combinations
+from simul_runner.combinations import compute_total_runs, generate_combinations
 from simul_runner.config import SimulationConfig
-from simul_runner.db_manager import SimulationDatabase
-from simul_runner.db_models import Race, RacerResult
+from simul_runner.db.manager import SimulationDatabase
+from simul_runner.db.models import Race, RacerResult
 from simul_runner.runner import run_single_simulation
 
 # Suppress game engine logs at module level
@@ -45,7 +45,7 @@ class Args:
 
         # Load config
         if not self.config.exists():
-            print(f"Error: Config file not found: {self.config}", file=sys.stderr)
+            tqdm.write(f"Error: Config file not found: {self.config}", file=sys.stderr)
             return 1
 
         config = SimulationConfig.from_toml(str(self.config))
@@ -59,18 +59,19 @@ class Args:
         eligible_racers = config.get_eligible_racers()
 
         if not eligible_racers:
-            print(
+            tqdm.write(
                 "Error: No eligible racers after include/exclude filters",
                 file=sys.stderr,
             )
             return 1
 
-        print(f"Eligible racers: {len(eligible_racers)}")
-        print(f"Racer counts: {config.racer_counts}")
-        print(f"Boards: {config.boards}")
-        print(f"Runs per combination: {runs_per_combo or 'unlimited'}")
-        print(f"Max total runs: {max_total or 'unlimited'}")
-        print()
+        # Print configuration summary before progress bar starts
+        tqdm.write(f"Eligible racers: {len(eligible_racers)}")
+        tqdm.write(f"Racer counts: {config.racer_counts}")
+        tqdm.write(f"Boards: {config.boards}")
+        tqdm.write(f"Runs per combination: {runs_per_combo or 'unlimited'}")
+        tqdm.write(f"Max total runs: {max_total or 'unlimited'}")
+        tqdm.write("")  # Blank line
 
         # Generate combinations
         combo_gen = generate_combinations(
@@ -93,9 +94,23 @@ class Args:
         aborted = 0
         unsaved_changes = 0
 
+        # Calculate expected total for progress bar (if possible)
+        total_expected = compute_total_runs(
+            eligible_racers=eligible_racers,
+            racer_counts=config.racer_counts,
+            boards=config.boards,
+            runs_per_combination=runs_per_combo,
+            max_total_runs=max_total,
+        )
+
         try:
-            # Progress bar
-            with tqdm(desc="Simulating", unit="race") as pbar:
+            # Progress bar with dynamic total
+            with tqdm(
+                desc="Simulating",
+                unit="race",
+                total=total_expected,
+                dynamic_ncols=True,
+            ) as pbar:
                 for game_config in combo_gen:
                     config_hash = game_config.compute_hash()
 
@@ -117,24 +132,25 @@ class Args:
 
                         # 1. Determine Rank (1st, 2nd, None)
                         # We sort a copy to determine standing, but keep original metrics order
+                        # SORT LOGIC: VP Descending > Fewest Turns (highest negative)
                         standings = sorted(
                             result.metrics,
-                            key=lambda m: (m.finished, m.final_vp, -m.turns_taken),
+                            key=lambda m: (m.final_vp, -m.turns_taken),
                             reverse=True,
                         )
 
                         rank_map = {}
-                        if len(standings) > 0 and standings[0].finished:
-                            rank_map[standings[0].racer_name] = 1
-                        if len(standings) > 1 and standings[1].finished:
-                            rank_map[standings[1].racer_name] = 2
+                        # Only the top 2 racers with positive VP get a rank
+                        if len(standings) > 0 and standings[0].final_vp > 0:
+                            rank_map[standings[0].racer_idx] = 1
+                        if len(standings) > 1 and standings[1].final_vp > 0:
+                            rank_map[standings[1].racer_idx] = 2
 
                         # 2. Create Race Record
                         race_record = Race(
                             config_hash=result.config_hash,
                             seed=game_config.seed,
                             board=game_config.board,
-                            # Save names in ID/Turn Order for reconstruction
                             racer_names=",".join(game_config.racers),
                             racer_count=len(game_config.racers),
                             timestamp=result.timestamp,
@@ -144,61 +160,54 @@ class Args:
                         )
 
                         # 3. Create Racer Results (Preserving ID/Turn Order)
-                        racer_records = []
-                        for m in result.metrics:
-                            racer_records.append(
-                                RacerResult(
-                                    config_hash=result.config_hash,
-                                    racer_name=m.racer_name,
-                                    final_vp=m.final_vp,
-                                    turns_taken=m.turns_taken,
-                                    total_dice_rolled=m.total_dice_rolled,
-                                    ability_trigger_count=m.ability_trigger_count,
-                                    finished=m.finished,
-                                    eliminated=m.eliminated,
-                                    rank=rank_map.get(m.racer_name),  # 1, 2, or None
-                                )
+                        racer_records = [
+                            RacerResult(
+                                config_hash=result.config_hash,
+                                racer_id=m.racer_idx,
+                                racer_name=m.racer_name,
+                                final_vp=m.final_vp,
+                                turns_taken=m.turns_taken,
+                                recovery_turns=m.recovery_turns,
+                                sum_dice_rolled=m.total_dice_rolled,
+                                ability_trigger_count=m.ability_trigger_count,
+                                ability_self_target_count=m.ability_self_target,
+                                ability_target_count=m.ability_target,
+                                eliminated=m.eliminated,
+                                rank=rank_map.get(m.racer_idx),
                             )
+                            for m in result.metrics
+                        ]
 
                         # 4. Save to Memory
                         db.save_simulation(race_record, racer_records)
 
                         # 5. Batch Flush to Disk
                         if unsaved_changes >= BATCH_SIZE:
+                            tqdm.write(
+                                f"💾 Flushing {unsaved_changes} records to disk...",
+                            )
                             db.flush_to_parquet()
                             unsaved_changes = 0
-
-                    # Print result
-                    status = "ABORTED" if result.aborted else "COMPLETED"
-                    tqdm.write(
-                        f"[{result.config_hash[:8]}] {status} "
-                        f"in {result.execution_time_ms:.2f}ms "
-                        f"({result.turn_count} turns)"
-                    )
-
-                    if not result.aborted:
-                        for metric in result.metrics:
-                            rank_str = f"#{rank_map.get(metric.racer_name, '-')}"
-                            tqdm.write(
-                                f"  {rank_str:<3} {metric.racer_name}: VP={metric.final_vp}, "
-                                f"turns={metric.turns_taken}, "
-                                f"dice={metric.total_dice_rolled}, "
-                                f"abilities={metric.ability_trigger_count}"
-                            )
-
                     pbar.update(1)
 
         finally:
             # Always flush remaining data on exit/crash/Ctrl+C
             if unsaved_changes > 0:
-                print(f"\n💾 Flushing {unsaved_changes} remaining records to disk...")
+                tqdm.write(
+                    f"\n💾 Flushing {unsaved_changes} remaining records to disk..."
+                )
                 db.flush_to_parquet()
 
-        print(f"\n✅ Completed: {completed}")
-        print(f"⏭️  Skipped:   {skipped} (Already in DB)")
-        print(f"⚠️  Aborted:   {aborted}")
-        print(f"🔑 Unique configs processed: {len(seen_hashes) - initial_seen_count}")
-        print(f"💾 Total DB Size: {len(seen_hashes)} races")
+        # Final summary (after progress bar completes)
+        tqdm.write(
+            f"""
+        \n✅ Completed: {completed}
+        ⏭️  Skipped:   {skipped} (Already in DB)
+        ⚠️  Aborted:   {aborted}
+        🔑 Unique configs processed: {len(seen_hashes) - initial_seen_count}
+        💾 Total DB Size: {len(seen_hashes)} races
+        """,
+        )
 
         return 0
 

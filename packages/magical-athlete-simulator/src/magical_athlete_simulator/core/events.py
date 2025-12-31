@@ -133,6 +133,11 @@ class TripCmdEvent(GameEvent, EmitsAbilityTriggeredEvent, HasTargetRacer): ...
 
 
 @dataclass(frozen=True)
+class TripRecoveryEvent(GameEvent, HasTargetRacer):
+    phase: Phase = Phase.PRE_MAIN
+
+
+@dataclass(frozen=True)
 class PreMoveEvent(GameEvent, HasTargetRacer):
     start_tile: int
     distance: int
@@ -160,6 +165,7 @@ class PostWarpEvent(GameEvent, HasTargetRacer):
 class AbilityTriggeredEvent(GameEvent):
     responsible_racer_idx: int
     source: AbilityName | ModifierName
+    target_racer_idx: int | None = None
 
     @classmethod
     def from_event(cls, event: GameEvent) -> Self:
@@ -176,6 +182,9 @@ class AbilityTriggeredEvent(GameEvent):
             responsible_racer_idx=event.responsible_racer_idx,
             source=event.source,  # pyright: ignore[reportArgumentType]
             phase=event.phase,
+            target_racer_idx=event.target_racer_idx
+            if isinstance(event, HasTargetRacer)
+            else None,
         )
 
 

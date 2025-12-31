@@ -1,7 +1,10 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
-from magical_athlete_simulator.core.events import AbilityTriggeredEvent
+from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEvent,
+    TripRecoveryEvent,
+)
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import GameEvent
@@ -127,6 +130,9 @@ class RacerStats:
     turns_taken: int = 0
     total_dice_rolled: int = 0
     ability_triggers: int = 0
+    ability_self_target: int = 0
+    ability_target: int = 0
+    recovery_turns: int = 0
 
 
 @dataclass(slots=True)
@@ -137,8 +143,11 @@ class RaceMetrics:
     racer_name: str
     final_vp: int
     turns_taken: int
+    recovery_turns: int
     total_dice_rolled: int
     ability_trigger_count: int
+    ability_self_target: int
+    ability_target: int
     finished: bool
     finish_position: int | None
     eliminated: bool
@@ -157,10 +166,8 @@ class TurnRecord:
 class MetricsAggregator:
     """
     Type-safe sink for simulation runner.
-    Uses dataclasses for all state to ensure type safety.
     """
 
-    # Map racer_idx -> RacerStats dataclass (instead of multiple dicts)
     racer_stats: dict[int, RacerStats] = field(default_factory=dict)
 
     # Log of turn outcomes
@@ -175,9 +182,21 @@ class MetricsAggregator:
     def on_event(self, event: GameEvent) -> None:
         """Count specific events using exact type checks."""
         if isinstance(event, AbilityTriggeredEvent):
-            idx = event.responsible_racer_idx
-            stats = self._get_stats(idx)
-            stats.ability_triggers += 1
+            # how often did an ability trigger?
+            self._get_stats(event.responsible_racer_idx).ability_triggers += 1
+            # how often was ability used on self?
+            if event.responsible_racer_idx == event.target_racer_idx:
+                self._get_stats(event.responsible_racer_idx).ability_self_target += 1
+            # how often was racer target of an ability of ANOTHER racer?
+            if (
+                event.target_racer_idx is not None
+                and event.target_racer_idx != event.responsible_racer_idx
+            ):
+                self._get_stats(event.target_racer_idx).ability_target += 1
+
+        if isinstance(event, TripRecoveryEvent):
+            # how often did a racer skip a main move due to tripping?
+            self._get_stats(event.target_racer_idx).recovery_turns += 1
 
     def on_turn_end(
         self,
@@ -217,8 +236,11 @@ class MetricsAggregator:
                     racer_name=racer.name,
                     final_vp=racer.victory_points,
                     turns_taken=stats.turns_taken,
+                    recovery_turns=stats.recovery_turns,
                     total_dice_rolled=stats.total_dice_rolled,
                     ability_trigger_count=stats.ability_triggers,
+                    ability_self_target=stats.ability_self_target,
+                    ability_target=stats.ability_target,
                     finished=racer.finished,
                     finish_position=racer.finish_position,
                     eliminated=racer.eliminated,

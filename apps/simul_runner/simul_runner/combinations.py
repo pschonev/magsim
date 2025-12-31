@@ -5,17 +5,51 @@ import math
 import random
 from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.core.types import RacerName
 from simul_runner.hashing import GameConfiguration
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-    from magical_athlete_simulator.core.types import BoardName
+    from collections.abc import Iterable, Iterator
+
+    from magical_athlete_simulator.core.types import BoardName, RacerName
 
 # Threshold: If total combinations > 10 Million, we switch to random sampling
 # to avoid consuming GBs of RAM building the index list.
 # 36 racers, 5 counts, 2 boards, 5 seeds ~= 4.5 Million indices (Safe).
 EXHAUSTIVE_LIMIT = 10_000_000
+
+
+def compute_total_runs(
+    *,
+    eligible_racers: list[RacerName],
+    racer_counts: Iterable[int],
+    boards: list[BoardName],
+    runs_per_combination: int | None,
+    max_total_runs: int | None,
+    exhaustive_limit: int = EXHAUSTIVE_LIMIT,
+) -> int | None:
+    if runs_per_combination is None and max_total_runs is None:
+        return None
+
+    n = len(eligible_racers)
+    if n == 0 or not boards:
+        return 0
+
+    seeds = runs_per_combination or 1
+    ks = sorted({k for k in racer_counts if 0 < k <= n})
+    if not ks:
+        return 0
+
+    combo_space = sum(math.comb(n, k) for k in ks)
+    space_total = len(boards) * seeds * combo_space
+
+    # Key change: if we *must* go random due to limit, then total is the cap (if any)
+    if space_total > exhaustive_limit:
+        return max_total_runs  # None if uncapped -> tqdm total stays unknown
+
+    if max_total_runs is None:
+        return space_total
+
+    return min(space_total, max_total_runs)
 
 
 def generate_combinations(
@@ -26,56 +60,52 @@ def generate_combinations(
     max_total_runs: int | None,
     seed_offset: int = 0,
 ) -> Iterator[GameConfiguration]:
-    """
-    Generate configurations ensuring maximum entropy and zero duplicates (where possible).
-
-    Strategy:
-    1. Calculate total size of the simulation space.
-    2. If space < 10M: Generate a 'Virtual Index' for every possible simulation,
-       shuffle the indices, and decode them one by one. This guarantees
-       PERFECT coverage and ZERO collisions.
-    3. If space > 10M: Fallback to infinite random sampling (with rejection in caller).
-    """
-    # 1. Calculate space size per "Bucket" (RacerCount + Board)
-    # We treat runs_per_combination as a multiplier (seeds 0..N-1)
     n_seeds = runs_per_combination or 1
 
-    # Pre-calculate combinations for each count to see if we blow up memory
-    # We store them as a list of lists: bucket_combinations[racer_count] = [(r1, r2...), ...]
-    bucket_combinations: dict[int, list[tuple[RacerName, ...]]] = {}
-    total_space_size = 0
+    total_expected = compute_total_runs(
+        eligible_racers=list(eligible_racers),
+        racer_counts=racer_counts,
+        boards=list(boards),
+        runs_per_combination=runs_per_combination,
+        max_total_runs=max_total_runs,
+        exhaustive_limit=EXHAUSTIVE_LIMIT,
+    )
 
-    try:
-        for count in racer_counts:
-            # math.comb is fast and lets us check size before expanding
-            n_combos = math.comb(len(eligible_racers), count)
-            bucket_size = n_combos * len(boards) * n_seeds
-            total_space_size += bucket_size
-
-            if total_space_size > EXHAUSTIVE_LIMIT:
-                raise MemoryError("Space too big for exhaustive shuffling")
-
-            # Generate the actual tuples for this count
-            bucket_combinations[count] = list(
-                itertools.combinations(eligible_racers, count)
-            )
-
-        # === STRATEGY A: EXHAUSTIVE SHUFFLE ===
-        yield from _generate_exhaustive(
-            bucket_combinations, boards, n_seeds, seed_offset, max_total_runs
-        )
-
-    except MemoryError:
-        # === STRATEGY B: INFINITE RANDOM SAMPLING ===
-        # Fallback for massive spaces (e.g. 100 racers)
+    # If the helper says "unknown total" or "too large -> random", go random directly.
+    # (When total_expected is None, either uncapped random or invalid inputs.)
+    if total_expected is None:
         yield from _generate_random_infinite(
             eligible_racers, racer_counts, boards, seed_offset, max_total_runs
         )
+        return
+
+    # If total_expected equals max_total_runs in the "too large" case, we still want random mode.
+    # The easiest robust check: recompute space_total quickly and compare to limit.
+    # (Or return an extra flag from compute_total_runs; see note below.)
+    n = len(eligible_racers)
+    ks = [k for k in sorted(set(racer_counts)) if 0 < k <= n]
+    space_total = len(boards) * n_seeds * sum(math.comb(n, k) for k in ks)
+    if space_total > EXHAUSTIVE_LIMIT:
+        yield from _generate_random_infinite(
+            eligible_racers, racer_counts, boards, seed_offset, max_total_runs
+        )
+        return
+
+    # Exhaustive mode (existing logic)
+    bucket_combinations: dict[int, list[tuple[RacerName, ...]]] = {}
+    for count in racer_counts:
+        bucket_combinations[count] = list(
+            itertools.combinations(eligible_racers, count)
+        )
+
+    yield from _generate_exhaustive(
+        bucket_combinations, boards, n_seeds, seed_offset, max_total_runs
+    )
 
 
 def _generate_exhaustive(
     bucket_combinations: dict[int, list[tuple[RacerName, ...]]],
-    boards: list["BoardName"],
+    boards: list[BoardName],
     n_seeds: int,
     seed_offset: int,
     max_total_runs: int | None,
@@ -114,7 +144,7 @@ def _generate_exhaustive(
 def _generate_random_infinite(
     eligible_racers: list[RacerName],
     racer_counts: list[int],
-    boards: list["BoardName"],
+    boards: list[BoardName],
     seed_offset: int,
     max_total_runs: int | None,
 ) -> Iterator[GameConfiguration]:

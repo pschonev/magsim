@@ -19,6 +19,7 @@ from magical_athlete_simulator.core.events import (
     SimultaneousMoveCmdEvent,
     SimultaneousWarpCmdEvent,
     TripCmdEvent,
+    TripRecoveryEvent,
     TurnStartEvent,
     WarpCmdEvent,
 )
@@ -111,6 +112,13 @@ class GameEngine:
             self.log_info(f"{racer.repr} recovers from Trip.")
             racer.tripped = False
             racer.main_move_consumed = True
+            self.push_event(
+                TripRecoveryEvent(
+                    target_racer_idx=cr,
+                    responsible_racer_idx=None,
+                    source="System",
+                ),
+            )
             self.push_event(
                 TurnStartEvent(
                     target_racer_idx=cr,

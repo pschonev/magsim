@@ -1,15 +1,13 @@
 """Database manager for persisting simulation results."""
 
-from pathlib import Path
-
-
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from sqlalchemy import text
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from simul_runner.db_models import Race, RacerResult
+from simul_runner.db.models import Race, RacerResult
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -48,8 +46,9 @@ class SimulationDatabase:
                             f"INSERT INTO races SELECT * FROM read_parquet('{self.races_file}')",
                         ),
                     )
+                    logger.info(f"Loaded existing races from {self.races_file}")
                 except Exception as e:
-                    logger.error(f"Failed to load races.parquet: {e}")
+                    logger.exception("Failed to load races.parquet.")
 
             # Load results
             if self.results_file.exists():
@@ -59,8 +58,9 @@ class SimulationDatabase:
                             f"INSERT INTO racer_results SELECT * FROM read_parquet('{self.results_file}')",
                         ),
                     )
+                    logger.info(f"Loaded existing results from {self.results_file}")
                 except Exception as e:
-                    logger.error(f"Failed to load racer_results.parquet: {e}")
+                    logger.exception("Failed to load racer_results.parquet.")
 
             session.commit()
 
@@ -83,6 +83,7 @@ class SimulationDatabase:
     def flush_to_parquet(self):
         """Dump in-memory tables back to Parquet files."""
         with Session(self.engine) as session:
+            # DuckDB COPY TO overwrites the file with the full current state
             session.exec(
                 text(
                     f"COPY races TO '{self.races_file}' (FORMAT 'parquet', CODEC 'zstd')",
