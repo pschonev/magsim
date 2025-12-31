@@ -362,7 +362,9 @@ def _(mo):
 
     # Track the last seen selection for EACH table to prevent fighting/loops
     get_last_race_hash, set_last_race_hash = mo.state(None, allow_self_loops=True)
-    get_last_result_hash, set_last_result_hash = mo.state(None, allow_self_loops=True)
+    get_last_result_hash, set_last_result_hash = mo.state(
+        None, allow_self_loops=True
+    )
     return (
         get_board,
         get_debug_mode,
@@ -422,14 +424,16 @@ def _(
         on_click=lambda _: set_step_idx(0),
     )
 
-    # Helper to handle manual changes 
-    # FIX: Do NOT clear the last loaded hash here. 
-    # This prevents the watcher from "re-loading" the table selection 
+
+    # Helper to handle manual changes
+    # FIX: Do NOT clear the last loaded hash here.
+    # This prevents the watcher from "re-loading" the table selection
     # immediately after we manually change a value.
     def manual_change(setter, value):
         setter(value)
         set_step_idx(0)
         return value
+
 
     scenario_seed = mo.ui.number(
         start=1,
@@ -461,6 +465,7 @@ def _(
         value=get_debug_mode(), on_change=set_debug_mode, label="Debug logging"
     )
 
+
     # ... (Rest of Position Inputs, Snapshot Logic, Remove Buttons, Add Racer remains identical)
     # 2. Position Inputs
     def _make_pos_on_change(racer_name):
@@ -471,7 +476,9 @@ def _(
                 v = 0
             set_saved_positions(lambda cur: {**cur, racer_name: v})
             set_step_idx(0)
+
         return _on_change
+
 
     pos_widget_map = {
         ui_racer: mo.ui.number(
@@ -484,9 +491,11 @@ def _(
         for ui_racer in current_roster
     }
 
+
     # 3. Snapshot Logic
     def _snapshot_values(exclude=None):
         return {r: w.value for r, w in pos_widget_map.items() if r != exclude}
+
 
     # 4. Remove Buttons
     def _remove_factory(racer_to_remove):
@@ -497,7 +506,9 @@ def _(
                 lambda cur: [x for x in cur if x != racer_to_remove]
             )
             set_step_idx(0)
+
         return _remover
+
 
     rem_buttons = {
         ui_racer: mo.ui.button(
@@ -517,6 +528,7 @@ def _(
         label="Add racer",
     )
 
+
     def _add_racer(v):
         r = get_racer_to_add()
         if r and r not in get_selected_racers():
@@ -527,6 +539,7 @@ def _(
             set_racer_to_add(None)
             set_step_idx(0)
         return v
+
 
     add_button = mo.ui.button(label="Add", on_click=_add_racer)
 
@@ -576,7 +589,9 @@ def _(
                 [
                     mo.md("## Configure"),
                     mo.hstack(
-                        [scenario_seed, board_selector, reset_button], justify="start", gap=2
+                        [scenario_seed, board_selector, reset_button],
+                        justify="start",
+                        gap=2,
                     ),
                     mo.vstack(
                         [use_scripted_dice_ui, dice_input],
@@ -589,9 +604,8 @@ def _(
                     ),
                 ]
             ),
-            results_tabs,
+            results_tabs.style({"overflow-x": "auto", "max-width": "100%"}),
         ],
-        widths="equal",
     )
     return
 
@@ -623,7 +637,10 @@ def _(
         curr_race_row = races_table.value.row(0, named=True)
 
     curr_res_hash = None
-    if racer_results_table.value is not None and racer_results_table.value.height > 0:
+    if (
+        racer_results_table.value is not None
+        and racer_results_table.value.height > 0
+    ):
         curr_res_hash = racer_results_table.value.item(0, "config_hash")
 
     # 2. Get Last Known States
@@ -632,8 +649,8 @@ def _(
 
     # 3. Detect Changes (Delta Check)
     # We only react if the current selection differs from the last recorded selection for that specific table.
-    race_changed = (curr_race_hash is not None and curr_race_hash != last_race)
-    res_changed = (curr_res_hash is not None and curr_res_hash != last_res)
+    race_changed = curr_race_hash is not None and curr_race_hash != last_race
+    res_changed = curr_res_hash is not None and curr_res_hash != last_res
 
     target_config = None
 
@@ -670,7 +687,6 @@ def _(
 
     if curr_res_hash != last_res:
         set_last_result_hash(curr_res_hash)
-
     return
 
 
@@ -782,12 +798,15 @@ def _(
         ],
         dice_rolls=dice_rolls,
         seed=None if dice_rolls else current_seed_val,
-        board=BOARD_DEFINITIONS.get(current_board_val, BOARD_DEFINITIONS["standard"])(),
+        board=BOARD_DEFINITIONS.get(
+            current_board_val, BOARD_DEFINITIONS["standard"]
+        )(),
     )
 
     step_history = []
     turn_map = {}
     SNAPSHOT_EVENTS = (MoveCmdEvent, WarpCmdEvent, TripCmdEvent)
+
 
     class RichLogSource:
         def __init__(self, console):
@@ -800,6 +819,7 @@ def _(
             return self._console.export_html(
                 clear=False, inline_styles=True, code_format="{code}"
             )
+
 
     policy = SnapshotPolicy(
         snapshot_event_types=SNAPSHOT_EVENTS,
@@ -816,10 +836,12 @@ def _(
     ability_counter = AbilityTriggerCounter()
     sim_turn_counter = {"current": 0}
 
+
     def on_event(engine, event):
         t_idx = sim_turn_counter["current"]
         snapshot_recorder.on_event(engine, event, turn_index=t_idx)
         ability_counter.on_event(event)
+
 
     if hasattr(scenario.engine, "on_event_processed"):
         scenario.engine.on_event_processed = on_event
@@ -1072,7 +1094,7 @@ def _(
         - Last Result Hash: `{get_last_result_hash()}`
         - Racers: {get_selected_racers()}
         """),
-        kind="neutral"
+        kind="neutral",
     )
     return
 
