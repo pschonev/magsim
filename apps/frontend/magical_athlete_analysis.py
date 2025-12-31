@@ -339,13 +339,11 @@ def _(StepSnapshot, get_racer_color, math):
 def _(mo):
     # --- PERSISTENCE STATE ---
     # We only use this to remember values when the UI refreshes (Add/Remove).
-    # We do NOT use this to drive the simulation.
     get_selected_racers, set_selected_racers = mo.state(
         ["Banana", "Centaur", "Magician", "Scoocher"], allow_self_loops=True
     )
     get_racer_to_add, set_racer_to_add = mo.state(None, allow_self_loops=True)
 
-    # Stores the "Last Known" positions to prevent reset on Add/Remove
     get_saved_positions, set_saved_positions = mo.state(
         {"Banana": 0, "Centaur": 0, "Magician": 0, "Scoocher": 0},
         allow_self_loops=True,
@@ -357,17 +355,33 @@ def _(mo):
     get_dice_rolls_text, set_dice_rolls_text = mo.state("", allow_self_loops=False)
 
     get_debug_mode, set_debug_mode = mo.state(False, allow_self_loops=True)
+
+    # --- NEW STATES FOR CONFIG LOADING ---
+    get_seed, set_seed = mo.state(42, allow_self_loops=True)
+    get_board, set_board = mo.state("standard", allow_self_loops=True)
+
+    # Track the last seen selection for EACH table to prevent fighting/loops
+    get_last_race_hash, set_last_race_hash = mo.state(None, allow_self_loops=True)
+    get_last_result_hash, set_last_result_hash = mo.state(None, allow_self_loops=True)
     return (
+        get_board,
         get_debug_mode,
         get_dice_rolls_text,
+        get_last_race_hash,
+        get_last_result_hash,
         get_racer_to_add,
         get_saved_positions,
+        get_seed,
         get_selected_racers,
         get_use_scripted_dice,
+        set_board,
         set_debug_mode,
         set_dice_rolls_text,
+        set_last_race_hash,
+        set_last_result_hash,
         set_racer_to_add,
         set_saved_positions,
+        set_seed,
         set_selected_racers,
         set_use_scripted_dice,
     )
@@ -375,19 +389,24 @@ def _(mo):
 
 @app.cell
 def _(
+    BOARD_DEFINITIONS,
     RacerName,
     get_args,
+    get_board,
     get_debug_mode,
     get_dice_rolls_text,
     get_racer_to_add,
     get_saved_positions,
+    get_seed,
     get_selected_racers,
     get_use_scripted_dice,
     mo,
+    set_board,
     set_debug_mode,
     set_dice_rolls_text,
     set_racer_to_add,
     set_saved_positions,
+    set_seed,
     set_selected_racers,
     set_step_idx,
     set_use_scripted_dice,
@@ -402,12 +421,29 @@ def _(
         label="🔄Reset",
         on_click=lambda _: set_step_idx(0),
     )
+
+    # Helper to handle manual changes 
+    # FIX: Do NOT clear the last loaded hash here. 
+    # This prevents the watcher from "re-loading" the table selection 
+    # immediately after we manually change a value.
+    def manual_change(setter, value):
+        setter(value)
+        set_step_idx(0)
+        return value
+
     scenario_seed = mo.ui.number(
         start=1,
         stop=10000,
-        value=42,
+        value=get_seed(),
         label="Random Seed",
-        on_change=lambda v: (set_step_idx(0), v)[1],
+        on_change=lambda v: manual_change(set_seed, v),
+    )
+
+    board_selector = mo.ui.dropdown(
+        options=sorted(list(BOARD_DEFINITIONS.keys())),
+        value=get_board(),
+        label="Board Map",
+        on_change=lambda v: manual_change(set_board, v),
     )
 
     use_scripted_dice_ui = mo.ui.switch(
@@ -425,25 +461,17 @@ def _(
         value=get_debug_mode(), on_change=set_debug_mode, label="Debug logging"
     )
 
-
-    # 2. Position Inputs — with on_change handlers that update state (reactive)
-    # NOTE: this cell should accept `set_step_idx` in its argument list so we can
-    # reset the timeline to turn 0 when positions change.
-
-
+    # ... (Rest of Position Inputs, Snapshot Logic, Remove Buttons, Add Racer remains identical)
+    # 2. Position Inputs
     def _make_pos_on_change(racer_name):
         def _on_change(new_val):
             try:
                 v = int(new_val)
             except Exception:
                 v = 0
-            # update the saved positions state (this will be read by the simulator)
             set_saved_positions(lambda cur: {**cur, racer_name: v})
-            # reset the timeline to start (turn 0 / first step)
             set_step_idx(0)
-
         return _on_change
-
 
     pos_widget_map = {
         ui_racer: mo.ui.number(
@@ -456,17 +484,9 @@ def _(
         for ui_racer in current_roster
     }
 
-    # Keep the dictionary (optional) but we no longer rely on its .value for
-    # reactivity — the authoritative source is get_saved_positions()
-    all_positions_ui = mo.ui.dictionary(pos_widget_map)
-
-
-    # 3. Snapshot Logic (The "Glue" for Add/Remove)
-    # When we add/remove, we first grab the *current* widget values
-    # and save them to state.
+    # 3. Snapshot Logic
     def _snapshot_values(exclude=None):
         return {r: w.value for r, w in pos_widget_map.items() if r != exclude}
-
 
     # 4. Remove Buttons
     def _remove_factory(racer_to_remove):
@@ -477,9 +497,7 @@ def _(
                 lambda cur: [x for x in cur if x != racer_to_remove]
             )
             set_step_idx(0)
-
         return _remover
-
 
     rem_buttons = {
         ui_racer: mo.ui.button(
@@ -499,7 +517,6 @@ def _(
         label="Add racer",
     )
 
-
     def _add_racer(v):
         r = get_racer_to_add()
         if r and r not in get_selected_racers():
@@ -509,9 +526,7 @@ def _(
             set_selected_racers(lambda cur: cur + [r])
             set_racer_to_add(None)
             set_step_idx(0)
-
         return v
-
 
     add_button = mo.ui.button(label="Add", on_click=_add_racer)
 
@@ -529,6 +544,7 @@ def _(
     return (
         add_button,
         add_racer_dropdown,
+        board_selector,
         current_roster,
         debug_mode_ui,
         dice_rolls_text_ui,
@@ -543,6 +559,7 @@ def _(
 def _(
     add_button,
     add_racer_dropdown,
+    board_selector,
     debug_mode_ui,
     dice_input,
     mo,
@@ -559,7 +576,7 @@ def _(
                 [
                     mo.md("## Configure"),
                     mo.hstack(
-                        [scenario_seed, reset_button], justify="start", gap=2
+                        [scenario_seed, board_selector, reset_button], justify="start", gap=2
                     ),
                     mo.vstack(
                         [use_scripted_dice_ui, dice_input],
@@ -576,6 +593,84 @@ def _(
         ],
         widths="equal",
     )
+    return
+
+
+@app.cell
+def _(
+    df_races,
+    get_last_race_hash,
+    get_last_result_hash,
+    pl,
+    racer_results_table,
+    races_table,
+    set_board,
+    set_last_race_hash,
+    set_last_result_hash,
+    set_saved_positions,
+    set_seed,
+    set_selected_racers,
+    set_step_idx,
+    set_use_scripted_dice,
+):
+    # --- CONFIGURATION LOADER (Stable Version) ---
+
+    # 1. Capture Current Table Selections
+    curr_race_hash = None
+    curr_race_row = None
+    if races_table.value is not None and races_table.value.height > 0:
+        curr_race_hash = races_table.value.item(0, "config_hash")
+        curr_race_row = races_table.value.row(0, named=True)
+
+    curr_res_hash = None
+    if racer_results_table.value is not None and racer_results_table.value.height > 0:
+        curr_res_hash = racer_results_table.value.item(0, "config_hash")
+
+    # 2. Get Last Known States
+    last_race = get_last_race_hash()
+    last_res = get_last_result_hash()
+
+    # 3. Detect Changes (Delta Check)
+    # We only react if the current selection differs from the last recorded selection for that specific table.
+    race_changed = (curr_race_hash is not None and curr_race_hash != last_race)
+    res_changed = (curr_res_hash is not None and curr_res_hash != last_res)
+
+    target_config = None
+
+    # Priority: Races Table > Results Table
+    # But only if it actually changed!
+    if race_changed:
+        target_config = curr_race_row
+    elif res_changed:
+        # We need to fetch the row from df_races
+        filtered = df_races.filter(pl.col("config_hash") == curr_res_hash)
+        if filtered.height > 0:
+            target_config = filtered.row(0, named=True)
+
+    # 4. Apply Configuration (if any change detected)
+    if target_config:
+        racer_names_str = target_config.get("racer_names", "")
+        new_roster = [n.strip() for n in racer_names_str.split(",") if n.strip()]
+        new_seed = int(target_config.get("seed", 42))
+        new_board = target_config.get("board", "standard")
+
+        set_seed(new_seed)
+        set_board(new_board)
+        set_selected_racers(new_roster)
+        set_saved_positions({n: 0 for n in new_roster})
+        set_use_scripted_dice(False)
+        set_step_idx(0)
+
+    # 5. SYNC STATE (CRITICAL)
+    # Always update the "last seen" hashes to match the current table values.
+    # This prevents the "other" table from triggering a change in the next cycle
+    # just because we ignored it this time.
+    if curr_race_hash != last_race:
+        set_last_race_hash(curr_race_hash)
+
+    if curr_res_hash != last_res:
+        set_last_result_hash(curr_res_hash)
+
     return
 
 
@@ -623,15 +718,16 @@ def _(
     TripCmdEvent,
     WarpCmdEvent,
     current_roster,
+    get_board,
     get_debug_mode,
     get_dice_rolls_text,
     get_saved_positions,
+    get_seed,
     get_use_scripted_dice,
     logging,
     mo,
     re,
     reset_button,
-    scenario_seed,
 ):
     from magical_athlete_simulator.simulation.telemetry import (
         SnapshotPolicy,
@@ -640,13 +736,15 @@ def _(
     )
     from magical_athlete_simulator.core.events import AbilityTriggeredEvent
 
-
+    # Reactivity triggers
     reset_button.value
-    scenario_seed.value
+    # Use state getters
+    current_seed_val = get_seed()
+    current_board_val = get_board()
+
     get_saved_positions()
     get_use_scripted_dice()
     get_dice_rolls_text()
-
 
     log_console = Console(
         record=True, width=120, force_terminal=True, color_system="truecolor"
@@ -665,7 +763,7 @@ def _(
     log_handler.setFormatter(RichMarkupFormatter())
     root_logger.addHandler(log_handler)
     log_level = logging.DEBUG if get_debug_mode() else logging.INFO
-    root_logger.setLevel(log_level)  # ← Changed from hardcoded logging.INFO
+    root_logger.setLevel(log_level)
 
     dice_rolls = None
     if get_use_scripted_dice():
@@ -676,22 +774,20 @@ def _(
             except:
                 pass
 
+    # Updated: Use dynamic board and seed
     scenario = GameScenario(
         racers_config=[
             RacerConfig(i, n, start_pos=int(get_saved_positions().get(n, 0)))
             for i, n in enumerate(current_roster)
         ],
         dice_rolls=dice_rolls,
-        seed=None if dice_rolls else scenario_seed.value,
-        board=BOARD_DEFINITIONS["standard"](),
+        seed=None if dice_rolls else current_seed_val,
+        board=BOARD_DEFINITIONS.get(current_board_val, BOARD_DEFINITIONS["standard"])(),
     )
 
     step_history = []
     turn_map = {}
-
-    # Configure which events should create visible "steps" in the UI timeline.
     SNAPSHOT_EVENTS = (MoveCmdEvent, WarpCmdEvent, TripCmdEvent)
-
 
     class RichLogSource:
         def __init__(self, console):
@@ -705,12 +801,11 @@ def _(
                 clear=False, inline_styles=True, code_format="{code}"
             )
 
-
     policy = SnapshotPolicy(
         snapshot_event_types=SNAPSHOT_EVENTS,
         ensure_snapshot_each_turn=True,
         fallback_event_name="TurnSkipped/Recovery",
-        snapshot_on_turn_end=False,  # keep old behavior: only add fallback when needed
+        snapshot_on_turn_end=False,
     )
 
     snapshot_recorder = SnapshotRecorder(
@@ -719,40 +814,29 @@ def _(
     )
 
     ability_counter = AbilityTriggerCounter()
-
     sim_turn_counter = {"current": 0}
-
 
     def on_event(engine, event):
         t_idx = sim_turn_counter["current"]
         snapshot_recorder.on_event(engine, event, turn_index=t_idx)
         ability_counter.on_event(event)
 
-
     if hasattr(scenario.engine, "on_event_processed"):
         scenario.engine.on_event_processed = on_event
 
     engine = scenario.engine
-
-    # Initial snapshot (turn 0, before any turns run)
     snapshot_recorder.capture(engine, "InitialState", turn_index=0)
-
 
     with mo.status.spinner(title="Simulating..."):
         while not engine.state.race_over:
             log_console.export_html(clear=True)
-
             t_idx = sim_turn_counter["current"]
             scenario.run_turn()
-
-            # Ensure we have at least one snapshot for this turn if no tracked events fired.
             snapshot_recorder.on_turn_end(engine, turn_index=t_idx)
-
             sim_turn_counter["current"] += 1
             if len(snapshot_recorder.step_history) > 1000:
                 break
 
-    # Export to the variables your downstream cells already expect:
     step_history: list[StepSnapshot] = snapshot_recorder.step_history
     turn_map = snapshot_recorder.turn_map
 
@@ -967,6 +1051,29 @@ def _(
             align="start",
         )
     layout
+    return
+
+
+@app.cell
+def _(
+    get_board,
+    get_last_race_hash,
+    get_last_result_hash,
+    get_seed,
+    get_selected_racers,
+    mo,
+):
+    mo.callout(
+        mo.md(f"""
+        **State Debugger**
+        - Seed: {get_seed()}
+        - Board: {get_board()}
+        - Last Race Hash: `{get_last_race_hash()}`
+        - Last Result Hash: `{get_last_result_hash()}`
+        - Racers: {get_selected_racers()}
+        """),
+        kind="neutral"
+    )
     return
 
 
