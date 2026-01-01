@@ -1115,111 +1115,137 @@ def _(
 
 
 @app.cell
-def _(alt, df_racer_results, get_racer_color, mo, pl):
+def _(alt, df_racer_results, df_races, get_racer_color, mo, pl):
     # --- ANALYTICS DASHBOARD ---
 
-    # Check if data is loaded before doing anything
-    if df_racer_results.height == 0:
-        mo.md("⚠️ **No results loaded.** Please select a folder in the 'Source' tab above.")
-
-    # 1. PREPARE DATA
-    # Group by racer to get averages
-    stats_df = (
-        df_racer_results
-        .group_by("racer_name")
-        .agg([
-            pl.col("final_vp").mean().alias("mean_vp"),
-            pl.col("final_vp").var().alias("var_vp"),
-            pl.col("ability_trigger_count").mean().alias("mean_triggers"),
-            pl.col("turns_taken").mean().alias("avg_turns"),
-            # Win rate: count how many times rank == 1
-            (pl.col("rank") == 1).sum().alias("wins"),
-            pl.col("final_vp").count().alias("races_run")
-        ])
-        .with_columns(
-            (pl.col("wins") / pl.col("races_run")).alias("win_rate")
+    # --- Helper: Data Preparation ---
+    def _prepare_stats():
+        return (
+            df_racer_results
+            .group_by("racer_name")
+            .agg([
+                pl.col("final_vp").mean().alias("mean_vp"),
+                pl.col("final_vp").var().alias("var_vp"),
+                pl.col("ability_trigger_count").mean().alias("mean_triggers"),
+                (pl.col("rank") == 1).sum().alias("wins"),
+                pl.col("final_vp").count().alias("races_run")
+            ])
+            .with_columns(
+                (pl.col("wins") / pl.col("races_run")).alias("win_rate")
+            )
+            .fill_nan(0)
         )
-        .fill_nan(0)
-    )
 
-    # Global Chart Config
-    racers = stats_df["racer_name"].unique().to_list()
-    colors = [get_racer_color(r) for r in racers]
+    # --- Helper: Chart Builders ---
+    def _build_consistency_chart(stats_df, racers, colors):
+        # 1. Calculate VISUAL center
+        min_var, max_var = stats_df["var_vp"].min(), stats_df["var_vp"].max()
+        min_vp, max_vp = stats_df["mean_vp"].min(), stats_df["mean_vp"].max()
 
-    base = alt.Chart(stats_df).encode(
-        color=alt.Color("racer_name", scale=alt.Scale(domain=racers, range=colors))
-    )
+        if min_var == max_var: max_var += 0.1
+        if min_vp == max_vp: max_vp += 1.0
 
-    # --- CHART 1: CONSISTENCY (Quadrants) ---
-    # X = Variance, Y = Mean VP
+        mid_var = (min_var + max_var) / 2
+        mid_vp = (min_vp + max_vp) / 2
 
-    # Calculate global means for quadrant lines
-    avg_mean_vp = stats_df["mean_vp"].mean()
-    avg_var_vp = stats_df["var_vp"].mean()
+        base = alt.Chart(stats_df).encode(
+            color=alt.Color("racer_name", scale=alt.Scale(domain=racers, range=colors))
+        )
 
-    points = base.mark_circle(size=150).encode(
-        x=alt.X("var_vp", title="VP Variance (Risk)"),
-        y=alt.Y("mean_vp", title="Average Final VP (Reward)"),
-        tooltip=["racer_name", "mean_vp", "var_vp", "win_rate"]
-    ).interactive()
+        # Quadrant Lines
+        h_line = alt.Chart(pl.DataFrame({"y": [mid_vp]})).mark_rule(strokeDash=[5,5], color="gray").encode(y="y")
+        v_line = alt.Chart(pl.DataFrame({"x": [mid_var]})).mark_rule(strokeDash=[5,5], color="gray").encode(x="x")
 
-    # Quadrant Lines
-    h_line = alt.Chart(pl.DataFrame({"y": [avg_mean_vp]})).mark_rule(strokeDash=[5,5], color="gray").encode(y="y")
-    v_line = alt.Chart(pl.DataFrame({"x": [avg_var_vp]})).mark_rule(strokeDash=[5,5], color="gray").encode(x="x")
+        # Quadrant Labels: Creating 4 separate marks to avoid encoding limitation
+        # Right side = Low Variance (High Consistency) - X is Reversed
+        # Left side = High Variance (Low Consistency)
 
-    # Text Labels for Quadrants
-    text_data = pl.DataFrame([
-        {"x": avg_var_vp*1.5, "y": avg_mean_vp*1.1, "t": "High Risk / High Reward"},
-        {"x": avg_var_vp*0.5, "y": avg_mean_vp*1.1, "t": "Consistent / High Reward"},
-        {"x": avg_var_vp*0.5, "y": avg_mean_vp*0.9, "t": "Consistent / Low Reward"},
-        {"x": avg_var_vp*1.5, "y": avg_mean_vp*0.9, "t": "High Risk / Low Reward"},
-    ])
-    labels = alt.Chart(text_data).mark_text(align="center", baseline="middle", dx=0, dy=0, color="gray", opacity=0.6).encode(
-        x="x", y="y", text="t"
-    )
+        # 1. Top Right (Consistent / High Reward) -> Align Left, Baseline Top
+        lbl_tr = alt.Chart(pl.DataFrame({'x': [min_var], 'y': [max_vp], 't': ['Consistent/High Reward']})).mark_text(
+            align='left', baseline='top', dx=5, dy=5, color='gray', opacity=0.6
+        ).encode(x='x', y='y', text='t')
 
-    chart_consistency = (points + h_line + v_line + labels).properties(
-        title="Consistency Quadrants", width=600, height=400
-    )
+        # 2. Top Left (Risky / High Reward) -> Align Right, Baseline Top
+        lbl_tl = alt.Chart(pl.DataFrame({'x': [max_var], 'y': [max_vp], 't': ['Risky/High Reward']})).mark_text(
+            align='right', baseline='top', dx=-5, dy=5, color='gray', opacity=0.6
+        ).encode(x='x', y='y', text='t')
 
+        # 3. Bottom Right (Consistent / Low Reward) -> Align Left, Baseline Bottom
+        lbl_br = alt.Chart(pl.DataFrame({'x': [min_var], 'y': [min_vp], 't': ['Consistent/Low Reward']})).mark_text(
+            align='left', baseline='bottom', dx=5, dy=-5, color='gray', opacity=0.6
+        ).encode(x='x', y='y', text='t')
 
-    # --- CHART 2: ABILITY IMPACT ---
-    chart_ability = base.mark_circle(size=120).encode(
-        x=alt.X("mean_triggers", title="Avg Ability Triggers"),
-        y=alt.Y("mean_vp", title="Avg Final VP"),
-        tooltip=["racer_name", "mean_triggers", "mean_vp"]
-    ).properties(title="Ability Activity vs Score", width=600, height=400).interactive()
+        # 4. Bottom Left (Risky / Low Reward) -> Align Right, Baseline Bottom
+        lbl_bl = alt.Chart(pl.DataFrame({'x': [max_var], 'y': [min_vp], 't': ['Risky/Low Reward']})).mark_text(
+            align='right', baseline='bottom', dx=-5, dy=-5, color='gray', opacity=0.6
+        ).encode(x='x', y='y', text='t')
 
+        points = base.mark_circle(size=150).encode(
+            x=alt.X("var_vp", title="Consistency (Lower Variance →)", scale=alt.Scale(reverse=True, zero=False)),
+            y=alt.Y("mean_vp", title="Avg Final VP (Reward)", scale=alt.Scale(zero=False)),
+            tooltip=["racer_name", "mean_vp", "var_vp", "win_rate"]
+        )
 
-    # --- CHART 3: GAME LENGTH (Max Turns per Board) ---
-    # We need a different aggregation for this: Group by Board + Racer Count
-    # We need to join with races table to get board info (it's in config_hash)
-    # BUT we don't have the joined table here. Let's assume we can just use the results.
-    # Actually, we can approximate "Board" complexity by just looking at turns_taken distribution.
+        return (h_line + v_line + lbl_tr + lbl_tl + lbl_br + lbl_bl + points).properties(
+            title="Consistency Quadrants", width=600, height=400
+        )
 
-    # Let's show max turns taken by any racer, grouped by racer name (Who is the slowest?)
-    chart_length = base.mark_bar().encode(
-        x=alt.X("racer_name", sort="-y", title="Racer"),
-        y=alt.Y("avg_turns", title="Average Turns to Finish"),
-        tooltip=["racer_name", "avg_turns"]
-    ).properties(title="Average Race Duration per Racer", width=600, height=400)
+    def _build_ability_chart(stats_df, racers, colors):
+        return alt.Chart(stats_df).mark_circle(size=120).encode(
+            x=alt.X("mean_triggers", title="Avg Ability Triggers"),
+            y=alt.Y("mean_vp", title="Avg Final VP"),
+            color=alt.Color("racer_name", scale=alt.Scale(domain=racers, range=colors)),
+            tooltip=["racer_name", "mean_triggers", "mean_vp"]
+        ).properties(title="Ability Activity vs Score", width=600, height=400)
 
+    def _build_win_rate_chart(stats_df, racers, colors):
+        return alt.Chart(stats_df).mark_bar().encode(
+            x=alt.X("racer_name", sort="-y", title="Racer"),
+            y=alt.Y("win_rate", axis=alt.Axis(format="%"), title="Win Rate"),
+            color=alt.Color("racer_name", scale=alt.Scale(domain=racers, range=colors)),
+            tooltip=["racer_name", alt.Tooltip("win_rate", format=".1%"), "races_run"]
+        ).properties(title="Win Rate %", width=600, height=400)
 
-    # --- CHART 4: WIN RATE ---
-    chart_wins = base.mark_bar().encode(
-        x=alt.X("racer_name", sort="-y", title="Racer"),
-        y=alt.Y("win_rate", axis=alt.Axis(format="%"), title="Win Rate"),
-        tooltip=["racer_name", alt.Tooltip("win_rate", format=".1%"), "races_run"]
-    ).properties(title="Win Rate %", width=600, height=400)
+    def _build_game_length_chart():
+        gl_stats = (
+            df_races
+            .group_by(["board", "racer_count"])
+            .agg(pl.col("total_turns").mean().alias("avg_duration"))
+            .sort(["board", "racer_count"])
+        )
 
+        return alt.Chart(gl_stats).mark_bar().encode(
+            x=alt.X("racer_count:O", title="Number of Racers"),
+            y=alt.Y("avg_duration", title="Avg Turns to Finish"),
+            column=alt.Column("board", title="Board Map"),
+            color=alt.Color("board", legend=None),
+            tooltip=["board", "racer_count", "avg_duration"]
+        ).properties(title="Game Duration Analysis", width=200, height=300)
 
-    # DISPLAY
-    mo.ui.tabs({
-        "🎯 Consistency": mo.ui.altair_chart(chart_consistency),
-        "⚡ Abilities": mo.ui.altair_chart(chart_ability),
-        "🏆 Win Rate": mo.ui.altair_chart(chart_wins),
-        "zzz Speed": mo.ui.altair_chart(chart_length),
-    })
+    # --- Main Execution Logic ---
+    has_data = (df_racer_results.height > 0)
+
+    final_output = None
+    if has_data:
+        stats = _prepare_stats()
+        r_list = stats["racer_name"].unique().to_list()
+        c_list = [get_racer_color(r) for r in r_list]
+
+        c1 = _build_consistency_chart(stats, r_list, c_list)
+        c2 = _build_ability_chart(stats, r_list, c_list)
+        c3 = _build_win_rate_chart(stats, r_list, c_list)
+        c4 = _build_game_length_chart()
+
+        # We wrap in a container with min-height to reduce layout shift jumping
+        final_output = mo.ui.tabs({
+            "🎯 Consistency": mo.ui.altair_chart(c1),
+            "⚡ Abilities": mo.ui.altair_chart(c2),
+            "🏆 Win Rate": mo.ui.altair_chart(c3),
+            "⏳ Game Length": mo.ui.altair_chart(c4),
+        }).style({"min-height": "500px"})
+    else:
+        final_output = mo.md("⚠️ **No results loaded.** Please select a folder in the 'Source' tab above.")
+    final_output
     return
 
 
