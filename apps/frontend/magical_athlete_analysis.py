@@ -1120,91 +1120,119 @@ def _(alt, df_racer_results, df_races, get_racer_color, mo, pl):
 
     # --- Helper: Data Preparation ---
     def _prepare_stats():
+        # We need sum_dice_rolled and turns_taken from the raw results
+        # Assuming df_racer_results has: 
+        # 'racer_name', 'final_vp', 'ability_trigger_count', 'turns_taken', 'sum_dice_rolled', 'rank'
+        # 'recovery_turns', 'ability_self_target_count', 'ability_target_count'
+
+        # Calculate per-game metrics first (to get accurate means)
+        # Note: Some metrics are per-turn (like trigger rate), so we calculate them per row first
+
+        # Avoid division by zero for per-turn metrics
+        df_clean = df_racer_results.with_columns(
+            pl.when(pl.col("turns_taken") > 0)
+            .then(pl.col("turns_taken"))
+            .otherwise(1)
+            .alias("safe_turns"),
+
+            pl.when(pl.col("final_vp") > 0)
+            .then(pl.col("final_vp"))
+            .otherwise(None) # Set to None to exclude from efficiency mean if 0 VP
+            .alias("safe_vp")
+        )
+
         return (
-            df_racer_results
+            df_clean
             .group_by("racer_name")
             .agg([
+                # Score Stats
                 pl.col("final_vp").mean().alias("mean_vp"),
                 pl.col("final_vp").var().alias("var_vp"),
-                pl.col("ability_trigger_count").mean().alias("mean_triggers"),
-                (pl.col("rank") == 1).sum().alias("wins"),
-                pl.col("final_vp").count().alias("races_run")
+
+                # Ability Stats (Per Turn)
+                (pl.col("ability_trigger_count") / pl.col("safe_turns")).mean().alias("triggers_per_turn"),
+                (pl.col("ability_self_target_count") / pl.col("safe_turns")).mean().alias("self_per_turn"),
+                (pl.col("ability_target_count") / pl.col("safe_turns")).mean().alias("target_per_turn"),
+
+                # Dice Efficiency (Dice per VP) - Lower is better
+                (pl.col("sum_dice_rolled") / pl.col("safe_vp")).mean().alias("dice_per_vp"),
+
+                # Speed Stats
+                pl.col("turns_taken").mean().alias("avg_turns"),
+                (pl.col("recovery_turns") / pl.col("safe_turns")).mean().alias("recovery_rate"),
+
+                # Win/Place Stats
+                (pl.col("rank") == 1).sum().alias("cnt_1st"),
+                (pl.col("rank") == 2).sum().alias("cnt_2nd"),
+                pl.len().alias("races_run")
             ])
-            .with_columns(
-                (pl.col("wins") / pl.col("races_run")).alias("win_rate")
-            )
+            .with_columns([
+                (pl.col("cnt_1st") / pl.col("races_run")).alias("pct_1st"),
+                (pl.col("cnt_2nd") / pl.col("races_run")).alias("pct_2nd")
+            ])
             .fill_nan(0)
         )
 
-    # --- Helper: Chart Builders ---
-    def _build_consistency_chart(stats_df, racers, colors):
+    # --- Helper: Generic Quadrant Chart ---
+    def _build_quadrant_chart(stats_df, racers, colors, x_col, y_col, title, x_title, y_title, reverse_x=False):
         # 1. Calculate VISUAL center
-        min_var, max_var = stats_df["var_vp"].min(), stats_df["var_vp"].max()
-        min_vp, max_vp = stats_df["mean_vp"].min(), stats_df["mean_vp"].max()
+        min_x, max_x = stats_df[x_col].min(), stats_df[x_col].max()
+        min_y, max_y = stats_df[y_col].min(), stats_df[y_col].max()
 
-        if min_var == max_var: max_var += 0.1
-        if min_vp == max_vp: max_vp += 1.0
+        # Safety for flat data
+        if min_x == max_x: max_x += 0.1
+        if min_y == max_y: max_y += 1.0
 
-        mid_var = (min_var + max_var) / 2
-        mid_vp = (min_vp + max_vp) / 2
+        mid_x = (min_x + max_x) / 2
+        mid_y = (min_y + max_y) / 2
 
         base = alt.Chart(stats_df).encode(
             color=alt.Color("racer_name", scale=alt.Scale(domain=racers, range=colors))
         )
 
         # Quadrant Lines
-        h_line = alt.Chart(pl.DataFrame({"y": [mid_vp]})).mark_rule(strokeDash=[5,5], color="gray").encode(y="y")
-        v_line = alt.Chart(pl.DataFrame({"x": [mid_var]})).mark_rule(strokeDash=[5,5], color="gray").encode(x="x")
+        h_line = alt.Chart(pl.DataFrame({"y": [mid_y]})).mark_rule(strokeDash=[5,5], color="gray").encode(y="y")
+        v_line = alt.Chart(pl.DataFrame({"x": [mid_x]})).mark_rule(strokeDash=[5,5], color="gray").encode(x="x")
 
-        # Quadrant Labels: Creating 4 separate marks to avoid encoding limitation
-        # Right side = Low Variance (High Consistency) - X is Reversed
-        # Left side = High Variance (Low Consistency)
+        # Labels - 4 separate marks to handle alignment
+        # Logic: "Better" is usually Top-Right (High Y, High X).
+        # But if reverse_x is True (like Variance/DiceCost), "Better" is Top-Left (High Y, Low X).
+        # We place generic labels based on the quadrants.
 
-        # 1. Top Right (Consistent / High Reward) -> Align Left, Baseline Top
-        lbl_tr = alt.Chart(pl.DataFrame({'x': [min_var], 'y': [max_vp], 't': ['Consistent/High Reward']})).mark_text(
-            align='left', baseline='top', dx=5, dy=5, color='gray', opacity=0.6
-        ).encode(x='x', y='y', text='t')
+        # Definitions for Top/Bottom (High Y / Low Y)
+        t_high, t_low = "High", "Low"
 
-        # 2. Top Left (Risky / High Reward) -> Align Right, Baseline Top
-        lbl_tl = alt.Chart(pl.DataFrame({'x': [max_var], 'y': [max_vp], 't': ['Risky/High Reward']})).mark_text(
-            align='right', baseline='top', dx=-5, dy=5, color='gray', opacity=0.6
-        ).encode(x='x', y='y', text='t')
+        # Definitions for Left/Right depend on X meaning
+        # If reverse_x (Low is good): Left=Bad(High), Right=Good(Low) -> Wait, visual left is Max X (Bad)
+        # Visual:
+        #   Normal X: Left=Min, Right=Max
+        #   Reversed X: Left=Max, Right=Min
 
-        # 3. Bottom Right (Consistent / Low Reward) -> Align Left, Baseline Bottom
-        lbl_br = alt.Chart(pl.DataFrame({'x': [min_var], 'y': [min_vp], 't': ['Consistent/Low Reward']})).mark_text(
-            align='left', baseline='bottom', dx=5, dy=-5, color='gray', opacity=0.6
-        ).encode(x='x', y='y', text='t')
+        # Let's just label them as Q1-Q4 style concepts relative to the metric names
+        # We will use simple offsets from the corners
 
-        # 4. Bottom Left (Risky / Low Reward) -> Align Right, Baseline Bottom
-        lbl_bl = alt.Chart(pl.DataFrame({'x': [max_var], 'y': [min_vp], 't': ['Risky/Low Reward']})).mark_text(
-            align='right', baseline='bottom', dx=-5, dy=-5, color='gray', opacity=0.6
-        ).encode(x='x', y='y', text='t')
+        # Top-Right Corner (Visual)
+        # Normal X: Max X, Max Y. Reversed X: Min X, Max Y
+        tr_x = min_x if reverse_x else max_x
+        tr_y = max_y
+
+        # Top-Left Corner (Visual)
+        # Normal X: Min X, Max Y. Reversed X: Max X, Max Y
+        tl_x = max_x if reverse_x else min_x
+        tl_y = max_y
+
+        # ... and so on. To keep it simple and robust, I'll just map the 4 data corners to text
+        # and let the user interpret based on the axis title, OR we just skip the text labels for the generic function 
+        # because "Risk/Reward" specific logic was hardcoded. 
+        # I will keep it simple: Just lines and points for the generic one to avoid confusion.
 
         points = base.mark_circle(size=150).encode(
-            x=alt.X("var_vp", title="Consistency (Lower Variance →)", scale=alt.Scale(reverse=True, zero=False)),
-            y=alt.Y("mean_vp", title="Avg Final VP (Reward)", scale=alt.Scale(zero=False)),
-            tooltip=["racer_name", "mean_vp", "var_vp", "win_rate"]
+            x=alt.X(x_col, title=x_title, scale=alt.Scale(reverse=reverse_x, zero=False)),
+            y=alt.Y(y_col, title=y_title, scale=alt.Scale(zero=False)),
+            tooltip=["racer_name", x_col, y_col, "mean_vp"]
         )
 
-        return (h_line + v_line + lbl_tr + lbl_tl + lbl_br + lbl_bl + points).properties(
-            title="Consistency Quadrants", width=600, height=400
-        )
-
-    def _build_ability_chart(stats_df, racers, colors):
-        return alt.Chart(stats_df).mark_circle(size=120).encode(
-            x=alt.X("mean_triggers", title="Avg Ability Triggers"),
-            y=alt.Y("mean_vp", title="Avg Final VP"),
-            color=alt.Color("racer_name", scale=alt.Scale(domain=racers, range=colors)),
-            tooltip=["racer_name", "mean_triggers", "mean_vp"]
-        ).properties(title="Ability Activity vs Score", width=600, height=400)
-
-    def _build_win_rate_chart(stats_df, racers, colors):
-        return alt.Chart(stats_df).mark_bar().encode(
-            x=alt.X("racer_name", sort="-y", title="Racer"),
-            y=alt.Y("win_rate", axis=alt.Axis(format="%"), title="Win Rate"),
-            color=alt.Color("racer_name", scale=alt.Scale(domain=racers, range=colors)),
-            tooltip=["racer_name", alt.Tooltip("win_rate", format=".1%"), "races_run"]
-        ).properties(title="Win Rate %", width=600, height=400)
+        return (h_line + v_line + points).properties(title=title, width=500, height=350)
 
     def _build_game_length_chart():
         gl_stats = (
@@ -1213,38 +1241,76 @@ def _(alt, df_racer_results, df_races, get_racer_color, mo, pl):
             .agg(pl.col("total_turns").mean().alias("avg_duration"))
             .sort(["board", "racer_count"])
         )
-
         return alt.Chart(gl_stats).mark_bar().encode(
             x=alt.X("racer_count:O", title="Number of Racers"),
             y=alt.Y("avg_duration", title="Avg Turns to Finish"),
             column=alt.Column("board", title="Board Map"),
             color=alt.Color("board", legend=None),
             tooltip=["board", "racer_count", "avg_duration"]
-        ).properties(title="Game Duration Analysis", width=200, height=300)
+        ).properties(title="Game Duration Analysis", width=150, height=300)
 
-    # --- Main Execution Logic ---
-    has_data = (df_racer_results.height > 0)
-
-    final_output = None
-    if has_data:
+    # --- Main Execution ---
+    if df_racer_results.height == 0:
+        final_output = mo.md("⚠️ **No results loaded.**")
+    else:
         stats = _prepare_stats()
         r_list = stats["racer_name"].unique().to_list()
         c_list = [get_racer_color(r) for r in r_list]
 
-        c1 = _build_consistency_chart(stats, r_list, c_list)
-        c2 = _build_ability_chart(stats, r_list, c_list)
-        c3 = _build_win_rate_chart(stats, r_list, c_list)
-        c4 = _build_game_length_chart()
+        # 1. Generate Charts
+        c_consist = _build_quadrant_chart(
+            stats, r_list, c_list, 
+            "var_vp", "mean_vp", 
+            "Consistency (Risk vs Reward)", "Consistency (Lower Var →)", "Avg Final VP", 
+            reverse_x=True
+        )
 
-        # We wrap in a container with min-height to reduce layout shift jumping
-        final_output = mo.ui.tabs({
-            "🎯 Consistency": mo.ui.altair_chart(c1),
-            "⚡ Abilities": mo.ui.altair_chart(c2),
-            "🏆 Win Rate": mo.ui.altair_chart(c3),
-            "⏳ Game Length": mo.ui.altair_chart(c4),
-        }).style({"min-height": "500px"})
-    else:
-        final_output = mo.md("⚠️ **No results loaded.** Please select a folder in the 'Source' tab above.")
+        c_ability = _build_quadrant_chart(
+            stats, r_list, c_list, 
+            "triggers_per_turn", "mean_vp", 
+            "Ability Impact", "Abilities / Turn", "Avg Final VP",
+            reverse_x=False
+        )
+
+        c_effic = _build_quadrant_chart(
+            stats, r_list, c_list, 
+            "dice_per_vp", "mean_vp", 
+            "Dice Efficiency", "Dice / VP (Lower is Better →)", "Avg Final VP",
+            reverse_x=True
+        )
+
+        c_len = _build_game_length_chart()
+
+        # 2. Charts Tab
+        charts_ui = mo.ui.tabs({
+            "🎯 Consistency": mo.ui.altair_chart(c_consist),
+            "⚡ Ability Impact": mo.ui.altair_chart(c_ability),
+            "🎲 Dice Efficiency": mo.ui.altair_chart(c_effic),
+            "⏳ Game Length": mo.ui.altair_chart(c_len),
+        }).style({"min-height": "450px", "width": "100%"})
+
+        # 3. Aggregate Table (Clean formatting)
+        # Select and rename columns for display
+        display_df = stats.select([
+            pl.col("racer_name").alias("Racer"),
+            pl.col("mean_vp").round(2).alias("Avg VP"),
+            pl.col("var_vp").round(2).alias("VP Var"),
+            pl.col("triggers_per_turn").round(2).alias("Abil/Turn"),
+            pl.col("self_per_turn").round(2).alias("Self/Turn"),
+            pl.col("target_per_turn").round(2).alias("Tgt/Turn"),
+            pl.col("dice_per_vp").round(1).alias("Dice/VP"),
+            pl.col("avg_turns").round(1).alias("Avg Turns"),
+            (pl.col("pct_1st") * 100).round(1).alias("1st %"),
+            (pl.col("pct_2nd") * 100).round(1).alias("2nd %"),
+        ]).sort("Avg VP", descending=True)
+
+        table_ui = mo.ui.table(display_df, selection=None, page_size=10)
+
+        # 4. Layout: Charts Left, Data Right
+        final_output = mo.hstack([
+            mo.vstack([mo.md("### Charts"), charts_ui]),
+            mo.vstack([mo.md("### Aggregate Racer Stats"), table_ui])
+        ], widths=[5, 4], gap=2)
     final_output
     return
 
