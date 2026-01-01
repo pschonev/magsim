@@ -6,6 +6,7 @@ dependencies = [
     "marimo[lsp]",
     "magical-athlete-simulator",
     "polars>=1.36.1",
+    "altair>=6.0.0",
 ]
 
 [tool.uv.sources]

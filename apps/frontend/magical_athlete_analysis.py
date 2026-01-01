@@ -7,6 +7,7 @@ app = marimo.App(width="full")
 @app.cell
 def _():
     import marimo as mo
+    import altair as alt
     import math
     import logging
     import re
@@ -39,6 +40,7 @@ def _():
         RichMarkupFormatter,
         TripCmdEvent,
         WarpCmdEvent,
+        alt,
         get_args,
         logging,
         math,
@@ -1113,25 +1115,111 @@ def _(
 
 
 @app.cell
-def _(
-    get_board,
-    get_last_race_hash,
-    get_last_result_hash,
-    get_seed,
-    get_selected_racers,
-    mo,
-):
-    mo.callout(
-        mo.md(f"""
-        **State Debugger**
-        - Seed: {get_seed()}
-        - Board: {get_board()}
-        - Last Race Hash: `{get_last_race_hash()}`
-        - Last Result Hash: `{get_last_result_hash()}`
-        - Racers: {get_selected_racers()}
-        """),
-        kind="neutral",
+def _(alt, df_racer_results, get_racer_color, mo, pl):
+    # --- ANALYTICS DASHBOARD ---
+
+    # Check if data is loaded before doing anything
+    if df_racer_results.height == 0:
+        mo.md("⚠️ **No results loaded.** Please select a folder in the 'Source' tab above.")
+
+    # 1. PREPARE DATA
+    # Group by racer to get averages
+    stats_df = (
+        df_racer_results
+        .group_by("racer_name")
+        .agg([
+            pl.col("final_vp").mean().alias("mean_vp"),
+            pl.col("final_vp").var().alias("var_vp"),
+            pl.col("ability_trigger_count").mean().alias("mean_triggers"),
+            pl.col("turns_taken").mean().alias("avg_turns"),
+            # Win rate: count how many times rank == 1
+            (pl.col("rank") == 1).sum().alias("wins"),
+            pl.col("final_vp").count().alias("races_run")
+        ])
+        .with_columns(
+            (pl.col("wins") / pl.col("races_run")).alias("win_rate")
+        )
+        .fill_nan(0)
     )
+
+    # Global Chart Config
+    racers = stats_df["racer_name"].unique().to_list()
+    colors = [get_racer_color(r) for r in racers]
+
+    base = alt.Chart(stats_df).encode(
+        color=alt.Color("racer_name", scale=alt.Scale(domain=racers, range=colors))
+    )
+
+    # --- CHART 1: CONSISTENCY (Quadrants) ---
+    # X = Variance, Y = Mean VP
+
+    # Calculate global means for quadrant lines
+    avg_mean_vp = stats_df["mean_vp"].mean()
+    avg_var_vp = stats_df["var_vp"].mean()
+
+    points = base.mark_circle(size=150).encode(
+        x=alt.X("var_vp", title="VP Variance (Risk)"),
+        y=alt.Y("mean_vp", title="Average Final VP (Reward)"),
+        tooltip=["racer_name", "mean_vp", "var_vp", "win_rate"]
+    ).interactive()
+
+    # Quadrant Lines
+    h_line = alt.Chart(pl.DataFrame({"y": [avg_mean_vp]})).mark_rule(strokeDash=[5,5], color="gray").encode(y="y")
+    v_line = alt.Chart(pl.DataFrame({"x": [avg_var_vp]})).mark_rule(strokeDash=[5,5], color="gray").encode(x="x")
+
+    # Text Labels for Quadrants
+    text_data = pl.DataFrame([
+        {"x": avg_var_vp*1.5, "y": avg_mean_vp*1.1, "t": "High Risk / High Reward"},
+        {"x": avg_var_vp*0.5, "y": avg_mean_vp*1.1, "t": "Consistent / High Reward"},
+        {"x": avg_var_vp*0.5, "y": avg_mean_vp*0.9, "t": "Consistent / Low Reward"},
+        {"x": avg_var_vp*1.5, "y": avg_mean_vp*0.9, "t": "High Risk / Low Reward"},
+    ])
+    labels = alt.Chart(text_data).mark_text(align="center", baseline="middle", dx=0, dy=0, color="gray", opacity=0.6).encode(
+        x="x", y="y", text="t"
+    )
+
+    chart_consistency = (points + h_line + v_line + labels).properties(
+        title="Consistency Quadrants", width=600, height=400
+    )
+
+
+    # --- CHART 2: ABILITY IMPACT ---
+    chart_ability = base.mark_circle(size=120).encode(
+        x=alt.X("mean_triggers", title="Avg Ability Triggers"),
+        y=alt.Y("mean_vp", title="Avg Final VP"),
+        tooltip=["racer_name", "mean_triggers", "mean_vp"]
+    ).properties(title="Ability Activity vs Score", width=600, height=400).interactive()
+
+
+    # --- CHART 3: GAME LENGTH (Max Turns per Board) ---
+    # We need a different aggregation for this: Group by Board + Racer Count
+    # We need to join with races table to get board info (it's in config_hash)
+    # BUT we don't have the joined table here. Let's assume we can just use the results.
+    # Actually, we can approximate "Board" complexity by just looking at turns_taken distribution.
+
+    # Let's show max turns taken by any racer, grouped by racer name (Who is the slowest?)
+    chart_length = base.mark_bar().encode(
+        x=alt.X("racer_name", sort="-y", title="Racer"),
+        y=alt.Y("avg_turns", title="Average Turns to Finish"),
+        tooltip=["racer_name", "avg_turns"]
+    ).properties(title="Average Race Duration per Racer", width=600, height=400)
+
+
+    # --- CHART 4: WIN RATE ---
+    chart_wins = base.mark_bar().encode(
+        x=alt.X("racer_name", sort="-y", title="Racer"),
+        y=alt.Y("win_rate", axis=alt.Axis(format="%"), title="Win Rate"),
+        tooltip=["racer_name", alt.Tooltip("win_rate", format=".1%"), "races_run"]
+    ).properties(title="Win Rate %", width=600, height=400)
+
+
+    # DISPLAY
+    mo.ui.tabs({
+        "🎯 Consistency": mo.ui.altair_chart(chart_consistency),
+        "⚡ Abilities": mo.ui.altair_chart(chart_ability),
+        "🏆 Win Rate": mo.ui.altair_chart(chart_wins),
+        "zzz Speed": mo.ui.altair_chart(chart_length),
+    })
     return
 
 
