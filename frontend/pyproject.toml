@@ -8,6 +8,3 @@ dependencies = [
     "polars>=1.36.1",
     "altair>=6.0.0",
 ]
-
-[tool.uv.sources]
-magical-athlete-simulator = { workspace = true }

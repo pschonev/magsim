@@ -5,10 +5,11 @@ import math
 import random
 from typing import TYPE_CHECKING
 
-from simul_runner.hashing import GameConfiguration
+from magical_athlete_simulator.simulation.hashing import GameConfiguration
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
+
     from magical_athlete_simulator.core.types import BoardName, RacerName
 
 # Threshold: If total combinations > 10 Million, we switch to random sampling

@@ -2,10 +2,10 @@
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
   "python.testing.pytestArgs": [
-    "packages/magical-athlete-simulator/tests"
+    "tests"
   ],
   "python.analysis.extraPaths": [
-    "packages/magical-athlete-simulator/src"
+    "src"
   ],
   "python.envFile": "${workspaceFolder}/.env"
 }

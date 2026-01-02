@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import text
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from simul_runner.db.models import Race, RacerResult
+from magical_athlete_simulator.simulation.db.models import Race, RacerResult
 
 if TYPE_CHECKING:
     from pathlib import Path

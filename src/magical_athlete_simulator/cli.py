@@ -8,11 +8,14 @@ from pathlib import Path
 import cappa
 from tqdm import tqdm
 
-from simul_runner.combinations import compute_total_runs, generate_combinations
-from simul_runner.config import SimulationConfig
-from simul_runner.db.manager import SimulationDatabase
-from simul_runner.db.models import Race, RacerResult
-from simul_runner.runner import run_single_simulation
+from magical_athlete_simulator.simulation.combinations import (
+    compute_total_runs,
+    generate_combinations,
+)
+from magical_athlete_simulator.simulation.config import SimulationConfig
+from magical_athlete_simulator.simulation.db.manager import SimulationDatabase
+from magical_athlete_simulator.simulation.db.models import Race, RacerResult
+from magical_athlete_simulator.simulation.runner import run_single_simulation
 
 # Suppress game engine logs at module level
 logging.getLogger("magical_athlete").setLevel(logging.CRITICAL)

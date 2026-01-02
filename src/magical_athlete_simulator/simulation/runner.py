@@ -11,9 +11,8 @@ from magical_athlete_simulator.simulation.telemetry import MetricsAggregator
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import GameEvent
     from magical_athlete_simulator.engine.game_engine import GameEngine
+    from magical_athlete_simulator.simulation.hashing import GameConfiguration
     from magical_athlete_simulator.simulation.telemetry import RaceMetrics
-
-    from simul_runner.hashing import GameConfiguration
 
 
 @dataclass(slots=True)

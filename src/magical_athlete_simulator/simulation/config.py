@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import get_args
 
 import msgspec
+
 from magical_athlete_simulator.core.types import BoardName, RacerName
 
 
