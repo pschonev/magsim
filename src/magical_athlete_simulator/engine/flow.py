@@ -110,10 +110,5 @@ def end_race(engine: GameEngine) -> None:
     engine.state.race_over = True
     engine.log_info("Race Ended.")
 
-    # Mark everyone else eliminated
-    for r in engine.state.racers:
-        if not r.finished:
-            r.eliminated = True
-
     engine.state.queue.clear()
     log_final_standings(engine)
