@@ -1,6 +1,7 @@
 """Database models for simulation results."""
 
 import datetime
+
 from sqlmodel import Field, SQLModel
 
 
@@ -69,15 +70,21 @@ class RacerResult(SQLModel, table=True):
 
 class RacePositionLog(SQLModel, table=True):
     """
-    Log of a single racer's position at the end of a specific turn.
-    We use this class to generate the table schema, but we fill data via raw arrays.
+    Log of board state at the end of each turn (flat format).
+    One row per turn, with columns for each racer position.
     """
 
     __tablename__ = "race_position_logs"  # pyright: ignore[reportAssignmentType, reportUnannotatedClassAttribute]
 
     config_hash: str = Field(primary_key=True)
     turn_index: int = Field(primary_key=True)
-    racer_id: int = Field(primary_key=True)
 
-    position: int | None = None
-    is_current_turn: bool = False
+    current_racer_id: int
+
+    # Position columns (nullable for 4-racer games)
+    pos_r0: int | None = None
+    pos_r1: int | None = None
+    pos_r2: int | None = None
+    pos_r3: int | None = None
+    pos_r4: int | None = None
+    pos_r5: int | None = None

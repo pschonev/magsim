@@ -44,9 +44,13 @@ class SimulationDatabase:
         self._position_buffer_cols: PositionLogColumns = {
             "config_hash": [],
             "turn_index": [],
-            "racer_id": [],
-            "position": [],
-            "is_current_turn": [],
+            "current_racer_id": [],  # Renamed from racer_id
+            "pos_r0": [],
+            "pos_r1": [],
+            "pos_r2": [],
+            "pos_r3": [],
+            "pos_r4": [],
+            "pos_r5": [],
         }
 
         # In-memory DuckDB instance
@@ -63,7 +67,7 @@ class SimulationDatabase:
                 try:
                     session.exec(
                         text(
-                            f"INSERT INTO races SELECT * FROM read_parquet('{self.races_file}')"
+                            f"INSERT INTO races SELECT * FROM read_parquet('{self.races_file}')",
                         ),
                     )
                     logger.info(f"Loaded existing races from {self.races_file}")
@@ -75,7 +79,7 @@ class SimulationDatabase:
                 try:
                     session.exec(
                         text(
-                            f"INSERT INTO racer_results SELECT * FROM read_parquet('{self.results_file}')"
+                            f"INSERT INTO racer_results SELECT * FROM read_parquet('{self.results_file}')",
                         ),
                     )
                     logger.info(f"Loaded existing results from {self.results_file}")
@@ -87,13 +91,13 @@ class SimulationDatabase:
                 try:
                     session.exec(
                         text(
-                            f"INSERT INTO race_position_logs SELECT * FROM read_parquet('{self.positions_file}')"
+                            f"INSERT INTO race_position_logs SELECT * FROM read_parquet('{self.positions_file}')",
                         ),
                     )
                     logger.info(f"Loaded existing positions from {self.positions_file}")
                 except Exception:
                     logger.warning(
-                        "Failed to load race_positions.parquet (might be new/empty)."
+                        "Failed to load race_positions.parquet (might be new/empty).",
                     )
 
             session.commit()
@@ -149,8 +153,18 @@ class SimulationDatabase:
                 conn.execute(
                     text("""
                     INSERT INTO racer_results 
-                    (config_hash, racer_id, racer_name, final_vp, turns_taken, recovery_turns, sum_dice_rolled, ability_trigger_count, ability_self_target_count, ability_target_count, finish_position, eliminated, rank)
-                    VALUES (:config_hash, :racer_id, :racer_name, :final_vp, :turns_taken, :recovery_turns, :sum_dice_rolled, :ability_trigger_count, :ability_self_target_count, :ability_target_count, :finish_position, :eliminated, :rank)
+                    (
+                        config_hash, racer_id, racer_name, final_vp, turns_taken, 
+                        recovery_turns, sum_dice_rolled, sum_dice_rolled_final, 
+                        ability_trigger_count, ability_self_target_count, 
+                        ability_target_count, finish_position, eliminated, rank
+                    )
+                    VALUES (
+                        :config_hash, :racer_id, :racer_name, :final_vp, :turns_taken, 
+                        :recovery_turns, :sum_dice_rolled, :sum_dice_rolled_final, 
+                        :ability_trigger_count, :ability_self_target_count, 
+                        :ability_target_count, :finish_position, :eliminated, :rank
+                    )
                     """),
                     result_dicts,
                 )
@@ -166,7 +180,7 @@ class SimulationDatabase:
 
                 # 'arrow_table' is available in the local scope, so DuckDB sees it
                 raw_conn.execute(
-                    f"INSERT INTO {RacePositionLog.__tablename__} SELECT * FROM arrow_table"
+                    f"INSERT INTO {RacePositionLog.__tablename__} SELECT * FROM arrow_table",
                 )
 
         # Clear buffers
@@ -185,20 +199,20 @@ class SimulationDatabase:
             tqdm.write(f"  -> {self.races_file.name}")
             session.exec(
                 text(
-                    f"COPY races TO '{self.races_file}' (FORMAT 'parquet', CODEC 'zstd')"
-                )
+                    f"COPY races TO '{self.races_file}' (FORMAT 'parquet', CODEC 'zstd')",
+                ),
             )
 
             tqdm.write(f"  -> {self.results_file.name}")
             session.exec(
                 text(
-                    f"COPY racer_results TO '{self.results_file}' (FORMAT 'parquet', CODEC 'zstd')"
-                )
+                    f"COPY racer_results TO '{self.results_file}' (FORMAT 'parquet', CODEC 'zstd')",
+                ),
             )
 
             tqdm.write(f"  -> {self.positions_file.name}")
             session.exec(
                 text(
-                    f"COPY race_position_logs TO '{self.positions_file}' (FORMAT 'parquet', CODEC 'zstd')"
-                )
+                    f"COPY race_position_logs TO '{self.positions_file}' (FORMAT 'parquet', CODEC 'zstd')",
+                ),
             )

@@ -94,13 +94,17 @@ def run_single_simulation(
 
     if aborted:
         metrics = []
-        # Return empty structure if aborted
+        # Make sure this empty dict MATCHES the new keys!
         positions: PositionLogColumns = {
             "config_hash": [],
             "turn_index": [],
-            "racer_id": [],
-            "position": [],
-            "is_current_turn": [],
+            "current_racer_id": [],
+            "pos_r0": [],
+            "pos_r1": [],
+            "pos_r2": [],
+            "pos_r3": [],
+            "pos_r4": [],
+            "pos_r5": [],
         }
     else:
         metrics = aggregator.finalize_metrics(engine)

@@ -123,13 +123,17 @@ class SnapshotRecorder:
 
 
 class PositionLogColumns(TypedDict):
-    """Columnar storage for position logs to maximize insert speed."""
+    """Columnar storage for position logs (flat format)."""
 
     config_hash: list[str]
     turn_index: list[int]
-    racer_id: list[int]
-    position: list[int | None]
-    is_current_turn: list[bool]
+    current_racer_id: list[int]
+    pos_r0: list[int | None]
+    pos_r1: list[int | None]
+    pos_r2: list[int | None]
+    pos_r3: list[int | None]
+    pos_r4: list[int | None]
+    pos_r5: list[int | None]
 
 
 @dataclass(slots=True)
@@ -156,9 +160,13 @@ class MetricsAggregator:
         default_factory=lambda: {
             "config_hash": [],
             "turn_index": [],
-            "racer_id": [],
-            "position": [],
-            "is_current_turn": [],
+            "current_racer_id": [],
+            "pos_r0": [],
+            "pos_r1": [],
+            "pos_r2": [],
+            "pos_r3": [],
+            "pos_r4": [],
+            "pos_r5": [],
         },
     )
 
@@ -175,7 +183,6 @@ class MetricsAggregator:
 
     def on_event(self, event: GameEvent) -> None:
         if isinstance(event, RollResultEvent):
-            # Now you are 100% sure this racer just finalized this specific roll
             racer_metrics = self._get_result(event.target_racer_idx)
             racer_metrics.sum_dice_rolled += event.base_value
             racer_metrics.sum_dice_rolled_final += event.final_value
@@ -209,7 +216,7 @@ class MetricsAggregator:
             else engine.state.current_racer_idx
         )
 
-        # 1. Standard Stats
+        # 1. Standard Stats (unchanged)
         if 0 <= racer_idx < len(engine.state.racers):
             roll_val = engine.state.roll_state.base_value
             stats = self._get_result(racer_idx)
@@ -222,23 +229,27 @@ class MetricsAggregator:
                 ),
             )
 
-        # 2. Capture Positions (Columnar Append)
-        # This is the "hot path". We avoid object creation entirely.
-        active_id = racer_idx
-
-        # Local variable access is faster than dict lookup in loop
+        # 2. Capture Positions (FLAT FORMAT - one row per turn)
         cols = self.position_logs
-        c_hash = self.config_hash
 
+        # Append turn metadata
+        cols["config_hash"].append(self.config_hash)
+        cols["turn_index"].append(turn_index)
+        cols["current_racer_id"].append(racer_idx)
+
+        # Build position array (6 slots, pad with None)
+        positions: list[int | None] = [None] * 6
         for racer in engine.state.racers:
-            pos_val = racer.position if not racer.eliminated else None
+            if racer.idx < 6:  # Safety check
+                positions[racer.idx] = racer.position if not racer.eliminated else None
 
-            # Append primitives directly to columns
-            cols["config_hash"].append(c_hash)
-            cols["turn_index"].append(turn_index)
-            cols["racer_id"].append(racer.idx)
-            cols["position"].append(pos_val)
-            cols["is_current_turn"].append(racer.idx == active_id)
+        # Append to columns
+        cols["pos_r0"].append(positions[0])
+        cols["pos_r1"].append(positions[1])
+        cols["pos_r2"].append(positions[2])
+        cols["pos_r3"].append(positions[3])
+        cols["pos_r4"].append(positions[4])
+        cols["pos_r5"].append(positions[5])
 
     def finalize_metrics(self, engine: GameEngine) -> list[RacerResult]:
         output: list[RacerResult] = []
