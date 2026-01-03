@@ -136,7 +136,12 @@ class Args:
                                 total_turns=result.turn_count,
                             )
 
-                            db.save_simulation(race_record, result.metrics)
+                            # Changed: Pass position_logs to save_simulation
+                            db.save_simulation(
+                                race_record,
+                                result.metrics,
+                                result.position_logs,
+                            )
 
                         if unsaved_changes >= BATCH_SIZE:
                             tqdm.write(

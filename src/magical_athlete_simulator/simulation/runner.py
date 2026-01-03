@@ -6,7 +6,10 @@ from typing import TYPE_CHECKING
 
 from magical_athlete_simulator.engine.board import BOARD_DEFINITIONS
 from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-from magical_athlete_simulator.simulation.telemetry import MetricsAggregator
+from magical_athlete_simulator.simulation.telemetry import (
+    MetricsAggregator,
+    PositionLogColumns,
+)
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import GameEvent
@@ -25,6 +28,9 @@ class SimulationResult:
     aborted: bool
     turn_count: int
     metrics: list[RacerResult]
+
+    # CHANGED: Now carries the column dictionary
+    position_logs: PositionLogColumns
 
 
 def run_single_simulation(
@@ -54,7 +60,7 @@ def run_single_simulation(
 
     engine = scenario.engine
 
-    # Pass config_hash to aggregator so it can init the Result objects correctly
+    # Pass config_hash to aggregator
     aggregator = MetricsAggregator(config_hash=config_hash)
     aggregator.initialize_racers(engine)
 
@@ -86,7 +92,19 @@ def run_single_simulation(
     end_time = time.perf_counter()
     execution_time_ms = (end_time - start_time) * 1000
 
-    metrics = [] if aborted else aggregator.finalize_metrics(engine)
+    if aborted:
+        metrics = []
+        # Return empty structure if aborted
+        positions: PositionLogColumns = {
+            "config_hash": [],
+            "turn_index": [],
+            "racer_id": [],
+            "position": [],
+            "is_current_turn": [],
+        }
+    else:
+        metrics = aggregator.finalize_metrics(engine)
+        positions = aggregator.finalize_positions()
 
     return SimulationResult(
         config_hash=config_hash,
@@ -95,4 +113,5 @@ def run_single_simulation(
         aborted=aborted,
         turn_count=turn_counter,
         metrics=metrics,
+        position_logs=positions,
     )

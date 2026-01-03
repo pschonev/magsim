@@ -80,6 +80,7 @@ def _(Path, pl, reload_data_btn, results_folder_browser):
     # 2. Construct Paths using the slash operator
     path_races = base_folder / "races.parquet"
     path_res = base_folder / "racer_results.parquet"
+    path_positions = base_folder / "race_positions.parquet"
 
     # 3. Load Data
     try:
@@ -90,10 +91,12 @@ def _(Path, pl, reload_data_btn, results_folder_browser):
 
         df_racer_results = pl.read_parquet(path_res)
         df_races = pl.read_parquet(path_races)
+        df_positions = pl.read_parquet(path_positions)
         load_status = f"✅ Loaded from: `{base_folder}`"
     except Exception as e:
         df_racer_results = pl.DataFrame()
         df_races = pl.DataFrame()
+        df_positions = pl.DataFrame()
         load_status = f"❌ Error: {str(e)}"
     return df_racer_results, df_races, load_status
 
@@ -1106,13 +1109,72 @@ def _(
 
 
 @app.cell
-def _(alt, df_racer_results, df_races, get_racer_color, mo, pl):
+def _(
+    alt,
+    df_racer_results,
+    df_races,
+    df_positions,
+    get_racer_color,
+    mo,
+    pl,
+):
     # --- ANALYTICS DASHBOARD ---
 
-    def _prepare_stats():
-        # 1. Correlations (Impact Scores) - These remain valid per-racer
+    def _calculate_advanced_metrics():
+        if df_positions.height == 0:
+            return df_racer_results, df_races
+
+        # --- 1. TIGHTNESS (Race Level) ---
+        # Mean deviation from the pack center
+        turn_stats = df_positions.group_by(["config_hash", "turn_index"]).agg(
+            pl.col("position").mean().alias("mean_pos")
+        )
+
+        tightness_calc = (
+            df_positions.join(turn_stats, on=["config_hash", "turn_index"])
+            .with_columns(
+                (pl.col("position") - pl.col("mean_pos")).abs().alias("deviation")
+            )
+            .group_by("config_hash")
+            .agg(pl.col("deviation").mean().alias("race_tightness_score"))
+        )
+
+        # --- 2. COMEBACK (Race Level) ---
+        # Find the max deficit ANYONE overcame in this race
+
+        # A. Leader position per turn
+        leader_stats = df_positions.group_by(["config_hash", "turn_index"]).agg(
+            pl.col("position").max().alias("leader_pos")
+        )
+
+        # B. Deficit per racer per turn
+        race_comeback_score = (
+            df_positions.join(leader_stats, on=["config_hash", "turn_index"])
+            .with_columns(
+                (pl.col("leader_pos") - pl.col("position")).alias("current_deficit")
+            )
+            # Find max deficit for each racer
+            .group_by(["config_hash", "racer_id"])
+            .agg(pl.col("current_deficit").max().alias("racer_max_deficit"))
+            # Find the SINGLE BIGGEST deficit in the whole race
+            .group_by("config_hash")
+            .agg(pl.col("racer_max_deficit").mean().alias("race_comeback_score"))
+        )
+
+        # --- 3. MERGE TO RACES ---
+        # We attach these stats to the RACE, not the racer result directly yet.
+        stats_races = (
+            df_races.join(tightness_calc, on="config_hash", how="left")
+            .join(race_comeback_score, on="config_hash", how="left")
+            .fill_null(0)
+        )
+
+        return df_racer_results, stats_races
+
+    def _prepare_stats(processed_results, processed_races):
+        # 1. Correlations
         corr_df = (
-            df_racer_results.group_by("racer_name")
+            processed_results.group_by("racer_name")
             .agg(
                 [
                     pl.corr("ability_trigger_count", "final_vp").alias(
@@ -1126,7 +1188,7 @@ def _(alt, df_racer_results, df_races, get_racer_color, mo, pl):
 
         # 2. Main Aggregations
         base_stats = (
-            df_racer_results.with_columns(
+            processed_results.with_columns(
                 pl.when(pl.col("turns_taken") > 0)
                 .then(pl.col("turns_taken"))
                 .otherwise(1)
@@ -1136,29 +1198,25 @@ def _(alt, df_racer_results, df_races, get_racer_color, mo, pl):
                 .otherwise(None)
                 .alias("safe_vp"),
             )
+            # JOIN RACE STATS: This repeats the Race Score for every participant
+            .join(
+                processed_races.select(
+                    ["config_hash", "race_tightness_score", "race_comeback_score"]
+                ),
+                on="config_hash",
+                how="left",
+            )
             .group_by("racer_name")
             .agg(
                 [
                     # Score
                     pl.col("final_vp").mean().alias("mean_vp"),
                     pl.col("final_vp").var().alias("var_vp"),
-                    # Ability Volume (Per Turn is fairer for short games)
-                    (pl.col("ability_trigger_count") / pl.col("safe_turns"))
-                    .mean()
-                    .alias("triggers_per_turn"),
-                    (pl.col("ability_self_target_count") / pl.col("safe_turns"))
-                    .mean()
-                    .alias("self_per_turn"),
-                    (pl.col("ability_target_count") / pl.col("safe_turns"))
-                    .mean()
-                    .alias("target_per_turn"),
-                    # Dice Volume (Per Turn)
-                    (pl.col("sum_dice_rolled") / pl.col("safe_turns"))
-                    .mean()
-                    .alias("dice_per_turn"),
-                    (pl.col("sum_dice_rolled") / pl.col("safe_vp"))
-                    .mean()
-                    .alias("dice_per_vp"),
+                    # --- NEW METRICS (Averaged) ---
+                    # Answers: "When this racer plays, how tight is the race on average?"
+                    pl.col("race_tightness_score").mean().alias("avg_race_tightness"),
+                    # Answers: "When this racer plays, how big are the comebacks on average?"
+                    pl.col("race_comeback_score").mean().alias("avg_race_comeback"),
                     # Speed / Game Stats
                     pl.col("turns_taken").mean().alias("avg_turns"),
                     (pl.col("recovery_turns") / pl.col("safe_turns"))
@@ -1168,6 +1226,16 @@ def _(alt, df_racer_results, df_races, get_racer_color, mo, pl):
                     (pl.col("rank") == 1).sum().alias("cnt_1st"),
                     (pl.col("rank") == 2).sum().alias("cnt_2nd"),
                     pl.len().alias("races_run"),
+                    # Passthroughs
+                    (pl.col("ability_trigger_count") / pl.col("safe_turns"))
+                    .mean()
+                    .alias("triggers_per_turn"),
+                    (pl.col("sum_dice_rolled") / pl.col("safe_turns"))
+                    .mean()
+                    .alias("dice_per_turn"),
+                    (pl.col("sum_dice_rolled") / pl.col("safe_vp"))
+                    .mean()
+                    .alias("dice_per_vp"),
                 ]
             )
         )
@@ -1185,16 +1253,23 @@ def _(alt, df_racer_results, df_races, get_racer_color, mo, pl):
         min_x, max_x = stats_df[x_col].min(), stats_df[x_col].max()
         min_y, max_y = stats_df[y_col].min(), stats_df[y_col].max()
 
-        if min_x == max_x:
-            max_x += 0.01
-        if min_y == max_y:
-            max_y += 0.01
+        # Padding
+        pad_x = (max_x - min_x) * 0.1 if max_x != min_x else 1.0
+        pad_y = (max_y - min_y) * 0.1 if max_y != min_y else 1.0
 
-        mid_x, mid_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+        # Domains
+        domain_x = [min_x - pad_x, max_x + pad_x]
+        domain_y = [min_y - pad_y, max_y + pad_y]
+
+        if reverse_x:
+            domain_x = domain_x[::-1]
 
         base = alt.Chart(stats_df).encode(
             color=alt.Color("racer_name", scale=alt.Scale(domain=racers, range=colors))
         )
+
+        mid_x = (min_x + max_x) / 2
+        mid_y = (min_y + max_y) / 2
 
         h_line = (
             alt.Chart(pl.DataFrame({"y": [mid_y]}))
@@ -1208,15 +1283,14 @@ def _(alt, df_racer_results, df_races, get_racer_color, mo, pl):
         )
 
         points = base.mark_circle(size=150).encode(
-            x=alt.X(
-                x_col, title=x_title, scale=alt.Scale(reverse=reverse_x, zero=False)
-            ),
-            y=alt.Y(y_col, title=y_title, scale=alt.Scale(zero=False)),
-            tooltip=["racer_name", x_col, y_col, "mean_vp", "races_run"],
+            x=alt.X(x_col, title=x_title, scale=alt.Scale(domain=domain_x)),
+            y=alt.Y(y_col, title=y_title, scale=alt.Scale(domain=domain_y)),
+            tooltip=["racer_name", x_col, y_col, "mean_vp"],
         )
         return (h_line + v_line + points).properties(title=title, width=500, height=350)
 
-    def _build_game_length_chart():
+    # --- RESTORED: Game Length Chart ---
+    def _build_game_length_chart(df_races):
         gl_stats = (
             df_races.group_by(["board", "racer_count"])
             .agg(pl.col("total_turns").mean().alias("avg_duration"))
@@ -1239,54 +1313,69 @@ def _(alt, df_racer_results, df_races, get_racer_color, mo, pl):
     if df_racer_results.height == 0:
         final_output = mo.md("⚠️ **No results loaded.**")
     else:
-        stats = _prepare_stats()
+        # 1. Metrics
+        proc_results, proc_races = _calculate_advanced_metrics()
+        stats = _prepare_stats(proc_results, proc_races)
+
         r_list = stats["racer_name"].unique().to_list()
         c_list = [get_racer_color(r) for r in r_list]
 
-        # 1. Consistency
+        # 2. Charts
         c_consist = _build_quadrant_chart(
             stats,
             r_list,
             c_list,
             "var_vp",
             "mean_vp",
-            "Consistency (Risk vs Reward)",
+            "Consistency",
             "Consistency (Lower Var →)",
-            "Avg Final VP",
+            "Avg VP",
             reverse_x=True,
         )
-
-        # 2. Ability Value (Per Turn)
         c_ability = _build_quadrant_chart(
             stats,
             r_list,
             c_list,
             "triggers_per_turn",
             "ability_impact_score",
-            "Ability Strategy (Freq vs Impact)",
-            "Avg Triggers / Turn",
-            "Impact (Corr Triggers/VP)",
+            "Ability Value",
+            "Triggers/Turn",
+            "Impact Score",
             reverse_x=False,
         )
-
-        # 3. Dice Strategy (Per Turn)
         c_dice = _build_quadrant_chart(
             stats,
             r_list,
             c_list,
             "dice_per_turn",
             "dice_impact_score",
-            "Dice Strategy (Volume vs Impact)",
-            "Avg Dice Value / Turn",
-            "Impact (Corr Dice/VP)",
+            "Dice Value",
+            "Dice/Turn",
+            "Impact Score",
             reverse_x=False,
         )
 
-        c_len = _build_game_length_chart()
+        # NEW: Excitement Profile
+        # X: Tightness (Low = Close Race)
+        # Y: Comeback (High = Big Swings)
+        c_excitement = _build_quadrant_chart(
+            stats,
+            r_list,
+            c_list,
+            "avg_race_tightness",
+            "avg_race_comeback",
+            "Excitement Profile",
+            "Avg Race Tightness (Left=Tighter)",
+            "Avg Max Comeback (Up=Bigger)",
+            reverse_x=True,
+        )
+
+        c_len = _build_game_length_chart(proc_races)
 
         charts_ui = mo.ui.tabs(
             {
                 "🎯 Consistency": mo.ui.altair_chart(c_consist),
+                "🔥 Excitement": mo.ui.altair_chart(c_excitement),
                 "⚡ Ability Value": mo.ui.altair_chart(c_ability),
                 "🎲 Dice Value": mo.ui.altair_chart(c_dice),
                 "⏳ Game Length": mo.ui.altair_chart(c_len),
@@ -1297,15 +1386,10 @@ def _(alt, df_racer_results, df_races, get_racer_color, mo, pl):
             [
                 pl.col("racer_name").alias("Racer"),
                 pl.col("mean_vp").round(2).alias("Avg VP"),
-                pl.col("var_vp").round(2).alias("VP Var"),
+                pl.col("avg_race_comeback").round(1).alias("Avg Comeback"),
+                pl.col("avg_race_tightness").round(2).alias("Avg Tightness"),
                 pl.col("ability_impact_score").round(2).alias("Abil Imp"),
-                pl.col("triggers_per_turn").round(2).alias("Trig/Turn"),
-                pl.col("self_per_turn").round(2).alias("Self/Turn"),
-                pl.col("target_per_turn").round(2).alias("Tgt/Turn"),
-                pl.col("dice_per_vp").round(1).alias("Dice/VP"),
-                pl.col("avg_turns").round(1).alias("Avg Turns"),
                 (pl.col("pct_1st") * 100).round(1).alias("1st %"),
-                (pl.col("pct_2nd") * 100).round(1).alias("2nd %"),
             ]
         ).sort("Avg VP", descending=True)
 

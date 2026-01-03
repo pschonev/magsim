@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, TypedDict
 
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
@@ -9,11 +9,13 @@ from magical_athlete_simulator.simulation.db.models import RacerResult
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import GameEvent
-    from magical_athlete_simulator.core.types import (
-        AbilityName,
-        ModifierName,
-    )
+    from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
+
+
+# ==============================================================================
+# VISUALIZATION / FRONTEND TOOLS (Restored)
+# ==============================================================================
 
 
 class LogSource(Protocol):
@@ -41,14 +43,19 @@ class StepSnapshot:
     last_roll: int
     current_racer: int
     names: list[str]
-    modifiers: list[list[AbilityName | ModifierName]]
-    abilities: list[list[AbilityName]]
+    modifiers: list[list["AbilityName | ModifierName"]]
+    abilities: list[list["AbilityName"]]
     log_html: str
     log_line_index: int
 
 
 @dataclass(slots=True)
 class SnapshotRecorder:
+    """
+    Captures full game state snapshots for frontend visualization/replay.
+    Used primarily in interactive sessions (Notebooks), not batch CLI.
+    """
+
     policy: SnapshotPolicy
     log_source: LogSource
     step_history: list[StepSnapshot] = field(default_factory=list)
@@ -57,15 +64,15 @@ class SnapshotRecorder:
 
     def on_event(
         self,
-        engine: GameEngine,
-        event: GameEvent,
+        engine: "GameEngine",
+        event: "GameEvent",
         *,
         turn_index: int,
     ) -> None:
         if isinstance(event, self.policy.snapshot_event_types):
             self.capture(engine, event.__class__.__name__, turn_index=turn_index)
 
-    def on_turn_end(self, engine: GameEngine, *, turn_index: int) -> None:
+    def on_turn_end(self, engine: "GameEngine", *, turn_index: int) -> None:
         if self.policy.snapshot_on_turn_end:
             self.capture(engine, self.policy.turn_end_event_name, turn_index=turn_index)
 
@@ -75,7 +82,9 @@ class SnapshotRecorder:
         ):
             self.capture(engine, self.policy.fallback_event_name, turn_index=turn_index)
 
-    def capture(self, engine: GameEngine, event_name: str, *, turn_index: int) -> None:
+    def capture(
+        self, engine: "GameEngine", event_name: str, *, turn_index: int
+    ) -> None:
         current_logs_text = self.log_source.export_text()
         log_line_index = max(0, current_logs_text.count("\n") - 1)
         current_logs_html = self.log_source.export_html()
@@ -103,10 +112,23 @@ class SnapshotRecorder:
         )
 
 
+# ==============================================================================
+# BATCH SIMULATION / METRICS TOOLS (Optimized)
+# ==============================================================================
+
+
+class PositionLogColumns(TypedDict):
+    """Columnar storage for position logs to maximize insert speed."""
+
+    config_hash: list[str]
+    turn_index: list[int]
+    racer_id: list[int]
+    position: list[int | None]
+    is_current_turn: list[bool]
+
+
 @dataclass(slots=True)
 class TurnRecord:
-    """Lightweight record of a single turn's key outcome."""
-
     turn_index: int
     racer_idx: int
     dice_roll: int
@@ -115,20 +137,27 @@ class TurnRecord:
 @dataclass(slots=True)
 class MetricsAggregator:
     """
-    Accumulates stats directly into RacerResult objects.
+    High-performance aggregator for batch simulations.
+    Uses columnar buffering for position logs to avoid object overhead.
     """
 
     config_hash: str
 
-    # We store the RacerResult objects here, keyed by racer_idx
     results: dict[int, RacerResult] = field(default_factory=dict)
     turn_history: list[TurnRecord] = field(default_factory=list)
 
-    def initialize_racers(self, engine: GameEngine) -> None:
-        """
-        Pre-populate results for all racers in the engine.
-        MUST be called before processing events.
-        """
+    # COLUMNAR BUFFER: Dict of Lists
+    position_logs: PositionLogColumns = field(
+        default_factory=lambda: {
+            "config_hash": [],
+            "turn_index": [],
+            "racer_id": [],
+            "position": [],
+            "is_current_turn": [],
+        },
+    )
+
+    def initialize_racers(self, engine: "GameEngine") -> None:
         for racer in engine.state.racers:
             self.results[racer.idx] = RacerResult(
                 config_hash=self.config_hash,
@@ -137,21 +166,14 @@ class MetricsAggregator:
             )
 
     def _get_result(self, racer_idx: int) -> RacerResult:
-        """
-        Retrieve existing result object.
-        Raises KeyError if racer was not initialized.
-        """
         return self.results[racer_idx]
 
-    def on_event(self, event: GameEvent) -> None:
-        """Count specific events."""
+    def on_event(self, event: "GameEvent") -> None:
         if isinstance(event, AbilityTriggeredEvent):
             stats = self._get_result(event.responsible_racer_idx)
             stats.ability_trigger_count += 1
-
             if event.responsible_racer_idx == event.target_racer_idx:
                 stats.ability_self_target_count += 1
-
             if (
                 event.target_racer_idx is not None
                 and event.target_racer_idx != event.responsible_racer_idx
@@ -165,45 +187,60 @@ class MetricsAggregator:
 
     def on_turn_end(
         self,
-        engine: GameEngine,
+        engine: "GameEngine",
         *,
         turn_index: int,
         active_racer_idx: int | None = None,
     ) -> None:
-        """Update stats at the end of a turn."""
         racer_idx = (
             active_racer_idx
             if active_racer_idx is not None
             else engine.state.current_racer_idx
         )
-        if racer_idx < 0 or racer_idx >= len(engine.state.racers):
-            return
 
-        roll_val = engine.state.roll_state.base_value
+        # 1. Standard Stats
+        if 0 <= racer_idx < len(engine.state.racers):
+            roll_val = engine.state.roll_state.base_value
+            stats = self._get_result(racer_idx)
+            stats.turns_taken += 1
+            stats.sum_dice_rolled += roll_val
+            self.turn_history.append(
+                TurnRecord(
+                    turn_index=turn_index,
+                    racer_idx=racer_idx,
+                    dice_roll=roll_val,
+                ),
+            )
 
-        stats = self._get_result(racer_idx)
-        stats.turns_taken += 1
-        stats.sum_dice_rolled += roll_val
+        # 2. Capture Positions (Columnar Append)
+        # This is the "hot path". We avoid object creation entirely.
+        active_id = racer_idx
 
-        self.turn_history.append(
-            TurnRecord(turn_index=turn_index, racer_idx=racer_idx, dice_roll=roll_val),
-        )
+        # Local variable access is faster than dict lookup in loop
+        cols = self.position_logs
+        c_hash = self.config_hash
 
-    def finalize_metrics(self, engine: GameEngine) -> list[RacerResult]:
-        """
-        Finalize values that are simply snapshots of the end state (VP, position).
-        Returns the list of RacerResult objects ready for DB insertion.
-        """
+        for racer in engine.state.racers:
+            pos_val = racer.position if not racer.eliminated else None
+
+            # Append primitives directly to columns
+            cols["config_hash"].append(c_hash)
+            cols["turn_index"].append(turn_index)
+            cols["racer_id"].append(racer.idx)
+            cols["position"].append(pos_val)
+            cols["is_current_turn"].append(racer.idx == active_id)
+
+    def finalize_metrics(self, engine: "GameEngine") -> list[RacerResult]:
         output: list[RacerResult] = []
         for racer in engine.state.racers:
-            # We trust initialize_racers was called; if this fails, we want to crash loudly
             stats = self._get_result(racer.idx)
-
-            # Update final snapshot values
             stats.final_vp = racer.victory_points
             stats.finish_position = racer.finish_position
             stats.eliminated = racer.eliminated
-
+            # Note: 'finished' isn't on RacerResult in your previous schema,
+            # but is used in your frontend snippet. Add if needed.
             output.append(stats)
-
         return output
+
+    def finalize_positions(self) -> PositionLogColumns:
+        return self.position_logs

@@ -4,7 +4,10 @@ version = "0.2.0"
 description = "A simulator for Magical Athlete"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = ["rich>=14.2.0"]
+dependencies = [
+    "pyarrow>=22.0.0",
+    "rich>=14.2.0",
+]
 
 [project.optional-dependencies]
 cli = [
