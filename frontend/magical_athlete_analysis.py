@@ -1239,7 +1239,7 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
                         "race_elasticity_score",
                         "race_avg_triggers",
                         "race_avg_trip_rate",
-                        "total_turns",  # Needed for avg_game_duration
+                        "total_turns",
                     ]
                 ),
                 on="config_hash",
@@ -1257,7 +1257,7 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
                     pl.col("race_tightness_score").mean().alias("avg_race_tightness"),
                     pl.col("race_elasticity_score").mean().alias("avg_race_elasticity"),
                     pl.col("turns_taken").mean().alias("avg_turns"),
-                    pl.col("total_turns").mean().alias("avg_game_duration"),  # NEW
+                    pl.col("total_turns").mean().alias("avg_game_duration"),
                     pl.col("race_avg_triggers").mean().alias("avg_env_triggers"),
                     pl.col("race_avg_trip_rate").mean().alias("avg_env_trip_rate"),
                     # Abilities
@@ -1294,33 +1294,25 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
             ]
         )
 
-    # --- Interaction Heatmap Logic (Updated) ---
+    # --- Interaction Heatmap Logic ---
     def _prepare_interaction_matrix(processed_results):
-        # 1. Calculate Global Average VP per racer (Baseline)
         global_means = processed_results.group_by("racer_name").agg(
             pl.col("final_vp").mean().alias("global_mean_vp")
         )
-
-        # 2. Subject Frame
         subjects = processed_results.select(["config_hash", "racer_name", "final_vp"])
-
-        # 3. Opponent Frame
         opponents = processed_results.select(
             [pl.col("config_hash"), pl.col("racer_name").alias("opponent_name")]
         )
 
-        # 4. Join to form pairs
         pairs = subjects.join(opponents, on="config_hash", how="inner").filter(
             pl.col("racer_name") != pl.col("opponent_name")
         )
 
-        # 5. Aggregate and Compare
         matrix = (
             pairs.group_by(["racer_name", "opponent_name"])
             .agg(pl.col("final_vp").mean().alias("avg_vp_with_opponent"))
             .join(global_means, on="racer_name", how="left")
             .with_columns(
-                # (Conditional - Global) / Global
                 (
                     (pl.col("avg_vp_with_opponent") - pl.col("global_mean_vp"))
                     / pl.col("global_mean_vp")
@@ -1461,7 +1453,7 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
         r_list = stats["racer_name"].unique().to_list()
         c_list = [get_racer_color(r) for r in r_list]
 
-        # --- 1. Charts ---
+        # --- 1. Left Charts (Scatterplots) ---
         c_consist = _build_quadrant_chart(
             stats,
             r_list,
@@ -1508,36 +1500,50 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
             reverse_x=False,
             quad_labels=["Clutch", "Engine", "Ineffective", "Spam"],
         )
+        c_dice = _build_quadrant_chart(
+            stats,
+            r_list,
+            c_list,
+            x_col="dice_per_turn",
+            y_col="dice_impact_score",
+            title="Base Dice Value",
+            x_title="Base Roll/Active Turn",
+            y_title="Impact Score",
+            reverse_x=False,
+            quad_labels=["Efficient", "Power Roller", "Weak", "Empty Calories"],
+        )
 
-        # CORRECTED: Duration Profile Chart
-        # X: Avg Game Length (Avg Total Turns of races they are in) -> Measures if they extend games
-        # Y: Duration Pref (Corr Total Turns / VP) -> Measures if they LIKE extended games
+        # CORRECTED AXIS: Duration Profile uses "avg_turns" (Personal)
         c_duration = _build_quadrant_chart(
             stats,
             r_list,
             c_list,
-            x_col="avg_game_duration",
+            x_col="avg_turns",
             y_col="duration_pref_score",
             title="Duration Profile (Pacing)",
-            x_title="Avg Game Length (Short -> Long)",
-            y_title="Duration Preference (Hates Long -> Loves Long)",
+            x_title="Avg Personal Turns (Rusher -> Staller)",
+            y_title="Duration Pref (Hates Long -> Loves Long)",
             reverse_x=False,
-            quad_labels=[
-                "Scaler/Staller",
-                "Efficient Scaler",
-                "Rusher/Finisher",
-                "Chaos Agent",
-            ],
+            quad_labels=["Scaler", "Late Bloomer", "Rusher/Winner", "Flash in Pan"],
         )
 
-        # NEW: Interaction Heatmap (Relative Shift)
+        left_charts_ui = mo.ui.tabs(
+            {
+                "🎯 Consistency": mo.ui.altair_chart(c_consist),
+                "🔥 Excitement": mo.ui.altair_chart(c_excitement),
+                "⚡ Ability Value": mo.ui.altair_chart(c_ability),
+                "⏱️ Duration": mo.ui.altair_chart(c_duration),
+                "🎲 Dice Value": mo.ui.altair_chart(c_dice),
+            }
+        )
+
+        # --- 2. Right Column (Visuals + Tables) ---
         c_matrix = (
             alt.Chart(interaction_matrix)
             .mark_rect()
             .encode(
                 x=alt.X("opponent_name:N", title="Opponent Present"),
                 y=alt.Y("racer_name:N", title="Subject Racer"),
-                # Diverging color scale for +/- shift
                 color=alt.Color(
                     "relative_shift:Q",
                     title="Rel. Performance Shift",
@@ -1555,19 +1561,6 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
                 width=680,
                 height=680,
             )
-        )
-
-        c_dice = _build_quadrant_chart(
-            stats,
-            r_list,
-            c_list,
-            x_col="dice_per_turn",
-            y_col="dice_impact_score",
-            title="Base Dice Value",
-            x_title="Base Roll/Active Turn",
-            y_title="Impact Score",
-            reverse_x=False,
-            quad_labels=["Efficient", "Power Roller", "Weak", "Empty Calories"],
         )
 
         gl_stats = (
@@ -1588,21 +1581,8 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
             .properties(title="Game Duration", width=120, height=400)
         )
 
-        charts_ui = mo.ui.tabs(
-            {
-                "🎯 Consistency": mo.ui.altair_chart(c_consist),
-                "🔥 Excitement": mo.ui.altair_chart(c_excitement),
-                "⚡ Ability Value": mo.ui.altair_chart(c_ability),
-                "⏱️ Duration": mo.ui.altair_chart(c_duration),
-                "⚔️ Interactions": mo.ui.altair_chart(c_matrix),
-                "🎲 Dice Value": mo.ui.altair_chart(c_dice),
-                "⏳ Game Length": mo.ui.altair_chart(c_len),
-            }
-        )
-
-        # --- 2. Data Tables ---
+        # Tables
         master_df = stats.sort("mean_vp", descending=True)
-
         df_overview = master_df.select(
             [
                 pl.col("racer_name").alias("Racer"),
@@ -1618,7 +1598,7 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
                 pl.col("avg_race_elasticity").round(1).alias("Elasticity"),
                 pl.col("avg_race_tightness").round(2).alias("Tightness"),
                 pl.col("avg_turns").round(1).alias("Avg Turns"),
-                pl.col("avg_game_duration").round(1).alias("Avg Game Len"),  # Added
+                pl.col("avg_game_duration").round(1).alias("Avg Game Len"),
                 pl.col("avg_env_triggers").round(1).alias("Race Trigs"),
                 (pl.col("avg_env_trip_rate") * 100).round(1).alias("Race Trip%"),
             ]
@@ -1653,23 +1633,25 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
             ]
         )
 
-        data_tabs = mo.ui.tabs(
+        right_ui = mo.ui.tabs(
             {
                 "🏆 Overview": mo.ui.table(df_overview, selection=None, page_size=10),
+                "⚔️ Interactions": mo.ui.altair_chart(c_matrix),
                 "🔥 Dynamics": mo.ui.table(df_dynamics, selection=None, page_size=10),
                 "⚡ Abilities": mo.ui.table(df_abilities, selection=None, page_size=10),
                 "🏃 Movement": mo.ui.table(df_movement, selection=None, page_size=10),
                 "💎 VP Analysis": mo.ui.table(df_vp, selection=None, page_size=10),
+                "⏳ Game Length": mo.ui.altair_chart(c_len),
             }
         )
 
         final_output = mo.md(f"""
         <div style="display: flex; flex-wrap: wrap; gap: 2rem; width: 100%; min-height: 550px;">
             <div style="flex: 1 1 450px; min-width: 0; display: flex; justify-content: center; align-items: start;">
-                {charts_ui}
+                {left_charts_ui}
             </div>
             <div style="flex: 1 1 400px; min-width: 0; overflow-x: auto;">
-                {data_tabs}
+                {right_ui}
             </div>
         </div>
         """)
