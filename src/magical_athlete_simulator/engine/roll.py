@@ -6,6 +6,7 @@ from magical_athlete_simulator.core.events import (
     Phase,
     ResolveMainMoveEvent,
     RollModificationWindowEvent,
+    RollResultEvent,
 )
 from magical_athlete_simulator.core.mixins import RollModificationMixin
 from magical_athlete_simulator.engine.movement import push_move
@@ -75,6 +76,17 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
     if event.roll_serial != engine.state.roll_state.serial_id:
         engine.log_debug("Ignoring stale roll resolution (Re-roll occurred).")
         return
+
+    engine.push_event(
+        RollResultEvent(
+            target_racer_idx=event.target_racer_idx,
+            responsible_racer_idx=event.responsible_racer_idx,
+            source=event.source,
+            base_value=engine.state.roll_state.base_value,
+            final_value=engine.state.roll_state.final_value,
+            phase=Phase.MAIN_ACT,
+        ),
+    )
 
     dist = engine.state.roll_state.final_value
     if dist > 0:

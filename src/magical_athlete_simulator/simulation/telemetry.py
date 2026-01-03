@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Protocol, TypedDict
 
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
+    RollResultEvent,
     TripRecoveryEvent,
 )
 from magical_athlete_simulator.simulation.db.models import RacerResult
@@ -43,8 +44,8 @@ class StepSnapshot:
     last_roll: int
     current_racer: int
     names: list[str]
-    modifiers: list[list["AbilityName | ModifierName"]]
-    abilities: list[list["AbilityName"]]
+    modifiers: list[list[AbilityName | ModifierName]]
+    abilities: list[list[AbilityName]]
     log_html: str
     log_line_index: int
 
@@ -64,15 +65,15 @@ class SnapshotRecorder:
 
     def on_event(
         self,
-        engine: "GameEngine",
-        event: "GameEvent",
+        engine: GameEngine,
+        event: GameEvent,
         *,
         turn_index: int,
     ) -> None:
         if isinstance(event, self.policy.snapshot_event_types):
             self.capture(engine, event.__class__.__name__, turn_index=turn_index)
 
-    def on_turn_end(self, engine: "GameEngine", *, turn_index: int) -> None:
+    def on_turn_end(self, engine: GameEngine, *, turn_index: int) -> None:
         if self.policy.snapshot_on_turn_end:
             self.capture(engine, self.policy.turn_end_event_name, turn_index=turn_index)
 
@@ -83,7 +84,11 @@ class SnapshotRecorder:
             self.capture(engine, self.policy.fallback_event_name, turn_index=turn_index)
 
     def capture(
-        self, engine: "GameEngine", event_name: str, *, turn_index: int
+        self,
+        engine: GameEngine,
+        event_name: str,
+        *,
+        turn_index: int,
     ) -> None:
         current_logs_text = self.log_source.export_text()
         log_line_index = max(0, current_logs_text.count("\n") - 1)
@@ -157,7 +162,7 @@ class MetricsAggregator:
         },
     )
 
-    def initialize_racers(self, engine: "GameEngine") -> None:
+    def initialize_racers(self, engine: GameEngine) -> None:
         for racer in engine.state.racers:
             self.results[racer.idx] = RacerResult(
                 config_hash=self.config_hash,
@@ -168,7 +173,13 @@ class MetricsAggregator:
     def _get_result(self, racer_idx: int) -> RacerResult:
         return self.results[racer_idx]
 
-    def on_event(self, event: "GameEvent") -> None:
+    def on_event(self, event: GameEvent) -> None:
+        if isinstance(event, RollResultEvent):
+            # Now you are 100% sure this racer just finalized this specific roll
+            racer_metrics = self._get_result(event.target_racer_idx)
+            racer_metrics.sum_dice_rolled += event.base_value
+            racer_metrics.sum_dice_rolled_final += event.final_value
+
         if isinstance(event, AbilityTriggeredEvent):
             stats = self._get_result(event.responsible_racer_idx)
             stats.ability_trigger_count += 1
@@ -187,7 +198,7 @@ class MetricsAggregator:
 
     def on_turn_end(
         self,
-        engine: "GameEngine",
+        engine: GameEngine,
         *,
         turn_index: int,
         active_racer_idx: int | None = None,
@@ -203,7 +214,6 @@ class MetricsAggregator:
             roll_val = engine.state.roll_state.base_value
             stats = self._get_result(racer_idx)
             stats.turns_taken += 1
-            stats.sum_dice_rolled += roll_val
             self.turn_history.append(
                 TurnRecord(
                     turn_index=turn_index,
@@ -230,7 +240,7 @@ class MetricsAggregator:
             cols["position"].append(pos_val)
             cols["is_current_turn"].append(racer.idx == active_id)
 
-    def finalize_metrics(self, engine: "GameEngine") -> list[RacerResult]:
+    def finalize_metrics(self, engine: GameEngine) -> list[RacerResult]:
         output: list[RacerResult] = []
         for racer in engine.state.racers:
             stats = self._get_result(racer.idx)

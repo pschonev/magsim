@@ -79,6 +79,17 @@ class RollModificationWindowEvent(GameEvent, HasTargetRacer):
 
 
 @dataclass(frozen=True, kw_only=True)
+class RollResultEvent(GameEvent, HasTargetRacer):
+    """
+    Fired exactly once per valid main roll, containing the final locked-in values.
+    """
+
+    base_value: int
+    final_value: int
+    phase: Phase = Phase.MAIN_ACT
+
+
+@dataclass(frozen=True, kw_only=True)
 class ResolveMainMoveEvent(GameEvent, HasTargetRacer):
     roll_serial: int
     phase: Phase = Phase.MAIN_ACT
