@@ -48,7 +48,6 @@ ignore = [
 # Ruff
 [tool.ruff]
 exclude = ["tests", "apps/frontend"]
-target-version = "py314"
 
 
 # Pyright
