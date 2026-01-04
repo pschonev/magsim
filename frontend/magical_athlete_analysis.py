@@ -1322,6 +1322,88 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
         )
         return matrix
 
+    # --- Environment (Board+Count) Heatmap Logic ---
+    def _prepare_environment_matrix(processed_results, df_races):
+        # 1. Join to get Board and Racer Count
+        race_meta = df_races.select(["config_hash", "board", "racer_count"])
+        joined = processed_results.join(race_meta, on="config_hash", how="inner")
+
+        # 2. Per-Racer Baseline (Each racer's global average VP)
+        racer_baselines = joined.group_by("racer_name").agg(
+            pl.col("final_vp").mean().alias("racer_global_avg_vp")
+        )
+
+        # 3. Conditional Aggregation (Racer + Board + Count)
+        env_stats = (
+            joined.group_by(["racer_name", "board", "racer_count"])
+            .agg(
+                [
+                    pl.col("final_vp").mean().alias("cond_avg_vp"),
+                    pl.col("final_vp").count().alias("sample_size"),
+                ]
+            )
+            .join(racer_baselines, on="racer_name", how="left")
+            .with_columns(
+                [
+                    # Shift = (Conditional - Racer's Own Avg) / Racer's Own Avg
+                    (
+                        (pl.col("cond_avg_vp") - pl.col("racer_global_avg_vp"))
+                        / pl.col("racer_global_avg_vp")
+                    ).alias("relative_shift"),
+                    # Combined Label for X-Axis
+                    (
+                        pl.col("board").cast(pl.String)
+                        + " ("
+                        + pl.col("racer_count").cast(pl.String)
+                        + "p)"
+                    ).alias("env_label"),
+                ]
+            )
+        )
+
+        # 4. Sort Order: Board First, then Racer Count
+        sort_order = (
+            env_stats.select(["env_label", "board", "racer_count"])
+            .unique()
+            .sort(["board", "racer_count"])
+            .get_column("env_label")
+            .to_list()
+        )
+
+        c_env = (
+            alt.Chart(env_stats)
+            .mark_rect()
+            .encode(
+                x=alt.X(
+                    "env_label:N",
+                    title="Environment (Board & Count)",
+                    sort=sort_order,
+                ),
+                y=alt.Y("racer_name:N", title="Racer"),
+                color=alt.Color(
+                    "relative_shift:Q",
+                    title="Shift vs Own Avg",
+                    scale=alt.Scale(scheme="redblue", domainMid=0),
+                    legend=alt.Legend(format=".0%"),
+                ),
+                tooltip=[
+                    "racer_name",
+                    "board",
+                    "racer_count",
+                    alt.Tooltip("cond_avg_vp", format=".2f", title="Env VP"),
+                    alt.Tooltip("racer_global_avg_vp", format=".2f", title="Own Avg"),
+                    alt.Tooltip("relative_shift", format="+.1%", title="Shift"),
+                    alt.Tooltip("sample_size", title="Games"),
+                ],
+            )
+            .properties(
+                title="Env Adaptability (Shift vs Own Baseline)",
+                width=680,
+                height=680,
+            )
+        )
+        return c_env
+
     def _build_quadrant_chart(
         stats_df,
         racers,
@@ -1448,7 +1530,10 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
     else:
         proc_results, proc_races = _calculate_advanced_metrics()
         stats = _prepare_stats(proc_results, proc_races)
+
+        # Matrix Generations
         interaction_matrix = _prepare_interaction_matrix(proc_results)
+        environment_matrix = _prepare_environment_matrix(proc_results, df_races)
 
         r_list = stats["racer_name"].unique().to_list()
         c_list = [get_racer_color(r) for r in r_list]
@@ -1644,6 +1729,7 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
             {
                 "🏆 Overview": mo.ui.table(df_overview, selection=None, page_size=10),
                 "⚔️ Interactions": mo.ui.altair_chart(c_matrix),
+                "🌍 Environments": mo.ui.altair_chart(environment_matrix),
                 "🔥 Dynamics": mo.ui.table(df_dynamics, selection=None, page_size=10),
                 "⚡ Abilities": mo.ui.table(df_abilities, selection=None, page_size=10),
                 "🏃 Movement": mo.ui.table(df_movement, selection=None, page_size=10),
