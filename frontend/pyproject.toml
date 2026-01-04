@@ -8,3 +8,6 @@ dependencies = [
     "polars>=1.36.1",
     "altair>=6.0.0",
 ]
+
+[tool.marimo.runtime]
+output_max_bytes = 10_000_000

@@ -1,16 +1,15 @@
 """Database manager for persisting simulation results."""
 
+import atexit
 import logging
 from typing import TYPE_CHECKING
 
-import pyarrow as pa  # The only dependency we need for speed
 from sqlalchemy import text
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import SQLModel, create_engine
 from tqdm import tqdm
 
 from magical_athlete_simulator.simulation.db.models import (
     Race,
-    RacePositionLog,
     RacerResult,
 )
 
@@ -24,27 +23,38 @@ logger = logging.getLogger("magical_athlete")
 
 class SimulationDatabase:
     """
-    Manages persistence of race simulations to Parquet via DuckDB.
+    Manages persistence of race simulations using a persistent DuckDB file.
+
+    Workflow:
+    1. Startup: Checks for 'simulation.duckdb'. If missing, imports from Parquet.
+    2. Run: Writes to 'simulation.duckdb' (Fast, ACID, Single Source of Truth).
+    3. Exit: Exports 'simulation.duckdb' back to Parquet files.
     """
 
-    def __init__(self, results_dir: Path):
-        self.results_dir: Path = results_dir
+    def __init__(self, results_dir: "Path"):
+        self.results_dir = results_dir
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
-        self.races_file: Path = results_dir / "races.parquet"
-        self.results_file: Path = results_dir / "racer_results.parquet"
-        self.positions_file: Path = results_dir / "race_positions.parquet"
+        self.db_path = results_dir / "simulation.duckdb"
+        self.races_parquet = results_dir / "races.parquet"
+        self.results_parquet = results_dir / "racer_results.parquet"
+        self.positions_parquet = results_dir / "race_positions.parquet"
 
-        # --- BUFFERS ---
-        # Low volume objects (Race, Result) -> Keep as Objects
-        self._race_buffer: list[Race] = []
-        self._result_buffer: list[RacerResult] = []
+        # 1. SQLAlchemy Engine (For Schema Management)
+        self.engine = create_engine(f"duckdb:///{self.db_path}")
 
-        # High volume data (Position Logs) -> Columnar buffer
-        self._position_buffer_cols: PositionLogColumns = {
+        # 2. Raw DuckDB Connection (For High-Performance Bulk Inserts)
+        self.raw_conn = self.engine.raw_connection()
+
+        self._init_db()
+
+        # Buffers (Lists of Dicts)
+        self._race_buffer: list[dict] = []
+        self._result_buffer: list[dict] = []
+        self._position_buffer_cols: "PositionLogColumns" = {
             "config_hash": [],
             "turn_index": [],
-            "current_racer_id": [],  # Renamed from racer_id
+            "current_racer_id": [],
             "pos_r0": [],
             "pos_r1": [],
             "pos_r2": [],
@@ -53,166 +63,179 @@ class SimulationDatabase:
             "pos_r5": [],
         }
 
-        # In-memory DuckDB instance
-        self.engine = create_engine("duckdb:///:memory:")
-        self._init_db()
+        # Ensure we export on script exit
+        atexit.register(self.export_parquet)
 
     def _init_db(self):
-        """Initialize in-memory tables and load existing Parquet data."""
+        """Initialize tables. Import existing Parquet if DB is fresh."""
         SQLModel.metadata.create_all(self.engine)
 
-        with Session(self.engine) as session:
-            # Load races
-            if self.races_file.exists():
-                try:
-                    session.exec(
-                        text(
-                            f"INSERT INTO races SELECT * FROM read_parquet('{self.races_file}')",
-                        ),
-                    )
-                    logger.info(f"Loaded existing races from {self.races_file}")
-                except Exception:
-                    logger.exception("Failed to load races.parquet.")
+        try:
+            # We use the raw connection to check if the table has data
+            count = self.raw_conn.execute("SELECT count(*) FROM races").fetchone()[0]
+            if count == 0:
+                self._import_existing_parquet()
+        except Exception:
+            self._import_existing_parquet()
 
-            # Load results
-            if self.results_file.exists():
-                try:
-                    session.exec(
-                        text(
-                            f"INSERT INTO racer_results SELECT * FROM read_parquet('{self.results_file}')",
-                        ),
-                    )
-                    logger.info(f"Loaded existing results from {self.results_file}")
-                except Exception:
-                    logger.exception("Failed to load racer_results.parquet.")
+    def _import_existing_parquet(self):
+        """Load legacy parquet files into the active DuckDB instance."""
+        if not self.races_parquet.exists():
+            return
 
-            # Load positions
-            if self.positions_file.exists():
-                try:
-                    session.exec(
-                        text(
-                            f"INSERT INTO race_position_logs SELECT * FROM read_parquet('{self.positions_file}')",
-                        ),
-                    )
-                    logger.info(f"Loaded existing positions from {self.positions_file}")
-                except Exception:
-                    logger.warning(
-                        "Failed to load race_positions.parquet (might be new/empty).",
-                    )
-
-            session.commit()
+        tqdm.write("📦 Fresh DB detected. Importing existing Parquet history...")
+        try:
+            if self.races_parquet.exists():
+                self.raw_conn.execute(
+                    f"INSERT INTO races SELECT * FROM read_parquet('{self.races_parquet}')"
+                )
+            if self.results_parquet.exists():
+                self.raw_conn.execute(
+                    f"INSERT INTO racer_results SELECT * FROM read_parquet('{self.results_parquet}')"
+                )
+            if self.positions_parquet.exists():
+                self.raw_conn.execute(
+                    f"INSERT INTO race_position_logs SELECT * FROM read_parquet('{self.positions_parquet}')"
+                )
+            self.raw_conn.commit()
+            tqdm.write("✅ Import complete.")
+        except Exception as e:
+            logger.error(f"Failed to import existing parquet: {e}")
+            self.raw_conn.rollback()
 
     def get_known_hashes(self) -> set[str]:
-        """Return a set of all config_hashes already present in the DB."""
-        with Session(self.engine) as session:
-            statement = select(Race.config_hash)
-            results = session.exec(statement).all()
-            return set(results)
+        """
+        Fast hash lookup directly from DuckDB.
+        This is our Source of Truth during execution.
+        """
+        try:
+            cur = self.raw_conn.cursor()
+            res = cur.execute("SELECT config_hash FROM races").fetchall()
+            return {r[0] for r in res}
+        except Exception:
+            return set()
 
     def save_simulation(
         self,
-        race: Race,
-        results: list[RacerResult],
-        positions: PositionLogColumns,
+        race: "Race",
+        results: list["RacerResult"],
+        positions: "PositionLogColumns",
     ):
-        """Buffer data for later persistence."""
-        self._race_buffer.append(race)
-        self._result_buffer.extend(results)
+        """Buffer data in memory."""
+        self._race_buffer.append(race.model_dump())
+        self._result_buffer.extend([r.model_dump() for r in results])
 
-        # Merge new columns into the main buffer columns
         for key in self._position_buffer_cols:
             self._position_buffer_cols[key].extend(positions[key])  # type: ignore
 
-    def _flush_buffers_to_db(self):
-        """Internal: Bulk insert all buffered data into DuckDB."""
-
-        has_races = bool(self._race_buffer)
-        has_pos = bool(self._position_buffer_cols["config_hash"])
-
-        if not (has_races or has_pos):
+    def flush_to_parquet(self):
+        """
+        Flushes buffers to DuckDB using native bulk insert.
+        Kept method name for runner compatibility.
+        """
+        if not self._race_buffer:
             return
 
-        tqdm.write("💾 Bulk inserting into in-memory DB...")
+        try:
+            # DuckDB is smart enough to accept a list of dicts directly
+            # via `executemany` or simple parameter binding, but for truly bulk
+            # speed without Pandas, we create a temporary view from the Python object.
 
-        # 1. Handle Races & Results (Standard SQLModel -> Dict)
-        race_dicts = [r.model_dump() for r in self._race_buffer]
-        result_dicts = [r.model_dump() for r in self._result_buffer]
+            # 1. Races
+            if self._race_buffer:
+                # We can't just pass list[dict] to INSERT directly in all DuckDB versions easily
+                # without an intermediate library. However, DuckDB's Python client
+                # creates a virtual table from local variables seamlessly.
+                #
+                # "INSERT INTO table SELECT * FROM python_variable" works if the variable
+                # is a recognizable table-like structure. A list of dicts is NOT always one.
+                #
+                # BUT, since we want NO Pandas/Polars deps here, the standard way is `executemany`.
+                # This is slightly slower than Arrow transfer but fine for batches of ~1000.
 
-        with self.engine.begin() as conn:
-            if race_dicts:
-                conn.execute(
-                    text("""
-                    INSERT INTO races 
-                    (config_hash, seed, board, racer_names, racer_count, timestamp, execution_time_ms, aborted, total_turns, created_at)
-                    VALUES (:config_hash, :seed, :board, :racer_names, :racer_count, :timestamp, :execution_time_ms, :aborted, :total_turns, :created_at)
-                    """),
-                    race_dicts,
+                # OPTIMIZED: Column-based insertion (faster than row-based dicts)
+                # But our buffer is row-based. Let's trust executemany for now or use the
+                # "Appender" if available.
+
+                # Simpler: Just rely on SQLModel/SQLAlchemy core for the INSERT if we want
+                # pure python, but we want DuckDB speed.
+
+                # BEST PURE PYTHON APPROACH:
+                # Transform list[dict] -> dict[list] (columnar) -> DuckDB native
+
+                # Actually, DuckDB's `execute` can take a list of tuples.
+                # Let's convert our dicts to tuples based on the model fields order.
+
+                race_keys = Race.model_fields.keys()
+                race_tuples = [[r[k] for k in race_keys] for r in self._race_buffer]
+                # Placeholders: :1, :2, etc
+                placeholders = ",".join(["?"] * len(race_keys))
+                self.raw_conn.executemany(
+                    f"INSERT INTO races ({','.join(race_keys)}) VALUES ({placeholders})",
+                    race_tuples,
                 )
 
-            if result_dicts:
-                conn.execute(
-                    text("""
-                    INSERT INTO racer_results 
-                    (
-                        config_hash, racer_id, racer_name, final_vp, turns_taken, 
-                        recovery_turns, sum_dice_rolled, sum_dice_rolled_final, 
-                        ability_trigger_count, ability_self_target_count, 
-                        ability_target_count, finish_position, eliminated, rank
-                    )
-                    VALUES (
-                        :config_hash, :racer_id, :racer_name, :final_vp, :turns_taken, 
-                        :recovery_turns, :sum_dice_rolled, :sum_dice_rolled_final, 
-                        :ability_trigger_count, :ability_self_target_count, 
-                        :ability_target_count, :finish_position, :eliminated, :rank
-                    )
-                    """),
-                    result_dicts,
+            # 2. Results
+            if self._result_buffer:
+                res_keys = RacerResult.model_fields.keys()
+                res_tuples = [[r[k] for k in res_keys] for r in self._result_buffer]
+                placeholders = ",".join(["?"] * len(res_keys))
+                self.raw_conn.executemany(
+                    f"INSERT INTO racer_results ({','.join(res_keys)}) VALUES ({placeholders})",
+                    res_tuples,
                 )
 
-            # 2. Handle Position Logs (The High Volume Data) - VIA PYARROW
+            # 3. Positions (Already Columnar! Easiest to insert)
             if self._position_buffer_cols["config_hash"]:
-                # Wrap columns in a PyArrow Table (Zero-Copy from lists mostly)
-                arrow_table = pa.Table.from_pydict(self._position_buffer_cols)
+                # PositionLogColumns is ALREADY a dict of lists (Columnar).
+                # DuckDB loves this. We can register it as a view if we convert it to
+                # a format DuckDB likes (PyArrow Table is best, but you wanted no heavy deps).
+                #
+                # Without Arrow/Pandas, we must zip it back to rows for `executemany`.
+                keys = list(self._position_buffer_cols.keys())
+                # zip(*[col_list1, col_list2...]) creates row tuples
+                values = list(zip(*[self._position_buffer_cols[k] for k in keys]))
+                placeholders = ",".join(["?"] * len(keys))
 
-                # DuckDB can ingest Arrow tables directly
-                # We need the raw connection for this specific magic
-                raw_conn = conn.connection
-
-                # 'arrow_table' is available in the local scope, so DuckDB sees it
-                raw_conn.execute(
-                    f"INSERT INTO {RacePositionLog.__tablename__} SELECT * FROM arrow_table",
+                self.raw_conn.executemany(
+                    f"INSERT INTO race_position_logs ({','.join(keys)}) VALUES ({placeholders})",
+                    values,
                 )
+
+            self.raw_conn.commit()
+
+        except Exception as e:
+            logger.error(f"Failed to flush to DB: {e}")
+            self.raw_conn.rollback()
 
         # Clear buffers
         self._race_buffer.clear()
         self._result_buffer.clear()
-
         for key in self._position_buffer_cols:
             self._position_buffer_cols[key].clear()  # type: ignore
 
-    def flush_to_parquet(self):
-        """Dump in-memory tables back to Parquet files."""
-        self._flush_buffers_to_db()
-
-        tqdm.write("📦 Writing Parquet files...")
-        with Session(self.engine) as session:
-            tqdm.write(f"  -> {self.races_file.name}")
-            session.exec(
-                text(
-                    f"COPY races TO '{self.races_file}' (FORMAT 'parquet', CODEC 'zstd')",
-                ),
+    def export_parquet(self):
+        """
+        Export the current state of DuckDB to Parquet files.
+        """
+        tqdm.write("📦 Exporting simulation data to Parquet...")
+        try:
+            self.raw_conn.execute(
+                f"COPY races TO '{self.races_parquet}' (FORMAT PARQUET, CODEC 'ZSTD')"
             )
-
-            tqdm.write(f"  -> {self.results_file.name}")
-            session.exec(
-                text(
-                    f"COPY racer_results TO '{self.results_file}' (FORMAT 'parquet', CODEC 'zstd')",
-                ),
+            self.raw_conn.execute(
+                f"COPY racer_results TO '{self.results_parquet}' (FORMAT PARQUET, CODEC 'ZSTD')"
             )
-
-            tqdm.write(f"  -> {self.positions_file.name}")
-            session.exec(
-                text(
-                    f"COPY race_position_logs TO '{self.positions_file}' (FORMAT 'parquet', CODEC 'zstd')",
-                ),
+            self.raw_conn.execute(
+                f"COPY race_position_logs TO '{self.positions_parquet}' (FORMAT PARQUET, CODEC 'ZSTD')"
             )
+            tqdm.write("✅ Export complete.")
+        except Exception as e:
+            logger.error(f"Failed to export parquet: {e}")
+
+    def close(self):
+        """Flush remaining buffers, export, and close."""
+        self.flush_to_parquet()
+        self.export_parquet()
+        self.raw_conn.close()
+        self.engine.dispose()
