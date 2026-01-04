@@ -217,3 +217,4 @@ rules.md
 .gitignore
 
 *.duckdb
+*.duckdb.wal
