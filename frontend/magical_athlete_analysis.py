@@ -1500,20 +1500,6 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
             reverse_x=False,
             quad_labels=["Clutch", "Engine", "Ineffective", "Spam"],
         )
-        c_dice = _build_quadrant_chart(
-            stats,
-            r_list,
-            c_list,
-            x_col="dice_per_turn",
-            y_col="dice_impact_score",
-            title="Base Dice Value",
-            x_title="Base Roll/Active Turn",
-            y_title="Impact Score",
-            reverse_x=False,
-            quad_labels=["Efficient", "Power Roller", "Weak", "Empty Calories"],
-        )
-
-        # CORRECTED AXIS: Duration Profile uses "avg_turns" (Personal)
         c_duration = _build_quadrant_chart(
             stats,
             r_list,
@@ -1527,13 +1513,34 @@ def _(alt, df_positions, df_racer_results, df_races, get_racer_color, mo, pl):
             quad_labels=["Scaler", "Late Bloomer", "Rusher/Winner", "Flash in Pan"],
         )
 
+        # CHANGED: "Movement Value" (replacing Dice Value)
+        # X: Avg Speed (Movement/Turn) - Measures engine speed
+        # Y: Dice Impact (Correlation Dice/VP) - Measures reliance on luck
+        c_movement_val = _build_quadrant_chart(
+            stats,
+            r_list,
+            c_list,
+            x_col="avg_speed",
+            y_col="dice_impact_score",
+            title="Movement vs Luck Reliance",
+            x_title="Speed (Avg Move/Turn)",
+            y_title="Dice Impact (Low = Reliable, High = Gambler)",
+            reverse_x=False,
+            quad_labels=[
+                "Dice Hungry",
+                "Nitro Junkie",
+                "Slow Farmer",
+                "Efficient Engine",
+            ],
+        )
+
         left_charts_ui = mo.ui.tabs(
             {
                 "🎯 Consistency": mo.ui.altair_chart(c_consist),
                 "🔥 Excitement": mo.ui.altair_chart(c_excitement),
                 "⚡ Ability Value": mo.ui.altair_chart(c_ability),
                 "⏱️ Duration": mo.ui.altair_chart(c_duration),
-                "🎲 Dice Value": mo.ui.altair_chart(c_dice),
+                "🏃 Movement Value": mo.ui.altair_chart(c_movement_val),
             }
         )
 
