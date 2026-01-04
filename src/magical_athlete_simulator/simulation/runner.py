@@ -29,19 +29,19 @@ class SimulationResult:
     execution_time_ms: float
     aborted: bool
     turn_count: int
-    metrics: list["RacerResult"]
-    position_logs: "PositionLogColumns"
+    metrics: list[RacerResult]
+    position_logs: PositionLogColumns
 
 
 def run_single_simulation(
-    config: "GameConfiguration",
+    config: GameConfiguration,
     max_turns: int,
 ) -> SimulationResult:
     """
     Execute one race and return aggregated metrics.
     """
     # --- START LOGGING ---
-    tqdm.write(f"▶ Start: {config.racers} on {config.board} (Seed: {config.seed})")
+    tqdm.write(f"▶ Simulating: {config.racers} on {config.board} (Seed: {config.seed})")
 
     start_time = time.perf_counter()
     timestamp = time.time()
@@ -69,7 +69,7 @@ def run_single_simulation(
 
     turn_counter = 0
 
-    def on_event(_: "GameEngine", event: "GameEvent"):
+    def on_event(_: GameEngine, event: GameEvent):
         aggregator.on_event(event=event)
 
     engine.on_event_processed = on_event
@@ -96,6 +96,8 @@ def run_single_simulation(
     execution_time_ms = (end_time - start_time) * 1000
 
     if aborted:
+        # STRATEGY: Aborted races are saved in the 'races' table (metadata)
+        # but we return EMPTY metrics/logs so nothing is written to the detail tables.
         metrics = []
         positions: PositionLogColumns = {
             "config_hash": [],
@@ -114,14 +116,6 @@ def run_single_simulation(
         positions = aggregator.finalize_positions()
 
         # --- END LOGGING ---
-        # Find 1st and 2nd place
-        # rank=1 is 1st place, rank=2 is 2nd place
-        # We need to sort or filter the metrics list based on 'rank' if available,
-        # otherwise we might need to rely on 'finish_position' or just sort by VP descending?
-        # The metrics are populated with 'finish_position' (1-based index of finishing).
-
-        # Sort by finish_position (asc) then final_vp (desc) to be safe
-        # (Though finish_position should cover it if race finished properly)
         sorted_results = sorted(
             metrics,
             key=lambda r: (
@@ -135,7 +129,7 @@ def run_single_simulation(
 
         tqdm.write(
             f"🏁 Done in {execution_time_ms:.2f}ms | {turn_counter} turns | "
-            f"1st: {winner}, 2nd: {runner_up}"
+            f"1st: {winner}, 2nd: {runner_up}",
         )
 
     return SimulationResult(

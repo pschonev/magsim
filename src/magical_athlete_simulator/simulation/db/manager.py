@@ -4,7 +4,6 @@ import atexit
 import logging
 from typing import TYPE_CHECKING
 
-from sqlalchemy import text
 from sqlmodel import SQLModel, create_engine
 from tqdm import tqdm
 
@@ -31,7 +30,7 @@ class SimulationDatabase:
     3. Exit: Exports 'simulation.duckdb' back to Parquet files.
     """
 
-    def __init__(self, results_dir: "Path"):
+    def __init__(self, results_dir: Path):
         self.results_dir = results_dir
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -48,10 +47,10 @@ class SimulationDatabase:
 
         self._init_db()
 
-        # Buffers (Lists of Dicts)
+        # Buffers
         self._race_buffer: list[dict] = []
         self._result_buffer: list[dict] = []
-        self._position_buffer_cols: "PositionLogColumns" = {
+        self._position_buffer_cols: PositionLogColumns = {
             "config_hash": [],
             "turn_index": [],
             "current_racer_id": [],
@@ -71,7 +70,7 @@ class SimulationDatabase:
         SQLModel.metadata.create_all(self.engine)
 
         try:
-            # We use the raw connection to check if the table has data
+            # Check if we have data
             count = self.raw_conn.execute("SELECT count(*) FROM races").fetchone()[0]
             if count == 0:
                 self._import_existing_parquet()
@@ -87,15 +86,15 @@ class SimulationDatabase:
         try:
             if self.races_parquet.exists():
                 self.raw_conn.execute(
-                    f"INSERT INTO races SELECT * FROM read_parquet('{self.races_parquet}')"
+                    f"INSERT INTO races SELECT * FROM read_parquet('{self.races_parquet}')",
                 )
             if self.results_parquet.exists():
                 self.raw_conn.execute(
-                    f"INSERT INTO racer_results SELECT * FROM read_parquet('{self.results_parquet}')"
+                    f"INSERT INTO racer_results SELECT * FROM read_parquet('{self.results_parquet}')",
                 )
             if self.positions_parquet.exists():
                 self.raw_conn.execute(
-                    f"INSERT INTO race_position_logs SELECT * FROM read_parquet('{self.positions_parquet}')"
+                    f"INSERT INTO race_position_logs SELECT * FROM read_parquet('{self.positions_parquet}')",
                 )
             self.raw_conn.commit()
             tqdm.write("✅ Import complete.")
@@ -117,9 +116,9 @@ class SimulationDatabase:
 
     def save_simulation(
         self,
-        race: "Race",
-        results: list["RacerResult"],
-        positions: "PositionLogColumns",
+        race: Race,
+        results: list[RacerResult],
+        positions: PositionLogColumns,
     ):
         """Buffer data in memory."""
         self._race_buffer.append(race.model_dump())
@@ -131,47 +130,21 @@ class SimulationDatabase:
     def flush_to_parquet(self):
         """
         Flushes buffers to DuckDB using native bulk insert.
-        Kept method name for runner compatibility.
+        Ignores duplicates (INSERT OR IGNORE) to prevent crashing on re-runs.
         """
         if not self._race_buffer:
             return
 
         try:
-            # DuckDB is smart enough to accept a list of dicts directly
-            # via `executemany` or simple parameter binding, but for truly bulk
-            # speed without Pandas, we create a temporary view from the Python object.
-
             # 1. Races
             if self._race_buffer:
-                # We can't just pass list[dict] to INSERT directly in all DuckDB versions easily
-                # without an intermediate library. However, DuckDB's Python client
-                # creates a virtual table from local variables seamlessly.
-                #
-                # "INSERT INTO table SELECT * FROM python_variable" works if the variable
-                # is a recognizable table-like structure. A list of dicts is NOT always one.
-                #
-                # BUT, since we want NO Pandas/Polars deps here, the standard way is `executemany`.
-                # This is slightly slower than Arrow transfer but fine for batches of ~1000.
-
-                # OPTIMIZED: Column-based insertion (faster than row-based dicts)
-                # But our buffer is row-based. Let's trust executemany for now or use the
-                # "Appender" if available.
-
-                # Simpler: Just rely on SQLModel/SQLAlchemy core for the INSERT if we want
-                # pure python, but we want DuckDB speed.
-
-                # BEST PURE PYTHON APPROACH:
-                # Transform list[dict] -> dict[list] (columnar) -> DuckDB native
-
-                # Actually, DuckDB's `execute` can take a list of tuples.
-                # Let's convert our dicts to tuples based on the model fields order.
-
                 race_keys = Race.model_fields.keys()
+                # Convert dicts to list of values
                 race_tuples = [[r[k] for k in race_keys] for r in self._race_buffer]
-                # Placeholders: :1, :2, etc
                 placeholders = ",".join(["?"] * len(race_keys))
+
                 self.raw_conn.executemany(
-                    f"INSERT INTO races ({','.join(race_keys)}) VALUES ({placeholders})",
+                    f"INSERT OR IGNORE INTO races ({','.join(race_keys)}) VALUES ({placeholders})",
                     race_tuples,
                 )
 
@@ -180,33 +153,31 @@ class SimulationDatabase:
                 res_keys = RacerResult.model_fields.keys()
                 res_tuples = [[r[k] for k in res_keys] for r in self._result_buffer]
                 placeholders = ",".join(["?"] * len(res_keys))
+
                 self.raw_conn.executemany(
-                    f"INSERT INTO racer_results ({','.join(res_keys)}) VALUES ({placeholders})",
+                    f"INSERT OR IGNORE INTO racer_results ({','.join(res_keys)}) VALUES ({placeholders})",
                     res_tuples,
                 )
 
-            # 3. Positions (Already Columnar! Easiest to insert)
+            # 3. Positions
             if self._position_buffer_cols["config_hash"]:
-                # PositionLogColumns is ALREADY a dict of lists (Columnar).
-                # DuckDB loves this. We can register it as a view if we convert it to
-                # a format DuckDB likes (PyArrow Table is best, but you wanted no heavy deps).
-                #
-                # Without Arrow/Pandas, we must zip it back to rows for `executemany`.
                 keys = list(self._position_buffer_cols.keys())
-                # zip(*[col_list1, col_list2...]) creates row tuples
                 values = list(zip(*[self._position_buffer_cols[k] for k in keys]))
                 placeholders = ",".join(["?"] * len(keys))
 
                 self.raw_conn.executemany(
-                    f"INSERT INTO race_position_logs ({','.join(keys)}) VALUES ({placeholders})",
+                    f"INSERT OR IGNORE INTO race_position_logs ({','.join(keys)}) VALUES ({placeholders})",
                     values,
                 )
 
+            # Manually commit if needed (DuckDB in Python usually auto-commits DDL/DML outside transaction blocks)
+            # but explicit commit ensures safety.
             self.raw_conn.commit()
 
         except Exception as e:
             logger.error(f"Failed to flush to DB: {e}")
-            self.raw_conn.rollback()
+            # No rollback needed here for simple insert errors in auto-commit mode,
+            # and 'no transaction active' error suggests we shouldn't force it.
 
         # Clear buffers
         self._race_buffer.clear()
@@ -221,13 +192,13 @@ class SimulationDatabase:
         tqdm.write("📦 Exporting simulation data to Parquet...")
         try:
             self.raw_conn.execute(
-                f"COPY races TO '{self.races_parquet}' (FORMAT PARQUET, CODEC 'ZSTD')"
+                f"COPY races TO '{self.races_parquet}' (FORMAT PARQUET, CODEC 'ZSTD')",
             )
             self.raw_conn.execute(
-                f"COPY racer_results TO '{self.results_parquet}' (FORMAT PARQUET, CODEC 'ZSTD')"
+                f"COPY racer_results TO '{self.results_parquet}' (FORMAT PARQUET, CODEC 'ZSTD')",
             )
             self.raw_conn.execute(
-                f"COPY race_position_logs TO '{self.positions_parquet}' (FORMAT PARQUET, CODEC 'ZSTD')"
+                f"COPY race_position_logs TO '{self.positions_parquet}' (FORMAT PARQUET, CODEC 'ZSTD')",
             )
             tqdm.write("✅ Export complete.")
         except Exception as e:
