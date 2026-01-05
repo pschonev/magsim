@@ -30,6 +30,7 @@ def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+
     return (
         BOARD_DEFINITIONS,
         Console,
@@ -348,6 +349,7 @@ def _(StepSnapshot, get_racer_color, math):
             <ellipse cx="350" cy="260" rx="150" ry="70" fill="#C8E6C9" stroke="none"/>
             {"".join(svg_elements)}
         </svg>"""
+
     return (render_game_track,)
 
 
@@ -1255,7 +1257,12 @@ def _(mo):
 
 
 @app.cell
-def _(df_positions_f, df_racer_results_f, df_races_f, pl):
+def _(
+    df_positions_f,
+    df_racer_results_f,
+    df_races_f,
+    pl,
+):
     # 2. HEAVY COMPUTATION CELL
     def unpivot_positions(df_flat: pl.DataFrame) -> pl.DataFrame:
         return (
@@ -1328,8 +1335,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
             pl.col("position").max().alias("final_distance")
         )
 
-        # 2. Clutch & Closing (Strict First/Last Logic)
-        # Snapshot at 66% of winner's turns
+        # 2. Clutch & Closing (Fixed Logic + Correct Grouping)
         winner_turns = df_racer_results_f.filter(pl.col("rank") == 1).select(
             ["config_hash", pl.col("turns_taken").alias("winner_turns")]
         )
@@ -1341,7 +1347,6 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
             .alias("snapshot_turn")
         )
 
-        # Get state at snapshot
         snapshot_state = (
             df_long.join(snapshot_target, on="config_hash")
             .filter(pl.col("turn_index") <= pl.col("snapshot_turn"))
@@ -1350,8 +1355,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
             .last()
         )
 
-        # Calculate Rank at Snapshot
-        # Sort by Position Descending, then Racer ID Ascending (Tie-Breaker)
+        # Calculate Ranks at Snapshot
         snapshot_ranks = (
             snapshot_state.join(
                 df_races_f.select(["config_hash", "racer_count"]), on="config_hash"
@@ -1361,21 +1365,29 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
             )
             .with_columns(
                 pl.col("position")
-                .rank(
-                    method="ordinal", descending=True
-                )  # Ordinal ensures 1,2,3,4 even with ties
+                .rank(method="ordinal", descending=True)
                 .over("config_hash")
                 .alias("rank_at_snapshot")
             )
         )
 
-        winners_df = df_racer_results_f.select(["config_hash", "racer_id", "rank"])
+        # JOIN RACER NAMES HERE to fix the grouping bug
+        # We need the mapping of (config_hash, racer_id) -> racer_name
+        racer_map = df_racer_results_f.select(
+            ["config_hash", "racer_id", "racer_name", "rank"]
+        )
+
+        snapshot_with_names = snapshot_ranks.join(
+            racer_map, on=["config_hash", "racer_id"], how="inner"
+        )
 
         # Metric A: Clutch Factor (Win from STRICT LAST PLACE)
+        # Group by racer_name now!
         clutch_calc = (
-            snapshot_ranks.filter(pl.col("rank_at_snapshot") == pl.col("racer_count"))
-            .join(winners_df, on=["config_hash", "racer_id"], how="left")
-            .group_by("racer_id")
+            snapshot_with_names.filter(
+                pl.col("rank_at_snapshot") == pl.col("racer_count")
+            )
+            .group_by("racer_name")
             .agg(
                 (pl.col("rank") == 1).sum().alias("clutch_wins"),
                 pl.len().alias("clutch_opps"),
@@ -1386,10 +1398,10 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
         )
 
         # Metric B: Closing Rate (Win from STRICT FIRST PLACE)
+        # Group by racer_name now!
         closing_calc = (
-            snapshot_ranks.filter(pl.col("rank_at_snapshot") == 1)
-            .join(winners_df, on=["config_hash", "racer_id"], how="left")
-            .group_by("racer_id")
+            snapshot_with_names.filter(pl.col("rank_at_snapshot") == 1)
+            .group_by("racer_name")
             .agg(
                 (pl.col("rank") == 1).sum().alias("closing_wins"),
                 pl.len().alias("closing_opps"),
@@ -1399,8 +1411,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
             )
         )
 
-        # 3. Start Position Bias (Relative Shift)
-        # Aggregated on df_racer_results_f for correct granularity
+        # 3. Start Position Bias
         start_stats = (
             df_racer_results_f.join(
                 df_races_f.select(["config_hash", "racer_count"]), on="config_hash"
@@ -1459,18 +1470,8 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
             .fill_null(0)
         )
 
-        stats_results = (
-            df_racer_results_f.join(
-                final_dist_calc, on=["config_hash", "racer_id"], how="left"
-            )
-            .join(clutch_calc, on="racer_id", how="left")
-            .join(closing_calc, on="racer_id", how="left")
-            .with_columns(
-                [
-                    pl.col("clutch_factor").fill_null(0),
-                    pl.col("closing_rate").fill_null(0),
-                ]
-            )
+        stats_results = df_racer_results_f.join(
+            final_dist_calc, on=["config_hash", "racer_id"], how="left"
         )
 
         # 6. Strategic Potency
@@ -1558,7 +1559,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
                     (pl.col("ability_target_count") / pl.col("safe_turns"))
                     .mean()
                     .alias("target_per_turn"),
-                    # Movement (Corrected Denominator: rolling_turns = turns - recovery)
+                    # Movement
                     pl.col("turns_taken").mean().alias("avg_turns"),
                     (pl.col("sum_dice_rolled") / pl.col("rolling_turns"))
                     .mean()
@@ -1572,9 +1573,6 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
                     (pl.col("sum_dice_rolled") / pl.col("safe_vp"))
                     .mean()
                     .alias("dice_per_vp"),
-                    # Advanced
-                    pl.col("clutch_factor").mean().alias("clutch_factor"),
-                    pl.col("closing_rate").mean().alias("closing_rate"),
                 ]
             )
         )
@@ -1597,6 +1595,8 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
             base_stats.join(potency_score, on="racer_id", how="left")
             .join(corr_df, on="racer_name", how="left")
             .join(start_stats, on="racer_name", how="left")
+            .join(clutch_calc, on="racer_name", how="left")  # JOIN ON NAME
+            .join(closing_calc, on="racer_name", how="left")  # JOIN ON NAME
             .with_columns(
                 [
                     (pl.col("cnt_1st") / pl.col("races_run")).alias("pct_1st"),
@@ -1605,6 +1605,8 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
                     pl.col("cv_vp").fill_null(0),
                     pl.col("rel_bias_first").fill_null(0),
                     pl.col("rel_bias_last").fill_null(0),
+                    pl.col("clutch_factor").fill_null(0),
+                    pl.col("closing_rate").fill_null(0),
                 ]
             )
         )
@@ -2178,32 +2180,6 @@ def _(
     </div>
     """)
     final_output
-    return
-
-
-@app.cell
-def _():
-    import json
-    import base64
-
-    """Shareable config string for URLs/frontend."""
-    canonical = json.dumps(
-        {
-            "racers": [
-                "Scoocher",
-                "Magician",
-                "Gunk",
-                "Banana",
-                "BabaYaga",
-                "HugeBaby",
-            ],
-            "board": "standard",
-            "seed": 42,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    base64.urlsafe_b64encode(canonical.encode("utf-8")).decode("ascii")
     return
 
 
