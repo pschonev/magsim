@@ -1289,7 +1289,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
         # --- A. PREPARE METRICS ---
         df_long = unpivot_positions(df_positions_f)
 
-        # 1. TRUTH SOURCE: Global Win Rates
+        # 1. TRUTH SOURCE: Global Win Rates (Used for Table & Pressure)
         global_win_rates = (
             df_racer_results_f.group_by("racer_name")
             .agg(
@@ -1381,6 +1381,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
             racer_map, on=["config_hash", "racer_id"], how="inner"
         )
 
+        # PRESSURE METRICS (Keep using the "Truth" source for these as they are relative to global performance)
         clutch_calc = (
             snapshot_with_names.filter(
                 pl.col("rank_at_snapshot") == pl.col("racer_count")
@@ -1447,7 +1448,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
             )  # CLEAN SELECTION
         )
 
-        # 4. Start Position Bias
+        # 4. Start Position Bias (REVERTED TO LOCAL CALCULATION)
         start_stats = (
             df_racer_results_f.join(
                 df_races_f.select(["config_hash", "racer_count"]), on="config_hash"
@@ -1469,22 +1470,19 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
                     (pl.col("rank").filter(pl.col("is_last")) == 1)
                     .mean()
                     .alias("win_rate_last"),
+                    # LOCAL CALCULATION (Restored)
+                    (pl.col("rank") == 1).mean().alias("win_rate_global_local"),
                 ]
-            )
-            .join(
-                global_win_rates.select(["racer_name", "global_win_rate"]),
-                on="racer_name",
-                how="left",
             )
             .with_columns(
                 [
                     (
-                        (pl.col("win_rate_first") - pl.col("global_win_rate"))
-                        / pl.col("global_win_rate")
+                        (pl.col("win_rate_first") - pl.col("win_rate_global_local"))
+                        / pl.col("win_rate_global_local")
                     ).alias("rel_bias_first"),
                     (
-                        (pl.col("win_rate_last") - pl.col("global_win_rate"))
-                        / pl.col("global_win_rate")
+                        (pl.col("win_rate_last") - pl.col("win_rate_global_local"))
+                        / pl.col("win_rate_global_local")
                     ).alias("rel_bias_last"),
                 ]
             )
