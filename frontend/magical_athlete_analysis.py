@@ -30,6 +30,7 @@ def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+
     return (
         BOARD_DEFINITIONS,
         Console,
@@ -214,54 +215,51 @@ def _(StepSnapshot, get_racer_color, math):
             return "<p>No Data</p>"
 
         svg_elements = []
-        rw, rh = 50, 30
 
-        # 1. Track spaces
+        # Dimensions & Scaling
+        # Original: 700x400. Request: ~1.7x wider/taller.
+        # Let's go with 1100x650 for a spacious, dark layout.
+        W, H = 1100, 650
+
+        # We need to scale the board positions (originally centered around 120,350 with radius 100).
+        # Original generation: start_x=120, start_y=350, straight_len=350, radius=100.
+        # The track is roughly 700px wide.
+        # We can apply a scaling transform to the group containing the track.
+        scale_factor = 1.70
+        trans_x = 40
+        trans_y = -120
+
+        rw, rh = 50, 30  # Tile size
+
+        # 1. Dark Theme Backgrounds
+        # Background rect for the whole SVG
+        # Using a group for the track to scale it up
+        track_group_start = (
+            f'<g transform="translate({trans_x}, {trans_y}) scale({scale_factor})">'
+        )
+
+        # 2. Track spaces (Dark Grey Theme)
         for i, (cx, cy, rot) in enumerate(positions_map):
             transform = f"rotate({rot}, {cx}, {cy})"
+
+            # Darker tiles: #333 fill, #555 stroke.
+            # Special tiles (Start/Finish) can keep a subtle tint or be distinct.
+            # Original logic had colors_map passed in. We'll override for dark mode consistency
+            # unless it's the start/finish.
+
+            fill_color = "#333333"  # Default dark grey
+            if i == 0:
+                fill_color = "#2E7D32"  # Dark Green start
+            elif i == len(positions_map) - 1:
+                fill_color = "#C62828"  # Dark Red finish
+
             svg_elements.append(
                 f'<rect x="{cx - rw / 2:.1f}" y="{cy - rh / 2:.1f}" width="{rw}" height="{rh}" '
-                f'fill="{colors_map[i]}" stroke="#555" stroke-width="1" transform="{transform}" rx="4" />'
+                f'fill="{fill_color}" stroke="#555" stroke-width="2" transform="{transform}" rx="4" />'
             )
             svg_elements.append(
                 f'<text x="{cx:.1f}" y="{cy:.1f}" dy="4" font-family="sans-serif" font-size="10" font-weight="bold" '
-                f'text-anchor="middle" fill="#333" transform="{transform}">{i}</text>'
-            )
-
-        # 2. Legend
-        legend_start_x = 20
-        legend_start_y = 20
-        legend_col_width = 110
-        legend_row_height = 20
-        items_per_col = 4
-
-        num_items = len(turn_data.names)
-        num_cols = math.ceil(num_items / items_per_col)
-        legend_bg_width = num_cols * legend_col_width + 10
-        legend_bg_height = (items_per_col * legend_row_height) + 30
-
-        svg_elements.append(
-            f'<g opacity="0.95">'
-            f'<rect x="{legend_start_x - 5}" y="{legend_start_y - 5}" width="{legend_bg_width}" height="{legend_bg_height}" rx="6" '
-            f'fill="white" stroke="#bbb" stroke-width="1" />'
-            f'<text x="{legend_start_x}" y="{legend_start_y + 10}" font-family="sans-serif" font-size="12" '
-            f'font-weight="700" fill="#333">Legend</text>'
-            f"</g>"
-        )
-
-        for i, name in enumerate(turn_data.names):
-            c = get_racer_color(name)
-            col_idx = i // items_per_col
-            row_idx = i % items_per_col
-            x = legend_start_x + (col_idx * legend_col_width)
-            y = legend_start_y + 30 + (row_idx * legend_row_height)
-
-            svg_elements.append(
-                f'<circle cx="{x + 6}" cy="{y - 4}" r="5" fill="{c}" stroke="#555" stroke-width="1" />'
-            )
-            svg_elements.append(
-                f'<text x="{x + 18}" y="{y}" font-family="sans-serif" font-size="12" '
-                f'font-weight="600" fill="#333">{_html.escape(name)}</text>'
+                f'text-anchor="middle" fill="#888" transform="{transform}">{i}</text>'
             )
 
         # 3. Racers
@@ -270,7 +268,7 @@ def _(StepSnapshot, get_racer_color, math):
             draw_pos = min(pos, len(positions_map) - 1)
             name = turn_data.names[idx]
 
-            # --- Tooltip ---
+            # Tooltip
             mods = turn_data.modifiers
             abils = turn_data.abilities
             mod_str = str(mods[idx]) if idx < len(mods) else "[]"
@@ -296,6 +294,8 @@ def _(StepSnapshot, get_racer_color, math):
         for space_idx, racers_here in occupancy.items():
             bx, by, brot = positions_map[space_idx]
             count = len(racers_here)
+
+            # Jitter logic
             if count == 1:
                 offsets = [(0, 0)]
             elif count == 2:
@@ -313,41 +313,59 @@ def _(StepSnapshot, get_racer_color, math):
                 cx = bx + (ox * math.cos(rad) - oy * math.sin(rad))
                 cy = by + (ox * math.sin(rad) + oy * math.cos(rad))
 
-                stroke = "yellow" if racer["is_current"] else "white"
+                # Highlight current racer with white glow, others standard
+                stroke = "#fff" if racer["is_current"] else "#000"
                 width = "3" if racer["is_current"] else "1.5"
+
+                # Make non-current racers slightly transparent if crowded? No, solid is better for visibility against dark.
 
                 svg_elements.append(f"<g>")
                 svg_elements.append(f"<title>{_html.escape(racer['tooltip'])}</title>")
 
                 svg_elements.append(
-                    f'<circle cx="{cx}" cy="{cy}" r="8" fill="{racer["color"]}" stroke="{stroke}" stroke-width="{width}" />'
+                    f'<circle cx="{cx}" cy="{cy}" r="9" fill="{racer["color"]}" stroke="{stroke}" stroke-width="{width}" />'
                 )
 
-                # Add racer name below the circle
+                # Name label with dark background stroke for readability
                 svg_elements.append(
-                    f'<text x="{cx}" y="{cy + 20}" font-family="sans-serif" font-size="13" '
+                    f'<text x="{cx}" y="{cy + 22}" font-family="sans-serif" font-size="14" '
                     f'font-weight="900" text-anchor="middle" fill="{racer["color"]}" '
-                    f'style="paint-order: stroke; stroke: rgba(255,255,255,0.9); stroke-width: 4px;">'
+                    f'style="paint-order: stroke; stroke: #111; stroke-width: 5px;">'
                     f"{_html.escape(racer['name'])}</text>"
                 )
 
                 if racer["tripped"]:
                     svg_elements.append(
-                        f'<text x="{cx}" y="{cy}" dy="4" fill="red" font-weight="bold" text-anchor="middle">X</text>'
+                        f'<text x="{cx}" y="{cy}" dy="4" fill="#ff0000" font-weight="bold" font-size="14" text-anchor="middle">X</text>'
                     )
 
                 svg_elements.append(f"</g>")
 
-        # 4. Dice Roll Overlay (TOP RIGHT, Tight layout)
+        svg_elements.append("</g>")  # Close track scale group
+
+        # 4. Dice Roll Overlay (CENTERED)
+        # Center of the oval loop is roughly:
+        # X = start_x + straight_len/2 = 120 + 175 = 295
+        # Y = start_y - radius = 350 - 100 = 250
+        # Scaled: 295 * 1.4 + 100 = ~513, 250 * 1.4 - 50 = ~300
+
+        center_x = (120 + 350 / 2) * scale_factor + trans_x
+        center_y = (350 - 100) * scale_factor + trans_y
+
         roll = turn_data.last_roll
+        # Dice Box
         svg_elements.append(
-            f'<text x="680" y="50" font-size="40" text-anchor="end" fill="#333">🎲 {roll}</text>'
+            f'<rect x="{center_x - 60}" y="{center_y - 40}" width="120" height="80" rx="10" fill="#222" stroke="#444" stroke-width="2"/>'
+        )
+        svg_elements.append(
+            f'<text x="{center_x}" y="{center_y}" dy="10" font-size="50" font-weight="bold" text-anchor="middle" fill="#eee">🎲 {roll}</text>'
         )
 
-        return f"""<svg width="700" height="400" style="background:#eef; border:2px solid #ccc; border-radius:8px;">
-            <ellipse cx="350" cy="260" rx="150" ry="70" fill="#C8E6C9" stroke="none"/>
+        return f"""<svg width="{W}" height="{H}" style="background:#1e1e1e; border:2px solid #333; border-radius:8px;">
+            {track_group_start}
             {"".join(svg_elements)}
         </svg>"""
+
     return (render_game_track,)
 
 
@@ -1072,7 +1090,7 @@ def _(current_data, current_turn_idx, mo, step_history, turn_map):
         log_ui = mo.vstack(
             [
                 mo.Html(
-                    f"""<div id="{container_id}" style="height:600px; overflow-y:auto; background:#1e1e1e; font-family:monospace;">{full_html}</div>"""
+                    f"""<div id="{container_id}" style="height:750px; overflow-y:auto; background:#1e1e1e; font-family:monospace;">{full_html}</div>"""
                 ),
                 mo.iframe(scroll_script, width="0", height="0"),
             ]
