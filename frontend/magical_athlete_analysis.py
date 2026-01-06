@@ -2292,5 +2292,229 @@ def _(
     return
 
 
+@app.cell
+def _(alt, df_positions_f, df_racer_results_f, get_racer_color, mo, pl):
+    # --- 1. PREP: GROSS SPEED (ACCURATE) ---
+    df_pos_long = (
+        df_positions_f.unpivot(
+            index=["config_hash", "turn_index"],
+            on=["pos_r0", "pos_r1", "pos_r2", "pos_r3", "pos_r4", "pos_r5"],
+            variable_name="racer_slot",
+            value_name="position",
+        )
+        .with_columns(
+            pl.col("racer_slot")
+            .str.extract(r"pos_r(\d+)", 1)
+            .cast(pl.Int64)
+            .alias("racer_id")
+        )
+        .filter(pl.col("position").is_not_null())
+        .sort(["config_hash", "racer_id", "turn_index"])
+    )
+
+    df_gross_dist = (
+        df_pos_long.with_columns(
+            pl.col("position")
+            .shift(1)
+            .over(["config_hash", "racer_id"])
+            .alias("prev_pos")
+        )
+        .with_columns(
+            (pl.col("position") - pl.col("prev_pos").fill_null(0)).alias("move_delta")
+        )
+        .filter(pl.col("move_delta") > 0)
+        .group_by(["config_hash", "racer_id"])
+        .agg(pl.col("move_delta").sum().alias("gross_distance"))
+    )
+
+    # --- 2. PREP: LATE GAME STATE (66% SNAPSHOT) ---
+    winner_turns = (
+        df_racer_results_f.filter(pl.col("rank") == 1)
+        .group_by("config_hash")
+        .agg(
+            (pl.col("turns_taken").min() * 0.66)
+            .floor()
+            .cast(pl.Int32)
+            .alias("snapshot_turn")
+        )
+    )
+
+    df_snap_pos = df_pos_long.join(winner_turns, on="config_hash").filter(
+        pl.col("turn_index") == pl.col("snapshot_turn")
+    )
+
+    df_race_medians = df_snap_pos.group_by("config_hash").agg(
+        pl.col("position").median().alias("median_pos_at_snap")
+    )
+
+    df_late_game = (
+        df_snap_pos.join(df_race_medians, on="config_hash")
+        .with_columns(
+            (pl.col("position") - pl.col("median_pos_at_snap")).alias(
+                "pos_diff_from_median"
+            )
+        )
+        .select(["config_hash", "racer_id", "pos_diff_from_median"])
+    )
+
+    # --- 3. MERGE EVERYTHING ---
+    df_full_analysis = (
+        df_racer_results_f.join(
+            df_gross_dist, on=["config_hash", "racer_id"], how="left"
+        )
+        .join(df_late_game, on=["config_hash", "racer_id"], how="left")
+        .with_columns(
+            [
+                (pl.col("turns_taken") - pl.col("recovery_turns"))
+                .clip(lower_bound=1)
+                .alias("rolling_turns"),
+                pl.col("turns_taken").clip(lower_bound=1).alias("total_turns"),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("gross_distance") / pl.col("total_turns")).alias("speed_gross"),
+                (pl.col("sum_dice_rolled") / pl.col("total_turns")).alias(
+                    "dice_per_turn"
+                ),
+                (pl.col("sum_dice_rolled") / pl.col("rolling_turns")).alias(
+                    "dice_per_rolling_turn"
+                ),
+                (pl.col("sum_dice_rolled_final") / pl.col("rolling_turns")).alias(
+                    "final_roll_per_rolling_turn"
+                ),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("speed_gross") - pl.col("dice_per_turn")).alias(
+                    "non_dice_movement"
+                )
+            ]
+        )
+    )
+
+    # --- 4. CALCULATE CORRELATIONS ---
+    df_correlations = df_full_analysis.group_by("racer_name").agg(
+        [
+            # Chart 1
+            pl.corr("sum_dice_rolled", "final_vp").alias("corr_dice_vp"),
+            pl.corr("non_dice_movement", "final_vp").alias("corr_ability_move_vp"),
+            # Chart 2
+            # FIX APPLIED HERE: Multiply by -1
+            # Original: High ID (Last) -> High VP = Positive Corr.
+            # Inverted: Low ID (First) -> High VP = Positive Corr.
+            (pl.corr("racer_id", "final_vp") * -1).alias("corr_start_rank_vp"),
+            pl.corr("pos_diff_from_median", "final_vp").alias("corr_midgame_lead_vp"),
+            # Context
+            pl.col("non_dice_movement").mean().alias("avg_ability_move"),
+            pl.col("final_vp").mean().alias("avg_vp"),
+        ]
+    )
+
+    # --- 5. SANITY TABLE ---
+    df_sanity_table = (
+        df_full_analysis.group_by("racer_name")
+        .agg(
+            [
+                pl.col("turns_taken").mean().round(2).alias("avg_turns"),
+                pl.col("rolling_turns").mean().round(2).alias("avg_rolling_turns"),
+                pl.col("dice_per_rolling_turn").mean().round(2).alias("dice_per_turn"),
+                pl.col("final_roll_per_rolling_turn")
+                .mean()
+                .round(2)
+                .alias("final_roll_per_turn"),
+                pl.col("speed_gross").mean().round(2).alias("accurate_speed (gross)"),
+                pl.col("non_dice_movement")
+                .mean()
+                .round(2)
+                .alias("ability_mvmt_per_turn"),
+            ]
+        )
+        .sort("ability_mvmt_per_turn", descending=True)
+    )
+
+    # --- 6. PLOTTING ---
+    _r_list = df_correlations["racer_name"].unique().to_list()
+    _c_list = [get_racer_color(r) for r in _r_list]
+
+    def _make_scatter(x_col, y_col, x_title, y_title, title, x_domain=None):
+        x_vals = df_correlations[x_col].drop_nulls().to_list()
+        y_vals = df_correlations[y_col].drop_nulls().to_list()
+
+        pad_x = (max(x_vals) - min(x_vals)) * 0.1
+        pad_y = (max(y_vals) - min(y_vals)) * 0.1
+
+        base = alt.Chart(df_correlations).encode(
+            color=alt.Color(
+                "racer_name",
+                scale=alt.Scale(domain=_r_list, range=_c_list),
+                legend=None,
+            ),
+            tooltip=[
+                "racer_name",
+                alt.Tooltip(x_col, format=".2f"),
+                alt.Tooltip(y_col, format=".2f"),
+            ],
+        )
+
+        points = base.mark_circle(size=140, opacity=0.8).encode(
+            x=alt.X(
+                x_col,
+                title=x_title,
+                scale=alt.Scale(domain=[min(x_vals) - pad_x, max(x_vals) + pad_x]),
+            ),
+            y=alt.Y(
+                y_col,
+                title=y_title,
+                scale=alt.Scale(domain=[min(y_vals) - pad_y, max(y_vals) + pad_y]),
+            ),
+        )
+
+        text = points.mark_text(dy=-15, fontSize=11, fontWeight="bold").encode(
+            text="racer_name"
+        )
+
+        rule_x = (
+            alt.Chart(pl.DataFrame({"x": [0]}))
+            .mark_rule(strokeDash=[4, 4], color="#ccc")
+            .encode(x="x")
+        )
+        rule_y = (
+            alt.Chart(pl.DataFrame({"y": [0]}))
+            .mark_rule(strokeDash=[4, 4], color="#ccc")
+            .encode(y="y")
+        )
+
+        return (rule_x + rule_y + points + text).properties(
+            title=title, width=500, height=450
+        )
+
+    chart1 = _make_scatter(
+        "corr_ability_move_vp",
+        "corr_dice_vp",
+        "Ability Move Dependency (Corr)",
+        "Dice Dependency (Corr)",
+        "1. Sources of Victory: Muscle vs Magic",
+    )
+
+    chart2 = _make_scatter(
+        "corr_start_rank_vp",
+        "corr_midgame_lead_vp",
+        "Start Pos Bias (Positive = Favors 1st)",
+        "Mid-Game Bias (Positive = Favors Leading)",
+        "2. Momentum: Frontrunner vs Comeback",
+    )
+
+    # --- 7. OUTPUT ---
+    mo.vstack(
+        [
+            mo.hstack([chart1, chart2]),
+            mo.ui.table(df_sanity_table, selection=None, label="Racer Movement Stats"),
+        ]
+    )
+    return
+
+
 if __name__ == "__main__":
     app.run()
