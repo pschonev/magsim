@@ -30,7 +30,6 @@ def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-
     return (
         BOARD_DEFINITIONS,
         Console,
@@ -211,63 +210,31 @@ def _(StepSnapshot, get_racer_color, math):
     def render_game_track(turn_data: StepSnapshot, positions_map, colors_map):
         import html as _html
 
-        def _label_layout_from_offset(ox: float, oy: float):
-            # Decide whether label should go vertical or horizontal
-            if abs(oy) >= abs(ox):
-                # above/below
-                dy = -22 if oy < 0 else 22
-                return {"dx": 0, "dy": dy, "anchor": "middle", "baseline": "middle"}
-            else:
-                # left/right
-                dx = -34 if ox < 0 else 34
-                return {
-                    "dx": dx,
-                    "dy": 5,  # small downshift looks nicer for side labels
-                    "anchor": "end" if ox < 0 else "start",
-                    "baseline": "middle",
-                }
-
         if not turn_data:
             return "<p>No Data</p>"
 
         svg_elements = []
 
         # Dimensions & Scaling
-        # Original: 700x400. Request: ~1.7x wider/taller.
-        # Let's go with 1100x650 for a spacious, dark layout.
-        W, H = 1100, 650
+        W, H = 1000, 600
+        scale_factor = 1.45
+        trans_x = 50
+        trans_y = -60
+        rw, rh = 50, 30
 
-        # We need to scale the board positions (originally centered around 120,350 with radius 100).
-        # Original generation: start_x=120, start_y=350, straight_len=350, radius=100.
-        # The track is roughly 700px wide.
-        # We can apply a scaling transform to the group containing the track.
-        scale_factor = 1.70
-        trans_x = 40
-        trans_y = -120
-
-        rw, rh = 50, 30  # Tile size
-
-        # 1. Dark Theme Backgrounds
-        # Background rect for the whole SVG
-        # Using a group for the track to scale it up
+        # 1. Track Groups
         track_group_start = (
             f'<g transform="translate({trans_x}, {trans_y}) scale({scale_factor})">'
         )
 
-        # 2. Track spaces (Dark Grey Theme)
+        # 2. Track Spaces
         for i, (cx, cy, rot) in enumerate(positions_map):
             transform = f"rotate({rot}, {cx}, {cy})"
-
-            # Darker tiles: #333 fill, #555 stroke.
-            # Special tiles (Start/Finish) can keep a subtle tint or be distinct.
-            # Original logic had colors_map passed in. We'll override for dark mode consistency
-            # unless it's the start/finish.
-
-            fill_color = "#333333"  # Default dark grey
+            fill_color = "#333333"
             if i == 0:
-                fill_color = "#2E7D32"  # Dark Green start
+                fill_color = "#2E7D32"
             elif i == len(positions_map) - 1:
-                fill_color = "#C62828"  # Dark Red finish
+                fill_color = "#C62828"
 
             svg_elements.append(
                 f'<rect x="{cx - rw / 2:.1f}" y="{cy - rh / 2:.1f}" width="{rw}" height="{rh}" '
@@ -284,18 +251,11 @@ def _(StepSnapshot, get_racer_color, math):
             draw_pos = min(pos, len(positions_map) - 1)
             name = turn_data.names[idx]
 
-            # Tooltip
             mods = turn_data.modifiers
             abils = turn_data.abilities
             mod_str = str(mods[idx]) if idx < len(mods) else "[]"
             abil_str = str(abils[idx]) if idx < len(abils) else "[]"
-
-            tooltip_text = (
-                f"{name} (ID: {idx}) - VP: {turn_data.vp[idx]}\n"
-                f"Pos: {pos} | Tripped: {turn_data.tripped[idx]}\n"
-                f"Abilities: {abil_str}\n"
-                f"Modifiers: {mod_str}"
-            )
+            tooltip_text = f"{name} (ID: {idx})\nVP: {turn_data.vp[idx]}\nTripped: {turn_data.tripped[idx]}\nAbils: {abil_str}\nMods: {mod_str}"
 
             occupancy.setdefault(draw_pos, []).append(
                 {
@@ -307,11 +267,12 @@ def _(StepSnapshot, get_racer_color, math):
                 }
             )
 
+        # Render Racers
         for space_idx, racers_here in occupancy.items():
             bx, by, brot = positions_map[space_idx]
             count = len(racers_here)
 
-            # Jitter logic
+            # Offset logic (Tile Relative)
             if count == 1:
                 offsets = [(0, 0)]
             elif count == 2:
@@ -325,55 +286,73 @@ def _(StepSnapshot, get_racer_color, math):
                 if i >= len(offsets):
                     break
                 ox, oy = offsets[i]
+
+                # Calculate Screen Position
                 rad = math.radians(brot)
                 cx = bx + (ox * math.cos(rad) - oy * math.sin(rad))
                 cy = by + (ox * math.sin(rad) + oy * math.cos(rad))
 
-                # Highlight current racer with white glow, others standard
+                # --- NEW LABEL LOGIC ---
+                # Determine visual offset from the center of the tile (bx, by)
+                vis_dx = cx - bx
+                vis_dy = cy - by
+
+                # Defaults
+                text_anchor = "middle"
+                dy_text = 24  # Default below
+                tx = cx
+                ty = cy
+
+                if count > 1:
+                    # Directional Logic: Push label away from cluster center
+                    if abs(vis_dy) > abs(vis_dx):
+                        # Vertical Dominance
+                        if vis_dy < 0:  # Top
+                            dy_text = -14
+                        else:  # Bottom
+                            dy_text = 24
+                    else:
+                        # Horizontal Dominance
+                        dy_text = 5  # Centered vertically
+                        if vis_dx < 0:  # Left
+                            text_anchor = "end"
+                            tx = cx - 14
+                        else:  # Right
+                            text_anchor = "start"
+                            tx = cx + 14
+
                 stroke = "#fff" if racer["is_current"] else "#000"
                 width = "3" if racer["is_current"] else "1.5"
-
-                # Make non-current racers slightly transparent if crowded? No, solid is better for visibility against dark.
 
                 svg_elements.append(f"<g>")
                 svg_elements.append(f"<title>{_html.escape(racer['tooltip'])}</title>")
 
+                # Dot
                 svg_elements.append(
                     f'<circle cx="{cx}" cy="{cy}" r="9" fill="{racer["color"]}" stroke="{stroke}" stroke-width="{width}" />'
                 )
 
-                # Name label with dark background stroke for readability
-                _name_layout = _label_layout_from_offset(ox, oy)
-
+                # Label
                 svg_elements.append(
-                    f'<text x="{cx + _name_layout["dx"]}" y="{cy + _name_layout["dy"]}" '
-                    f'font-family="sans-serif" font-size="14" font-weight="900" '
-                    f'text-anchor="{_name_layout["anchor"]}" dominant-baseline="{_name_layout["baseline"]}" '
-                    f'fill="{racer["color"]}" '
-                    f'style="paint-order: stroke; stroke: #111; stroke-width: 5px;">'
+                    f'<text x="{tx}" y="{ty}" dy="{dy_text}" font-family="sans-serif" font-size="13" '
+                    f'font-weight="900" text-anchor="{text_anchor}" fill="{racer["color"]}" '
+                    f'style="paint-order: stroke; stroke: #111; stroke-width: 4px;">'
                     f"{_html.escape(racer['name'])}</text>"
                 )
 
                 if racer["tripped"]:
                     svg_elements.append(
-                        f'<text x="{cx}" y="{cy}" dy="4" fill="#ff0000" font-weight="bold" font-size="14" text-anchor="middle">X</text>'
+                        f'<text x="{cx}" y="{cy}" dy="5" fill="#ff0000" font-weight="bold" font-size="14" text-anchor="middle">X</text>'
                     )
-
                 svg_elements.append(f"</g>")
 
         svg_elements.append("</g>")  # Close track scale group
 
-        # 4. Dice Roll Overlay (CENTERED)
-        # Center of the oval loop is roughly:
-        # X = start_x + straight_len/2 = 120 + 175 = 295
-        # Y = start_y - radius = 350 - 100 = 250
-        # Scaled: 295 * 1.4 + 100 = ~513, 250 * 1.4 - 50 = ~300
-
+        # 4. Dice Roll (Centered)
         center_x = (120 + 350 / 2) * scale_factor + trans_x
         center_y = (350 - 100) * scale_factor + trans_y
-
         roll = turn_data.last_roll
-        # Dice Box
+
         svg_elements.append(
             f'<rect x="{center_x - 60}" y="{center_y - 40}" width="120" height="80" rx="10" fill="#222" stroke="#444" stroke-width="2"/>'
         )
@@ -385,7 +364,6 @@ def _(StepSnapshot, get_racer_color, math):
             {track_group_start}
             {"".join(svg_elements)}
         </svg>"""
-
     return (render_game_track,)
 
 
@@ -1290,7 +1268,7 @@ def _(mo):
     return (matchup_metric_toggle,)
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(df_positions_f, df_racer_results_f, df_races_f, pl):
     # 2. HEAVY COMPUTATION CELL
 
@@ -1765,9 +1743,15 @@ def _(
 
         if quad_labels and len(quad_labels) == 4:
             if reverse_x:
-                left_x, right_x = view_max_x - (pad_x * 0.5), view_min_x + (pad_x * 0.5)
+                left_x, right_x = (
+                    view_max_x - (pad_x * 0.5),
+                    view_min_x + (pad_x * 0.5),
+                )
             else:
-                left_x, right_x = view_min_x + (pad_x * 0.5), view_max_x - (pad_x * 0.5)
+                left_x, right_x = (
+                    view_min_x + (pad_x * 0.5),
+                    view_max_x - (pad_x * 0.5),
+                )
             top_y, bot_y = view_max_y - (pad_y * 0.5), view_min_y + (pad_y * 0.5)
 
             text_props = {
@@ -1966,7 +1950,9 @@ def _(
         )
         .resolve_scale(y="independent")
         .properties(
-            width=120, height=200, title="Victory Correlations & Ability Usage by Board"
+            width=120,
+            height=200,
+            title="Victory Correlations & Ability Usage by Board",
         )
     )
 
@@ -2223,23 +2209,29 @@ def _(
 def _(mo):
     from magical_athlete_simulator.core.registry import RACER_ABILITIES
     from magical_athlete_simulator.racers import get_ability_classes
-    from magical_athlete_simulator.core.agent import Autosolvable
+    from magical_athlete_simulator.core.agent import (
+        BooleanInteractive,
+        SelectionInteractive,
+    )
 
     # Get map of Name -> Class
     ability_classes = get_ability_classes()
 
-    # Pythonic filter: Keep racer if ANY of their abilities are Autosolvable
-    autosolvable_racers = [
+    # Pythonic filter: Keep racer if ANY of their abilities are interactive
+    automatic_racers = [
         racer
         for racer, abilities in RACER_ABILITIES.items()
-        if any(
-            issubclass(ability_classes.get(a), Autosolvable)
+        if not any(
+            issubclass(
+                ability_classes.get(a),
+                (BooleanInteractive, SelectionInteractive),
+            )
             for a in abilities
             if ability_classes.get(a)
         )
     ]
 
-    mo.md(f"**Autosolvable Racers:** {', '.join(sorted(autosolvable_racers))}")
+    mo.md(f"**Auto-Racers:** {', '.join(sorted(automatic_racers))}")
     return
 
 

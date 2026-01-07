@@ -54,7 +54,6 @@ ModifierName = Literal[
     "PartySelfBoost",
     "TripTile",
     "VictoryPointTile",
-    # New Modifiers
     "MastermindPrediction",
 ]
 

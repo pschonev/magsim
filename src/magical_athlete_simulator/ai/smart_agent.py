@@ -1,10 +1,12 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, override
 
 from magical_athlete_simulator.core.agent import (
     Agent,
+    BooleanInteractive,
     DecisionContext,
     SelectionDecisionContext,
+    SelectionInteractive,
 )
 
 if TYPE_CHECKING:
@@ -19,14 +21,14 @@ class SmartAgent(Agent):
     def make_boolean_decision(
         self,
         engine: GameEngine,
-        ctx: DecisionContext,
+        ctx: DecisionContext[BooleanInteractive],
     ) -> bool:
         return ctx.source.get_auto_boolean_decision(engine, ctx)
 
     @override
-    def make_selection_decision(
+    def make_selection_decision[R](
         self,
         engine: GameEngine,
-        ctx: SelectionDecisionContext,
-    ) -> Any:
+        ctx: SelectionDecisionContext[SelectionInteractive[R], R],
+    ) -> R | None:
         return ctx.source.get_auto_selection_decision(engine, ctx)

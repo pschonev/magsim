@@ -15,7 +15,6 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "PartyAnimal": {"PartyPull", "PartyBoost"},
     "Romantic": {"RomanticMove"},
     "Scoocher": {"ScoochStep"},
-    # New Racers
     "Skipper": {"SkipperTurn"},
     "Genius": {"GeniusPrediction"},
     "Legs": {"LegsMove5"},

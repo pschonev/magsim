@@ -1,7 +1,12 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Self, override
 
 from magical_athlete_simulator.core.abilities import Ability
+from magical_athlete_simulator.core.agent import (
+    SelectionDecisionContext,
+    SelectionDecisionMixin,
+    SelectionInteractive,
+)
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     AbilityTriggeredEventOrSkipped,
@@ -17,7 +22,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class AbilityGenius(Ability):
+class AbilityGenius(Ability, SelectionDecisionMixin[int]):
     name: AbilityName = "GeniusPrediction"
     triggers: tuple[type[GameEvent], ...] = (
         TurnStartEvent,
@@ -38,9 +43,18 @@ class AbilityGenius(Ability):
         # 1. Prediction Phase (Turn Start)
         if isinstance(event, TurnStartEvent):
             if event.target_racer_idx == owner_idx:
-                # Deterministic fallback: Always predict 6.
-                # (In a real Agent system, this would call agent.make_selection_decision)
-                self.prediction = 6
+                self.prediction = agent.make_selection_decision(
+                    engine,
+                    ctx=SelectionDecisionContext[
+                        SelectionInteractive[int],
+                        int,
+                    ](
+                        source=self,
+                        game_state=engine.state,
+                        source_racer_idx=owner_idx,
+                        options=list(range(1, 7)),
+                    ),
+                )
 
                 engine.log_info(f"{self.name}: Predicts a roll of {self.prediction}.")
                 return AbilityTriggeredEvent(
@@ -73,3 +87,11 @@ class AbilityGenius(Ability):
             )
 
         return "skip_trigger"
+
+    @override
+    def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, int],
+    ) -> int:
+        return 6

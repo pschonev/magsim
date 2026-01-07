@@ -1,11 +1,12 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Self, override
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import (
     Agent,
-    DefaultAutosolvableMixin,
     SelectionDecisionContext,
+    SelectionDecisionMixin,
+    SelectionInteractive,
 )
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
@@ -18,13 +19,12 @@ from magical_athlete_simulator.core.state import RacerState
 from magical_athlete_simulator.engine.flow import mark_finished
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
 @dataclass
-class AbilityMastermindPredict(Ability, DefaultAutosolvableMixin):
+class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
     name: AbilityName = "MastermindPredict"
     triggers: tuple[type[GameEvent], ...] = (TurnStartEvent, RacerFinishedEvent)
 
@@ -46,13 +46,21 @@ class AbilityMastermindPredict(Ability, DefaultAutosolvableMixin):
             if event.target_racer_idx == owner_idx and self.prediction is None:
                 target_racer = agent.make_selection_decision(
                     engine,
-                    ctx=SelectionDecisionContext(
+                    ctx=SelectionDecisionContext[
+                        SelectionInteractive[RacerState],
+                        RacerState,
+                    ](
                         source=self,
                         game_state=engine.state,
                         source_racer_idx=owner_idx,
                         options=engine.state.racers,
                     ),
                 )
+
+                if target_racer is None:
+                    raise AssertionError(
+                        "Mastermind should always have a target to pick, even if it's himself.",
+                    )
 
                 # Store State
                 self.prediction = target_racer.idx
@@ -111,13 +119,12 @@ class AbilityMastermindPredict(Ability, DefaultAutosolvableMixin):
     def get_auto_selection_decision(
         self,
         engine: GameEngine,
-        ctx: SelectionDecisionContext,
-    ) -> RacerState:
+        ctx: SelectionDecisionContext[Self, RacerState],
+    ) -> RacerState | None:
         """
         AI Logic: Predict the racer with the best early-game stats or position.
         """
-        options: list[RacerState] = cast("list[RacerState]", ctx.options)
-        candidates = [r for r in options if r.idx != ctx.source_racer_idx]
+        candidates = [r for r in ctx.options if r.idx != ctx.source_racer_idx]
         if not candidates:
             return engine.get_racer(ctx.source_racer_idx)
         # Sort by position (descending)

@@ -1,20 +1,20 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.core.agent import Agent, DefaultAutosolvableMixin
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     AbilityTriggeredEventOrSkipped,
 )
 
 if TYPE_CHECKING:
+    from magical_athlete_simulator.core.agent import Agent
     from magical_athlete_simulator.core.events import GameEvent
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
 @dataclass
-class Ability(DefaultAutosolvableMixin):
+class Ability:
     """Base class for all racer abilities.
     Enforces a unique name and handles automatic event emission upon execution.
     """

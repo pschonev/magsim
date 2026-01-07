@@ -4,7 +4,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-
 from magical_athlete_simulator.ai.smart_agent import SmartAgent
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
@@ -42,7 +41,6 @@ from magical_athlete_simulator.engine.roll import (
 )
 from magical_athlete_simulator.racers import get_ability_classes
 
-
 if TYPE_CHECKING:
     import random
 
@@ -76,12 +74,12 @@ class HeuristicKey:
 
 @dataclass
 class GameEngine:
-    state: "GameState"
-    rng: "random.Random"
-    log_context: "LogContext"
+    state: GameState
+    rng: random.Random
+    log_context: LogContext
     current_processing_event: ScheduledEvent | None = None
     subscribers: dict[type[GameEvent], list[Subscriber]] = field(default_factory=dict)
-    agents: dict[int, "Agent"] = field(default_factory=dict)
+    agents: dict[int, Agent] = field(default_factory=dict)
 
     # LOOP DETECTION
     # 1. Heuristic History: Tracks (Board+Event) -> Min Queue Size
@@ -91,7 +89,7 @@ class GameEngine:
     event_creation_hashes: dict[int, int] = field(default_factory=dict)
 
     # Callback for external observers
-    on_event_processed: Callable[["GameEngine", GameEvent], None] | None = None
+    on_event_processed: Callable[[GameEngine, GameEvent], None] | None = None
     verbose: bool = True
     _logger: logging.Logger = field(init=False, repr=False)
 
@@ -177,7 +175,7 @@ class GameEngine:
                 self.event_creation_hashes.pop(skipped_sched.serial, None)
 
                 self.log_warning(
-                    f"Infinite loop detected (Exact State Cycle). Dropping recursive event: {skipped_sched.event}"
+                    f"Infinite loop detected (Exact State Cycle). Dropping recursive event: {skipped_sched.event}",
                 )
                 continue
 
@@ -194,7 +192,7 @@ class GameEngine:
             # Checks if we are repeating work on the SAME board state.
             if self._check_heuristic_loop(sched, creation_hash):
                 self.log_warning(
-                    f"Infinite loop detected (Heuristic/Exploding). Dropping: {sched.event}"
+                    f"Infinite loop detected (Heuristic/Exploding). Dropping: {sched.event}",
                 )
                 continue
 
@@ -203,7 +201,9 @@ class GameEngine:
             self._handle_event(sched.event)
 
     def _check_heuristic_loop(
-        self, sched: ScheduledEvent, creation_hash: int | None
+        self,
+        sched: ScheduledEvent,
+        creation_hash: int | None,
     ) -> bool:
         """
         Returns True if a heuristic loop is detected.
@@ -361,7 +361,7 @@ class GameEngine:
             self.subscribers[event_type] = []
         self.subscribers[event_type].append(Subscriber(callback, owner_idx))
 
-    def update_racer_abilities(self, racer_idx: int, new_abilities: set["AbilityName"]):
+    def update_racer_abilities(self, racer_idx: int, new_abilities: set[AbilityName]):
         racer = self.get_racer(racer_idx)
         current_instances = racer.active_abilities
         old_names = set(current_instances.keys())
@@ -439,10 +439,10 @@ class GameEngine:
             self.on_event_processed(self, event)
 
     # -- Getters --
-    def get_agent(self, racer_idx: int) -> "Agent":
+    def get_agent(self, racer_idx: int) -> Agent:
         return self.agents[racer_idx]
 
-    def get_racer(self, idx: int) -> "RacerState":
+    def get_racer(self, idx: int) -> RacerState:
         return self.state.racers[idx]
 
     def get_racer_pos(self, idx: int) -> int:
@@ -452,7 +452,7 @@ class GameEngine:
         self,
         tile_idx: int,
         except_racer_idx: int | None = None,
-    ) -> list["RacerState"]:
+    ) -> list[RacerState]:
         if except_racer_idx is None:
             return [r for r in self.state.racers if r.position == tile_idx and r.active]
         else:

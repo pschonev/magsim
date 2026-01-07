@@ -1,19 +1,24 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Self, override
 
 from magical_athlete_simulator.core.abilities import Ability
+from magical_athlete_simulator.core.agent import (
+    SelectionDecisionContext,
+    SelectionDecisionMixin,
+    SelectionInteractive,
+)
 from magical_athlete_simulator.core.events import GameEvent, Phase, TurnStartEvent
+from magical_athlete_simulator.core.state import RacerState
 from magical_athlete_simulator.engine.movement import push_simultaneous_warp
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
-    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
 @dataclass
-class FlipFlopSwap(Ability):
+class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
     name: AbilityName = "FlipFlopSwap"
     triggers: tuple[type[GameEvent], ...] = (TurnStartEvent,)
 
@@ -36,20 +41,21 @@ class FlipFlopSwap(Ability):
         if not ff.active or ff.finished:
             return "skip_trigger"
 
-        # AI decision: pick someone at least 6 ahead (strictly greater position)
-        candidates: list[RacerState] = [
-            c
-            for c in engine.state.racers
-            if (c.position - ff.position) >= 6 and c.active
-        ]
-        if not candidates:
-            return "skip_trigger"
-
-        # Choose the one furthest ahead
-        target = max(
-            candidates,
-            key=lambda r: r.position,
+        target = agent.make_selection_decision(
+            engine,
+            ctx=SelectionDecisionContext[
+                SelectionInteractive[RacerState],
+                RacerState,
+            ](
+                source=self,
+                game_state=engine.state,
+                source_racer_idx=owner_idx,
+                options=engine.state.racers,
+            ),
         )
+
+        if target is None:
+            return "skip_trigger"
 
         ff_pos = ff.position
         target_pos = target.position
@@ -70,3 +76,25 @@ class FlipFlopSwap(Ability):
         ff.main_move_consumed = True
 
         return "skip_trigger"
+
+    @override
+    def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, RacerState],
+    ) -> RacerState | None:
+        # pick someone at least 6 ahead (strictly greater position)
+        candidates: list[RacerState] = [
+            c
+            for c in ctx.options
+            if (c.position - engine.get_racer_pos(ctx.source_racer_idx)) >= 6
+            and c.active
+        ]
+        if not candidates:
+            return None
+
+        # Choose the one furthest ahead
+        return max(
+            candidates,
+            key=lambda r: r.position,
+        )

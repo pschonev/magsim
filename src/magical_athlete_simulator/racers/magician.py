@@ -1,9 +1,10 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Self, override
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import (
     Agent,
+    BooleanDecisionMixin,
     DecisionContext,
 )
 from magical_athlete_simulator.core.events import (
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class AbilityMagicalReroll(Ability):
+class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
     name: AbilityName = "MagicalReroll"
     triggers: tuple[type[GameEvent], ...] = (RollModificationWindowEvent,)
 
@@ -72,6 +73,6 @@ class AbilityMagicalReroll(Ability):
     def get_auto_boolean_decision(
         self,
         engine: GameEngine,
-        ctx: DecisionContext,
+        ctx: DecisionContext[Self],
     ) -> bool:
         return ctx.game_state.roll_state.base_value <= 3

@@ -1,80 +1,77 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Self, override, runtime_checkable
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.abilities import Ability
+    from collections.abc import Sequence
+
     from magical_athlete_simulator.core.state import GameState
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
+@runtime_checkable
+class BooleanInteractive(Protocol):
+    def get_auto_boolean_decision(
+        self,
+        engine: GameEngine,
+        ctx: DecisionContext[Self],
+    ) -> bool: ...
+
+
+@runtime_checkable
+class SelectionInteractive[R](Protocol):
+    def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, R],
+    ) -> R | None: ...
+
+
 @dataclass
-class DecisionContext:
-    source: Ability
+class DecisionContext[T]:
+    source: T
     game_state: GameState
     source_racer_idx: int
 
 
 @dataclass
-class SelectionDecisionContext(DecisionContext):
-    options: list[Any]
+class SelectionDecisionContext[T, R](DecisionContext[T]):
+    options: Sequence[R]
 
 
-@runtime_checkable
-class Autosolvable(Protocol):
-    """Protocol for any object that can answer its own decision requests."""
-
+class BooleanDecisionMixin(BooleanInteractive, ABC):
+    @override
+    @abstractmethod
     def get_auto_boolean_decision(
         self,
         engine: GameEngine,
-        ctx: DecisionContext,
-    ) -> bool: ...
-    def get_auto_selection_decision(
-        self,
-        engine: GameEngine,
-        ctx: DecisionContext,
-    ) -> int: ...
-
-
-class DefaultAutosolvableMixin:
-    """
-    Mixin that provides safe, 'dumb' default behavior.
-    Inherit from this in your Ability class to make it Autosolvable.
-    """
-
-    def get_auto_boolean_decision(
-        self,
-        engine: GameEngine,
-        ctx: DecisionContext,
+        ctx: DecisionContext[Self],
     ) -> bool:
-        # Default: Always say No to optional things
-        _ = ctx, engine
-        return False
+        raise NotImplementedError
 
+
+class SelectionDecisionMixin[R](SelectionInteractive[R], ABC):
+    @override
+    @abstractmethod
     def get_auto_selection_decision(
         self,
         engine: GameEngine,
-        ctx: SelectionDecisionContext,
-    ) -> Any:
-        # Default: Always pick the first option
-        _ = ctx, engine
-        return ctx.options[0]
+        ctx: SelectionDecisionContext[Self, R],
+    ) -> R | None:
+        raise NotImplementedError
 
 
 class Agent:
-    """Base Agent that knows how to handle context but not specific rules."""
-
     def make_boolean_decision(
         self,
         engine: GameEngine,
-        ctx: DecisionContext,
+        ctx: DecisionContext[BooleanInteractive],
     ) -> bool:
-        _ = ctx, engine
-        return NotImplemented
+        return ctx.source.get_auto_boolean_decision(engine, ctx)
 
-    def make_selection_decision(
+    def make_selection_decision[R](
         self,
         engine: GameEngine,
-        ctx: SelectionDecisionContext,
-    ) -> Any:
-        _ = ctx, engine
-        return NotImplemented
+        ctx: SelectionDecisionContext[SelectionInteractive[R], R],
+    ) -> R | None:
+        return ctx.source.get_auto_selection_decision(engine, ctx)
