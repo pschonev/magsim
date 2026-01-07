@@ -41,7 +41,6 @@ def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-
     return (
         BOARD_DEFINITIONS,
         Console,
@@ -376,7 +375,6 @@ def _(StepSnapshot, get_racer_color, math):
             {track_group_start}
             {"".join(svg_elements)}
         </svg>"""
-
     return (render_game_track,)
 
 
@@ -1561,33 +1559,63 @@ def _(df_positions_f, df_racer_results_f, df_races_f, mo, pl, selected_racers):
             )
             .join(df_late_game, on=["config_hash", "racer_id"], how="left")
             .with_columns(
+                # 1. Fill basic nulls
                 pl.col("gross_distance").fill_null(0),
                 pl.col("pos_diff_from_median").fill_null(0),
-                pl.col("turns_taken").clip(lower_bound=1).alias("total_turns"),
+                # 2. Define Raw Denominators
+                pl.col("turns_taken").alias("total_turns_raw"),
                 (
                     pl.col("turns_taken")
                     - pl.col("recovery_turns")
                     - pl.col("skipped_main_moves")
-                )
-                .clip(lower_bound=1)
-                .alias("rolling_turns"),
+                ).alias("rolling_turns_raw"),
             )
             .with_columns(
-                (pl.col("gross_distance") / pl.col("total_turns")).alias("speed_gross"),
-                (pl.col("sum_dice_rolled") / pl.col("rolling_turns")).alias(
+                # 3. THE FIX: Convert 0 -> Null (None)
+                # This tells Polars "Do not count this row in averages"
+                pl.when(pl.col("total_turns_raw") <= 0)
+                .then(None)
+                .otherwise(pl.col("total_turns_raw"))
+                .alias("total_turns_clean"),
+                pl.when(pl.col("rolling_turns_raw") <= 0)
+                .then(None)
+                .otherwise(pl.col("rolling_turns_raw"))
+                .alias("rolling_turns_clean"),
+            )
+            .with_columns(
+                # 4. Apply Specific Denominators
+                # A. MOVEMENT (Uses Total Turns)
+                # If total_turns is Null, speed becomes Null (ignored in avg), which is correct.
+                (pl.col("gross_distance") / pl.col("total_turns_clean")).alias(
+                    "speed_gross"
+                ),
+                # B. ABILITIES (Uses Total Turns)
+                (pl.col("ability_trigger_count") / pl.col("total_turns_clean")).alias(
+                    "triggers_per_turn"
+                ),
+                (
+                    pl.col("ability_self_target_count") / pl.col("total_turns_clean")
+                ).alias("self_per_turn"),
+                (pl.col("ability_target_count") / pl.col("total_turns_clean")).alias(
+                    "target_per_turn"
+                ),
+                # C. DICE (Uses Rolling Turns)
+                # Only calculated if they actually rolled.
+                (pl.col("sum_dice_rolled") / pl.col("rolling_turns_clean")).alias(
                     "dice_per_turn"
                 ),
-                (pl.col("sum_dice_rolled") / pl.col("rolling_turns")).alias(
+                (pl.col("sum_dice_rolled") / pl.col("rolling_turns_clean")).alias(
                     "dice_per_rolling_turn"
                 ),
-                (pl.col("sum_dice_rolled_final") / pl.col("rolling_turns")).alias(
+                (pl.col("sum_dice_rolled_final") / pl.col("rolling_turns_clean")).alias(
                     "final_roll_per_rolling_turn"
                 ),
             )
             .with_columns(
-                (pl.col("speed_gross") - pl.col("dice_per_turn")).alias(
-                    "non_dice_movement"
-                )
+                (
+                    (pl.col("gross_distance") - pl.col("sum_dice_rolled"))
+                    / pl.col("total_turns_clean")
+                ).alias("non_dice_movement")
             )
         )
 
@@ -1622,7 +1650,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, mo, pl, selected_racers):
                         "race_volatility_score",
                         "race_avg_triggers",
                         "race_avg_trip_rate",
-                        "total_turns",
+                        pl.col("total_turns").alias("race_global_turns"),
                     ]
                 ),
                 on="config_hash",
@@ -1640,7 +1668,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, mo, pl, selected_racers):
                 pl.col("race_volatility_score").mean().alias("avg_race_volatility"),
                 pl.col("race_avg_triggers").mean().alias("avg_env_triggers"),
                 pl.col("race_avg_trip_rate").mean().alias("avg_env_trip_rate"),
-                pl.col("total_turns").mean().alias("avg_game_duration"),
+                pl.col("race_global_turns").mean().alias("avg_game_duration"),
                 # Movement / Dice
                 pl.col("non_dice_movement").mean().alias("avg_ability_move"),
                 pl.col("speed_gross").mean().alias("avg_speed_gross"),
@@ -1648,15 +1676,9 @@ def _(df_positions_f, df_racer_results_f, df_races_f, mo, pl, selected_racers):
                 pl.col("dice_per_rolling_turn").mean().alias("avg_dice_rolling"),
                 pl.col("final_roll_per_rolling_turn").mean().alias("avg_final_roll"),
                 # Ability usage
-                (pl.col("ability_trigger_count") / pl.col("total_turns"))
-                .mean()
-                .alias("triggers_per_turn"),
-                (pl.col("ability_self_target_count") / pl.col("total_turns"))
-                .mean()
-                .alias("self_per_turn"),
-                (pl.col("ability_target_count") / pl.col("total_turns"))
-                .mean()
-                .alias("target_per_turn"),
+                pl.col("triggers_per_turn").mean(),
+                pl.col("self_per_turn").mean(),
+                pl.col("target_per_turn").mean(),
             )
         )
 
@@ -1664,7 +1686,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, mo, pl, selected_racers):
         corr_df = (
             stats_results.group_by("racer_name")
             .agg(
-                pl.corr("sum_dice_rolled", "final_vp").alias("dice_dependency"),
+                pl.corr("dice_per_turn", "final_vp").alias("dice_dependency"),
                 pl.corr("non_dice_movement", "final_vp").alias(
                     "ability_move_dependency"
                 ),
@@ -1979,7 +2001,7 @@ def _(
         "Ability Move Dep (Corr to VP)",
         "Dice Dep (Corr to VP)",
         False,
-        ["Ability-Driven", "Hybrid Winner", "Low Signal", "Dice-Driven"],
+        ["Dice-Driven", "Hybrid Winner", "Low Signal", "Ability-Driven"],
         extra_tooltips=[
             alt.Tooltip("avg_ability_move:Q", format=".2f", title="Ability Mvmt/Turn"),
             alt.Tooltip("avg_dice_rolling:Q", format=".2f", title="Dice/Rolling Turn"),
