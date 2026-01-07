@@ -41,15 +41,19 @@ class AbilityCopyLead(Ability):
         me = engine.get_racer(owner_idx)
         racers = engine.state.racers
 
-        # 1. Find all racers who are strictly ahead of Copycat
-        potential_targets = [
-            r for r in racers if r.position > me.position and not r.finished
-        ]
+        active_racers = [r for r in racers if not r.finished and r.idx != owner_idx]
+        if not active_racers:
+            potential_targets = []
+        else:
+            max_pos = max(r.position for r in active_racers)
+            potential_targets = [r for r in active_racers if r.position == max_pos]
+            engine.log_info(f"{potential_targets=}")
 
         if not potential_targets:
             # Only log at TurnStart to avoid spamming logs on every move
             if isinstance(event, TurnStartEvent):
                 engine.log_info(f"{self.name}: No one ahead to copy.")
+            engine.update_racer_abilities(owner_idx, new_abilities={self.name})
             return "skip_trigger"
 
         # 2. Find the highest position among those ahead
@@ -68,16 +72,20 @@ class AbilityCopyLead(Ability):
                 options=leaders,
             ),
         )
+        if target is None:
+            return "skip_trigger"
 
         # Optimization: Don't copy if abilities are identical
-        if me.abilities == target.abilities:
+        if not me.abilities.isdisjoint(target.abilities):
             return "skip_trigger"
 
         engine.log_info(f"{self.name}: {me.repr} decided to copy {target.repr}.")
 
         # 4. Perform the Update
         # This registers the new ability with the engine, but it won't run in the current loop.
-        engine.update_racer_abilities(owner_idx, target.abilities)
+        new_abilities = set(target.abilities)
+        new_abilities.add(self.name)
+        engine.update_racer_abilities(owner_idx, new_abilities)
 
         # 5. IMMEDIATE TRIGGER CHECK
         # Because the engine loop over subscribers is already running, the new ability
