@@ -1123,26 +1123,76 @@ def _(
 
 
 @app.cell
-def _(df_racer_results, df_races, mo):
-    # --- UI CREATION CELL ---
-
-    header = mo.md(
-        """
-        <hr style="margin: 1.25rem 0;" />
-        <h2 style="margin: 0 0 0.5rem 0;">Aggregated Dashboard</h2>
-        <div style="color: #aaa; margin-bottom: 0.75rem;">
-          Filter races by roster, board, and player count (applies to all aggregated charts/tables below).
-        </div>
-        """
+def _():
+    from magical_athlete_simulator.core.registry import RACER_ABILITIES
+    from magical_athlete_simulator.racers import get_ability_classes
+    from magical_athlete_simulator.core.agent import (
+        BooleanInteractive,
+        SelectionInteractive,
     )
 
+    ability_classes = get_ability_classes()
+
+    # Filter: Keep racer if NONE of their abilities are interactive
+    # This checks if the racer class implements the interactive protocols
+    automatic_racers_list = [
+        racer
+        for racer, abilities in RACER_ABILITIES.items()
+        if not any(
+            issubclass(
+                ability_classes.get(a),
+                (BooleanInteractive, SelectionInteractive),
+            )
+            for a in abilities
+            if ability_classes.get(a)
+        )
+    ]
+    return (automatic_racers_list,)
+
+
+@app.cell
+def _(mo):
+    # last_run_config starts as None.
+    # It only updates when "Run Analysis" is clicked.
+    last_run_config, set_last_run_config = mo.state(None)
+    return last_run_config, set_last_run_config
+
+
+@app.cell
+def _(mo):
+    select_auto_racers_btn = mo.ui.run_button(
+        label="🤖 Select automatic racers",
+        kind="neutral",
+        tooltip="Select all racers that do not require human/AI decisions.",
+    )
+    return (select_auto_racers_btn,)
+
+
+@app.cell
+def _(
+    automatic_racers_list,
+    df_racer_results,
+    df_races,
+    mo,
+    select_auto_racers_btn,
+    set_last_run_config,
+):
+    # 1. Prepare Options from RAW Data
     all_racers = sorted(df_racer_results.get_column("racer_name").unique().to_list())
     all_boards = sorted(df_races.get_column("board").unique().to_list())
     all_counts = sorted(df_races.get_column("racer_count").unique().to_list())
 
+    # 2. Handle Auto-Select Logic
+    # Now we can safely read .value because the button was defined in a previous cell
+    if select_auto_racers_btn.value:
+        _current_selection = [r for r in automatic_racers_list if r in all_racers]
+    else:
+        _current_selection = all_racers
+
+    # 3. Define Filter Widgets
     ui_racers = mo.ui.multiselect(
         options=all_racers,
-        value=all_racers,
+        value=_current_selection,
         label="Racers (roster pool)",
     )
     ui_counts = mo.ui.multiselect(
@@ -1156,29 +1206,105 @@ def _(df_racer_results, df_races, mo):
         label="Board(s)",
     )
 
-    # Just display the UI here
-    mo.vstack([header, mo.hstack([ui_racers, ui_counts, ui_boards], justify="start")])
-    return ui_boards, ui_counts, ui_racers
+    matchup_metric_toggle = mo.ui.switch(value=False, label="Show Percentage Shift")
+
+    # 4. Define "Run Analysis" Button with Callback
+    def _submit_filters(_):
+        set_last_run_config(
+            {
+                "racers": ui_racers.value,
+                "boards": ui_boards.value,
+                "counts": ui_counts.value,
+            }
+        )
+
+    run_computation_btn = mo.ui.button(
+        label="🚀 Run Analysis",
+        kind="success",
+        on_click=_submit_filters,
+        tooltip="Click to process data with current filters.",
+    )
+    return (
+        matchup_metric_toggle,
+        run_computation_btn,
+        ui_boards,
+        ui_counts,
+        ui_racers,
+    )
 
 
 @app.cell
 def _(
-    df_positions,
-    df_racer_results,
-    df_races,
+    last_run_config,
+    matchup_metric_toggle,
     mo,
-    pl,
+    run_computation_btn,
+    select_auto_racers_btn,
     ui_boards,
     ui_counts,
     ui_racers,
 ):
-    # --- LOGIC & FILTERING CELL ---
+    # A. Check for "Stale" state (Widgets != Last Run)
+    stale_warning = None
+    if last_run_config() is not None:
+        is_stale = (
+            ui_racers.value != last_run_config()["racers"]
+            or ui_boards.value != last_run_config()["boards"]
+            or ui_counts.value != last_run_config()["counts"]
+        )
+        if is_stale:
+            stale_warning = mo.md(
+                "<div style='color:#DC143C; font-weight:600; margin-top:0.5rem;'>⚠️ Filters Changed: The dashboard below is showing old data. Click 🚀 Run Analysis to update.</div>"
+            )
 
-    selected_racers = list(ui_racers.value)
-    selected_counts = list(ui_counts.value)
-    selected_boards = list(ui_boards.value)
+    # B. Layout
+    header = mo.md(
+        """
+        <hr style="margin: 1.25rem 0;" />
+        <h2 style="margin: 0 0 0.5rem 0;">Aggregated Dashboard</h2>
+        <div style="color: #aaa; margin-bottom: 0.75rem;">
+          Filter races by roster, board, and player count (applies to all aggregated charts/tables below).
+        </div>
+        """
+    )
 
-    # --- Validation ---
+    mo.vstack(
+        [
+            header,
+            mo.hstack(
+                [
+                    ui_racers,
+                    select_auto_racers_btn,
+                    ui_counts,
+                    ui_boards,
+                    run_computation_btn,
+                ],
+                justify="start",
+            ),
+            matchup_metric_toggle,
+            stale_warning if stale_warning else None,
+        ]
+    )
+    return
+
+
+@app.cell
+def _(df_positions, df_racer_results, df_races, last_run_config, mo, pl):
+    # 1. Gate: If never run, stop here.
+    if last_run_config() is None:
+        mo.stop(
+            True,
+            mo.md(
+                "ℹ️ **Waiting for Input**: Adjust filters above and click **🚀 Run Analysis** to generate stats."
+            ),
+        )
+
+    # 2. Unwrap the specific config used for THIS run
+    selected_racers = list(last_run_config()["racers"])
+    selected_counts = list(last_run_config()["counts"])
+    selected_boards = list(last_run_config()["boards"])
+
+    # 3. Validation Logic
     error_msg = None
     if len(selected_boards) == 0:
         error_msg = "Select at least one board."
@@ -1192,15 +1318,15 @@ def _(
                 f"but only {len(selected_racers)} selected."
             )
 
-    # --- Filter Logic ---
+    # 4. Apply Filters (Same logic as before)
     if error_msg is None:
-        # 1. Filter Races by metadata (Board & Count)
+        # Filter Races by metadata
         races_bc = df_races.filter(
             pl.col("board").is_in(selected_boards)
             & pl.col("racer_count").is_in(selected_counts)
         ).select(["config_hash", "board", "racer_count"])
 
-        # 2. Roster Check: Ensure all participants in the race are in 'selected_racers'
+        # Roster Check
         roster_ok = (
             df_racer_results.join(races_bc, on="config_hash", how="inner")
             .group_by(["config_hash", "board", "racer_count"])
@@ -1242,36 +1368,34 @@ def _(
         df_racer_results_f = df_racer_results.head(0)
         df_positions_f = df_positions.head(0)
 
-    # Validation Note Display
-    note = (
-        mo.md(
-            f"<div style='color:#ff6b6b; font-weight:600; margin-top:0.5rem;'>⚠ {error_msg}</div>"
+    # 5. Validation Note
+    if error_msg:
+        mo.output.replace(
+            mo.md(
+                f"<div style='color:#ff6b6b; font-weight:600; margin-top:0.5rem;'>⚠ {error_msg}</div>"
+            )
         )
-        if error_msg is not None
-        else mo.md(
-            f"<div style='color:#7ee787; font-weight:600; margin-top:0.5rem;'>✓ Using "
-            f"{df_races_f.height} races.</div>"
+    else:
+        mo.output.replace(
+            mo.md(
+                f"<div style='color:#7ee787; font-weight:600; margin-top:0.5rem;'>✓ Analysis running on {df_races_f.height} races...</div>"
+            )
         )
-    )
-
-    note
-    return df_positions_f, df_racer_results_f, df_races_f
+    return df_positions_f, df_racer_results_f, df_races_f, selected_racers
 
 
 @app.cell
-def _(mo):
-    # 1. Define the toggle in its own cell so it can be used as an input downstream
-    matchup_metric_toggle = mo.ui.switch(
-        value=False,  # False = Residual (default), True = Percentage
-        label="Show Percentage Shift",
+def _(df_positions_f, df_racer_results_f, df_races_f, mo, pl, selected_racers):
+    # A. Check Data Load
+    if df_positions_f.height == 0:
+        mo.stop(True, mo.md("⚠️ **No data matches filters.**"))
+
+    # Apply Racer Filter to Results (Optimization)
+    df_racer_results_filtered = df_racer_results_f.filter(
+        pl.col("racer_name").is_in(selected_racers)
     )
-    return (matchup_metric_toggle,)
 
-
-@app.cell(disabled=True)
-def _(df_positions_f, df_racer_results_f, df_races_f, pl):
-    # 2. HEAVY COMPUTATION CELL
-
+    # --- HELPER FUNCTIONS ---
     def unpivot_positions(df_flat: pl.DataFrame) -> pl.DataFrame:
         return (
             df_flat.unpivot(
@@ -1296,15 +1420,12 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
         )
 
     def _calculate_all_data():
-        if df_positions_f.height == 0:
-            return None
-
         # --- A. PREPARE METRICS ---
         df_long = unpivot_positions(df_positions_f)
 
         # 1. TRUTH SOURCE: Global Win Rates
         global_win_rates = (
-            df_racer_results_f.group_by("racer_name")
+            df_racer_results_filtered.group_by("racer_name")
             .agg(
                 (pl.col("rank") == 1).sum().alias("total_wins"),
                 pl.len().alias("total_races"),
@@ -1372,7 +1493,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
 
         # --- NEW: Late-game snapshot (66%) + position-vs-median ---
         winner_turns = (
-            df_racer_results_f.filter(pl.col("rank") == 1)
+            df_racer_results_filtered.filter(pl.col("rank") == 1)
             .group_by("config_hash")
             .agg(pl.col("turns_taken").min().alias("winner_turns"))
         )
@@ -1404,7 +1525,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
         )
 
         # 3. Race environment stats
-        race_environment_stats = df_racer_results_f.group_by("config_hash").agg(
+        race_environment_stats = df_racer_results_filtered.group_by("config_hash").agg(
             (pl.col("ability_trigger_count").sum() / pl.col("racer_id").count()).alias(
                 "race_avg_triggers"
             ),
@@ -1422,7 +1543,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
 
         # 4. Results enriched with movement features
         stats_results = (
-            df_racer_results_f.join(
+            df_racer_results_filtered.join(
                 df_gross_dist, on=["config_hash", "racer_id"], how="left"
             )
             .join(df_late_game, on=["config_hash", "racer_id"], how="left")
@@ -1522,7 +1643,7 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
             )
         )
 
-        # 6. Per-racer correlations (used by racer charts/tables)
+        # 6. Per-racer correlations
         corr_df = (
             stats_results.group_by("racer_name")
             .agg(
@@ -1590,6 +1711,13 @@ def _(df_positions_f, df_racer_results_f, df_races_f, pl):
         }
 
     dashboard_data = _calculate_all_data()
+
+    # Success message
+    mo.output.replace(
+        mo.md(
+            f"✅ **Analysis Complete** for {len(selected_racers)} racers.",
+        )
+    )
     return (dashboard_data,)
 
 
@@ -1603,8 +1731,9 @@ def _(
     mo,
     pl,
 ):
-    if not dashboard_data:
-        mo.stop(True, mo.md("⚠️ **No results loaded.**"))
+    # If no data is available (button not clicked yet), stop execution here.
+    if dashboard_data is None:
+        mo.stop(True)
 
     stats = dashboard_data["stats"]
     matchup_df = dashboard_data["matchup_df"]
@@ -2197,41 +2326,15 @@ def _(
 
     final_output = mo.md(f"""
     <div style="display: flex; flex-wrap: wrap; gap: 2rem; width: 100%; min-height: 550px;">
-        <div style="flex: 1 1 450px; min-width: 0; display: flex; justify-content: center; align-items: start;">{left_charts_ui}</div>
+        <div style="flex: 1 1 450px; min-width: 0; display: flex; justify-content: center; align-items: start;">
+            <div style="width: 100%; display:flex; flex-direction:column; gap: 1rem;">
+                {left_charts_ui}
+            </div>
+        </div>
         <div style="flex: 1 1 400px; min-width: 0; overflow-x: auto;">{right_ui}</div>
     </div>
     """)
     final_output
-    return
-
-
-@app.cell
-def _(mo):
-    from magical_athlete_simulator.core.registry import RACER_ABILITIES
-    from magical_athlete_simulator.racers import get_ability_classes
-    from magical_athlete_simulator.core.agent import (
-        BooleanInteractive,
-        SelectionInteractive,
-    )
-
-    # Get map of Name -> Class
-    ability_classes = get_ability_classes()
-
-    # Pythonic filter: Keep racer if ANY of their abilities are interactive
-    automatic_racers = [
-        racer
-        for racer, abilities in RACER_ABILITIES.items()
-        if not any(
-            issubclass(
-                ability_classes.get(a),
-                (BooleanInteractive, SelectionInteractive),
-            )
-            for a in abilities
-            if ability_classes.get(a)
-        )
-    ]
-
-    mo.md(f"**Auto-Racers:** {', '.join(sorted(automatic_racers))}")
     return
 
 
