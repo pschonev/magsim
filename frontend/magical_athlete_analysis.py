@@ -1,3 +1,13 @@
+# /// script
+# requires-python = ">=3.14"
+# frontend = [
+#     "marimo",
+#     "magical-athlete-simulator",
+#     "polars>=1.36.1",
+#     "altair>=6.0.0",
+# ]
+# ///
+
 import marimo
 
 __generated_with = "0.18.4"
@@ -30,6 +40,7 @@ def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+
     return (
         BOARD_DEFINITIONS,
         Console,
@@ -364,6 +375,7 @@ def _(StepSnapshot, get_racer_color, math):
             {track_group_start}
             {"".join(svg_elements)}
         </svg>"""
+
     return (render_game_track,)
 
 
@@ -1183,7 +1195,7 @@ def _(
     all_counts = sorted(df_races.get_column("racer_count").unique().to_list())
 
     # 2. Handle Auto-Select Logic
-    # Now we can safely read .value because the button was defined in a previous cell
+    # We can safely read .value because the button was defined in a previous cell
     if select_auto_racers_btn.value:
         _current_selection = [r for r in automatic_racers_list if r in all_racers]
     else:
@@ -1236,7 +1248,6 @@ def _(
 @app.cell
 def _(
     last_run_config,
-    matchup_metric_toggle,
     mo,
     run_computation_btn,
     select_auto_racers_btn,
@@ -1245,7 +1256,8 @@ def _(
     ui_racers,
 ):
     # A. Check for "Stale" state (Widgets != Last Run)
-    stale_warning = None
+    stale_warning = None  # Initialize to None, not empty markdown
+
     if last_run_config() is not None:
         is_stale = (
             ui_racers.value != last_run_config()["racers"]
@@ -1253,8 +1265,9 @@ def _(
             or ui_counts.value != last_run_config()["counts"]
         )
         if is_stale:
+            # FIX: Removed the trailing comma that made this a Tuple
             stale_warning = mo.md(
-                "<div style='color:#DC143C; font-weight:600; margin-top:0.5rem;'>⚠️ Filters Changed: The dashboard below is showing old data. Click 🚀 Run Analysis to update.</div>"
+                '<div style="color: #DC143C; margin-bottom: 0.75rem;">⚠️ <b>Filters Changed:</b> The dashboard below is showing old data. Click <b>🚀 Run Analysis</b> to update.</div>',
             )
 
     # B. Layout
@@ -1281,8 +1294,7 @@ def _(
                 ],
                 justify="start",
             ),
-            matchup_metric_toggle,
-            stale_warning if stale_warning else None,
+            stale_warning if stale_warning else mo.md(""),
         ]
     )
     return
@@ -1295,7 +1307,7 @@ def _(df_positions, df_racer_results, df_races, last_run_config, mo, pl):
         mo.stop(
             True,
             mo.md(
-                "ℹ️ **Waiting for Input**: Adjust filters above and click **🚀 Run Analysis** to generate stats."
+                '<div style="color: #DC143C; margin-bottom: 0.75rem;">ℹ️ <b>Waiting for Input:</b> Adjust filters above and click <b>🚀 Run Analysis</b> to generate stats.<div>'
             ),
         )
 
@@ -1318,7 +1330,7 @@ def _(df_positions, df_racer_results, df_races, last_run_config, mo, pl):
                 f"but only {len(selected_racers)} selected."
             )
 
-    # 4. Apply Filters (Same logic as before)
+    # 4. Apply Filters
     if error_msg is None:
         # Filter Races by metadata
         races_bc = df_races.filter(
