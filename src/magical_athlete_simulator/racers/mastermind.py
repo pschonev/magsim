@@ -99,6 +99,16 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
                 )
 
                 if not owner.finished:
+                    # send to telemetry directly if prediction correct
+                    if engine.on_event_processed:
+                        engine.on_event_processed(
+                            engine,
+                            AbilityTriggeredEvent(
+                                responsible_racer_idx=owner_idx,
+                                source=self.name,
+                                phase=event.phase,
+                            ),
+                        )
                     if engine.state.rules.hr_mastermind_steal_1st:
                         # house rule lets Mastermind steal 1st place instead
                         engine.log_info("Mastermind steals 1st place!")
