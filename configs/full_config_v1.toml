@@ -9,6 +9,9 @@ include_racers = [
     "FlipFlop",
     "Genius",
     "PartyAnimal",
+    "HugeBaby",
+    "Copycat",
+    "Mastermind",
 ]
 exclude_racers = []
 
@@ -17,6 +20,6 @@ racer_counts = [4, 5, 6]
 boards = ["standard", "wild_wilds"]
 
 # Execution limits
-runs_per_combination = 5
-max_total_runs = 10_000
+runs_per_combination = 20
+max_total_runs = 1_000_000
 max_turns_per_race = 300

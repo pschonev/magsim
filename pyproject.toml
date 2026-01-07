@@ -24,7 +24,7 @@ frontend = [
 
 
 [dependency-groups]
-dev = ["pytest>=9.0.2", "ruff==0.8.4", "basedpyright==1.23.0", "marimo[lsp]"]
+dev = ["pytest>=9.0.2", "basedpyright==1.23.0", "marimo[lsp]", "ruff>=0.14.10"]
 
 
 [project.scripts]
@@ -48,7 +48,7 @@ ignore = [
 # Ruff
 [tool.ruff]
 exclude = ["tests", "apps/frontend"]
-
+target-version = "py314"
 
 # Pyright
 [tool.basedpyright]
@@ -62,6 +62,7 @@ reportAny = "none"
 reportExplicitAny = "none"
 reportUnusedCallResult = "none"
 reportMissingTypeStubs = "none"
+reportUnusedParameter = "none"
 
 # Pytest
 [tool.pytest.ini_options]
