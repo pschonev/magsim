@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.18.4"
-app = marimo.App(width="full")
+app = marimo.App(width="full", css_file="magical_athlete_analysis.css")
 
 
 @app.cell
@@ -211,6 +211,22 @@ def _(StepSnapshot, get_racer_color, math):
     def render_game_track(turn_data: StepSnapshot, positions_map, colors_map):
         import html as _html
 
+        def _label_layout_from_offset(ox: float, oy: float):
+            # Decide whether label should go vertical or horizontal
+            if abs(oy) >= abs(ox):
+                # above/below
+                dy = -22 if oy < 0 else 22
+                return {"dx": 0, "dy": dy, "anchor": "middle", "baseline": "middle"}
+            else:
+                # left/right
+                dx = -34 if ox < 0 else 34
+                return {
+                    "dx": dx,
+                    "dy": 5,  # small downshift looks nicer for side labels
+                    "anchor": "end" if ox < 0 else "start",
+                    "baseline": "middle",
+                }
+
         if not turn_data:
             return "<p>No Data</p>"
 
@@ -327,9 +343,13 @@ def _(StepSnapshot, get_racer_color, math):
                 )
 
                 # Name label with dark background stroke for readability
+                _name_layout = _label_layout_from_offset(ox, oy)
+
                 svg_elements.append(
-                    f'<text x="{cx}" y="{cy + 22}" font-family="sans-serif" font-size="14" '
-                    f'font-weight="900" text-anchor="middle" fill="{racer["color"]}" '
+                    f'<text x="{cx + _name_layout["dx"]}" y="{cy + _name_layout["dy"]}" '
+                    f'font-family="sans-serif" font-size="14" font-weight="900" '
+                    f'text-anchor="{_name_layout["anchor"]}" dominant-baseline="{_name_layout["baseline"]}" '
+                    f'fill="{racer["color"]}" '
                     f'style="paint-order: stroke; stroke: #111; stroke-width: 5px;">'
                     f"{_html.escape(racer['name'])}</text>"
                 )
@@ -2196,6 +2216,30 @@ def _(
     </div>
     """)
     final_output
+    return
+
+
+@app.cell
+def _(mo):
+    from magical_athlete_simulator.core.registry import RACER_ABILITIES
+    from magical_athlete_simulator.racers import get_ability_classes
+    from magical_athlete_simulator.core.agent import Autosolvable
+
+    # Get map of Name -> Class
+    ability_classes = get_ability_classes()
+
+    # Pythonic filter: Keep racer if ANY of their abilities are Autosolvable
+    autosolvable_racers = [
+        racer
+        for racer, abilities in RACER_ABILITIES.items()
+        if any(
+            issubclass(ability_classes.get(a), Autosolvable)
+            for a in abilities
+            if ability_classes.get(a)
+        )
+    ]
+
+    mo.md(f"**Autosolvable Racers:** {', '.join(sorted(autosolvable_racers))}")
     return
 
 
