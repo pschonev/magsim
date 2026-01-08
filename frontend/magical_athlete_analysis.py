@@ -1539,7 +1539,6 @@ def _(df_positions, df_racer_results, df_races, last_run_config, mo, pl):
 def _(
     df_positions_f,
     df_racer_results_f,
-    df_races,
     df_races_f,
     mo,
     pl,
@@ -1892,7 +1891,7 @@ def _(
         }
 
     with mo.status.spinner(
-        title=f"Aggregating data for {df_races.height} races..."
+        title=f"Aggregating data for {df_races_f.height} races..."
     ) as _spinner:
         dashboard_data = _calculate_all_data()
 
