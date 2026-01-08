@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+from functools import cached_property
 import hashlib
 import json
 from dataclasses import dataclass
@@ -11,7 +13,7 @@ if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import BoardName, RacerName
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass
 class GameConfiguration:
     """Immutable representation of a single game setup."""
 
@@ -33,3 +35,28 @@ class GameConfiguration:
         )
 
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @cached_property
+    def encoded(self) -> str:
+        """Shareable config string for URLs/frontend."""
+        canonical = json.dumps(
+            {
+                "racers": list(self.racers),
+                "board": self.board,
+                "seed": self.seed,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return base64.urlsafe_b64encode(canonical.encode("utf-8")).decode("ascii")
+
+    @classmethod
+    def from_encoded(cls, encoded: str) -> GameConfiguration:
+        """Decode from shareable string."""
+        json_str = base64.urlsafe_b64decode(encoded).decode("utf-8")
+        data = json.loads(json_str)
+        return cls(
+            racers=tuple(data["racers"]),
+            board=data["board"],
+            seed=data["seed"],
+        )

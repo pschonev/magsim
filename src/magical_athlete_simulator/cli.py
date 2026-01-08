@@ -126,6 +126,7 @@ class Args:
 
                             race_record = Race(
                                 config_hash=result.config_hash,
+                                config_encoded=game_config.encoded,
                                 seed=game_config.seed,
                                 board=game_config.board,
                                 racer_names=",".join(game_config.racers),

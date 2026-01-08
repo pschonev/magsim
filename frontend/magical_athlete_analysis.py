@@ -173,6 +173,7 @@ def _(
             df_races = pl.read_parquet(path_races)
             df_positions = pl.read_parquet(path_positions)
         load_status = f"✅ Loaded from: `{base_folder}`"
+
     except Exception as e:
         df_racer_results = pl.DataFrame()
         df_races = pl.DataFrame()
@@ -551,12 +552,10 @@ def _(
         on_click=lambda _: set_step_idx(0),
     )
 
-
     def manual_change(setter, value):
         setter(value)
         set_step_idx(0)
         return value
-
 
     scenario_seed = mo.ui.number(
         start=0,
@@ -588,6 +587,39 @@ def _(
         value=get_debug_mode(), on_change=set_debug_mode, label="Debug logging"
     )
 
+    # --- NEW: Share & Load Logic ---
+    encoded_config_input = mo.ui.text(
+        label="Paste Encoded Config",
+        placeholder="eyJ...",
+        full_width=True
+    )
+
+    def _on_load_click(_):
+        """Parse encoded string using the existing class and update UI state."""
+        val = encoded_config_input.value
+        if not val:
+            return
+
+        from magical_athlete_simulator.simulation.hashing import GameConfiguration
+
+        try:
+            # 1. Decode using your existing Single Source of Truth
+            config = GameConfiguration.from_encoded(val)
+
+            # 2. Update the Shared State directly
+            set_seed(config.seed)
+            set_board(config.board)
+            set_selected_racers(list(config.racers))
+            set_saved_positions({n: 0 for n in config.racers})
+            set_use_scripted_dice(False)
+            set_step_idx(0) # Reset simulation
+        except Exception:
+            pass
+
+    load_encoded_btn = mo.ui.button(
+        label="Load Configuration", 
+        on_click=_on_load_click
+    )
 
     # 2. Position Inputs & Logic
     def _make_pos_on_change(racer_name):
@@ -598,9 +630,7 @@ def _(
                 v = 0
             set_saved_positions(lambda cur: {**cur, racer_name: v})
             set_step_idx(0)
-
         return _on_change
-
 
     pos_widget_map = {
         ui_racer: mo.ui.number(
@@ -613,30 +643,24 @@ def _(
         for ui_racer in current_roster
     }
 
-
     # 3. Snapshot Logic
     def _snapshot_values(exclude=None):
         return {r: w.value for r, w in pos_widget_map.items() if r != exclude}
 
-
     # --- REORDERING LOGIC ---
     def move_racer(index, direction):
-        # Direction: -1 for up, +1 for down
         def _move(_):
             roster = list(get_selected_racers())
             new_index = index + direction
             if 0 <= new_index < len(roster):
                 roster[index], roster[new_index] = roster[new_index], roster[index]
                 set_selected_racers(roster)
-                set_step_idx(0)  # Reset sim
-
+                set_step_idx(0)
         return _move
 
-
-    # 4. Action Buttons (Remove, Up, Down)
+    # 4. Action Buttons
     action_buttons = {}
     for i, ui_racer in enumerate(current_roster):
-        # Remove
         btn_remove = mo.ui.button(
             label="✖",
             on_click=lambda _, r=ui_racer: (
@@ -646,21 +670,8 @@ def _(
             ),
             disabled=(len(current_roster) <= 1),
         )
-
-        # Up (disabled for first item)
-        btn_up = mo.ui.button(
-            label="↑",
-            on_click=move_racer(i, -1),
-            disabled=(i == 0),
-        )
-
-        # Down (disabled for last item)
-        btn_down = mo.ui.button(
-            label="↓",
-            on_click=move_racer(i, 1),
-            disabled=(i == len(current_roster) - 1),
-        )
-
+        btn_up = mo.ui.button(label="↑", on_click=move_racer(i, -1), disabled=(i == 0))
+        btn_down = mo.ui.button(label="↓", on_click=move_racer(i, 1), disabled=(i == len(current_roster) - 1))
         action_buttons[ui_racer] = (btn_remove, btn_up, btn_down)
 
     # 5. Add Racer Logic
@@ -671,7 +682,6 @@ def _(
         on_change=set_racer_to_add,
         label="Add racer",
     )
-
 
     def _add_racer(v):
         r = get_racer_to_add()
@@ -684,7 +694,6 @@ def _(
             set_step_idx(0)
         return v
 
-
     add_button = mo.ui.button(label="Add", on_click=_add_racer)
 
     # 6. Layout Table
@@ -692,13 +701,8 @@ def _(
     for i, ui_racer in enumerate(current_roster):
         w_pos = pos_widget_map[ui_racer]
         b_rem, b_up, b_down = action_buttons[ui_racer]
-
-        # Group Up/Down buttons tightly
         move_grp = mo.hstack([b_up, b_down], justify="center", gap=0)
-
-        table_rows.append(
-            f"| {i + 1}. {ui_racer} | {w_pos} | {move_grp} | {b_rem} |"
-        )
+        table_rows.append(f"| {i + 1}. {ui_racer} | {w_pos} | {move_grp} | {b_rem} |")
 
     racer_table = mo.md(
         "| Racer | Start Pos | Order | Remove |\n"
@@ -711,11 +715,33 @@ def _(
         current_roster,
         debug_mode_ui,
         dice_rolls_text_ui,
+        encoded_config_input,
+        load_encoded_btn,
         racer_table,
         reset_button,
         scenario_seed,
         use_scripted_dice_ui,
     )
+
+
+@app.cell
+def _(board_selector, current_roster, mo, scenario_seed):
+    from magical_athlete_simulator.simulation.hashing import GameConfiguration
+
+    # Generate string from current state
+    current_config_obj = GameConfiguration(
+        racers=tuple(current_roster),
+        board=board_selector.value,
+        seed=scenario_seed.value
+    )
+
+    share_widget = mo.ui.text_area(
+        value=current_config_obj.encoded,
+        disabled=True,       # Read-only
+        full_width=True,     
+        rows=5,              
+    )
+    return (share_widget,)
 
 
 @app.cell
@@ -725,11 +751,14 @@ def _(
     board_selector,
     debug_mode_ui,
     dice_input,
+    encoded_config_input,
+    load_encoded_btn,
     mo,
     racer_table,
     reset_button,
     results_tabs,
     scenario_seed,
+    share_widget,
     use_scripted_dice_ui,
 ):
     # --- CONFIG DISPLAY ---
@@ -753,8 +782,17 @@ def _(
                         [add_racer_dropdown, add_button], justify="start", gap=1
                     ),
                 ]
-            ),
-            results_tabs.style({"overflow-x": "auto", "max-width": "100%"}),
+            ).style({"overflow-x": "auto", "max-width": "100%"}),
+            mo.vstack(
+                [results_tabs,
+                    mo.hstack([
+                        mo.md("Enter encoded config: "),
+                        encoded_config_input,
+                        load_encoded_btn,
+                        mo.md("Copy encoded config: "),
+                        share_widget
+                    ], justify="start"),
+                ]).style({"overflow-x": "auto", "max-width": "100%"}),
         ],
     )
     return
@@ -912,7 +950,7 @@ def _(
     from magical_athlete_simulator.simulation.telemetry import (
         SnapshotPolicy,
         SnapshotRecorder,
-        MetricsAggregator,  # <--- CHANGED THIS IMPORT
+        MetricsAggregator,
     )
     from magical_athlete_simulator.core.events import AbilityTriggeredEvent
 

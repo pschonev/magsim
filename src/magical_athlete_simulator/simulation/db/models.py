@@ -17,6 +17,7 @@ class Race(SQLModel, table=True):
 
     # Primary Key
     config_hash: str = Field(primary_key=True)
+    config_encoded: str
 
     # Configuration Details
     seed: int

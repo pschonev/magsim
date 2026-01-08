@@ -43,7 +43,7 @@ def run_single_simulation(
     Execute one race and return aggregated metrics.
     """
     # --- START LOGGING ---
-    tqdm.write(f"▶ Simulating: {config.racers} on {config.board} (Seed: {config.seed})")
+    tqdm.write(f"▶ Simulating: {config.racers} on {config.board} (Seed: {config.seed}) - {config.encoded}")
 
     start_time = time.perf_counter()
     timestamp = time.time()
