@@ -22,7 +22,12 @@ cli = [
     "pyarrow>=22.0.0",
 ]
 
-frontend = ["altair==6.0.0", "polars==1.36.1", "sqlmodel==0.0.31"]
+frontend = [
+    "marimo==0.18.4",
+    "altair==6.0.0",
+    "polars==1.36.1",
+    "sqlmodel==0.0.31",
+]
 
 [dependency-groups]
 dev = ["pytest>=9.0.2", "basedpyright==1.23.0", "marimo[lsp]", "ruff>=0.14.10"]

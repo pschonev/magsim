@@ -351,6 +351,7 @@ cli = [
 ]
 frontend = [
     { name = "altair" },
+    { name = "marimo" },
     { name = "polars" },
     { name = "sqlmodel" },
 ]
@@ -368,6 +369,7 @@ requires-dist = [
     { name = "altair", marker = "extra == 'frontend'", specifier = "==6.0.0" },
     { name = "cappa", marker = "extra == 'cli'", specifier = ">=0.31.0" },
     { name = "duckdb-engine", marker = "extra == 'cli'", specifier = ">=0.17.0" },
+    { name = "marimo", marker = "extra == 'frontend'", specifier = "==0.18.4" },
     { name = "msgspec", marker = "extra == 'cli'", specifier = ">=0.20.0" },
     { name = "polars", marker = "extra == 'frontend'", specifier = "==1.36.1" },
     { name = "pyarrow", marker = "extra == 'cli'", specifier = ">=22.0.0" },
