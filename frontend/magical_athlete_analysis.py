@@ -1391,17 +1391,28 @@ def _(df_positions, df_racer_results, df_races, last_run_config, mo, pl):
                 f"<div style='color:#ff6b6b; font-weight:600; margin-top:0.5rem;'>⚠ {error_msg}</div>"
             )
         )
-    else:
-        mo.output.replace(
-            mo.md(
-                f"<div style='color:#7ee787; font-weight:600; margin-top:0.5rem;'>✓ Analysis running on {df_races_f.height} races...</div>"
-            )
-        )
-    return df_positions_f, df_racer_results_f, df_races_f, selected_racers
+    return (
+        df_positions_f,
+        df_racer_results_f,
+        df_races_f,
+        selected_boards,
+        selected_counts,
+        selected_racers,
+    )
 
 
 @app.cell
-def _(df_positions_f, df_racer_results_f, df_races_f, mo, pl, selected_racers):
+def _(
+    df_positions_f,
+    df_racer_results_f,
+    df_races,
+    df_races_f,
+    mo,
+    pl,
+    selected_boards,
+    selected_counts,
+    selected_racers,
+):
     # A. Check Data Load
     if df_positions_f.height == 0:
         mo.stop(True, mo.md("⚠️ **No data matches filters.**"))
@@ -1746,12 +1757,15 @@ def _(df_positions_f, df_racer_results_f, df_races_f, mo, pl, selected_racers):
             "races_raw": stats_races,
         }
 
-    dashboard_data = _calculate_all_data()
+    with mo.status.spinner(
+        title=f"Aggregating data for {df_races.height} races..."
+    ) as _spinner:
+        dashboard_data = _calculate_all_data()
 
     # Success message
     mo.output.replace(
         mo.md(
-            f"✅ **Analysis Complete** for {len(selected_racers)} racers.",
+            f"✅ **Analysis Complete** for **{len(selected_racers)}** racers in races with **{', '.join([str(c) for c in selected_counts])}** racers on **{' and '.join(selected_boards)}**.",
         )
     )
     return (dashboard_data,)
