@@ -21,6 +21,10 @@ class GameConfiguration:
     board: BoardName
     seed: int
 
+    @property
+    def repr(self) -> str:
+        return f"{self.racers} on {self.board} (Seed: {self.seed}) - {self.encoded}"
+
     def compute_hash(self) -> str:
         """Compute stable SHA-256 hash of this configuration."""
         # Canonical JSON representation (sorted keys, no whitespace)

@@ -103,7 +103,7 @@ class Args:
 
                         result = run_single_simulation(game_config, max_turns)
 
-                        if result.aborted:
+                        if result.error_code == "MAX_TURNS_REACHED":
                             aborted += 1
                         else:
                             completed += 1
@@ -133,7 +133,7 @@ class Args:
                                 racer_count=len(game_config.racers),
                                 timestamp=result.timestamp,
                                 execution_time_ms=result.execution_time_ms,
-                                aborted=result.aborted,
+                                error_code=result.error_code,
                                 total_turns=result.turn_count,
                             )
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, assert_never, override
+from typing import TYPE_CHECKING, override
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (

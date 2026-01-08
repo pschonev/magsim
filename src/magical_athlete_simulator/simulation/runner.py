@@ -17,6 +17,7 @@ from magical_athlete_simulator.simulation.telemetry import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import GameEvent
+    from magical_athlete_simulator.core.types import ErrorCode
     from magical_athlete_simulator.engine.game_engine import GameEngine
     from magical_athlete_simulator.simulation.db.models import RacerResult
     from magical_athlete_simulator.simulation.hashing import GameConfiguration
@@ -29,7 +30,7 @@ class SimulationResult:
     config_hash: str
     timestamp: float
     execution_time_ms: float
-    aborted: bool
+    error_code: ErrorCode | None
     turn_count: int
     metrics: list[RacerResult]
     position_logs: PositionLogColumns
@@ -43,7 +44,7 @@ def run_single_simulation(
     Execute one race and return aggregated metrics.
     """
     # --- START LOGGING ---
-    tqdm.write(f"▶ Simulating: {config.racers} on {config.board} (Seed: {config.seed}) - {config.encoded}")
+    tqdm.write(f"▶ Simulating: {config.repr}")
 
     start_time = time.perf_counter()
     timestamp = time.time()
@@ -76,7 +77,7 @@ def run_single_simulation(
 
     engine.on_event_processed = on_event
 
-    aborted = False
+    error_code: ErrorCode | None = None
 
     while not engine.state.race_over:
         active_racer_idx = engine.state.current_racer_idx
@@ -91,13 +92,19 @@ def run_single_simulation(
         turn_counter += 1
 
         if turn_counter >= max_turns:
-            aborted = True
+            error_code = "MAX_TURNS_REACHED"
             break
 
+    error_code = engine.bug_reason if error_code is None else error_code
     end_time = time.perf_counter()
     execution_time_ms = (end_time - start_time) * 1000
 
-    if aborted:
+    if error_code is not None and error_code != "MAX_TURNS_REACHED":
+        tqdm.write(
+            f"⚠️ Error after {turn_counter} turns ({execution_time_ms:.2f}ms) due to {error_code}",
+        )
+
+    if error_code == "MAX_TURNS_REACHED":
         # STRATEGY: Aborted races are saved in the 'races' table (metadata)
         # but we return EMPTY metrics/logs so nothing is written to the detail tables.
         metrics = []
@@ -112,7 +119,6 @@ def run_single_simulation(
             "pos_r4": [],
             "pos_r5": [],
         }
-        tqdm.write(f"⚠️ Aborted after {turn_counter} turns ({execution_time_ms:.2f}ms)")
     else:
         metrics = aggregator.finalize_metrics(engine)
         positions = aggregator.finalize_positions()
@@ -137,7 +143,7 @@ def run_single_simulation(
         config_hash=config_hash,
         timestamp=timestamp,
         execution_time_ms=execution_time_ms,
-        aborted=aborted,
+        error_code=error_code,
         turn_count=turn_counter,
         metrics=metrics,
         position_logs=positions,

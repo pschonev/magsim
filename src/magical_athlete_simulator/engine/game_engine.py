@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import heapq
 import logging
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -53,7 +54,7 @@ if TYPE_CHECKING:
         LogContext,
         RacerState,
     )
-    from magical_athlete_simulator.core.types import AbilityName, Source
+    from magical_athlete_simulator.core.types import AbilityName, ErrorCode, Source
 
 
 AbilityCallback = Callable[[GameEvent, int, "GameEngine"], None]
@@ -83,6 +84,8 @@ class GameEngine:
     current_processing_event: ScheduledEvent | None = None
     subscribers: dict[type[GameEvent], list[Subscriber]] = field(default_factory=dict)
     agents: dict[int, Agent] = field(default_factory=dict)
+
+    bug_reason: ErrorCode | None = None
 
     # LOOP DETECTION
     # 1. Heuristic History: Tracks (Board+Event) -> Min Queue Size
@@ -123,6 +126,9 @@ class GameEngine:
         self.state.history.clear()
         self.heuristic_history.clear()
         self.event_creation_hashes.clear()
+
+        # Track how many times we visit each board state
+        board_visit_counts = Counter[int]()
 
         cr = self.state.current_racer_idx
         racer = self.state.racers[cr]
@@ -167,6 +173,21 @@ class GameEngine:
             )
 
         while self.state.queue and not self.state.race_over:
+            # --- NEW: Hard Limit on Board State Visits ---
+            # Calculate hash BEFORE processing (same as heuristic)
+            current_board_hash = self._calculate_board_hash()
+            board_visit_counts[current_board_hash] += 1
+
+            # If we have visited this EXACT board configuration more than X times,
+            # we are likely in a loop (e.g. Move Fwd -> Move Back -> Move Fwd).
+            if board_visit_counts[current_board_hash] > 10:
+                self.log_error(
+                    f"Infinite Loop Detected: Board state visited {board_visit_counts[current_board_hash]} times. Aborting turn to prevent hang.",
+                )
+                self.state.queue.clear()  # Nuclear option: Stop everything
+                self.bug_reason = "CRITICAL_LOOP_DETECTED"
+                break
+
             # --- LAYER 1: Exact State Detection ---
             # Catches standard cycles (Scenario 2: Unproductive loops)
             current_hash = self.state.get_state_hash()
@@ -180,6 +201,7 @@ class GameEngine:
                 self.log_warning(
                     f"Infinite loop detected (Exact State Cycle). Dropping recursive event: {skipped_sched.event}",
                 )
+                self.bug_reason = "MINOR_LOOP_DETECTED"
                 continue
 
             self.state.history.add(current_hash)

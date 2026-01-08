@@ -10,8 +10,9 @@ include_racers = [
     "Genius",
     "PartyAnimal",
     "HugeBaby",
-    "Copycat",
+    "Copycat",     #causes too many problems currently
     "Mastermind",
+    "Skipper",
 ]
 exclude_racers = []
 

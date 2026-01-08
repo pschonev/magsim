@@ -25,6 +25,15 @@ class RollModificationMixin(ABC):
     ) -> None:
         pass
 
+    @abstractmethod
+    def send_ability_trigger(
+        self,
+        owner_idx: int | None,
+        engine: GameEngine,
+        rolling_racer_idx: int,
+    ) -> None:
+        pass
+
 
 class ApproachHookMixin(ABC):
     """Allows a modifier to redirect incoming racers (e.g., Huge Baby blocking)."""

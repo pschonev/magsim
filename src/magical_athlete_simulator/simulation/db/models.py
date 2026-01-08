@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import datetime
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, String
+
+from magical_athlete_simulator.core.types import ErrorCode
 
 
 class Race(SQLModel, table=True):
@@ -28,7 +30,7 @@ class Race(SQLModel, table=True):
     # Execution Metadata
     timestamp: float
     execution_time_ms: float
-    aborted: bool
+    error_code: ErrorCode | None = Field(sa_type=String)
     total_turns: int
 
     # Created at
