@@ -216,3 +216,4 @@ rules.md
 .gitignore
 
 /results
+/docs/docs/results/

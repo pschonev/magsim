@@ -1,4 +1,5 @@
 mkdir -p docs/results/
+mkdir -p docs/docs/results/
 
 # Export the notebook
 uvx marimo export html-wasm --mode run --no-show-code \
@@ -8,3 +9,4 @@ uvx marimo export html-wasm --mode run --no-show-code \
 # Copy supporting files
 cp frontend/magical_athlete_analysis.css docs/
 cp -r results/*.parquet docs/results/
+cp -r results/*.parquet docs/docs/results/
