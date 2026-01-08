@@ -1,12 +1,12 @@
 [project]
 name = "magical-athlete-simulator"
-version = "0.2.0"
+version = "0.2.2"
 description = "A simulator for Magical Athlete"
 authors = [{ name = "Philipp Schoneville", email = "philipp@schoneville.com" }]
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = ["pyarrow>=22.0.0", "rich>=14.2.0"]
+dependencies = ["rich>=13.7.1"]
 
 [project.urls]
 Repository = "https://github.com/pschonev/magical-athlete-simulator"
@@ -18,7 +18,10 @@ cli = [
     "msgspec>=0.20.0",
     "sqlmodel>=0.0.31",
     "tqdm>=4.67.1",
+    "pyarrow>=22.0.0",
 ]
+
+frontend = ["altair==6.0.0", "polars==1.36.1", "sqlmodel==0.0.31"]
 
 [dependency-groups]
 dev = ["pytest>=9.0.2", "basedpyright==1.23.0", "marimo[lsp]", "ruff>=0.14.10"]
