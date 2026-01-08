@@ -96,19 +96,32 @@ class ModifierPartySelfBoost(RacerModifier, RollModificationMixin):
             return  # Safety check (should never happen)
 
         if owner_idx is None:
-            _ = assert_never
             raise ValueError("owner_idx should never be None")
 
         owner = engine.get_racer(owner_idx)
-        guests = [
-            r
-            for r in engine.state.racers
-            if r.idx != owner_idx and not r.finished and r.position == owner.position
-        ]
-        if guests:
+
+        if guests := engine.get_racers_at_position(
+            owner.position,
+            except_racer_idx=owner_idx,
+        ):
             bonus = len(guests)
             query.modifiers.append(bonus)
             query.modifier_sources.append((self.name, bonus))
+
+    @override
+    def send_ability_trigger(
+        self,
+        owner_idx: int | None,
+        engine: GameEngine,
+        rolling_racer_idx: int,
+    ) -> None:
+        if owner_idx is None:
+            raise ValueError("owner_idx should never be None")
+
+        for _ in engine.get_racers_at_position(
+            engine.get_racer(owner_idx).position,
+            except_racer_idx=owner_idx,
+        ):
             engine.push_event(
                 AbilityTriggeredEvent(
                     owner_idx,

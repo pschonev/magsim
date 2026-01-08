@@ -42,8 +42,16 @@ class ModifierSlime(RacerModifier, RollModificationMixin):
         query.modifiers.append(-1)
         query.modifier_sources.append((self.name, -1))
 
+    @override
+    def send_ability_trigger(
+        self,
+        owner_idx: int | None,
+        engine: GameEngine,
+        rolling_racer_idx: int,
+    ) -> None:
         if owner_idx is None:
             raise ValueError("owner_idx should never be None for ModifierSlime")
+
         engine.push_event(
             AbilityTriggeredEvent(
                 owner_idx,

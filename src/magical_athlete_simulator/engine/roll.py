@@ -84,6 +84,11 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
         engine.log_debug("Ignoring stale roll resolution (Re-roll occurred).")
         return
 
+    # now we can send an AbilityTriggeredEvent
+    for mod in engine.get_racer(event.target_racer_idx).modifiers:
+        if isinstance(mod, RollModificationMixin):
+            mod.send_ability_trigger(mod.owner_idx, engine, event.target_racer_idx)
+
     engine.push_event(
         RollResultEvent(
             target_racer_idx=event.target_racer_idx,
