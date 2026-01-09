@@ -11,12 +11,10 @@ from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     EmitsAbilityTriggeredEvent,
     GameEvent,
-    HasTargetRacer,
     MainMoveSkippedEvent,
     MoveCmdEvent,
     PassingEvent,
     PerformMainRollEvent,
-    Phase,
     RacerFinishedEvent,
     ResolveMainMoveEvent,
     RollModificationWindowEvent,
@@ -58,9 +56,6 @@ if TYPE_CHECKING:
     )
     from magical_athlete_simulator.core.types import AbilityName, ErrorCode, Source
 
-HEURISTIC_LOOP_MAXIMUM = 5
-HARD_LIMIT_BOARD_STATE = 200
-
 AbilityCallback = Callable[[GameEvent, int, "GameEngine"], None]
 
 
@@ -79,7 +74,7 @@ class GameEngine:
     subscribers: dict[type[GameEvent], list[Subscriber]] = field(default_factory=dict)
     agents: dict[int, Agent] = field(default_factory=dict)
 
-    # errors and loop detection
+    # Errors and loop detection
     bug_reason: ErrorCode | None = None
     loop_detector: LoopDetector = field(default_factory=LoopDetector)
 
@@ -90,13 +85,12 @@ class GameEngine:
 
     def __post_init__(self) -> None:
         """Assigns starting abilities to all racers and fires on_gain hooks."""
-        base = logging.getLogger("magical_athlete")  # or LOGGER_NAME
+        base = logging.getLogger("magical_athlete")
         self._logger = base.getChild(f"engine.{id(self)}")
 
         if self.verbose:
             self._logger.addFilter(ContextFilter(self))
 
-        # Assign starting abilities
         for racer in self.state.racers:
             initial = RACER_ABILITIES.get(racer.name, set())
             self.update_racer_abilities(racer.idx, initial)
@@ -111,6 +105,7 @@ class GameEngine:
             self._advance_turn()
 
     def run_turn(self):
+        # 1. Reset detector for the new turn
         self.loop_detector.reset_for_turn()
         self.state.history.clear()
 
@@ -157,11 +152,11 @@ class GameEngine:
             )
 
         while self.state.queue and not self.state.race_over:
+            # Prepare hashes for checks
             current_board_hash = self._calculate_board_hash()
             current_system_hash = self.state.get_state_hash()
 
             # --- Layer 1: Exact State Cycle (Least Harmful) ---
-            # Checks if the entire system (Board + Queue) is in a recursive loop.
             if self.loop_detector.check_exact_cycle(current_system_hash):
                 skipped = heapq.heappop(self.state.queue)
                 self.loop_detector.forget_event(skipped.serial)
@@ -170,11 +165,10 @@ class GameEngine:
                 )
                 continue
 
-            # Pop the next event to analyze it against Heuristics
+            # Peek/Pop the next event
             sched = heapq.heappop(self.state.queue)
 
             # --- Layer 2: Heuristic Detection (Surgical Fix) ---
-            # Checks for logical loops (e.g. oscillating moves) where queue grows/stagnates.
             if self.loop_detector.check_heuristic_loop(
                 current_board_hash,
                 len(self.state.queue),
@@ -183,7 +177,6 @@ class GameEngine:
                 self.log_warning(
                     f"MINOR_LOOP_DETECTED (Heuristic/Exploding). Dropping: {sched.event}",
                 )
-                # Ensure we don't downgrade a critical error
                 self.bug_reason = (
                     "MINOR_LOOP_DETECTED"
                     if self.bug_reason != "CRITICAL_LOOP_DETECTED"
@@ -192,7 +185,6 @@ class GameEngine:
                 continue
 
             # --- Layer 3: Global Sanity Check (Nuclear Option) ---
-            # Failsafe: If the board keeps resetting despite the checks above, abort the turn.
             if self.loop_detector.check_global_sanity(current_board_hash):
                 self.log_error(
                     "CRITICAL_LOOP_DETECTED: Board state oscillation limit exceeded. Aborting turn.",
@@ -204,59 +196,8 @@ class GameEngine:
             self.current_processing_event = sched
             self._handle_event(sched.event)
 
-    def _check_heuristic_loop(
-        self,
-        sched: ScheduledEvent,
-        creation_hash: int | None,
-    ) -> bool:
-        """
-        Returns True if a heuristic loop is detected.
-        """
-        current_board_hash = self._calculate_board_hash()
-
-        # 1. LAG CHECK: If the event is old (created in a previous state), let it drain.
-        if creation_hash is not None and creation_hash != current_board_hash:
-            return False
-
-        ev = sched.event
-
-        # 2. KEY GENERATION: Now includes PHASE
-        key = HeuristicKey(
-            board_hash=current_board_hash,
-            event_type=type(ev),
-            target_idx=ev.target_racer_idx if isinstance(ev, HasTargetRacer) else None,
-            responsible_idx=ev.responsible_racer_idx,
-            phase=ev.phase,
-        )
-
-        current_q_len = len(self.state.queue)
-
-        # 3. HISTORY TRACKING
-        if key not in self.heuristic_history:
-            self.heuristic_history[key] = LoopTrackingData(current_q_len, 1)
-            return False
-
-        data = self.heuristic_history[key]
-
-        # 4. PROGRESS CHECK: Has the queue shrunk?
-        # If queue got smaller, we are processing items successfully. Reset strikes.
-        if current_q_len < data.min_queue_len:
-            data.min_queue_len = current_q_len
-            data.visit_count = 1
-            return False
-
-        # 5. STRIKE SYSTEM
-        # Queue is same size or bigger -> Possible Loop.
-        data.visit_count += 1
-
-        # ONLY trigger if we have failed to make progress X times in a row.
-        return data.visit_count > HEURISTIC_LOOP_MAXIMUM
-
     def _calculate_board_hash(self) -> int:
-        """
-        Generates a hash of the physical board state.
-        Excludes the Event Queue and History.
-        """
+        """Generates a hash of the physical board state."""
         racer_states = tuple(
             (
                 r.position,
@@ -274,7 +215,6 @@ class GameEngine:
         if self.state.race_over:
             return
 
-        # 1. Handle Turn Override
         if self.state.next_turn_override is not None:
             next_idx = self.state.next_turn_override
             self.state.next_turn_override = None
@@ -284,7 +224,6 @@ class GameEngine:
             )
             return
 
-        # 2. Standard Clockwise Logic
         curr = self.state.current_racer_idx
         n = len(self.state.racers)
         next_idx = (curr + 1) % n
@@ -296,7 +235,6 @@ class GameEngine:
                 self.state.race_over = True
                 return
 
-        # 3. Detect New Round
         if next_idx < curr:
             self.log_context.new_round()
 

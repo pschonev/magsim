@@ -54,7 +54,7 @@ class LoopDetector:
 
     # Heuristic State
     heuristic_history: dict[HeuristicKey, LoopTrackingData] = field(
-        default_factory=dict
+        default_factory=dict,
     )
     event_creation_hashes: dict[int, int] = field(default_factory=dict)
 
@@ -85,7 +85,10 @@ class LoopDetector:
         return False
 
     def check_heuristic_loop(
-        self, current_board_hash: int, current_queue_len: int, sched: ScheduledEvent
+        self,
+        current_board_hash: int,
+        current_queue_len: int,
+        sched: ScheduledEvent,
     ) -> bool:
         """
         Layer 2 (Heuristic): Returns True if the same event is being processed on the same
