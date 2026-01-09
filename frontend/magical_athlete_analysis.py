@@ -44,7 +44,10 @@ async def _():
     from rich.logging import RichHandler
 
     MAGICAL_ATHLETE_SIMULATOR_VERSION = "0.5.4"
-    await micropip.install(MAGICAL_ATHLETE_SIMULATOR_VERSION, keep_going=True)
+    await micropip.install(
+        f"magical-athlete-simulator=={MAGICAL_ATHLETE_SIMULATOR_VERSION}",
+        keep_going=True,
+    )
 
     from magical_athlete_simulator.core.events import (
         MoveCmdEvent,
@@ -52,7 +55,12 @@ async def _():
         WarpCmdEvent,
     )
     from magical_athlete_simulator.core.types import RacerName
-    from magical_athlete_simulator.engine.board import BOARD_DEFINITIONS
+    from magical_athlete_simulator.engine.board import (
+        BOARD_DEFINITIONS,
+        VictoryPointTile,
+        TripTile,
+        MoveDeltaTile,
+    )
     from magical_athlete_simulator.engine.logging import (
         GameLogHighlighter,
         RichMarkupFormatter,
@@ -61,7 +69,6 @@ async def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -71,12 +78,15 @@ async def _():
         Literal,
         MAGICAL_ATHLETE_SIMULATOR_VERSION,
         MoveCmdEvent,
+        MoveDeltaTile,
         RacerConfig,
         RacerName,
         RichHandler,
         RichMarkupFormatter,
         StepSnapshot,
         TripCmdEvent,
+        TripTile,
+        VictoryPointTile,
         WarpCmdEvent,
         alt,
         get_args,
@@ -355,13 +365,20 @@ def _(math):
         return positions
 
     board_positions = generate_racetrack_positions(NUM_TILES, 120, 350, 350, 100)
-    return board_positions, get_racer_color, space_colors
+    return board_positions, get_racer_color
 
 
 @app.cell
-def _(StepSnapshot, get_racer_color, math):
+def _(
+    MoveDeltaTile,
+    StepSnapshot,
+    TripTile,
+    VictoryPointTile,
+    get_racer_color,
+    math,
+):
     # --- RENDERER ---
-    def render_game_track(turn_data: StepSnapshot, positions_map, colors_map):
+    def render_game_track(turn_data: StepSnapshot, positions_map, board=None):
         import html as _html
 
         if not turn_data:
@@ -384,19 +401,83 @@ def _(StepSnapshot, get_racer_color, math):
         # 2. Track Spaces
         for i, (cx, cy, rot) in enumerate(positions_map):
             transform = f"rotate({rot}, {cx}, {cy})"
-            fill_color = "#333333"
-            if i == 0:
-                fill_color = "#2E7D32"
-            elif i == len(positions_map) - 1:
-                fill_color = "#C62828"
 
+            # --- 1. DEFAULT STYLES (Dark Mode) ---
+            is_start = i == 0
+            is_end = i == len(positions_map) - 1
+
+            # Alternating Dark Grays
+            if (i // 2) % 2 == 0:
+                fill_color = "#333333"
+            else:
+                fill_color = "#3e3e3e"
+
+            stroke_color = "#555"
+            stroke_width = "2"
+
+            # Default Text
+            text_content = str(i)
+            text_fill = "#aaa"  # Lighter text for dark background
+            font_weight = "bold"
+            font_size = "10"
+
+            # --- 2. SPECIAL TILE LOGIC (isinstance checks) ---
+            if board:
+                # Retrieve the list of modifiers for this tile index
+                mods = board.static_features.get(i, [])
+                for mod in mods:
+                    if isinstance(mod, VictoryPointTile):
+                        fill_color = "#81D4FA"  # Light Blue
+                        text_content = "VP"
+                        text_fill = "#000"  # Black text on light tile
+
+                    elif isinstance(mod, TripTile):
+                        fill_color = "#111"  # Deep Black
+                        text_content = "T"
+                        text_fill = "#F44336"  # Red Text
+                        font_size = "16"
+
+                    elif isinstance(mod, MoveDeltaTile):
+                        d = mod.delta
+                        if d > 0:
+                            fill_color = "#A5D6A7"  # Light Green
+                            text_content = f"+{d}"
+                            text_fill = "#1B5E20"
+                        elif d < 0:
+                            fill_color = "#EF9A9A"  # Light Red
+                            text_content = f"{d}"
+                            text_fill = "#B71C1C"
+
+            # --- 3. START / END OVERRIDES ---
+            # IMPORTANT: We keep the fill_color (Dark Grey) so it's OPAQUE
+            # and hides any tile underneath it. We only change the stroke.
+            if is_start:
+                stroke_color = "#4CAF50"  # Green Outline
+                stroke_width = "4"
+                # Only overwrite text if it hasn't been changed by a special tile
+                if text_content == str(i):
+                    text_content = "S"
+                    text_fill = "#4CAF50"
+
+            elif is_end:
+                stroke_color = "#F44336"  # Red Outline
+                stroke_width = "4"
+                if text_content == str(i):
+                    text_content = "G"
+                    text_fill = "#F44336"
+
+            # Render Tile Rect
             svg_elements.append(
                 f'<rect x="{cx - rw / 2:.1f}" y="{cy - rh / 2:.1f}" width="{rw}" height="{rh}" '
-                f'fill="{fill_color}" stroke="#555" stroke-width="2" transform="{transform}" rx="4" />'
+                f'fill="{fill_color}" stroke="{stroke_color}" stroke-width="{stroke_width}" '
+                f'transform="{transform}" rx="4" />'
             )
+
+            # Render Tile Text
             svg_elements.append(
-                f'<text x="{cx:.1f}" y="{cy:.1f}" dy="4" font-family="sans-serif" font-size="10" font-weight="bold" '
-                f'text-anchor="middle" fill="#888" transform="{transform}">{i}</text>'
+                f'<text x="{cx:.1f}" y="{cy:.1f}" dy="4" font-family="sans-serif" '
+                f'font-size="{font_size}" font-weight="{font_weight}" '
+                f'text-anchor="middle" fill="{text_fill}" transform="{transform}">{text_content}</text>'
             )
 
         # 3. Racers
@@ -446,32 +527,26 @@ def _(StepSnapshot, get_racer_color, math):
                 cx = bx + (ox * math.cos(rad) - oy * math.sin(rad))
                 cy = by + (ox * math.sin(rad) + oy * math.cos(rad))
 
-                # --- NEW LABEL LOGIC ---
-                # Determine visual offset from the center of the tile (bx, by)
+                # --- LABEL LOGIC ---
                 vis_dx = cx - bx
                 vis_dy = cy - by
-
-                # Defaults
                 text_anchor = "middle"
                 dy_text = 24  # Default below
                 tx = cx
                 ty = cy
 
                 if count > 1:
-                    # Directional Logic: Push label away from cluster center
                     if abs(vis_dy) > abs(vis_dx):
-                        # Vertical Dominance
-                        if vis_dy < 0:  # Top
+                        if vis_dy < 0:
                             dy_text = -14
-                        else:  # Bottom
+                        else:
                             dy_text = 24
                     else:
-                        # Horizontal Dominance
-                        dy_text = 5  # Centered vertically
-                        if vis_dx < 0:  # Left
+                        dy_text = 5
+                        if vis_dx < 0:
                             text_anchor = "end"
                             tx = cx - 14
-                        else:  # Right
+                        else:
                             text_anchor = "start"
                             tx = cx + 14
 
@@ -480,27 +555,22 @@ def _(StepSnapshot, get_racer_color, math):
 
                 svg_elements.append(f"<g>")
                 svg_elements.append(f"<title>{_html.escape(racer['tooltip'])}</title>")
-
-                # Dot
                 svg_elements.append(
                     f'<circle cx="{cx}" cy="{cy}" r="9" fill="{racer["color"]}" stroke="{stroke}" stroke-width="{width}" />'
                 )
-
-                # Label
                 svg_elements.append(
                     f'<text x="{tx}" y="{ty}" dy="{dy_text}" font-family="sans-serif" font-size="13" '
                     f'font-weight="900" text-anchor="{text_anchor}" fill="{racer["color"]}" '
                     f'style="paint-order: stroke; stroke: #111; stroke-width: 4px;">'
                     f"{_html.escape(racer['name'])}</text>"
                 )
-
                 if racer["tripped"]:
                     svg_elements.append(
                         f'<text x="{cx}" y="{cy}" dy="5" fill="#ff0000" font-weight="bold" font-size="14" text-anchor="middle">X</text>'
                     )
                 svg_elements.append(f"</g>")
 
-        svg_elements.append("</g>")  # Close track scale group
+        svg_elements.append("</g>")
 
         # 4. Dice Roll (Centered)
         center_x = (120 + 350 / 2) * scale_factor + trans_x
@@ -518,7 +588,6 @@ def _(StepSnapshot, get_racer_color, math):
             {track_group_start}
             {"".join(svg_elements)}
         </svg>"""
-
     return (render_game_track,)
 
 
@@ -1319,20 +1388,27 @@ def _(current_data, current_turn_idx, mo, step_history, turn_map):
 
 @app.cell
 def _(
+    BOARD_DEFINITIONS,
     board_positions,
     current_data,
+    get_board,
     log_ui,
     mo,
     nav_ui,
     render_game_track,
-    space_colors,
 ):
     # --- COMPOSITION ---
     if not current_data:
         layout = mo.md("Waiting for simulation...")
     else:
+        factory = BOARD_DEFINITIONS.get(get_board())
+        if not factory:
+            factory = BOARD_DEFINITIONS["standard"]
+        board_instance = factory()
+
+        # 3. Render
         track_svg = mo.Html(
-            render_game_track(current_data, board_positions, space_colors)
+            render_game_track(current_data, board_positions, board=board_instance)
         )
         layout = mo.hstack(
             [mo.vstack([nav_ui, track_svg], align="center"), log_ui],
