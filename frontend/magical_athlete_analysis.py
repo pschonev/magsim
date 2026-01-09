@@ -284,46 +284,60 @@ def _(df_racer_results, df_races, mo, pl):
 
 @app.cell
 def _(math):
+    from typing import NamedTuple, Optional
+
+    # --- DATA STRUCTURES ---
+    class RacerPalette(NamedTuple):
+        primary: str
+        secondary: Optional[str] = None
+        outline: str = "#000000"
+
     # --- CONSTANTS ---
     NUM_TILES = 31  # 0..30 (30 is the finish tile)
 
-    space_colors = (
-        ["#4CAF50"]
-        + ["#F5F5F5", "#E0E0E0"] * ((NUM_TILES - 2) // 2)
-        + ["#F5F5F5"] * (NUM_TILES % 2)
-        + ["#F44336"]
-    )
-    space_colors = space_colors[:NUM_TILES]
-
-    racer_colors = {
-        "Banana": "#FFD700",
-        "Centaur": "#8B4513",
-        "Magician": "#9370DB",
-        "Scoocher": "#FF6347",
-        "Gunk": "#228B22",
-        "HugeBaby": "#FF69B4",
-        "Copycat": "#4682B4",
-        "Mermaid": "#00CED1",
-        "Amazon": "#DC143C",
-        "Ninja": "#2F4F4F",
+    # Placeholder Colors - Primary (Fill), Secondary (Ring), Outline
+    RACER_PALETTES = {
+        "Banana": RacerPalette(
+            "#FFD700", "#DAA520", "#4B3621"
+        ),  # Gold, Dark Goldenrod, Walnut
+        "Centaur": RacerPalette(
+            "#8B4513", "#CD853F", "#3E2723"
+        ),  # SaddleBrown, Peru, Dark Bean
+        "Magician": RacerPalette(
+            "#9370DB", "#4B0082", "#1A1A2E"
+        ),  # MediumPurple, Indigo, Dark Blue
+        "Scoocher": RacerPalette(
+            "#FF6347", "#FFFFFF", "#800000"
+        ),  # Tomato, White, Maroon
+        "Gunk": RacerPalette(
+            "#228B22", "#ADFF2F", "#004d00"
+        ),  # ForestGreen, GreenYellow, DarkGreen
+        "HugeBaby": RacerPalette(
+            "#FF69B4", "#FFC0CB", "#C71585"
+        ),  # HotPink, Pink, MedVioletRed
+        "Copycat": RacerPalette(
+            "#4682B4", "#B0C4DE", "#000080"
+        ),  # SteelBlue, LightSteel, Navy
     }
 
-    FALLBACK_PALETTE = [
-        "#8A2BE2",
-        "#5F9EA0",
-        "#D2691E",
-        "#FF8C00",
-        "#2E8B57",
-        "#1E90FF",
+    FALLBACK_PALETTES = [
+        RacerPalette("#8A2BE2", None, "#000"),
+        RacerPalette("#5F9EA0", None, "#000"),
+        RacerPalette("#D2691E", None, "#000"),
+        RacerPalette("#FF8C00", None, "#000"),
+        RacerPalette("#2E8B57", None, "#000"),
+        RacerPalette("#1E90FF", None, "#000"),
     ]
 
-    def get_racer_color(name):
-        if name in racer_colors:
-            return racer_colors[name]
-        try:
-            return FALLBACK_PALETTE[(hash(name) % len(FALLBACK_PALETTE))]
-        except:
-            return "#888888"
+    def get_racer_palette(name: str) -> RacerPalette:
+        if name in RACER_PALETTES:
+            return RACER_PALETTES[name]
+        # Deterministic fallback based on name hash
+        return FALLBACK_PALETTES[hash(name) % len(FALLBACK_PALETTES)]
+
+    def get_racer_color(name: str) -> str:
+        """Legacy helper for charts that just need the primary color string."""
+        return get_racer_palette(name).primary
 
     def generate_racetrack_positions(
         num_spaces, start_x, start_y, straight_len, radius
@@ -365,7 +379,9 @@ def _(math):
         return positions
 
     board_positions = generate_racetrack_positions(NUM_TILES, 120, 350, 350, 100)
-    return board_positions, get_racer_color
+
+    # Export get_racer_palette too
+    return board_positions, get_racer_color, get_racer_palette
 
 
 @app.cell
@@ -374,12 +390,26 @@ def _(
     StepSnapshot,
     TripTile,
     VictoryPointTile,
-    get_racer_color,
+    get_racer_palette,
     math,
 ):
     # --- RENDERER ---
     def render_game_track(turn_data: StepSnapshot, positions_map, board=None):
         import html as _html
+
+        # --- VISUALIZATION CONSTANTS ---
+        # Geometry
+        MAIN_RADIUS = 9.0  # The radius of the main racer circle
+        SECONDARY_RADIUS = (
+            8.0  # The radius of the inner ring (set closer to 9.0 for a border look)
+        )
+
+        # Stroke Widths
+        OUTLINE_WIDTH = 1.5  # Thickness of the black outline around the main circle
+        SECONDARY_WIDTH = 1.5  # Thickness of the inner ring stroke
+        TEXT_STROKE_WIDTH = (
+            "4px"  # Thickness of the stroke around racer names for readability
+        )
 
         if not turn_data:
             return "<p>No Data</p>"
@@ -423,44 +453,37 @@ def _(
 
             # --- 2. SPECIAL TILE LOGIC (isinstance checks) ---
             if board:
-                # Retrieve the list of modifiers for this tile index
                 mods = board.static_features.get(i, [])
                 for mod in mods:
                     if isinstance(mod, VictoryPointTile):
-                        fill_color = "#81D4FA"  # Light Blue
+                        fill_color = "#81D4FA"
                         text_content = "VP"
-                        text_fill = "#000"  # Black text on light tile
-
+                        text_fill = "#000"
                     elif isinstance(mod, TripTile):
-                        fill_color = "#111"  # Deep Black
+                        fill_color = "#111"
                         text_content = "T"
-                        text_fill = "#F44336"  # Red Text
+                        text_fill = "#F44336"
                         font_size = "16"
-
                     elif isinstance(mod, MoveDeltaTile):
                         d = mod.delta
                         if d > 0:
-                            fill_color = "#A5D6A7"  # Light Green
+                            fill_color = "#A5D6A7"
                             text_content = f"+{d}"
                             text_fill = "#1B5E20"
                         elif d < 0:
-                            fill_color = "#EF9A9A"  # Light Red
+                            fill_color = "#EF9A9A"
                             text_content = f"{d}"
                             text_fill = "#B71C1C"
 
             # --- 3. START / END OVERRIDES ---
-            # IMPORTANT: We keep the fill_color (Dark Grey) so it's OPAQUE
-            # and hides any tile underneath it. We only change the stroke.
             if is_start:
-                stroke_color = "#4CAF50"  # Green Outline
+                stroke_color = "#4CAF50"
                 stroke_width = "4"
-                # Only overwrite text if it hasn't been changed by a special tile
                 if text_content == str(i):
                     text_content = "S"
                     text_fill = "#4CAF50"
-
             elif is_end:
-                stroke_color = "#F44336"  # Red Outline
+                stroke_color = "#F44336"
                 stroke_width = "4"
                 if text_content == str(i):
                     text_content = "G"
@@ -486,6 +509,9 @@ def _(
             draw_pos = min(pos, len(positions_map) - 1)
             name = turn_data.names[idx]
 
+            # Retrieve palette for visualization
+            palette = get_racer_palette(name)
+
             mods = turn_data.modifiers
             abils = turn_data.abilities
             mod_str = str(mods[idx]) if idx < len(mods) else "[]"
@@ -495,7 +521,7 @@ def _(
             occupancy.setdefault(draw_pos, []).append(
                 {
                     "name": name,
-                    "color": get_racer_color(name),
+                    "palette": palette,
                     "is_current": (idx == turn_data.current_racer),
                     "tripped": turn_data.tripped[idx],
                     "tooltip": tooltip_text,
@@ -550,20 +576,33 @@ def _(
                             text_anchor = "start"
                             tx = cx + 14
 
-                stroke = "#fff" if racer["is_current"] else "#000"
-                width = "3" if racer["is_current"] else "1.5"
+                # Get Palette
+                pal = racer["palette"]
+                stroke = pal.outline
 
                 svg_elements.append(f"<g>")
                 svg_elements.append(f"<title>{_html.escape(racer['tooltip'])}</title>")
+
+                # 1. Main Circle (Primary Fill)
                 svg_elements.append(
-                    f'<circle cx="{cx}" cy="{cy}" r="9" fill="{racer["color"]}" stroke="{stroke}" stroke-width="{width}" />'
+                    f'<circle cx="{cx}" cy="{cy}" r="{MAIN_RADIUS}" fill="{pal.primary}" stroke="{stroke}" stroke-width="{OUTLINE_WIDTH}" />'
                 )
+
+                # 2. Secondary Ring (Optional)
+                if pal.secondary:
+                    svg_elements.append(
+                        f'<circle cx="{cx}" cy="{cy}" r="{SECONDARY_RADIUS}" fill="none" stroke="{pal.secondary}" stroke-width="{SECONDARY_WIDTH}" />'
+                    )
+
+                # 3. Label (Primary color fill, stroke for readability)
                 svg_elements.append(
                     f'<text x="{tx}" y="{ty}" dy="{dy_text}" font-family="sans-serif" font-size="13" '
-                    f'font-weight="900" text-anchor="{text_anchor}" fill="{racer["color"]}" '
-                    f'style="paint-order: stroke; stroke: #111; stroke-width: 4px;">'
+                    f'font-weight="900" text-anchor="{text_anchor}" fill="{pal.primary}" '
+                    f'style="paint-order: stroke; stroke: #000; stroke-width: {TEXT_STROKE_WIDTH};">'
                     f"{_html.escape(racer['name'])}</text>"
                 )
+
+                # 4. Tripped Marker
                 if racer["tripped"]:
                     svg_elements.append(
                         f'<text x="{cx}" y="{cy}" dy="5" fill="#ff0000" font-weight="bold" font-size="14" text-anchor="middle">X</text>'
@@ -572,16 +611,31 @@ def _(
 
         svg_elements.append("</g>")
 
-        # 4. Dice Roll (Centered)
+        # 4. Center Display (Active Racer + Dice)
         center_x = (120 + 350 / 2) * scale_factor + trans_x
         center_y = (350 - 100) * scale_factor + trans_y
+
+        # Get active racer info
+        active_idx = turn_data.current_racer
+        active_name = turn_data.names[active_idx]
+        active_pal = get_racer_palette(active_name)
         roll = turn_data.last_roll
 
+        # Background Box
         svg_elements.append(
-            f'<rect x="{center_x - 60}" y="{center_y - 40}" width="120" height="80" rx="10" fill="#222" stroke="#444" stroke-width="2"/>'
+            f'<rect x="{center_x - 70}" y="{center_y - 50}" width="140" height="100" rx="10" fill="#222" stroke="#444" stroke-width="2"/>'
         )
+
+        # Active Racer Name
         svg_elements.append(
-            f'<text x="{center_x}" y="{center_y}" dy="10" font-size="50" font-weight="bold" text-anchor="middle" fill="#eee">🎲 {roll}</text>'
+            f'<text x="{center_x}" y="{center_y - 15}" font-size="20" font-weight="bold" text-anchor="middle" '
+            f'fill="{active_pal.primary}" style="paint-order: stroke; stroke: {active_pal.outline}; stroke-width: 1px;">'
+            f"{_html.escape(active_name)}</text>"
+        )
+
+        # Dice Roll
+        svg_elements.append(
+            f'<text x="{center_x}" y="{center_y + 35}" font-size="40" font-weight="bold" text-anchor="middle" fill="#eee">🎲 {roll}</text>'
         )
 
         return f"""<svg width="{W}" height="{H}" style="background:#1e1e1e; border:2px solid #333; border-radius:8px;">
