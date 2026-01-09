@@ -74,6 +74,36 @@ reportUnusedParameter = "none"
 pythonpath = ["tests"]
 testpaths = ["tests"]
 
+# Commitizen
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "v$version"
+version_scheme = "pep440"
+update_changelog_on_bump = true
+version_files = ["pyproject.toml:version"]
+changelog_file = "CHANGELOG.md"
+pre_bump_hooks = ["uv run python scripts/release_prep.py"]
+post_bump_hooks = [
+    "uvx --from gh gh release create \"$CZ_POST_CURRENT_TAG_VERSION\" --generate-notes --verify-tag",
+]
+
+
+# Poe
+[tool.poe]
+envfile = ".env"
+
+[tool.poe.executor]
+type = "uv"
+run_options = ["--isolated"]
+
+[tool.poe.tasks]
+check = "uvx --from commitizen cz check --rev-range HEAD"
+bump = "uvx --from commitizen cz bump"
+build = "uv build"
+publish = "uv publish"
+release = { sequence = ["check", "bump", "build", "publish"] }
+
+
 [build-system]
 requires = ["uv_build>=0.9.10,<0.10.0"]
 build-backend = "uv_build"
