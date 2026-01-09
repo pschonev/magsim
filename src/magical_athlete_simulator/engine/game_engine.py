@@ -12,10 +12,12 @@ from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     EmitsAbilityTriggeredEvent,
     GameEvent,
+    HasTargetRacer,
     MainMoveSkippedEvent,
     MoveCmdEvent,
     PassingEvent,
     PerformMainRollEvent,
+    Phase,
     RacerFinishedEvent,
     ResolveMainMoveEvent,
     RollModificationWindowEvent,
@@ -76,6 +78,7 @@ class HeuristicKey:
     event_type: type[GameEvent]
     target_idx: int | None
     responsible_idx: int | None
+    phase: Phase
 
 
 @dataclass
@@ -244,38 +247,44 @@ class GameEngine:
         sched: ScheduledEvent,
         creation_hash: int | None,
     ) -> bool:
+        """
+        Returns True if a heuristic loop is detected.
+        """
         current_board_hash = self._calculate_board_hash()
 
-        # (Lagging event check remains the same...)
+        # 1. LAG CHECK: If the event is old (created in a previous state), let it drain.
         if creation_hash is not None and creation_hash != current_board_hash:
             return False
 
         ev = sched.event
+
+        # 2. KEY GENERATION: Now includes PHASE
         key = HeuristicKey(
             board_hash=current_board_hash,
             event_type=type(ev),
-            target_idx=getattr(ev, "target_racer_idx", None),
-            responsible_idx=getattr(ev, "responsible_racer_idx", None),
+            target_idx=ev.target_racer_idx if isinstance(ev, HasTargetRacer) else None,
+            responsible_idx=ev.responsible_racer_idx,
+            phase=ev.phase,
         )
 
         current_q_len = len(self.state.queue)
 
+        # 3. HISTORY TRACKING
         if key not in self.heuristic_history:
-            # First visit: Initialize with 1 visit
             self.heuristic_history[key] = LoopTrackingData(current_q_len, 1)
             return False
 
-        # We have been here before!
         data = self.heuristic_history[key]
 
-        # If the queue has shrunk since our last visit, we are making progress.
-        # Reset the strikes (or keep them, depending on how strict you want to be. Reset is safer).
+        # 4. PROGRESS CHECK: Has the queue shrunk?
+        # If queue got smaller, we are processing items successfully. Reset strikes.
         if current_q_len < data.min_queue_len:
             data.min_queue_len = current_q_len
-            data.visit_count = 1  # Reset count because we made progress
+            data.visit_count = 1
             return False
 
-        # The queue is stable or growing. This is suspicious.
+        # 5. STRIKE SYSTEM
+        # Queue is same size or bigger -> Possible Loop.
         data.visit_count += 1
 
         # ONLY trigger if we have failed to make progress X times in a row.
