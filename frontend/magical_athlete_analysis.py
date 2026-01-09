@@ -37,6 +37,7 @@ async def _():
     import micropip
     import re
     from typing import get_args, Any, Literal
+    import dataclasses
 
     import altair as alt
     import marimo as mo
@@ -89,6 +90,7 @@ async def _():
         VictoryPointTile,
         WarpCmdEvent,
         alt,
+        dataclasses,
         get_args,
         logging,
         math,
@@ -611,11 +613,10 @@ def _(
 
         svg_elements.append("</g>")
 
-        # 4. Center Display (Active Racer + Dice)
-        center_x = (120 + 350 / 2) * scale_factor + trans_x
+        # 4. Center Display (Active Racer & Dice)
+        center_x = (100 + 500) / 2 * scale_factor + trans_x
         center_y = (350 - 100) * scale_factor + trans_y
 
-        # Get active racer info
         active_idx = turn_data.current_racer
         active_name = turn_data.names[active_idx]
         active_pal = get_racer_palette(active_name)
@@ -623,20 +624,27 @@ def _(
 
         # Background Box
         svg_elements.append(
-            f'<rect x="{center_x - 70}" y="{center_y - 50}" width="140" height="100" rx="10" fill="#222" stroke="#444" stroke-width="2"/>'
+            f'<rect x="{center_x - 70}" y="{center_y - 50}" width="140" height="100" rx="10" fill="#222" stroke="#444" stroke-width="2" />'
         )
 
         # Active Racer Name
         svg_elements.append(
-            f'<text x="{center_x}" y="{center_y - 15}" font-size="20" font-weight="bold" text-anchor="middle" '
-            f'fill="{active_pal.primary}" style="paint-order: stroke; stroke: {active_pal.outline}; stroke-width: 1px;">'
-            f"{_html.escape(active_name)}</text>"
+            f'<text x="{center_x}" y="{center_y - 15}" font-size="20" font-weight="bold" text-anchor="middle" fill="{active_pal.primary}" style="paint-order: stroke; stroke: {active_pal.outline}; stroke-width: 1px;">{_html.escape(active_name)}</text>'
         )
 
-        # Dice Roll
-        svg_elements.append(
-            f'<text x="{center_x}" y="{center_y + 35}" font-size="40" font-weight="bold" text-anchor="middle" fill="#eee">🎲 {roll}</text>'
-        )
+        # --- [CHANGE START] ---
+        # Dice Roll OR Red X
+        if roll:
+            # Standard Dice Display (when roll > 0)
+            svg_elements.append(
+                f'<text x="{center_x}" y="{center_y + 35}" font-size="40" font-weight="bold" text-anchor="middle" fill="#eee" >🎲 {roll}</text>'
+            )
+        else:
+            # Recovery Turn Display (when roll is 0 or None) -> Big Red X
+            svg_elements.append(
+                f'<text x="{center_x}" y="{center_y + 35}" font-size="60" font-weight="bold" text-anchor="middle" fill="#ff0000" >X</text>'
+            )
+        # --- [CHANGE END] ---
 
         return f"""<svg width="{W}" height="{H}" style="background:#1e1e1e; border:2px solid #333; border-radius:8px;">
             {track_group_start}
@@ -1124,6 +1132,7 @@ def _(
     TripCmdEvent,
     WarpCmdEvent,
     current_roster,
+    dataclasses,
     get_board,
     get_debug_mode,
     get_dice_rolls_text,
@@ -1242,13 +1251,33 @@ def _(
         while not engine.state.race_over:
             log_console.export_html(clear=True)
             t_idx = sim_turn_counter["current"]
+
+            # --- [CHANGE] Capture WHO is acting and the roll state BEFORE execution ---
+            actual_racer_idx = engine.state.current_racer_idx
+            pre_turn_serial = engine.state.roll_state.serial_id
+
             scenario.run_turn()
 
-            # Note: We don't strictly NEED to call on_turn_end for the aggregator
-            # if we only care about ability counts, but it's good practice:
-            metrics_aggregator.on_turn_end(engine, turn_index=t_idx)
+            # --- [CHANGE] Capture roll state AFTER execution ---
+            post_turn_serial = engine.state.roll_state.serial_id
 
+            metrics_aggregator.on_turn_end(engine, turn_index=t_idx)
             snapshot_recorder.on_turn_end(engine, turn_index=t_idx)
+
+            # --- [CHANGE] Fix the Snapshot ---
+            last_snap = snapshot_recorder.step_history[-1]
+
+            # Fix 1: Ensure the snapshot points to the racer who ACTUALLY acted
+            updates = {"current_racer": actual_racer_idx}
+
+            # Fix 2: If serial didn't change, it was a recovery (No Roll) -> Set roll to 0
+            if post_turn_serial == pre_turn_serial:
+                updates["last_roll"] = 0
+
+            # Apply all updates at once
+            fixed_snap = dataclasses.replace(last_snap, **updates)
+            snapshot_recorder.step_history[-1] = fixed_snap
+
             sim_turn_counter["current"] += 1
             if len(snapshot_recorder.step_history) > 1000:
                 break
