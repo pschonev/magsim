@@ -43,7 +43,8 @@ async def _():
     from rich.console import Console
     from rich.logging import RichHandler
 
-    await micropip.install("magical-athlete-simulator==0.5.4", keep_going=True)
+    MAGICAL_ATHLETE_SIMULATOR_VERSION = "0.5.4"
+    await micropip.install(MAGICAL_ATHLETE_SIMULATOR_VERSION, keep_going=True)
 
     from magical_athlete_simulator.core.events import (
         MoveCmdEvent,
@@ -68,6 +69,7 @@ async def _():
         GameLogHighlighter,
         GameScenario,
         Literal,
+        MAGICAL_ATHLETE_SIMULATOR_VERSION,
         MoveCmdEvent,
         RacerConfig,
         RacerName,
@@ -949,6 +951,7 @@ def _(dice_rolls_text_ui, mo, use_scripted_dice_ui):
 
 @app.cell
 def _(
+    MAGICAL_ATHLETE_SIMULATOR_VERSION,
     load_status,
     mo,
     racer_results_table,
@@ -957,7 +960,11 @@ def _(
     results_folder_browser,
 ):
     def _header():
-        return mo.hstack([mo.md(load_status), reload_data_btn], justify="space-between")
+        return mo.hstack(
+            [mo.md(f"**v{MAGICAL_ATHLETE_SIMULATOR_VERSION}**"), reload_data_btn],
+            justify="end",
+            gap=1,
+        )
 
     results_tabs = mo.ui.tabs(
         {

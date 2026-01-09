@@ -4,6 +4,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import tomllib  # Requires Python 3.11+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PYPROJECT = ROOT / "pyproject.toml"
@@ -15,21 +16,35 @@ PACKAGE = "magical-athlete-simulator"
 
 
 def read_version() -> str:
-    text = PYPROJECT.read_text(encoding="utf-8")
-    m = re.search(r'(?m)^\s*version\s*=\s*"([^"]+)"\s*$', text)
-    if not m:
-        raise SystemExit('Could not find: version = "..." in pyproject.toml')
-    return m.group(1)
+    """Reads the project version using standard tomllib."""
+    # tomllib.load requires opening the file in binary mode
+    with PYPROJECT.open("rb") as f:
+        data = tomllib.load(f)
+
+    # Assumes PEP 621 metadata structure
+    try:
+        return data["project"]["version"]
+    except KeyError:
+        raise SystemExit("Could not find [project] version in pyproject.toml")
 
 
 def update_notebook_pin(version: str) -> None:
+    """Updates the version constant in the notebook file."""
     text = NOTEBOOK.read_text(encoding="utf-8")
+
+    # Regex to find: MAGICAL_ATHLETE_SIMULATOR_VERSION = "..."
+    # Captures the variable name + equals sign in group 1, and the quote style in group 2/3
     pat = re.compile(
-        rf'(await\s+micropip\.install\("){re.escape(PACKAGE)}==[^"]+("\s*,\s*keep_going=True\s*\))'
+        r'(^MAGICAL_ATHLETE_SIMULATOR_VERSION\s*=\s*)(["\'])([^"\']+)(["\'])',
+        re.MULTILINE,
     )
-    new, n = pat.subn(rf"\1{PACKAGE}=={version}\2", text)
+
+    # \1 restores variable name, \2 restores open quote, version is new, \4 restores close quote
+    new, n = pat.subn(rf"\g<1>\g<2>{version}\g<4>", text)
+
     if n != 1:
-        raise SystemExit(f"Expected to update 1 micropip.install pin, updated {n}")
+        raise SystemExit(f"Expected to update 1 version constant, updated {n}")
+
     NOTEBOOK.write_text(new, encoding="utf-8")
 
 
