@@ -16,7 +16,7 @@ __generated_with = "0.18.4"
 app = marimo.App(
     width="full",
     app_title="Magical Athlete Simulator",
-    css_file="docs/magical_athlete_analysis.css",
+    css_file="magical_athlete_analysis.css",
 )
 
 
@@ -60,6 +60,7 @@ async def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -515,6 +516,7 @@ def _(StepSnapshot, get_racer_color, math):
             {track_group_start}
             {"".join(svg_elements)}
         </svg>"""
+
     return (render_game_track,)
 
 
