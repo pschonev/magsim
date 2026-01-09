@@ -36,6 +36,12 @@ def update_notebook_pin(version: str) -> None:
 def export_docs() -> None:
     (DOCS_DIR / "results").mkdir(parents=True, exist_ok=True)
 
+    # Copy CSS BEFORE export so marimo can find it
+    shutil.copy2(
+        ROOT / "frontend" / "magical_athlete_analysis.css",
+        DOCS_DIR / "magical_athlete_analysis.css",
+    )
+
     subprocess.check_call(
         [
             "uvx",
@@ -49,11 +55,6 @@ def export_docs() -> None:
             "-o",
             str(DOCS_DIR),
         ]
-    )
-
-    shutil.copy2(
-        ROOT / "frontend" / "magical_athlete_analysis.css",
-        DOCS_DIR / "magical_athlete_analysis.css",
     )
 
     for p in RESULTS_DIR.glob("*.parquet"):
