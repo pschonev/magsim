@@ -92,7 +92,8 @@ major_version_zero = true
 pre_bump_hooks = ["uv run python scripts/release_prep.py"]
 post_bump_hooks = [
     "git push --tags",
-    "gh release create \"$CZ_POST_CURRENT_TAG_VERSION\" --generate-notes",
+    "sh -c 'cz changelog --incremental --unreleased-version \"$CZ_POST_CURRENT_VERSION\" --dry-run > /tmp/release_notes.md'",
+    "gh release create \"$CZ_POST_CURRENT_TAG_VERSION\" --notes-file /tmp/release_notes.md",
 ]
 
 
