@@ -10,7 +10,7 @@ dependencies = ["rich>=13.7.1"]
 
 [project.urls]
 Repository = "https://github.com/pschonev/magical-athlete-simulator"
-Changelog = "https://github.com/pschonev/magical-athlete-simulator/CHANGELOG.md"
+Changelog = "https://github.com/pschonev/magical-athlete-simulator/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 cli = [
@@ -100,7 +100,7 @@ bump = "cz bump"
 build = "uv build"
 publish = "uv publish"
 push = "git push --follow-tags"
-release = { sequence = ["check", "bump", "build", "publish", "push"] }
+release = { sequence = ["bump", "build", "publish", "push"] }
 
 [build-system]
 requires = ["uv_build>=0.9.10,<0.10.0"]

@@ -2,6 +2,7 @@
 # requires-python = ">=3.14"
 # dependencies = [
 #     "altair==6.0.0",
+#     "marimo>=0.19.0",
 #     "polars==1.36.1",
 #     "sqlmodel==0.0.31",
 # ]
@@ -38,7 +39,7 @@ async def _():
     from rich.console import Console
     from rich.logging import RichHandler
 
-    await micropip.install("magical-athlete-simulator==0.4.0", keep_going=True)
+    await micropip.install("magical-athlete-simulator==0.5.0", keep_going=True)
 
     from magical_athlete_simulator.core.events import (
         MoveCmdEvent,

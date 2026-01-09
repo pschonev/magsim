@@ -51,7 +51,10 @@ def export_docs() -> None:
         ]
     )
 
-    shutil.copy2(ROOT / "frontend" / "magical_athlete_analysis.css", DOCS_DIR / "magical_athlete_analysis.css")
+    shutil.copy2(
+        ROOT / "frontend" / "magical_athlete_analysis.css",
+        DOCS_DIR / "magical_athlete_analysis.css",
+    )
 
     for p in RESULTS_DIR.glob("*.parquet"):
         shutil.copy2(p, DOCS_DIR / "results" / p.name)
