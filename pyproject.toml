@@ -89,12 +89,6 @@ version_scheme = "pep440"
 version_provider = "uv"
 update_changelog_on_bump = true
 major_version_zero = true
-pre_bump_hooks = ["uv run python scripts/release_prep.py"]
-post_bump_hooks = [
-    "git push --tags",
-    "sh -c 'cz changelog --incremental --unreleased-version \"$CZ_POST_CURRENT_VERSION\" --dry-run > /tmp/release_notes.md'",
-    "gh release create \"$CZ_POST_CURRENT_TAG_VERSION\" --notes-file /tmp/release_notes.md",
-]
 
 
 # Poe
@@ -102,12 +96,32 @@ post_bump_hooks = [
 envfile = ".env"
 
 [tool.poe.tasks]
-check = "cz check --rev-range HEAD"
-bump = "cz bump"
-build = "uv build"
-publish = "uv publish"
-push = "git push --follow-tags"
-release = { sequence = ["bump", "build", "publish", "push"] }
+# Atomic steps
+release-prep = "python scripts/release_prep.py"
+release-commit = "git add pyproject.toml uv.lock CHANGELOG.md docs/ frontend/magical_athlete_analysis.py && git commit -m 'chore(release): prepare v$(python -c \"import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])\" )'"
+release-build = "uv build"
+release-publish = "uv publish"
+release-tags = "git push --tags"
+release-github = "sh -c 'cz changelog --incremental --unreleased-version \"$(cz version)\" --dry-run > /tmp/release_notes.md && gh release create \"$(cz version)\" --notes-file /tmp/release_notes.md'"
+
+# Single command release
+release = { sequence = [
+    "bump",
+    "release-prep",
+    "release-commit",
+    "release-build",
+    "release-publish",
+    "release-tags",
+    "release-github",
+] }
+
+# Safety: Test without publishing
+release-dry = { sequence = [
+    "bump",
+    "release-prep",
+    "release-commit",
+], shell = true }
+
 
 [build-system]
 requires = ["uv_build>=0.9.10,<0.10.0"]
