@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.0 (2026-01-10)
+
+### Feat
+
+- **frontend**: Show X on skipped turns
+- **frontend**: Add better racer coloring
+- Render Wild Wilds special tiles
+
+### Fix
+
+- Fix crash when picking from racer result table
+- Allow picking from racers result table again
+
+### Refactor
+
+- Show version in notebook
+- Remove some AI comment on export
+
 ## 0.5.4 (2026-01-09)
 
 ### Fix

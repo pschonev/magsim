@@ -44,7 +44,7 @@ async def _():
     from rich.console import Console
     from rich.logging import RichHandler
 
-    MAGICAL_ATHLETE_SIMULATOR_VERSION = "0.5.4"
+    MAGICAL_ATHLETE_SIMULATOR_VERSION = "0.6.0"
     await micropip.install(
         f"magical-athlete-simulator=={MAGICAL_ATHLETE_SIMULATOR_VERSION}",
         keep_going=True,
@@ -70,7 +70,6 @@ async def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -651,7 +650,6 @@ def _(
             {track_group_start}
             {"".join(svg_elements)}
         </svg>"""
-
     return (render_game_track,)
 
 
