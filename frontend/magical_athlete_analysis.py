@@ -635,15 +635,19 @@ def _(
         # --- [CHANGE START] ---
         # Dice Roll OR Red X
         if roll:
-            # Standard Dice Display (when roll > 0)
+            # 1. Standard Dice Display (Active Roll)
             svg_elements.append(
                 f'<text x="{center_x}" y="{center_y + 35}" font-size="40" font-weight="bold" text-anchor="middle" fill="#eee" >🎲 {roll}</text>'
             )
-        else:
-            # Recovery Turn Display (when roll is 0 or None) -> Big Red X
+        elif turn_data.turn_index > 0:
+            # 2. Recovery/Skipped Turn (Roll 0)
+            # We explicitly check turn_index > 0 so we don't draw an X on the "Initial State".
             svg_elements.append(
                 f'<text x="{center_x}" y="{center_y + 35}" font-size="60" font-weight="bold" text-anchor="middle" fill="#ff0000" >X</text>'
             )
+
+        # 3. Implicit Else (Turn == 0 and Roll == 0):
+        # Draw nothing. This leaves the center empty for the setup phase.
         # --- [CHANGE END] ---
 
         return f"""<svg width="{W}" height="{H}" style="background:#1e1e1e; border:2px solid #333; border-radius:8px;">
@@ -1228,22 +1232,25 @@ def _(
     )
 
     # --- CHANGED BLOCK START ---
-    # We use the new Aggregator. We need a dummy hash since we aren't saving to DB here.
     metrics_aggregator = MetricsAggregator(config_hash="interactive-session")
     metrics_aggregator.initialize_racers(scenario.engine)
 
-    sim_turn_counter = {"current": 0}
+    # FIX 1: Start the counter at 1.
+    # Turn 0 is reserved for "Board Setup". Turn 1 is the first actual move.
+    sim_turn_counter = {"current": 1}
 
     def on_event(engine, event):
         t_idx = sim_turn_counter["current"]
         snapshot_recorder.on_event(engine, event, turn_index=t_idx)
-        metrics_aggregator.on_event(event)  # <--- UPDATED CALL
+        metrics_aggregator.on_event(event)
 
     if hasattr(scenario.engine, "on_event_processed"):
         scenario.engine.on_event_processed = on_event
     # --- CHANGED BLOCK END ---
 
     engine = scenario.engine
+
+    # FIX 2: Capture Initial State as Turn 0
     snapshot_recorder.capture(engine, "InitialState", turn_index=0)
 
     with mo.status.spinner(title="Simulating..."):
@@ -1251,29 +1258,27 @@ def _(
             log_console.export_html(clear=True)
             t_idx = sim_turn_counter["current"]
 
-            # --- [CHANGE] Capture WHO is acting and the roll state BEFORE execution ---
             actual_racer_idx = engine.state.current_racer_idx
             pre_turn_serial = engine.state.roll_state.serial_id
 
             scenario.run_turn()
 
-            # --- [CHANGE] Capture roll state AFTER execution ---
             post_turn_serial = engine.state.roll_state.serial_id
 
             metrics_aggregator.on_turn_end(engine, turn_index=t_idx)
             snapshot_recorder.on_turn_end(engine, turn_index=t_idx)
 
-            # --- [CHANGE] Fix the Snapshot ---
             last_snap = snapshot_recorder.step_history[-1]
 
-            # Fix 1: Ensure the snapshot points to the racer who ACTUALLY acted
+            # Fix 1: Ensure snapshot points to the actor
             updates = {"current_racer": actual_racer_idx}
 
-            # Fix 2: If serial didn't change, it was a recovery (No Roll) -> Set roll to 0
-            if post_turn_serial == pre_turn_serial:
+            # Fix 2: "Red X" logic
+            # We check (t_idx > 1) because Turn 1 is the first roll.
+            # If a "Recovery" happens on Turn 2+, the serial won't change.
+            if t_idx > 1 and post_turn_serial == pre_turn_serial:
                 updates["last_roll"] = 0
 
-            # Apply all updates at once
             fixed_snap = dataclasses.replace(last_snap, **updates)
             snapshot_recorder.step_history[-1] = fixed_snap
 
@@ -1285,7 +1290,7 @@ def _(
     turn_map = snapshot_recorder.turn_map
 
     info_md = mo.md(
-        f"✅ **Simulation complete!** {len(current_roster)} racers, {sim_turn_counter['current']} turns"
+        f"✅ **Simulation complete!** {len(current_roster)} racers, {sim_turn_counter['current'] - 1} turns"
     )
     return info_md, step_history, turn_map
 
@@ -1358,7 +1363,7 @@ def _(get_step_idx, mo, set_step_idx, step_history, turn_map):
 
     nav_max_turn = max(turn_map.keys()) if turn_map else 0
     turn_slider = mo.ui.slider(
-        start=0,
+        start=-1,
         stop=nav_max_turn,
         value=current_turn_idx,
         step=1,
@@ -2421,7 +2426,12 @@ def _(
         "Activity (Avg Triggers / Turn)",
         "Efficacy (Corr Triggers to VP)",
         False,
-        ["Potent", "Ability Driven", "Low Reliance", "Incidental"],  # Quadrant Labels
+        [
+            "Potent",
+            "Ability Driven",
+            "Low Reliance",
+            "Incidental",
+        ],  # Quadrant Labels
     )
 
     # --- 4. GLOBAL DYNAMICS (SPLIT INTO TWO CHARTS, STACKED) ---
