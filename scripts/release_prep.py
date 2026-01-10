@@ -32,20 +32,22 @@ def update_notebook_pin(version: str) -> None:
     """Updates the version constant in the notebook file."""
     text = NOTEBOOK.read_text(encoding="utf-8")
 
-    # Regex to find: MAGICAL_ATHLETE_SIMULATOR_VERSION = "..."
-    # Captures the variable name + equals sign in group 1, and the quote style in group 2/3
-    pat = re.compile(
-        r'(^MAGICAL_ATHLETE_SIMULATOR_VERSION\s*=\s*)(["\'])([^"\']+)(["\'])',
-        re.MULTILINE,
-    )
+    # Universal pattern: any assignment to this variable
+    pattern = r'(MAGICAL_ATHLETE_SIMULATOR_VERSION\s*=\s*)(["\'])([^"\']+)\2'
 
-    # \1 restores variable name, \2 restores open quote, version is new, \4 restores close quote
-    new, n = pat.subn(rf"\g<1>\g<2>{version}\g<4>", text)
+    # Find ALL matches first
+    matches = list(re.finditer(pattern, text))
+    if len(matches) != 1:
+        print(f"Found {len(matches)} matches instead of 1:")
+        for i, m in enumerate(matches):
+            print(f"  {i}: '{m.group(0)}'")
+        raise SystemExit(f"Expected exactly 1 match, found {len(matches)}")
 
-    if n != 1:
-        raise SystemExit(f"Expected to update 1 version constant, updated {n}")
+    # Replace the single match
+    new_text = re.sub(pattern, rf"\g<1>\g<2>{version}\g<2>", text)
 
-    NOTEBOOK.write_text(new, encoding="utf-8")
+    NOTEBOOK.write_text(new_text, encoding="utf-8")
+    print(f"✅ Updated version: {version}")
 
 
 def export_docs() -> None:
