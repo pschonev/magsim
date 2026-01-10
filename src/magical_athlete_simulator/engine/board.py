@@ -22,52 +22,45 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class Board:
-    """Manages track topology and spatial modifiers (static and dynamic)."""
-
     length: int
     static_features: dict[int, list[SpaceModifier]]
-    dynamic_modifiers: defaultdict[int, set[SpaceModifier]] = field(
-        init=False,
-        default_factory=lambda: defaultdict(set),
+    # CHANGED: Use LIST, not SET
+    dynamic_modifiers: defaultdict[int, list[SpaceModifier]] = field(
+        init=False, default_factory=lambda: defaultdict(list)
     )
 
-    @property
-    def finish_space(self) -> int:
-        return self.length
-
     def register_modifier(
-        self,
-        tile: int,
-        modifier: SpaceModifier,
-        engine: GameEngine,
+        self, tile: int, modifier: SpaceModifier, engine: GameEngine
     ) -> None:
         modifiers = self.dynamic_modifiers[tile]
+
+        # Manual deduplication for lists
+        # Because eq=True, this prevents adding a second "identical" blocker
         if modifier not in modifiers:
-            modifiers.add(modifier)
+            modifiers.append(modifier)
             engine.log_info(
-                f"BOARD: Registered {modifier.name} (owner={modifier.owner_idx}) at tile {tile}",
+                f"BOARD: Registered {modifier.name} (owner={modifier.owner_idx}) at tile {tile}"
             )
 
     def unregister_modifier(
-        self,
-        tile: int,
-        modifier: SpaceModifier,
-        engine: GameEngine,
+        self, tile: int, modifier: SpaceModifier, engine: GameEngine
     ) -> None:
         modifiers = self.dynamic_modifiers.get(tile)
+
+        # eq=True makes "in" work even for new instances
         if not modifiers or modifier not in modifiers:
             engine.log_warning(
-                f"BOARD: Failed to unregister {modifier.name} from {tile} - not found.",
+                f"BOARD: Failed to unregister {modifier.name} from {tile} - not found."
             )
             return
 
         modifiers.remove(modifier)
         engine.log_info(
-            f"BOARD: Unregistered {modifier.name} (owner={modifier.owner_idx}) from tile {tile}",
+            f"BOARD: Unregistered {modifier.name} (owner={modifier.owner_idx}) from tile {tile}"
         )
 
         if not modifiers:
-            _ = self.dynamic_modifiers.pop(tile, None)
+            self.dynamic_modifiers.pop(tile, None)
 
     def get_modifiers_at(self, tile: int) -> list[SpaceModifier]:
         static = self.static_features.get(tile, ())

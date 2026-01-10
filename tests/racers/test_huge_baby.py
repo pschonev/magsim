@@ -203,3 +203,163 @@ def test_jump_over_huge_baby(scenario: type[GameScenario]):
 
     # 0 -> 6 (Jumps over 5)
     assert game.get_racer(0).position == 6
+
+def test_copycat_cleanup_on_leader_change(scenario: type[GameScenario]):
+    """
+    Scenario:
+    1. HugeBaby (Pos 10) rolls low, stays leader briefly.
+    2. Copycat (Pos 0) moves to 5, copies Baby -> Places Blocker at 5.
+    3. Mastermind (Pos 4) moves -> HITS the blocker at 5 (Proves it is active).
+    4. Centaur (Pos 10) rolls higher -> Overtakes Baby.
+       -> Copycat reacts immediately, switching to Centaur.
+       -> Copycat loses HugeBabyPush.
+       -> Blocker at Tile 5 should vanish.
+    """
+    game = scenario(
+        [
+            RacerConfig(0, "HugeBaby", start_pos=10),
+            RacerConfig(1, "Copycat", start_pos=0),
+            RacerConfig(2, "Mastermind", start_pos=4), 
+            RacerConfig(3, "Centaur", start_pos=10),   # Starts alongside Baby
+        ],
+        dice_rolls=[
+            1,   # Baby: 10 -> 11 (Current Leader)
+            5,   # Copycat: Copies Baby. 0 -> 5. Blocker at 5.
+            1,   # Mastermind: 4 -> 5. Should be blocked -> 4.
+            2,   # Centaur: 10 -> 12. (12 > 11). NEW LEADER. Switch triggers.
+        ],
+    )
+
+    # 1. Baby moves slightly (10 -> 11)
+    game.run_turn()
+    
+    # 2. Copycat copies Baby (Leader), moves to 5
+    game.run_turn() 
+    assert game.get_racer(1).position == 5
+    # Verify Blocker exists
+    mods = game.engine.state.board.get_modifiers_at(5)
+    assert any(m.name == "HugeBabyBlocker" for m in mods)
+
+    # 3. Mastermind runs into the wall (VERIFY ACTIVE)
+    game.run_turn() 
+    assert game.get_racer(2).position == 4, "Mastermind should have been blocked by Copycat"
+
+    # 4. Centaur moves (10 -> 12), overtaking Baby (11)
+    # This move triggers PostMoveEvent -> Copycat switches -> on_loss fires
+    game.run_turn() 
+    assert game.get_racer(3).position == 12
+
+    # 5. VERIFY CLEANUP
+    # The blocker at 5 should be gone immediately.
+    mods_after = game.engine.state.board.get_modifiers_at(5)
+    ghosts = [m for m in mods_after if m.name == "HugeBabyBlocker"]
+    
+    assert not ghosts, f"Ghost Blocker remains! Copycat failed to clean up: {ghosts}"
+
+def test_copycat_bounce_preserves_blocker(scenario: type[GameScenario]):
+    """
+    Scenario:
+    1. HugeBaby is at Tile 6 (Leader).
+    2. Copycat is at Tile 5.
+    3. Turn Start: Copycat copies HugeBaby (gains HugeBabyPush).
+       - Copycat places a blocker at 5 (via on_gain or previous turn).
+    4. Copycat rolls 1.
+       - Path: 5 -> 6 (Blocked by HugeBaby) -> 5.
+       - Net Move: 0.
+    
+    FAILURE (Current Code):
+    - PreMove: Copycat picks up blocker at 5.
+    - Move: 0 distance (5->5).
+    - PostMove: Skipped by Engine.
+    - Result: Copycat lands on 5, but the blocker is GONE.
+    """
+    game = scenario(
+        [
+            RacerConfig(0, "HugeBaby", start_pos=6), # The Wall
+            RacerConfig(1, "Copycat", start_pos=5),  # The Victim
+        ],
+        dice_rolls=[
+            0, # HugeBaby stays put
+            1, # Copycat rolls 1
+        ]
+    )
+    
+    # 1. HugeBaby turn (idle)
+    game.run_turn()
+    
+    # 2. Copycat turn
+    # - Copies HugeBaby (TurnStart)
+    # - Rolls 1 -> Bounces off HugeBaby -> Lands on 5
+    game.run_turn()
+    
+    assert game.get_racer(1).position == 5, "Copycat should have bounced back to 5"
+    
+    # 3. CRITICAL CHECK
+    # With the bug, Copycat's blocker is gone because PreMove removed it 
+    # and PostMove never ran to put it back.
+    mods = game.engine.state.board.get_modifiers_at(5)
+    copycat_blocker = [
+        m for m in mods 
+        if m.name == "HugeBabyBlocker" and m.owner_idx == 1
+    ]
+    
+    assert copycat_blocker, "Copycat lost their blocker after bouncing back!"
+
+def test_copycat_zombie_blocker_on_overtake(scenario: type[GameScenario]):
+    """
+    Scenario: Race Condition during PostMove.
+    1. HugeBaby is at 6. Copycat is at 5 (and has copied HugeBaby).
+    2. Copycat moves 5 -> 7.
+    3. Copycat is now the Leader (7 > 6).
+    
+    Execution Order (The Bug):
+    1. AbilityCopyLead fires first:
+       - Sees Copycat is leader.
+       - REMOVES HugeBabyPush.
+       - on_loss fires -> Tries to unregister from Tile 7 (Current Pos). 
+       - Fails (Blocker is still at 5).
+    2. HugeBabyPush fires second (Zombie):
+       - It was queued before removal.
+       - Executes and PLACES blocker at Tile 7.
+       
+    Result: Copycat has no ability, but a Ghost Blocker exists at 7.
+    """
+    game = scenario(
+        [
+            RacerConfig(0, "HugeBaby", start_pos=6),
+            RacerConfig(1, "Copycat", start_pos=5),
+        ],
+        dice_rolls=[
+            0, # Baby stays
+            2, # Copycat: 5 -> 7 (Overtakes)
+        ]
+    )
+
+    # 1. Setup: Baby at 6
+    game.run_turn()
+    
+    # 2. Copycat Turn
+    # - Start: Copies HugeBaby (gains ability)
+    # - Move: 5 -> 7
+    # - PostMove: Loses ability (because it leads), but Zombie Logic places blocker.
+    game.run_turn()
+    
+    assert game.get_racer(1).position == 7
+    
+    # Verify Copycat lost the ability
+    assert "HugeBabyPush" not in game.get_racer(1).active_abilities, \
+        "Copycat should have lost HugeBabyPush after taking the lead"
+
+    # CRITICAL CHECK
+    # There should be NO blocker at 7.
+    mods = game.engine.state.board.get_modifiers_at(7)
+    ghosts = [m for m in mods if m.name == "HugeBabyBlocker"]
+    
+    assert not ghosts, f"Zombie Blocker found at Tile 7! {ghosts}"
+    
+    # BONUS CHECK
+    # The old blocker at 5 should also be gone.
+    mods_old = game.engine.state.board.get_modifiers_at(5)
+    old_ghosts = [m for m in mods_old if m.name == "HugeBabyBlocker"]
+    assert not old_ghosts, f"Old Blocker still at Tile 5! {old_ghosts}"
+

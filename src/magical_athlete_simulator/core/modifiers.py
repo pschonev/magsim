@@ -31,7 +31,7 @@ class Modifier(ABC):
         return hash((self.name, self.owner_idx))
 
 
-@dataclass(eq=False)
+@dataclass
 class SpaceModifier(Modifier, ABC):
     """Base for board features. Can mix in Approach or Landing hooks."""
 
