@@ -88,10 +88,27 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
     @override
     @staticmethod
     def on_loss(engine: GameEngine, owner_idx: int):
+        # [FIX] "Search and Destroy"
+        # We scan for the blocker instead of assuming it is at racer.position.
+        # This handles cases where:
+        # A) We are at Tile 0 (No blocker exists) -> No Warning.
+        # B) We just moved, and the blocker is still at start_tile -> Finds and removes it.
+
         racer = engine.get_racer(owner_idx)
-        mod = HugeBabyModifier(owner_idx=owner_idx)
-        # With eq=True, this NEW mod equals the OLD mod on the board, so removal works.
-        engine.state.board.unregister_modifier(racer.position, mod, engine)
+        template = HugeBabyModifier(owner_idx=owner_idx)
+        board = engine.state.board
+
+        # 1. Optimization: Check current position first (Silent Check)
+        if template in board.dynamic_modifiers.get(racer.position, []):
+            board.unregister_modifier(racer.position, template, engine)
+            return
+
+        # 2. Fallback: Scan the board
+        # This handles the "Overtake" race condition (blocker left behind at start_tile)
+        for tile, modifiers in list(board.dynamic_modifiers.items()):
+            if template in modifiers:
+                board.unregister_modifier(tile, template, engine)
+                return
 
     @override
     def execute(
@@ -106,28 +123,26 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
             if event.target_racer_idx != owner_idx:
                 return "skip_trigger"
 
-            # [FIX START] ZOMBIE CHECK
-            # We check if we are still active. If CopyLead ran before us in this same event loop
-            # and removed us, we are 'dead' but still executing.
+            # [FIXED ZOMBIE CHECK]
+            # Use safe removal to avoid warnings if on_loss() beat us to it.
             racer = engine.get_racer(owner_idx)
             if self.name not in racer.active_abilities:
-                # We are a Zombie.
-                # Problem: on_loss() already ran, but it looked at 'end_tile' (current pos)
-                # and failed to find the blocker. The blocker is actually still at 'start_tile'.
-                # We must clean it up manually.
                 if event.start_tile != 0:
-                    mod_to_remove = self._get_modifier(owner_idx)
-                    engine.state.board.unregister_modifier(
-                        event.start_tile, mod_to_remove, engine
-                    )
-
-                # Do NOT place a new blocker. Abort.
+                    template = self._get_modifier(owner_idx)
+                    # Check existence before removing
+                    if template in engine.state.board.dynamic_modifiers.get(
+                        event.start_tile, []
+                    ):
+                        engine.state.board.unregister_modifier(
+                            event.start_tile, template, engine
+                        )
                 return "skip_trigger"
-            # [FIX END]
 
             # 1. ATOMIC MOVE: Clean up the OLD tile
             if event.start_tile != 0:
                 mod_to_remove = self._get_modifier(owner_idx)
+                # Here we WANT a warning if it's missing, because that would be a bug
+                # in normal operation (we expect to have a blocker).
                 engine.state.board.unregister_modifier(
                     event.start_tile, mod_to_remove, engine
                 )
@@ -139,6 +154,7 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
             mod_to_add = self._get_modifier(owner_idx)
             engine.state.board.register_modifier(event.end_tile, mod_to_add, engine)
 
+            # ... (Push logic continues below) ...
             # 3. "Active Push": Eject any racers already on this tile
             victims = [
                 r

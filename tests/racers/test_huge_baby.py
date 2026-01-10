@@ -363,3 +363,46 @@ def test_copycat_zombie_blocker_on_overtake(scenario: type[GameScenario]):
     old_ghosts = [m for m in mods_old if m.name == "HugeBabyBlocker"]
     assert not old_ghosts, f"Old Blocker still at Tile 5! {old_ghosts}"
 
+import logging
+
+def test_copycat_start_line_warning_fix(scenario: type[GameScenario], caplog):
+    """
+    Scenario:
+    1. HugeBaby is at 2. Copycat is at 0 (Copies HugeBaby).
+    2. Copycat has NO blocker (because it's at 0).
+    3. Copycat moves 0 -> 3 (Overtakes HugeBaby).
+    4. Copycat loses HugeBabyPush.
+    
+    FAILURE (Current): on_loss blindly tries to unregister from Tile 3 -> WARNING.
+    SUCCESS (Fix): on_loss checks first -> No Warning.
+    """
+    # 1. Clear previous logs
+    caplog.clear()
+    
+    game = scenario(
+        [
+            RacerConfig(0, "HugeBaby", start_pos=2),
+            RacerConfig(1, "Copycat", start_pos=0),
+        ],
+        dice_rolls=[
+            0, # Baby stays
+            3, # Copycat: 0 -> 3
+        ]
+    )
+
+    # 1. Setup
+    game.run_turn()
+    
+    # 2. Copycat Turn
+    # We use caplog to inspect the standard python logging output
+    with caplog.at_level(logging.WARNING, logger="magical_athlete"):
+        game.run_turn()
+    
+    # Check for the specific board warning in the captured records
+    warnings = [
+        r.message for r in caplog.records 
+        if "BOARD: Failed to unregister HugeBabyBlocker" in r.message
+    ]
+        
+    assert not warnings, f"Found unexpected warnings: {warnings}"
+    assert "HugeBabyPush" not in game.get_racer(1).active_abilities
