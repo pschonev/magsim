@@ -2062,6 +2062,9 @@ def _(
                 ),
                 (pl.corr("racer_id", "final_vp") * -1).alias("start_pos_bias"),
                 pl.corr("pos_diff_from_median", "final_vp").alias("midgame_bias"),
+                pl.corr("ability_trigger_count", "final_vp").alias(
+                    "trigger_dependency"
+                ),
             )
             .fill_nan(0)
         )
@@ -2399,6 +2402,19 @@ def _(
         ],
     )
 
+    c_engine = _build_quadrant_chart(
+        stats,
+        r_list,
+        c_list,
+        "triggers_per_turn",  # X: Frequency
+        "trigger_dependency",  # Y: Efficacy (The stat you found)
+        "Engine Profile",
+        "Activity (Avg Triggers / Turn)",
+        "Efficacy (Corr Triggers to VP)",
+        False,
+        ["Potent", "Ability Driven", "Low Reliance", "Incidental"],  # Quadrant Labels
+    )
+
     # --- 4. GLOBAL DYNAMICS (SPLIT INTO TWO CHARTS, STACKED) ---
     race_meta = df_races_f.select(["config_hash", "board", "racer_count"])
 
@@ -2661,6 +2677,16 @@ def _(
                     mo.md(
                         """**Tightness** (X-axis, reversed): Average distance from mean position across all turns.    
     **Volatility** (Y-axis): Percentage of turns where at least one racer changes rank."""
+                    ),
+                ]
+            ),
+            "⚡ Abilities": mo.vstack(
+                [
+                    mo.ui.altair_chart(c_engine),
+                    mo.md(
+                        """**X: Activity** – Average number of ability triggers per turn.  
+    **Y: Efficacy** – Correlation between trigger count and Victory Points.  
+    *Do more ability triggers mean more points?*"""
                     ),
                 ]
             ),
