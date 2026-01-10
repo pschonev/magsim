@@ -286,40 +286,24 @@ def _(df_racer_results, df_races, mo, pl):
 
 @app.cell
 def _(math):
-    from typing import NamedTuple, Optional
+    from typing import NamedTuple
 
     # --- DATA STRUCTURES ---
     class RacerPalette(NamedTuple):
         primary: str
-        secondary: Optional[str] = None
+        secondary: str | None = None
         outline: str = "#000000"
 
-    # --- CONSTANTS ---
-    NUM_TILES = 31  # 0..30 (30 is the finish tile)
-
+    # --- CONSTANTS: RACERS ---
     # Placeholder Colors - Primary (Fill), Secondary (Ring), Outline
     RACER_PALETTES = {
-        "Banana": RacerPalette(
-            "#FFD700", "#DAA520", "#4B3621"
-        ),  # Gold, Dark Goldenrod, Walnut
-        "Centaur": RacerPalette(
-            "#8B4513", "#CD853F", "#3E2723"
-        ),  # SaddleBrown, Peru, Dark Bean
-        "Magician": RacerPalette(
-            "#9370DB", "#4B0082", "#1A1A2E"
-        ),  # MediumPurple, Indigo, Dark Blue
-        "Scoocher": RacerPalette(
-            "#FF6347", "#FFFFFF", "#800000"
-        ),  # Tomato, White, Maroon
-        "Gunk": RacerPalette(
-            "#228B22", "#ADFF2F", "#004d00"
-        ),  # ForestGreen, GreenYellow, DarkGreen
-        "HugeBaby": RacerPalette(
-            "#FF69B4", "#FFC0CB", "#C71585"
-        ),  # HotPink, Pink, MedVioletRed
-        "Copycat": RacerPalette(
-            "#4682B4", "#B0C4DE", "#000080"
-        ),  # SteelBlue, LightSteel, Navy
+        "Banana": RacerPalette("#FFD700", "#DAA520", "#4B3621"),
+        "Centaur": RacerPalette("#8B4513", "#CD853F", "#3E2723"),
+        "Magician": RacerPalette("#9370DB", "#4B0082", "#1A1A2E"),
+        "Scoocher": RacerPalette("#FF6347", "#FFFFFF", "#800000"),
+        "Gunk": RacerPalette("#228B22", "#ADFF2F", "#004d00"),
+        "HugeBaby": RacerPalette("#FF69B4", "#FFC0CB", "#C71585"),
+        "Copycat": RacerPalette("#4682B4", "#B0C4DE", "#000080"),
     }
 
     FALLBACK_PALETTES = [
@@ -331,58 +315,109 @@ def _(math):
         RacerPalette("#1E90FF", None, "#000"),
     ]
 
+    # --- CONSTANTS: BOARD THEME ---
+    # Centralized colors for special tiles to be used by the renderer
+    BOARD_THEME = {
+        "background": "#1e1e1e",
+        "tile_1": "#333333",  # Alternating dark grey
+        "tile_2": "#3e3e3e",  # Alternating lighter grey
+        "stroke_default": "#555",
+        "text_default": "#aaa",
+        # Special Tiles
+        "start_fill": "#4CAF50",  # Green
+        "start_text": "#4CAF50",
+        "goal_fill": "#F44336",  # Red
+        "goal_text": "#F44336",
+        "trip_fill": "#111111",  # Near Black
+        "trip_text": "#F44336",
+        "vp_fill": "#81D4FA",  # Light Blue
+        "vp_text": "#000000",
+        "move_pos_fill": "#A5D6A7",  # Pale Green
+        "move_pos_text": "#1B5E20",
+        "move_neg_fill": "#EF9A9A",  # Pale Red
+        "move_neg_text": "#B71C1C",
+    }
+
+    # --- HELPER FUNCTIONS ---
     def get_racer_palette(name: str) -> RacerPalette:
         if name in RACER_PALETTES:
             return RACER_PALETTES[name]
-        # Deterministic fallback based on name hash
         return FALLBACK_PALETTES[hash(name) % len(FALLBACK_PALETTES)]
 
     def get_racer_color(name: str) -> str:
-        """Legacy helper for charts that just need the primary color string."""
         return get_racer_palette(name).primary
 
     def generate_racetrack_positions(
         num_spaces, start_x, start_y, straight_len, radius
     ):
+        """
+        Generates a Clockwise stadium track starting from the Top-Left straight.
+        (Flipped vertically compared to the previous version).
+        """
         positions = []
         perimeter = (2 * straight_len) + (2 * math.pi * radius)
         step_distance = perimeter / num_spaces
+
+        # Geometry Definitions (Y increases downwards in SVG)
+        # Top Straight: y = start_y
+        # Bottom Straight: y = start_y + 2*radius
+
         right_circle_cx = start_x + straight_len
-        right_circle_cy = start_y - radius
+        right_circle_cy = start_y + radius  # Center is 'below' the top straight
+
         left_circle_cx = start_x
-        left_circle_cy = start_y - radius
+        left_circle_cy = start_y + radius
 
         for i in range(num_spaces):
             dist = i * step_distance
+
+            # 1. Top Straight (Moving Right)
             if dist < straight_len:
-                x, y, angle = start_x + dist, start_y, 0
+                x = start_x + dist
+                y = start_y
+                angle = 0  # Facing Right
+
+            # 2. Right Curve (Moving Clockwise/Down)
             elif dist < (straight_len + math.pi * radius):
                 arc_dist = dist - straight_len
                 fraction = arc_dist / (math.pi * radius)
-                theta = (math.pi / 2) - (fraction * math.pi)
+                # Angle goes from -PI/2 (Top) to +PI/2 (Bottom)
+                theta = (-math.pi / 2) + (fraction * math.pi)
+
                 x = right_circle_cx + radius * math.cos(theta)
                 y = right_circle_cy + radius * math.sin(theta)
+                # Tangent angle = theta + 90 degrees
                 angle = math.degrees(theta) + 90
+
+            # 3. Bottom Straight (Moving Left)
             elif dist < (2 * straight_len + math.pi * radius):
                 top_dist = dist - (straight_len + math.pi * radius)
-                x, y, angle = (
-                    (start_x + straight_len) - top_dist,
-                    start_y - (2 * radius),
-                    180,
-                )
+                x = (start_x + straight_len) - top_dist
+                y = start_y + (2 * radius)
+                angle = 180  # Facing Left
+
+            # 4. Left Curve (Moving Clockwise/Up)
             else:
                 arc_dist = dist - (2 * straight_len + math.pi * radius)
                 fraction = arc_dist / (math.pi * radius)
-                theta = (-math.pi / 2) - (fraction * math.pi)
+                # Angle goes from +PI/2 (Bottom) to 3PI/2 (Top)
+                theta = (math.pi / 2) + (fraction * math.pi)
+
                 x = left_circle_cx + radius * math.cos(theta)
                 y = left_circle_cy + radius * math.sin(theta)
                 angle = math.degrees(theta) + 90
+
             positions.append((x, y, angle))
+
         return positions
 
-    board_positions = generate_racetrack_positions(NUM_TILES, 120, 350, 350, 100)
+    # Constants
+    NUM_TILES = 31  # 0..30
 
-    # Export get_racer_palette too
+    # Generate the map (Y-coordinates will now be positive/downwards, creating a "Top Straight")
+    board_positions = generate_racetrack_positions(NUM_TILES, 120, 150, 350, 100)
+
+    # Export everything needed by the renderer
     return board_positions, get_racer_color, get_racer_palette
 
 
@@ -395,16 +430,13 @@ def _(
     get_racer_palette,
     math,
 ):
-    # --- RENDERER ---
+    # --- RENDERER (RAW / UNPATCHED) ---
     def render_game_track(turn_data: StepSnapshot, positions_map, board=None):
         import html as _html
 
         # --- VISUALIZATION CONSTANTS ---
-        # Geometry
         MAIN_RADIUS = 9.0
         SECONDARY_RADIUS = 8.0
-
-        # Stroke Widths
         OUTLINE_WIDTH = 1.5
         SECONDARY_WIDTH = 1.5
         TEXT_STROKE_WIDTH = "4px"
@@ -426,22 +458,10 @@ def _(
             f'<g transform="translate({trans_x}, {trans_y}) scale({scale_factor})">'
         )
 
-        # --- [NEW] Calculate Vertical Pivot for Mirroring ---
-        # We scan the map to find the vertical center.
-        # We will reflect all Y coordinates across this line to flip Bottom <-> Top.
-        pivot_y = 0
-        if positions_map:
-            all_ys = [p[1] for p in positions_map]
-            if all_ys:
-                pivot_y = (min(all_ys) + max(all_ys)) / 2
-        # ----------------------------------------------------
-
         # 2. Track Spaces
         for i, (cx, cy, rot) in enumerate(positions_map):
-            # --- [NEW] Apply Vertical Flip to Tile ---
-            cy = 2 * pivot_y - cy  # Mirror Y
-            rot = -rot  # Invert Rotation angle for correct orientation
-            # -----------------------------------------
+            # [REMOVED] No Pivot / Mirror logic here.
+            # We trust positions_map is correct.
 
             transform = f"rotate({rot}, {cx}, {cy})"
 
@@ -449,7 +469,6 @@ def _(
             is_start = i == 0
             is_end = i == len(positions_map) - 1
 
-            # Alternating Dark Grays
             if (i // 2) % 2 == 0:
                 fill_color = "#333333"
             else:
@@ -458,13 +477,12 @@ def _(
             stroke_color = "#555"
             stroke_width = "2"
 
-            # Default Text
             text_content = str(i)
             text_fill = "#aaa"
             font_weight = "bold"
             font_size = "10"
 
-            # --- 2. SPECIAL TILE LOGIC (isinstance checks) ---
+            # --- 2. SPECIAL TILE LOGIC ---
             if board:
                 mods = board.static_features.get(i, [])
                 for mod in mods:
@@ -502,14 +520,12 @@ def _(
                     text_content = "G"
                     text_fill = "#F44336"
 
-            # Render Tile Rect
             svg_elements.append(
                 f'<rect x="{cx - rw / 2:.1f}" y="{cy - rh / 2:.1f}" width="{rw}" height="{rh}" '
                 f'fill="{fill_color}" stroke="{stroke_color}" stroke-width="{stroke_width}" '
                 f'transform="{transform}" rx="4" />'
             )
 
-            # Render Tile Text
             svg_elements.append(
                 f'<text x="{cx:.1f}" y="{cy:.1f}" dy="4" font-family="sans-serif" '
                 f'font-size="{font_size}" font-weight="{font_weight}" '
@@ -542,11 +558,7 @@ def _(
         # Render Racers
         for space_idx, racers_here in occupancy.items():
             bx, by, brot = positions_map[space_idx]
-
-            # --- [NEW] Apply Vertical Flip to Racer Position ---
-            by = 2 * pivot_y - by
-            brot = -brot
-            # ---------------------------------------------------
+            # [REMOVED] No coordinate flipping here either
 
             count = len(racers_here)
 
