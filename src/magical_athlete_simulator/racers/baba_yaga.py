@@ -30,26 +30,42 @@ class BabaYagaTrip(Ability):
         engine: GameEngine,
         agent: Agent,
     ):
-        if not isinstance(event, self.triggers):
+        if not isinstance(event, (PostMoveEvent, PostWarpEvent)):
             return "skip_trigger"
 
-        # whether Baba Yaga moves somewhere or racers move onto her space
-        # everyone there except Baba Yaga will trip
         baba = engine.get_racer(owner_idx)
         if not baba.active:
             return "skip_trigger"
 
-        for victim in engine.get_racers_at_position(
-            tile_idx=baba.position,
-            except_racer_idx=owner_idx,
-        ):
-            push_trip(
-                engine,
-                phase=event.phase,
-                tripped_racer_idx=victim.idx,
-                source=self.name,
-                responsible_racer_idx=owner_idx,
-                emit_ability_triggered="after_resolution",
+        # CASE 1: Baba Yaga Moved
+        # She trips everyone at her new location.
+        if event.target_racer_idx == owner_idx:
+            victims = engine.get_racers_at_position(
+                tile_idx=baba.position,
+                except_racer_idx=owner_idx,
             )
+            for victim in victims:
+                push_trip(
+                    engine,
+                    phase=event.phase,
+                    tripped_racer_idx=victim.idx,
+                    source=self.name,
+                    responsible_racer_idx=owner_idx,
+                    emit_ability_triggered="after_resolution",
+                )
+
+        # CASE 2: Someone else moved
+        # She trips them ONLY if they landed on her tile.
+        else:
+            mover = engine.get_racer(event.target_racer_idx)
+            if mover.position == baba.position:
+                push_trip(
+                    engine,
+                    phase=event.phase,
+                    tripped_racer_idx=mover.idx,
+                    source=self.name,
+                    responsible_racer_idx=owner_idx,
+                    emit_ability_triggered="after_resolution",
+                )
 
         return "skip_trigger"
