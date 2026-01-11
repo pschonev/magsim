@@ -22,9 +22,11 @@ RacerName = Literal[
     "Dicemonger",
     "Suckerfish",
     "Duelist",
+    "LovableLoser",
     "Leaptoad",
     "Mastermind",
     "Stickler",
+    "Sisyphus",
 ]
 
 AbilityName = Literal[
@@ -50,7 +52,9 @@ AbilityName = Literal[
     "SticklerStrictFinishManager",
     "SuckerfishRide",
     "DuelistChallenge",
+    "LovableLoserBonus",
     "MastermindPredict",
+    "SisyphusCurse",
 ]
 
 ModifierName = Literal[

@@ -93,3 +93,11 @@ class MovementValidatorMixin(ABC):
         self, engine: GameEngine, racer_idx: int, start_tile: int, end_tile: int
     ) -> bool:
         pass
+
+
+class SetupPhaseMixin(ABC):
+    """Mixin for abilities that trigger logic once at the very beginning of the game."""
+
+    @abstractmethod
+    def on_setup(self, engine: GameEngine, owner_idx: int) -> None:
+        pass

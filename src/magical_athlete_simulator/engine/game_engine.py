@@ -18,6 +18,7 @@ from magical_athlete_simulator.core.events import (
     RacerFinishedEvent,
     ResolveMainMoveEvent,
     RollModificationWindowEvent,
+    RollResultEvent,
     ScheduledEvent,
     SimultaneousMoveCmdEvent,
     SimultaneousWarpCmdEvent,
@@ -28,6 +29,7 @@ from magical_athlete_simulator.core.events import (
 )
 from magical_athlete_simulator.core.mixins import (
     LifecycleManagedMixin,
+    SetupPhaseMixin,
 )
 from magical_athlete_simulator.core.registry import RACER_ABILITIES
 from magical_athlete_simulator.engine.logging import ContextFilter
@@ -95,8 +97,11 @@ class GameEngine:
             initial = RACER_ABILITIES.get(racer.name, set())
             self.update_racer_abilities(racer.idx, initial)
 
-        for racer in self.state.racers:
             _ = self.agents.setdefault(racer.idx, SmartAgent())
+
+            for ability in racer.active_abilities.values():
+                if isinstance(ability, SetupPhaseMixin):
+                    ability.on_setup(self, racer.idx)
 
     # --- Main Loop ---
     def run_race(self):
@@ -360,6 +365,7 @@ class GameEngine:
                 | AbilityTriggeredEvent()
                 | RollModificationWindowEvent()
                 | RacerFinishedEvent()
+                | RollResultEvent()
             ):
                 self.publish_to_subscribers(event)
             case TripCmdEvent():

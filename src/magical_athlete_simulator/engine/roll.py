@@ -100,6 +100,10 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
         ),
     )
 
+    # make sure that nothing made the racer skip the main move
+    if engine.get_racer(event.target_racer_idx).main_move_consumed:
+        return
+
     dist = engine.state.roll_state.final_value
     if dist > 0:
         push_move(

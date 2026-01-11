@@ -24,13 +24,17 @@ if TYPE_CHECKING:
 class Board:
     length: int
     static_features: dict[int, list[SpaceModifier]]
-    # CHANGED: Use LIST, not SET
+    second_turn: int | None = 15
     dynamic_modifiers: defaultdict[int, list[SpaceModifier]] = field(
-        init=False, default_factory=lambda: defaultdict(list)
+        init=False,
+        default_factory=lambda: defaultdict(list),
     )
 
     def register_modifier(
-        self, tile: int, modifier: SpaceModifier, engine: GameEngine
+        self,
+        tile: int,
+        modifier: SpaceModifier,
+        engine: GameEngine,
     ) -> None:
         modifiers = self.dynamic_modifiers[tile]
 
