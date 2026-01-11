@@ -80,16 +80,14 @@ class LeaptoadJump(Ability, LifecycleManagedMixin):
     ):
         return "skip_trigger"
 
-    @staticmethod
     @override
-    def on_gain(engine: GameEngine, owner_idx: int) -> None:
+    def on_gain(self, engine: GameEngine, owner_idx: int) -> None:
         """Apply the jump modifier to self."""
         mod = LeaptoadJumpModifier(owner_idx=owner_idx)
         add_racer_modifier(engine, owner_idx, mod)
 
-    @staticmethod
     @override
-    def on_loss(engine: GameEngine, owner_idx: int) -> None:
+    def on_loss(self, engine: GameEngine, owner_idx: int) -> None:
         """Remove the jump modifier from self."""
         mod = LeaptoadJumpModifier(owner_idx=owner_idx)
         remove_racer_modifier(engine, owner_idx, mod)

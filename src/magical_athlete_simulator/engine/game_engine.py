@@ -325,7 +325,7 @@ class GameEngine:
         for name in removed:
             instance = current_instances.pop(name)
             if isinstance(instance, LifecycleManagedMixin):
-                instance.__class__.on_loss(self, racer_idx)
+                instance.on_loss(self, racer_idx)
 
             for event_type in self.subscribers:
                 self.subscribers[event_type] = [
@@ -344,7 +344,7 @@ class GameEngine:
                 instance.register(self, racer_idx)
                 current_instances[name] = instance
                 if isinstance(instance, LifecycleManagedMixin):
-                    instance.__class__.on_gain(self, racer_idx)
+                    instance.on_gain(self, racer_idx)
 
     def publish_to_subscribers(self, event: GameEvent):
         if type(event) not in self.subscribers:

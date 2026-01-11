@@ -68,16 +68,14 @@ class AbilitySlime(Ability, LifecycleManagedMixin):
     triggers: tuple[type[GameEvent], ...] = ()
 
     @override
-    @staticmethod
-    def on_gain(engine: GameEngine, owner_idx: int) -> None:
+    def on_gain(self, engine: GameEngine, owner_idx: int) -> None:
         # Apply debuff to ALL other active racers
         for r in engine.state.racers:
             if r.idx != owner_idx and not r.finished:
                 add_racer_modifier(engine, r.idx, ModifierSlime(owner_idx=owner_idx))
 
     @override
-    @staticmethod
-    def on_loss(engine: GameEngine, owner_idx: int) -> None:
+    def on_loss(self, engine: GameEngine, owner_idx: int) -> None:
         # Clean up debuff from everyone
         for r in engine.state.racers:
             remove_racer_modifier(engine, r.idx, ModifierSlime(owner_idx=owner_idx))

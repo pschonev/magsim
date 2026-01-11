@@ -63,18 +63,16 @@ class SticklerStrictFinish(Ability, LifecycleManagedMixin):
     ):
         return "skip_trigger"
 
-    @staticmethod
     @override
-    def on_gain(engine: GameEngine, owner_idx: int) -> None:
+    def on_gain(self, engine: GameEngine, owner_idx: int) -> None:
         """Apply the constraint modifier to all other racers."""
         constraint = SticklerConstraint(owner_idx=owner_idx)
         for racer in engine.state.racers:
             if racer.idx != owner_idx:
                 add_racer_modifier(engine, racer.idx, constraint)
 
-    @staticmethod
     @override
-    def on_loss(engine: GameEngine, owner_idx: int) -> None:
+    def on_loss(self, engine: GameEngine, owner_idx: int) -> None:
         """Remove the constraint modifier from all other racers."""
         constraint = SticklerConstraint(owner_idx=owner_idx)
         for racer in engine.state.racers:

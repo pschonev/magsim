@@ -64,14 +64,12 @@ class LandingHookMixin(ABC):
 
 
 class LifecycleManagedMixin(ABC):
-    @staticmethod
     @abstractmethod
-    def on_gain(engine: GameEngine, owner_idx: int) -> None:
+    def on_gain(self, engine: GameEngine, owner_idx: int) -> None:
         pass
 
-    @staticmethod
     @abstractmethod
-    def on_loss(engine: GameEngine, owner_idx: int) -> None:
+    def on_loss(self, engine: GameEngine, owner_idx: int) -> None:
         pass
 
 
@@ -80,7 +78,11 @@ class DestinationCalculatorMixin(ABC):
 
     @abstractmethod
     def calculate_destination(
-        self, engine: GameEngine, racer_idx: int, start_tile: int, distance: int
+        self,
+        engine: GameEngine,
+        racer_idx: int,
+        start_tile: int,
+        distance: int,
     ) -> int:
         pass
 

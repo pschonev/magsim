@@ -138,8 +138,7 @@ class AbilityPartyBoost(Ability, LifecycleManagedMixin):
     triggers: tuple[type[GameEvent], ...] = ()
 
     @override
-    @staticmethod
-    def on_gain(engine: GameEngine, owner_idx: int):
+    def on_gain(self, engine: GameEngine, owner_idx: int):
         # Apply the "Check for Neighbors" modifier to MYSELF
         add_racer_modifier(
             engine,
@@ -148,8 +147,7 @@ class AbilityPartyBoost(Ability, LifecycleManagedMixin):
         )
 
     @override
-    @staticmethod
-    def on_loss(engine: GameEngine, owner_idx: int):
+    def on_loss(self, engine: GameEngine, owner_idx: int):
         remove_racer_modifier(
             engine,
             owner_idx,

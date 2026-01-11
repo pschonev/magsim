@@ -78,16 +78,14 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
         return HugeBabyModifier(owner_idx=owner_idx)
 
     @override
-    @staticmethod
-    def on_gain(engine: GameEngine, owner_idx: int):
+    def on_gain(self, engine: GameEngine, owner_idx: int):
         racer = engine.get_racer(owner_idx)
         if racer.position > 0:
             mod = HugeBabyModifier(owner_idx=owner_idx)
             engine.state.board.register_modifier(racer.position, mod, engine)
 
     @override
-    @staticmethod
-    def on_loss(engine: GameEngine, owner_idx: int):
+    def on_loss(self, engine: GameEngine, owner_idx: int):
         # [FIX] "Search and Destroy"
         # We scan for the blocker instead of assuming it is at racer.position.
         # This handles cases where:
