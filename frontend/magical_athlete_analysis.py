@@ -1331,7 +1331,7 @@ def _(get_step_idx, mo, set_step_idx, step_history, turn_map):
     prev_turn_target = current_turn_idx - 1
 
     if next_turn_target in turn_map:
-        next_turn_step_val = turn_map[next_turn_target][0]
+        next_turn_step_val = turn_map[next_turn_target][-1]
     else:
         next_turn_step_val = current_step_idx
 
