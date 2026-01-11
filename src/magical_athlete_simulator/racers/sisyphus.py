@@ -42,7 +42,7 @@ class SisyphusCurse(Ability, SetupPhaseMixin):
             return "skip_trigger"
 
         # "Whenever he rolls a 6" (checking final value after modifiers usually)
-        if event.final_value == 6:
+        if event.base_value == 6:
             racer = engine.get_racer(owner_idx)
             engine.log_info("Sisyphus rolled a 6! The boulder rolls back...")
 

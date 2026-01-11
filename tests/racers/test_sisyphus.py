@@ -49,3 +49,23 @@ def test_sisyphus_setup_normal_play_and_curse(scenario: type[GameScenario]):
     # The Ability warps to 0, then skips move.
     # If move wasn't skipped, he would move 6 from 0 (landing at 6).
     assert sisyphus.position == 0, "Turn 2: Should not execute main move after warp"
+
+def test_sisyphus_use_base_roll(scenario: type[GameScenario]):
+    """
+    Sisyphus starts with +4 VP.
+    Turn 1: Rolls safe (3), moves normally, keeps VP.
+    Turn 2: Rolls 6 (Curse), warps to start, loses 1 VP, loses main move.
+    """
+    game = scenario(
+        [
+            RacerConfig(0, "Sisyphus", start_pos=0),
+            RacerConfig(1, "Gunk", start_pos=0),
+        ],
+        dice_rolls=[3, 1, 6],
+    )
+
+    game.run_turns(3)
+    sisyphus = game.get_racer(0)
+
+    assert sisyphus.position == 0
+    assert sisyphus.victory_points == 3
