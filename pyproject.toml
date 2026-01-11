@@ -96,25 +96,31 @@ major_version_zero = true
 envfile = ".env"
 
 [tool.poe.tasks]
-# Atomic steps
 clean = "rm -rf dist"
 bump-files = "cz bump --yes --files-only"
+
 release-prep = "python scripts/release_prep.py"
-release-commit = { shell = "git add pyproject.toml uv.lock CHANGELOG.md docs/ frontend/magical_athlete_analysis.py && git commit -m 'chore(release): prepare v$(python -c \"import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])\" )'" }
+
+git-add = "git add pyproject.toml uv.lock CHANGELOG.md docs/ frontend/magical_athlete_analysis.py"
+git-commit = { shell = 'git commit -m "chore(release): prepare v$(python -c "import tomllib; print(tomllib.load(open(\"pyproject.toml\", \"rb\"))[\"project\"][\"version\"])" )"' }
+git-tag = { shell = 'git tag $(python -c "import tomllib; print(tomllib.load(open(\"pyproject.toml\", \"rb\"))[\"project\"][\"version\"])" )' }
+
 release-build = "uv build"
 release-publish = "uv publish"
-release-tags = "git push --tags"
-release-github = "sh -c 'cz changelog --incremental --unreleased-version \"$(cz version)\" --dry-run > /tmp/release_notes.md && gh release create \"$(cz version)\" --notes-file /tmp/release_notes.md'"
+release-push-tags = "git push --tags"
+release-github = { shell = 'ver=$(python -c "import tomllib; print(tomllib.load(open(\"pyproject.toml\", \"rb\"))[\"project\"][\"version\"])" ) && cz changelog --incremental --unreleased-version "$ver" --dry-run > release_notes.md && gh release create "$ver" --notes-file release_notes.md' }
 
-# Single command release
+# 5. The Release Sequence
 release = { sequence = [
     "clean",
     "bump-files",
     "release-prep",
-    "release-commit",
+    "git-add",
+    "git-commit",
+    "git-tag",
     "release-build",
     "release-publish",
-    "release-tags",
+    "release-push-tags",
     "release-github",
 ] }
 
