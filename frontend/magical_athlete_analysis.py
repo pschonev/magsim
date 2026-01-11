@@ -220,6 +220,7 @@ def _(df_racer_results, df_races, mo, pl):
     import json  # Required for the WASM fix
 
     HASH_COL = "config_hash"
+    BG_COLOR = "#181c1a"
 
     # 1. Get unique racers for column headers
     unique_racers = sorted(df_racer_results.get_column("racer_name").unique().to_list())
@@ -281,11 +282,11 @@ def _(df_racer_results, df_races, mo, pl):
         label="Races (Matrix View)",
         freeze_columns_left=priority_cols,
     )
-    return df_races_clean, racer_results_table, races_table
+    return BG_COLOR, df_races_clean, racer_results_table, races_table
 
 
 @app.cell
-def _(math):
+def _(BG_COLOR, math):
     from typing import NamedTuple
 
     # --- DATA STRUCTURES ---
@@ -336,9 +337,9 @@ def _(math):
 
     # --- CONSTANTS: BOARD THEME ---
     BOARD_THEME = {
-        "background": "#1e1e1e",
-        "tile_1": "#333333",
-        "tile_2": "#3e3e3e",
+        "background": BG_COLOR,
+        "tile_1": "#2d3432",
+        "tile_2": "#363e3b",
         "stroke_default": "#555",
         "text_default": "#aaa",
         # Special Tiles
@@ -452,7 +453,7 @@ def _(
         # Dimensions & Scaling
         W, H = 1000, 600
         scale_factor = 1.45
-        trans_x = 50
+        trans_x = 75
         trans_y = -60
         rw, rh = 50, 30
 
@@ -639,8 +640,6 @@ def _(
         active_pal = get_racer_palette(active_name)
         roll = turn_data.last_roll
 
-        # [REMOVED] Background Rect
-
         # Active Racer Name (Floating)
         svg_elements.append(
             f'<text x="{center_x}" y="{center_y - 15}" font-size="28" font-weight="bold" text-anchor="middle" fill="{active_pal.primary}" style="paint-order: stroke; stroke: {active_pal.outline}; stroke-width: 2px; filter: drop-shadow(0px 0px 2px black);">{_html.escape(active_name)}</text>'
@@ -655,10 +654,10 @@ def _(
                 f'<text x="{center_x}" y="{center_y + 35}" font-size="60" font-weight="bold" text-anchor="middle" fill="#ff0000" >X</text>'
             )
 
-        return f"""<svg width="{W}" height="{H}" style="background:{BOARD_THEME["background"]}; border:2px solid #333; border-radius:8px;">
-            {track_group_start}
-            {"".join(svg_elements)}
-        </svg>"""
+        return f"""<svg width="{W}" height="{H}" style="background:{BOARD_THEME["background"]};"> 
+                {track_group_start}
+                {"".join(svg_elements)}
+            </svg>"""
     return (render_game_track,)
 
 
@@ -1427,7 +1426,7 @@ def _(
 
 
 @app.cell
-def _(current_data, current_turn_idx, mo, step_history, turn_map):
+def _(BG_COLOR, current_data, current_turn_idx, mo, step_history, turn_map):
     # --- LOG VIEWER ---
     if not current_data:
         log_ui = mo.md("No logs")
@@ -1454,7 +1453,7 @@ def _(current_data, current_turn_idx, mo, step_history, turn_map):
                 )
                 content_html = "<br>".join(lines)
             else:
-                bg, border, opacity = "#1e1e1e", "#333", "0.5"
+                bg, border, opacity = BG_COLOR, "#333", "0.5"
                 content_html = full_turn_log.replace("\n", "<br>")
 
             segments.append(f"""
@@ -1470,7 +1469,7 @@ def _(current_data, current_turn_idx, mo, step_history, turn_map):
         log_ui = mo.vstack(
             [
                 mo.Html(
-                    f"""<div id="{container_id}" style="height:750px; overflow-y:auto; background:#1e1e1e; font-family:monospace;">{full_html}</div>"""
+                    f"""<div id="{container_id}" style="height:750px; overflow-y:auto; background:{BG_COLOR}; font-family:monospace;">{full_html}</div>"""
                 ),
                 mo.iframe(scroll_script, width="0", height="0"),
             ]
@@ -1595,7 +1594,7 @@ def _(
         label="Board(s)",
     )
 
-    matchup_metric_toggle = mo.ui.switch(value=False, label="Show Percentage Shift")
+    matchup_metric_toggle = mo.ui.switch(value=True, label="Show Percentage Shift")
 
     # 4. Define "Run Analysis" Button with Callback
     def _submit_filters(_):
@@ -2150,6 +2149,7 @@ def _(
 
 @app.cell
 def _(
+    BG_COLOR,
     alt,
     dashboard_data,
     df_races_f,
@@ -2184,13 +2184,16 @@ def _(
                 title=metric_title,
                 scale=alt.Scale(
                     range=[
-                        "#FF007C",
-                        "#FF66A3",
-                        "#9E9E9E",
-                        "#9E9E9E",
-                        "#00B8FF",
-                        "#0055FF",
+                        "#F06292",  # Pink
+                        "#F06292",  # Pink (Anchor)
+                        "#3E3B45",  # Deep Lavender Grey (The Bridge)
+                        "#3E3B45",  # Deep Lavender Grey (The Bridge)
+                        "#42A5F5",
+                        "#42A5F5",  # Blue
+                        "#42A5F5",
+                        "#42A5F5",  # Blue (Anchor)
                     ],
+                    interpolate="rgb",
                 ),
                 legend=alt.Legend(format=legend_format),
             ),
@@ -2207,7 +2210,12 @@ def _(
                 alt.Tooltip("percentage_shift:Q", format="+.1%", title="Shift (%)"),
             ],
         )
-        .properties(title=f"Matchup Matrix ({metric_title})", width=680, height=680)
+        .properties(
+            title=f"Matchup Matrix ({metric_title})",
+            width=680,
+            height=680,
+            background=BG_COLOR,
+        )
     )
 
     # --- 2. QUADRANT CHART BUILDER (UPDATED) ---
@@ -2241,6 +2249,8 @@ def _(
         quad_labels=None,
         extra_tooltips=None,
     ):
+        PLOT_BG = "#232826"
+
         vals_x = stats_df[x_col].drop_nulls().to_list()
         vals_y = stats_df[y_col].drop_nulls().to_list()
 
@@ -2307,18 +2317,20 @@ def _(
         if extra_tooltips:
             tips.extend(extra_tooltips)
 
-        points = base.mark_circle(size=250, opacity=0.9).encode(  # Increased Dot Size
+        points = base.mark_circle(size=250, opacity=0.9).encode(
             x=alt.X(
                 f"{x_col}:Q",
                 title=x_title,
                 scale=alt.Scale(
                     domain=[view_min_x, view_max_x], reverse=reverse_x, zero=False
                 ),
+                axis=alt.Axis(grid=False),  # <--- Turn off X grid
             ),
             y=alt.Y(
                 f"{y_col}:Q",
                 title=y_title,
                 scale=alt.Scale(domain=[view_min_y, view_max_y], zero=False),
+                axis=alt.Axis(grid=False),  # <--- Turn off Y grid
             ),
             tooltip=tips,
         )
@@ -2331,30 +2343,28 @@ def _(
             baseline="middle",
             dy=-22,
             dx=-22,
-            fontSize=20,
-            fontWeight=500,
-            strokeWidth=1.5,
+            fontSize=15,  # Slightly smaller than 20 for cleaner look
+            fontWeight=800,  # Extra Bold is crucial for colored text
+            stroke=PLOT_BG,  # <--- THE FIX: Stroke matches plot background
+            strokeWidth=3,  # Wide halo
             opacity=1,
         ).encode(
             text="racer_name:N",
-            color=alt.Color("txt_stroke:N", legend=None),
-            stroke=alt.Stroke("txt_stroke:N", legend=None),
+            # No color needed, it's just the mask
         )
 
-        # Layer 2: The Fill (Racer Color)
         text_fill = points.mark_text(
             align="center",
             baseline="middle",
             dy=-22,
             dx=-22,
-            fontSize=20,  # Matches Outline
-            fontWeight=500,
+            fontSize=15,
+            fontWeight=800,
         ).encode(
             text="racer_name:N",
+            # Use the racer color directly, but consider a transform to pastel if possible
             color=alt.Color(
-                "racer_name:N",
-                scale=alt.Scale(domain=racers, range=colors),
-                legend=None,
+                "racer_name:N", scale=alt.Scale(domain=racers, range=colors)
             ),
         )
 
@@ -2411,7 +2421,12 @@ def _(
             chart = chart + t1 + t2 + t3 + t4
 
         # Increased Chart Size
-        return chart.properties(title=title, width=800, height=800)
+        return chart.properties(
+            title=title,
+            width=800,
+            height=800,
+            background=BG_COLOR,
+        )
 
     # --- 3. GENERATE CHARTS (Unchanged Logic, uses new builder) ---
     c_consist = _build_quadrant_chart(
@@ -2489,9 +2504,9 @@ def _(
         False,
         [
             "Potent",
-            "Ability Driven",
+            "Ability Abuser",
             "Low Reliance",
-            "Incidental",
+            "Spammer",
         ],
     )
 
@@ -2654,13 +2669,15 @@ def _(
                 title=env_metric_title,
                 scale=alt.Scale(
                     range=[
-                        "#FF007C",
-                        "#FF66A3",
-                        "#9E9E9E",
-                        "#9E9E9E",
-                        "#00B8FF",
-                        "#0055FF",
-                    ]
+                        "#F06292",  # Pink
+                        "#F06292",  # Pink (Anchor)
+                        "#3E3B45",  # Deep Lavender Grey (The Bridge)
+                        "#3E3B45",  # Deep Lavender Grey (The Bridge)
+                        "#42A5F5",
+                        "#42A5F5",
+                        "#42A5F5",  # Blue (Anchor)
+                    ],
+                    interpolate="rgb",
                 ),
                 legend=alt.Legend(format=env_legend_fmt),
             ),
@@ -2676,7 +2693,10 @@ def _(
             ],
         )
         .properties(
-            title=f"Env Adaptability ({env_metric_title})", width=680, height=680
+            title=f"Env Adaptability ({env_metric_title})",
+            width=680,
+            height=680,
+            background=BG_COLOR,
         )
     )
 
