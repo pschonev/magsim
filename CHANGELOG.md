@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.7.0 (2026-01-11)
+
+### Feat
+
+- Implement smarter drawing from sample distribution
+- **frontend**: Bring back ability chart
+
+### Fix
+
+- Fix Huge Baby and Copycat problems
+- **frontend**: Flip board
+- **frontend**: Fix X showing on first turn (actual marimo file)
+- **frontend**: Fix X showing on first turn
+
+### Refactor
+
+- **frontend**: Adjust some visuals
+- Change racer colors
+- Trying to fix Huge Baby and Copycat
+- **frontend**: Calculate flipped board from the beginning
+- **frontend**: Change matchup colors
+
 ## 0.6.0 (2026-01-10)
 
 ### Feat
