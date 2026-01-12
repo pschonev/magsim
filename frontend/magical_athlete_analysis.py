@@ -2183,16 +2183,15 @@ def _(
                 f"{metric_col}:Q",
                 title=metric_title,
                 scale=alt.Scale(
+                    # [Deep Pink, Soft Pink, GREY, Soft Blue, Deep Blue]
                     range=[
-                        "#F06292",  # Pink
-                        "#F06292",  # Pink (Anchor)
-                        "#3E3B45",  # Deep Lavender Grey (The Bridge)
-                        "#3E3B45",  # Deep Lavender Grey (The Bridge)
-                        "#42A5F5",
-                        "#42A5F5",  # Blue
-                        "#42A5F5",
-                        "#42A5F5",  # Blue (Anchor)
+                        "#AD1457",  # Deep Pink (New, for negative outliers)
+                        "#F06292",  # Your original Pink
+                        "#3E3B45",  # Grey (Anchor at 0)
+                        "#42A5F5",  # Your original Blue
+                        "#0D47A1",  # Deep Blue (New, for positive outliers)
                     ],
+                    domainMid=0,
                     interpolate="rgb",
                 ),
                 legend=alt.Legend(format=legend_format),
@@ -2229,10 +2228,11 @@ def _(
         hex_color = hex_color.lstrip("#")
         try:
             r, g, b = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-            # Standard luminance formula
-            luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-            # If bright (>0.6), use black outline. If dark, use white.
-            return "black" if luminance > 0.6 else "white"
+            return (
+                "black"
+                if ((0.299 * r + 0.587 * g + 0.114 * b) / 255) > 0.6
+                else "white"
+            )
         except:
             return "white"
 
@@ -2251,20 +2251,75 @@ def _(
     ):
         PLOT_BG = "#232826"
 
+        def _get_scale_props(col_name, threshold=3.0):
+            """
+            Automatically detects density to expand the region where data actually lies.
+            """
+            series = stats_df[col_name].drop_nulls()
+            if series.len() < 5:
+                return "linear", alt.Undefined, alt.Undefined
+
+            min_v, max_v = series.min(), series.max()
+            med_v = series.median()
+
+            if min_v == max_v:
+                return "linear", alt.Undefined, alt.Undefined
+
+            # Metrics
+            total_range = max_v - min_v
+            iqr = series.quantile(0.75) - series.quantile(0.25)
+
+            # If spread is normal, stick to linear
+            if iqr > 0 and (total_range / iqr) < threshold:
+                return "linear", alt.Undefined, alt.Undefined
+
+            skew_pos = (med_v - min_v) / total_range
+
+            # CASE A: Dense High (Expand Top)
+            if skew_pos > 0.65:
+                return "pow", 3.0, alt.Undefined
+
+            # CASE B: Dense Low (Expand Bottom)
+            if skew_pos < 0.35:
+                if min_v >= 0:
+                    return "pow", 0.33, alt.Undefined
+                else:
+                    return "symlog", alt.Undefined, max(0.01, iqr / 10)
+
+            # CASE C: Dense Middle (Expand Center)
+            return "symlog", alt.Undefined, max(0.001, iqr / 10)
+
+        # 1. Determine Scale Types
+        x_type, x_exp, x_const = _get_scale_props(x_col)
+        y_type, y_exp, y_const = _get_scale_props(y_col)
+
+        # 2. TIGHT Domain Calculation (No large margins)
+        # We calculate exact min/max to feed into domain, avoiding 'zero=True' behavior
         vals_x = stats_df[x_col].drop_nulls().to_list()
         vals_y = stats_df[y_col].drop_nulls().to_list()
 
         if not vals_x or not vals_y:
             return alt.Chart(stats_df).mark_text(text="No Data")
 
-        # --- [NEW] Prepare Outline Colors ---
-        # Map racernames to hex, then to their contrasting stroke
+        min_x, max_x = min(vals_x), max(vals_x)
+        min_y, max_y = min(vals_y), max(vals_y)
+
+        # Add a tiny 5% buffer just so dots don't get cut off
+        span_x = max_x - min_x if max_x != min_x else 0.1
+        span_y = max_y - min_y if max_y != min_y else 0.1
+
+        domain_x = [min_x - span_x * 0.05, max_x + span_x * 0.05]
+        domain_y = [min_y - span_y * 0.05, max_y + span_y * 0.05]
+
+        # Calculate midpoints for the quadrant lines
+        mid_x, mid_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+
+        # 3. Build Chart
         racer_to_hex = dict(zip(racers, colors))
         racer_to_stroke = {
             r: _get_contrasting_stroke(c) for r, c in racer_to_hex.items()
         }
 
-        # Enrich the dataframe with a 'txt_stroke' column for Altair to read
         chart_df = stats_df.with_columns(
             pl.col("racer_name")
             .map_elements(
@@ -2272,22 +2327,6 @@ def _(
             )
             .alias("txt_stroke")
         )
-
-        min_x, max_x = min(vals_x), max(vals_x)
-        min_y, max_y = min(vals_y), max(vals_y)
-
-        if min_x == max_x:
-            max_x += 0.01
-            min_x -= 0.01
-        if min_y == max_y:
-            max_y += 0.01
-            min_y -= 0.01
-
-        pad_x = (max_x - min_x) * 0.15
-        pad_y = (max_y - min_y) * 0.15
-        view_min_x, view_max_x = min_x - pad_x, max_x + pad_x
-        view_min_y, view_max_y = min_y - pad_y, max_y + pad_y
-        mid_x, mid_y = (min_x + max_x) / 2, (min_y + max_y) / 2
 
         base = alt.Chart(chart_df).encode(
             color=alt.Color(
@@ -2322,47 +2361,46 @@ def _(
                 f"{x_col}:Q",
                 title=x_title,
                 scale=alt.Scale(
-                    domain=[view_min_x, view_max_x], reverse=reverse_x, zero=False
+                    domain=domain_x,  # <--- EXPLICIT TIGHT DOMAIN
+                    reverse=reverse_x,
+                    zero=False,  # <--- CRITICAL: Do not force 0 to be visible
+                    type=x_type,
+                    exponent=x_exp,
+                    constant=x_const,
                 ),
-                axis=alt.Axis(grid=False),  # <--- Turn off X grid
+                axis=alt.Axis(grid=False),
             ),
             y=alt.Y(
                 f"{y_col}:Q",
                 title=y_title,
-                scale=alt.Scale(domain=[view_min_y, view_max_y], zero=False),
-                axis=alt.Axis(grid=False),  # <--- Turn off Y grid
+                scale=alt.Scale(
+                    domain=domain_y,  # <--- EXPLICIT TIGHT DOMAIN
+                    zero=False,  # <--- CRITICAL
+                    type=y_type,
+                    exponent=y_exp,
+                    constant=y_const,
+                ),
+                axis=alt.Axis(grid=False),
             ),
             tooltip=tips,
         )
 
-        # --- [NEW] LAYERED TEXT FOR OUTLINE EFFECT ---
-
-        # Layer 1: The Outline (Thicker Stroke, Contrast Color)
-        text_outline = points.mark_text(
-            align="center",
-            baseline="middle",
-            dy=-22,
-            dx=-22,
-            fontSize=15,  # Slightly smaller than 20 for cleaner look
-            fontWeight=800,  # Extra Bold is crucial for colored text
-            stroke=PLOT_BG,  # <--- THE FIX: Stroke matches plot background
-            strokeWidth=3,  # Wide halo
-            opacity=1,
-        ).encode(
-            text="racer_name:N",
-            # No color needed, it's just the mask
-        )
-
-        text_fill = points.mark_text(
+        text_base = points.mark_text(
             align="center",
             baseline="middle",
             dy=-22,
             dx=-22,
             fontSize=15,
             fontWeight=800,
-        ).encode(
+        )
+        text_outline = text_base.encode(
             text="racer_name:N",
-            # Use the racer color directly, but consider a transform to pastel if possible
+            stroke=alt.value(PLOT_BG),
+            strokeWidth=alt.value(3),
+            opacity=alt.value(1),
+        )
+        text_fill = text_base.encode(
+            text="racer_name:N",
             color=alt.Color(
                 "racer_name:N", scale=alt.Scale(domain=racers, range=colors)
             ),
@@ -2370,63 +2408,43 @@ def _(
 
         chart = h_line + v_line + points + text_outline + text_fill
 
+        # 4. Labels
         if quad_labels and len(quad_labels) == 4:
+            # Use the calculated tight domain for label positioning
+            dx_min, dx_max = domain_x
+            dy_min, dy_max = domain_y
+
+            # Simple padding for labels relative to the tight domain
+            px = (dx_max - dx_min) * 0.02
+            py = (dy_max - dy_min) * 0.02
+
             if reverse_x:
-                left_x, right_x = (
-                    view_max_x - (pad_x * 0.5),
-                    view_min_x + (pad_x * 0.5),
-                )
+                left_x, right_x = dx_max - px, dx_min + px
             else:
-                left_x, right_x = (
-                    view_min_x + (pad_x * 0.5),
-                    view_max_x - (pad_x * 0.5),
-                )
-            top_y, bot_y = view_max_y - (pad_y * 0.5), view_min_y + (pad_y * 0.5)
+                left_x, right_x = dx_min + px, dx_max - px
+
+            top_y, bot_y = dy_max - py, dy_min + py
 
             text_props = {
                 "fontWeight": "bold",
                 "opacity": 0.6,
-                "fontSize": 14,  # Increased Label Size
+                "fontSize": 14,
                 "color": "#e0e0e0",
             }
 
-            t1 = (
-                alt.Chart(
-                    pl.DataFrame({"x": [left_x], "y": [top_y], "t": [quad_labels[0]]})
+            def _lbl(lx, ly, lt, align, base):
+                return (
+                    alt.Chart(pl.DataFrame({"x": [lx], "y": [ly], "t": [lt]}))
+                    .mark_text(align=align, baseline=base, **text_props)
+                    .encode(x="x:Q", y="y:Q", text="t:N")
                 )
-                .mark_text(align="left", baseline="top", **text_props)
-                .encode(x="x:Q", y="y:Q", text="t:N")
-            )
-            t2 = (
-                alt.Chart(
-                    pl.DataFrame({"x": [right_x], "y": [top_y], "t": [quad_labels[1]]})
-                )
-                .mark_text(align="right", baseline="top", **text_props)
-                .encode(x="x:Q", y="y:Q", text="t:N")
-            )
-            t3 = (
-                alt.Chart(
-                    pl.DataFrame({"x": [left_x], "y": [bot_y], "t": [quad_labels[2]]})
-                )
-                .mark_text(align="left", baseline="bottom", **text_props)
-                .encode(x="x:Q", y="y:Q", text="t:N")
-            )
-            t4 = (
-                alt.Chart(
-                    pl.DataFrame({"x": [right_x], "y": [bot_y], "t": [quad_labels[3]]})
-                )
-                .mark_text(align="right", baseline="bottom", **text_props)
-                .encode(x="x:Q", y="y:Q", text="t:N")
-            )
-            chart = chart + t1 + t2 + t3 + t4
 
-        # Increased Chart Size
-        return chart.properties(
-            title=title,
-            width=800,
-            height=800,
-            background=BG_COLOR,
-        )
+            chart += _lbl(left_x, top_y, quad_labels[0], "left", "top")
+            chart += _lbl(right_x, top_y, quad_labels[1], "right", "top")
+            chart += _lbl(left_x, bot_y, quad_labels[2], "left", "bottom")
+            chart += _lbl(right_x, bot_y, quad_labels[3], "right", "bottom")
+
+        return chart.properties(title=title, width=800, height=800, background=BG_COLOR)
 
     # --- 3. GENERATE CHARTS (Unchanged Logic, uses new builder) ---
     c_consist = _build_quadrant_chart(
@@ -2668,15 +2686,15 @@ def _(
                 f"{env_metric_col}:Q",
                 title=env_metric_title,
                 scale=alt.Scale(
+                    # [Deep Pink, Soft Pink, GREY, Soft Blue, Deep Blue]
                     range=[
-                        "#F06292",  # Pink
-                        "#F06292",  # Pink (Anchor)
-                        "#3E3B45",  # Deep Lavender Grey (The Bridge)
-                        "#3E3B45",  # Deep Lavender Grey (The Bridge)
-                        "#42A5F5",
-                        "#42A5F5",
-                        "#42A5F5",  # Blue (Anchor)
+                        "#AD1457",  # Deep Pink (New, for negative outliers)
+                        "#F06292",  # Your original Pink
+                        "#3E3B45",  # Grey (Anchor at 0)
+                        "#42A5F5",  # Your original Blue
+                        "#0D47A1",  # Deep Blue (New, for positive outliers)
                     ],
+                    domainMid=0,
                     interpolate="rgb",
                 ),
                 legend=alt.Legend(format=env_legend_fmt),
@@ -2748,7 +2766,7 @@ def _(
         {
             "🎯 Consistency": mo.vstack(
                 [
-                    mo.ui.altair_chart(c_consist),
+                    mo.ui.altair_chart(c_consist).interactive(),
                     mo.md(
                         """**Stability**: Percentage of races where Final VP is within ±1 standard deviation (1σ) of the racer's mean VP."""
                     ),
@@ -2756,33 +2774,33 @@ def _(
             ),
             "🎲 Dice vs Ability": mo.vstack(
                 [
-                    mo.ui.altair_chart(c_sources),
+                    mo.ui.altair_chart(c_sources).interactive(),
                     mo.md(
-                        """**X: Ability Move Dependency** – Correlation of non-dice movement (ability-driven positioning) to VP.\n**Y: Dice Dependency** – Correlation of total dice rolled to VP."""
+                        """**X: Ability Move Dependency** – Correlation of non-dice movement (ability-driven positioning) to VP.  \n**Y: Dice Dependency** – Correlation of total dice rolled to VP."""
                     ),
                 ]
             ),
             "🌊 Momentum": mo.vstack(
                 [
-                    mo.ui.altair_chart(c_momentum),
+                    mo.ui.altair_chart(c_momentum).interactive(),
                     mo.md(
-                        """**X: Start Pos Bias** – Correlation of starting position (racer ID) to VP.\n**Y: Mid-Game Bias** – Correlation of position at 66% mark to VP."""
+                        """**X: Start Pos Bias** – Correlation of starting position (racer ID) to VP.  \n**Y: Mid-Game Bias** – Correlation of position at 66% mark to VP."""
                     ),
                 ]
             ),
             "🔥 Excitement": mo.vstack(
                 [
-                    mo.ui.altair_chart(c_excitement),
+                    mo.ui.altair_chart(c_excitement).interactive(),
                     mo.md(
-                        """**Tightness** (X-axis, reversed): Average distance from mean position across all turns.\n**Volatility** (Y-axis): Percentage of turns where at least one racer changes rank."""
+                        """**Tightness** (X-axis, reversed): Average distance from mean position across all turns.  \n**Volatility** (Y-axis): Percentage of turns where at least one racer changes rank."""
                     ),
                 ]
             ),
             "⚡ Abilities": mo.vstack(
                 [
-                    mo.ui.altair_chart(c_engine),
+                    mo.ui.altair_chart(c_engine).interactive(),
                     mo.md(
-                        """**X: Activity** – Average number of ability triggers per turn.\n**Y: Efficacy** – Correlation between trigger count and Victory Points.\n*Do more ability triggers mean more points?*"""
+                        """**X: Activity** – Average number of ability triggers per turn.  \n**Y: Efficacy** – Correlation between trigger count and Victory Points.  \n*Do more ability triggers mean more points?*"""
                     ),
                 ]
             ),
