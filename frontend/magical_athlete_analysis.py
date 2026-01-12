@@ -72,7 +72,6 @@ async def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -662,7 +661,6 @@ def _(
                 {track_group_start}
                 {"".join(svg_elements)}
             </svg>"""
-
     return (render_game_track,)
 
 
@@ -1600,6 +1598,9 @@ def _(
     )
 
     matchup_metric_toggle = mo.ui.switch(value=True, label="Show Percentage Shift")
+    dynamic_zoom_toggle = mo.ui.switch(
+        label="🔍 Rank-based zoom (ignores distances)", value=False
+    )
 
     # 4. Define "Run Analysis" Button with Callback
     def _submit_filters(_):
@@ -1618,6 +1619,7 @@ def _(
         tooltip="Click to process data with current filters.",
     )
     return (
+        dynamic_zoom_toggle,
         matchup_metric_toggle,
         run_computation_btn,
         ui_boards,
@@ -2158,6 +2160,7 @@ def _(
     alt,
     dashboard_data,
     df_races_f,
+    dynamic_zoom_toggle,
     get_racer_color,
     matchup_metric_toggle,
     mo,
@@ -2251,116 +2254,125 @@ def _(
         title,
         x_title,
         y_title,
+        *,
+        use_rank_scale: bool,
         reverse_x=False,
         quad_labels=None,
         extra_tooltips=None,
     ):
         PLOT_BG = "#232826"
 
-        # --- STEP 1: RANK TRANSFORM ---
-        # This allocates visual space based on the distribution of the data itself.
-        # Dense regions get expanded. Empty regions get squashed.
-
-        def _apply_rank_transform(df, col):
-            series = df[col].drop_nulls()
-            if series.len() < 3:
-                return df, col, [], []
-
-            # 1. Compute Percentile Rank (0.0 to 1.0)
-            # We use 'average' so ties share the same position
-            # We assume the dataframe is small enough that this is fast
-            vals = series.to_numpy()
-
-            # Create a sorted reference for interpolation
-            sorted_vals = np.sort(vals)
-            # Ranks corresponding to values (0 to 1)
-            sorted_ranks = np.linspace(0, 1, len(vals))
-
-            new_col = f"{col}_rank"
-
-            # Add the rank column to DataFrame
-            # We map each value to its percentile position
-            # Polars doesn't have a direct 'percentile_rank' that returns 0-1 floats easily
-            # so we use map_batches or just join.
-            # Actually, let's just use Python's interp which is safest for "Visual Position"
-
-            def get_rank_pos(x):
-                return float(np.interp(x, sorted_vals, sorted_ranks))
-
-            transformed_df = df.with_columns(
-                pl.col(col)
-                .map_elements(get_rank_pos, return_dtype=pl.Float64)
-                .alias(new_col)
-            )
-
-            # 2. Generate Axis Ticks (The hard part!)
-            # We want ticks at nice "Real" numbers (e.g. 0.1, 0.2),
-            # but placed at their "Rank" position.
-
-            min_v, max_v = vals.min(), vals.max()
-            span = max_v - min_v
-
-            # Simple heuristic for nice ticks
-            if span <= 0:
-                ticks = [min_v]
-            else:
-                # Try to pick 5 nice numbers covering the range
-                import math
-
-                step = 10 ** math.floor(math.log10(span))
-                if span / step < 2:
-                    step /= 5
-                elif span / step < 5:
-                    step /= 2
-
-                start = math.ceil(min_v / step) * step
-                ticks = []
-                curr = start
-                while curr <= max_v + (step / 1000):
-                    if curr >= min_v - (step / 1000):
-                        ticks.append(curr)
-                    curr += step
-
-                # If naive stepping fails (too few ticks inside data range),
-                # fallback to percentiles
-                if len(ticks) < 3:
-                    ticks = np.unique(
-                        np.percentile(vals, [0, 25, 50, 75, 100])
-                    ).tolist()
-
-            # Filter ticks that are way outside (floating point issues)
-            real_ticks = [t for t in ticks if min_v <= t <= max_v]
-
-            # Map Real Ticks -> Visual Rank Positions
-            vis_ticks = [
-                float(np.interp(t, sorted_vals, sorted_ranks)) for t in real_ticks
-            ]
-
-            return transformed_df, new_col, real_ticks, vis_ticks
-
-        # Apply transforms
-        df_x, vis_x_col, real_ticks_x, vis_ticks_x = _apply_rank_transform(
-            stats_df, x_col
-        )
-        df_final, vis_y_col, real_ticks_y, vis_ticks_y = _apply_rank_transform(
-            df_x, y_col
-        )
-
-        # --- STEP 2: PLOT SETUP ---
-        # Domain is always [0, 1] because we are plotting ranks!
-        # We add 5% padding so dots don't sit on the edge
-        domain = [-0.05, 1.05]
-
-        # Crosshairs at Median (Rank 0.5)
-        mid_x, mid_y = 0.5, 0.5
-
-        # --- STEP 3: BUILD CHART ---
+        # --- PREPARE COLOR MAPPING ---
         racer_to_hex = dict(zip(racers, colors))
         racer_to_stroke = {
             r: _get_contrasting_stroke(c) for r, c in racer_to_hex.items()
         }
 
-        chart_df = df_final.with_columns(
+        # --- BRANCH A: DYNAMIC ZOOM (Rank Scale) ---
+        if use_rank_scale:
+            # 1. Rank Transform Logic
+            def _apply_rank_transform(df, col):
+                series = df[col].drop_nulls()
+                if series.len() < 3:
+                    return df, col, [], []
+
+                vals = series.to_numpy()
+                sorted_vals = np.sort(vals)
+                sorted_ranks = np.linspace(0, 1, len(vals))
+
+                # Map values to 0-1 rank
+                new_col = f"{col}_rank"
+
+                def get_rank_pos(x):
+                    return float(np.interp(x, sorted_vals, sorted_ranks))
+
+                transformed_df = df.with_columns(
+                    pl.col(col)
+                    .map_elements(get_rank_pos, return_dtype=pl.Float64)
+                    .alias(new_col)
+                )
+
+                # Generate ticks
+                ticks = np.unique(
+                    np.percentile(vals, [0, 20, 40, 60, 80, 100])
+                ).tolist()
+                vis_ticks = [
+                    float(np.interp(t, sorted_vals, sorted_ranks)) for t in ticks
+                ]
+
+                return transformed_df, new_col, ticks, vis_ticks
+
+            # Apply transforms
+            df_x, plot_x, ticks_x, vis_ticks_x = _apply_rank_transform(stats_df, x_col)
+            chart_df, plot_y, ticks_y, vis_ticks_y = _apply_rank_transform(df_x, y_col)
+
+            # Setup Axes (Fixed 0-1 Domain)
+            scale_x = alt.Scale(
+                domain=[-0.05, 1.05], nice=False, zero=False, reverse=reverse_x
+            )
+            scale_y = alt.Scale(domain=[-0.05, 1.05], nice=False, zero=False)
+
+            # Custom Grid Labels (Visual Position -> Real Value)
+            axis_x = alt.Axis(
+                values=vis_ticks_x,
+                grid=True,
+                labelExpr=f"datum.value == {vis_ticks_x[0]} ? '{ticks_x[0]:.2f}' : "
+                + " ".join(
+                    [
+                        f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
+                        for vt, rt in zip(vis_ticks_x[1:], ticks_x[1:])
+                    ]
+                )
+                + " ''",
+            )
+            axis_y = alt.Axis(
+                values=vis_ticks_y,
+                grid=True,
+                labelExpr=f"datum.value == {vis_ticks_y[0]} ? '{ticks_y[0]:.2f}' : "
+                + " ".join(
+                    [
+                        f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
+                        for vt, rt in zip(vis_ticks_y[1:], ticks_y[1:])
+                    ]
+                )
+                + " ''",
+            )
+
+            mid_x, mid_y = 0.5, 0.5
+
+        # --- BRANCH B: LINEAR SCALE (Original) ---
+        else:
+            plot_x, plot_y = x_col, y_col
+            chart_df = stats_df
+
+            # Original Padding Logic
+            vals_x = stats_df[x_col].drop_nulls().to_list()
+            vals_y = stats_df[y_col].drop_nulls().to_list()
+
+            if not vals_x:
+                return alt.Chart(stats_df).mark_text(text="No Data")
+
+            min_x, max_x = min(vals_x), max(vals_x)
+            min_y, max_y = min(vals_y), max(vals_y)
+            if min_x == max_x:
+                max_x += 0.01
+                min_x -= 0.01
+            if min_y == max_y:
+                max_y += 0.01
+                min_y -= 0.01
+
+            pad_x, pad_y = (max_x - min_x) * 0.15, (max_y - min_y) * 0.15
+            dom_x = [min_x - pad_x, max_x + pad_x]
+            dom_y = [min_y - pad_y, max_y + pad_y]
+
+            scale_x = alt.Scale(domain=dom_x, reverse=reverse_x, zero=False)
+            scale_y = alt.Scale(domain=dom_y, zero=False)
+            axis_x, axis_y = alt.Axis(grid=False), alt.Axis(grid=False)
+
+            mid_x, mid_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+
+        # --- COMMON PLOTTING ---
+        chart_df = chart_df.with_columns(
             pl.col("racer_name")
             .map_elements(
                 lambda n: racer_to_stroke.get(n, "white"), return_dtype=pl.String
@@ -2376,80 +2388,50 @@ def _(
             )
         )
 
+        # Guidelines
         h_line = (
             alt.Chart(pl.DataFrame({"y": [mid_y]}))
-            .mark_rule(strokeDash=[4, 4], color="#666")
+            .mark_rule(strokeDash=[4, 4], color="#888")
             .encode(y="y:Q")
         )
         v_line = (
             alt.Chart(pl.DataFrame({"x": [mid_x]}))
-            .mark_rule(strokeDash=[4, 4], color="#666")
+            .mark_rule(strokeDash=[4, 4], color="#888")
             .encode(x="x:Q")
         )
 
-        tips = [
-            "racer_name:N",
-            alt.Tooltip(f"{x_col}:Q", format=".2f", title=x_title),
-            alt.Tooltip(f"{y_col}:Q", format=".2f", title=y_title),
-            alt.Tooltip("mean_vp:Q", format=".2f", title="Avg VP"),
-        ]
-        if extra_tooltips:
-            tips.extend(extra_tooltips)
-
+        # Points
         points = base.mark_circle(size=250, opacity=0.9).encode(
-            x=alt.X(
-                f"{vis_x_col}:Q",
-                title=x_title,
-                scale=alt.Scale(domain=domain, nice=False, zero=False),
-                axis=alt.Axis(
-                    values=vis_ticks_x,
-                    # Label the Visual Position with the Real Value
-                    labelExpr=f"datum.value == {vis_ticks_x[0]} ? '{real_ticks_x[0]:.2f}' : "
-                    + " ".join(
-                        [
-                            f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
-                            for vt, rt in zip(vis_ticks_x[1:], real_ticks_x[1:])
-                        ]
-                    )
-                    + " ''",
-                    grid=True,
-                ),
-            ),
-            y=alt.Y(
-                f"{vis_y_col}:Q",
-                title=y_title,
-                scale=alt.Scale(domain=domain, nice=False, zero=False),
-                axis=alt.Axis(
-                    values=vis_ticks_y,
-                    labelExpr=f"datum.value == {vis_ticks_y[0]} ? '{real_ticks_y[0]:.2f}' : "
-                    + " ".join(
-                        [
-                            f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
-                            for vt, rt in zip(vis_ticks_y[1:], real_ticks_y[1:])
-                        ]
-                    )
-                    + " ''",
-                    grid=True,
-                ),
-            ),
-            tooltip=tips,
+            x=alt.X(f"{plot_x}:Q", title=x_title, scale=scale_x, axis=axis_x),
+            y=alt.Y(f"{plot_y}:Q", title=y_title, scale=scale_y, axis=axis_y),
+            tooltip=[
+                "racer_name:N",
+                alt.Tooltip(f"{x_col}:Q", format=".2f", title=x_title),
+                alt.Tooltip(f"{y_col}:Q", format=".2f", title=y_title),
+            ]
+            + (extra_tooltips or []),
         )
 
-        text_base = points.mark_text(
+        # Text Layers
+        text_outline = points.mark_text(
             align="center",
             baseline="middle",
             dy=-22,
             dx=-22,
             fontSize=15,
             fontWeight=800,
-        )
-        text_outline = text_base.encode(
-            text="racer_name:N",
-            stroke=alt.value(PLOT_BG),
-            strokeWidth=alt.value(3),
-            opacity=alt.value(1),
-        )
-        text_fill = text_base.encode(
+            stroke=PLOT_BG,
+            strokeWidth=3,
+            opacity=1,
+        ).encode(text="racer_name:N")
+        text_fill = points.mark_text(
+            align="center",
+            baseline="middle",
+            dy=-22,
+            dx=-22,
+            fontSize=15,
+            fontWeight=800,
+        ).encode(
             text="racer_name:N",
             color=alt.Color(
                 "racer_name:N", scale=alt.Scale(domain=racers, range=colors)
@@ -2458,16 +2440,20 @@ def _(
 
         chart = h_line + v_line + points + text_outline + text_fill
 
-        # 4. Labels (Placed at 5% / 95% of the visual box)
+        # Labels
         if quad_labels and len(quad_labels) == 4:
-            low, high = 0.02, 0.98
-
-            if reverse_x:
-                left_x, right_x = high, low
+            if use_rank_scale:
+                lx, rx = (0.98, 0.02) if reverse_x else (0.02, 0.98)
+                ty, by = 0.98, 0.02
             else:
-                left_x, right_x = low, high
-
-            top_y, bot_y = high, low
+                dom_x, dom_y = scale_x.domain, scale_y.domain
+                px, py = (dom_x[1] - dom_x[0]) * 0.05, (dom_y[1] - dom_y[0]) * 0.05
+                lx, rx = (
+                    (dom_x[1] - px, dom_x[0] + px)
+                    if reverse_x
+                    else (dom_x[0] + px, dom_x[1] - px)
+                )
+                ty, by = dom_y[1] - py, dom_y[0] + py
 
             text_props = {
                 "fontWeight": "bold",
@@ -2476,17 +2462,19 @@ def _(
                 "color": "#e0e0e0",
             }
 
-            def _lbl(lx, ly, lt, align, base):
+            def _lbl(x, y, t, align, base):
                 return (
-                    alt.Chart(pl.DataFrame({"x": [lx], "y": [ly], "t": [lt]}))
+                    alt.Chart(pl.DataFrame({"x": [x], "y": [y], "t": [t]}))
                     .mark_text(align=align, baseline=base, **text_props)
                     .encode(x="x:Q", y="y:Q", text="t:N")
                 )
 
-            chart += _lbl(left_x, top_y, quad_labels[0], "left", "top")
-            chart += _lbl(right_x, top_y, quad_labels[1], "right", "top")
-            chart += _lbl(left_x, bot_y, quad_labels[2], "left", "bottom")
-            chart += _lbl(right_x, bot_y, quad_labels[3], "right", "bottom")
+            chart += (
+                _lbl(lx, ty, quad_labels[0], "left", "top")
+                + _lbl(rx, ty, quad_labels[1], "right", "top")
+                + _lbl(lx, by, quad_labels[2], "left", "bottom")
+                + _lbl(rx, by, quad_labels[3], "right", "bottom")
+            )
 
         return chart.properties(title=title, width=800, height=800, background=BG_COLOR)
 
@@ -2500,8 +2488,8 @@ def _(
         "Consistency (Stability)",
         "Stability (% within 1σ of mean VP)",
         "Avg VP",
-        False,
-        ["Wildcard", "Reliable Winner", "Erratic", "Reliable Loser"],
+        quad_labels=["Wildcard", "Reliable Winner", "Erratic", "Reliable Loser"],
+        use_rank_scale=dynamic_zoom_toggle.value,
         extra_tooltips=[
             alt.Tooltip("std_vp_sigma:Q", format=".2f", title="1σ (Std Dev)"),
         ],
@@ -2516,8 +2504,9 @@ def _(
         "Excitement Profile",
         "Tightness (Avg distance from mean position)",
         "Volatility (% of turns with rank changes)",
-        True,
-        ["Rubber Band", "Thriller", "Procession", "Stalemate"],
+        reverse_x=True,
+        quad_labels=["Rubber Band", "Thriller", "Procession", "Stalemate"],
+        use_rank_scale=dynamic_zoom_toggle.value,
     )
 
     c_sources = _build_quadrant_chart(
@@ -2529,8 +2518,8 @@ def _(
         "Sources of Victory",
         "Ability Move Dep (Corr to VP)",
         "Dice Dep (Corr to VP)",
-        False,
-        ["Dice-Driven", "Hybrid Winner", "Low Signal", "Ability-Driven"],
+        quad_labels=["Dice-Driven", "Hybrid Winner", "Low Signal", "Ability-Driven"],
+        use_rank_scale=dynamic_zoom_toggle.value,
         extra_tooltips=[
             alt.Tooltip("avg_ability_move:Q", format=".2f", title="Ability Mvmt/Turn"),
             alt.Tooltip("avg_dice_base:Q", format=".2f", title="Dice/Rolling Turn"),
@@ -2546,8 +2535,8 @@ def _(
         "Momentum Profile",
         "Start Pos Bias (+ = comeback)",
         "Mid-Game Bias (+ = leader wins)",
-        False,
-        ["Frontrunner", "Snowballer", "Comeback King", "Late Bloomer"],
+        quad_labels=["Frontrunner", "Snowballer", "Comeback King", "Late Bloomer"],
+        use_rank_scale=dynamic_zoom_toggle.value,
         extra_tooltips=[
             alt.Tooltip("pct_1st:Q", format=".1%", title="Win%"),
             alt.Tooltip("mean_vp:Q", format=".2f", title="Avg VP"),
@@ -2563,8 +2552,8 @@ def _(
         "Engine Profile",
         "Activity (Avg Triggers / Turn)",
         "Efficacy (Corr Triggers to VP)",
-        False,
-        [
+        use_rank_scale=dynamic_zoom_toggle.value,
+        quad_labels=[
             "Potent",
             "Ability Abuser",
             "Low Reliance",
@@ -2810,6 +2799,7 @@ def _(
         {
             "🎯 Consistency": mo.vstack(
                 [
+                    dynamic_zoom_toggle,
                     mo.ui.altair_chart(c_consist).interactive(),
                     mo.md(
                         """**Stability**: Percentage of races where Final VP is within ±1 standard deviation (1σ) of the racer's mean VP."""
@@ -2818,6 +2808,7 @@ def _(
             ),
             "🎲 Dice vs Ability": mo.vstack(
                 [
+                    dynamic_zoom_toggle,
                     mo.ui.altair_chart(c_sources).interactive(),
                     mo.md(
                         """**X: Ability Move Dependency** – Correlation of non-dice movement (ability-driven positioning) to VP.  \n**Y: Dice Dependency** – Correlation of total dice rolled to VP."""
@@ -2826,6 +2817,7 @@ def _(
             ),
             "🌊 Momentum": mo.vstack(
                 [
+                    dynamic_zoom_toggle,
                     mo.ui.altair_chart(c_momentum).interactive(),
                     mo.md(
                         """**X: Start Pos Bias** – Correlation of starting position (racer ID) to VP.  \n**Y: Mid-Game Bias** – Correlation of position at 66% mark to VP."""
@@ -2834,6 +2826,7 @@ def _(
             ),
             "🔥 Excitement": mo.vstack(
                 [
+                    dynamic_zoom_toggle,
                     mo.ui.altair_chart(c_excitement).interactive(),
                     mo.md(
                         """**Tightness** (X-axis, reversed): Average distance from mean position across all turns.  \n**Volatility** (Y-axis): Percentage of turns where at least one racer changes rank."""
@@ -2842,6 +2835,7 @@ def _(
             ),
             "⚡ Abilities": mo.vstack(
                 [
+                    dynamic_zoom_toggle,
                     mo.ui.altair_chart(c_engine).interactive(),
                     mo.md(
                         """**X: Activity** – Average number of ability triggers per turn.  \n**Y: Efficacy** – Correlation between trigger count and Victory Points.  \n*Do more ability triggers mean more points?*"""
