@@ -1598,9 +1598,7 @@ def _(
     )
 
     matchup_metric_toggle = mo.ui.switch(value=True, label="Show Percentage Shift")
-    dynamic_zoom_toggle = mo.ui.switch(
-        label="🔍 Rank-based zoom (ignores distances)", value=False
-    )
+    dynamic_zoom_toggle = mo.ui.switch(label="🔍 Rank-based view", value=False)
 
     # 4. Define "Run Analysis" Button with Callback
     def _submit_filters(_):
@@ -2535,7 +2533,7 @@ def _(
         "Momentum Profile",
         "Start Pos Bias (+ = comeback)",
         "Mid-Game Bias (+ = leader wins)",
-        quad_labels=["Frontrunner", "Snowballer", "Comeback King", "Late Bloomer"],
+        quad_labels=["Late Bloomer", "Snowballer", "Comeback King", "Frontrunner"],
         use_rank_scale=dynamic_zoom_toggle.value,
         extra_tooltips=[
             alt.Tooltip("pct_1st:Q", format=".1%", title="Win%"),
