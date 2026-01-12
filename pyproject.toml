@@ -27,6 +27,7 @@ frontend = [
     "altair==6.0.0",
     "polars==1.36.1",
     "sqlmodel==0.0.31",
+    "numpy>=2.4.1",
 ]
 
 [dependency-groups]

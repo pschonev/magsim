@@ -5,6 +5,7 @@
 #     "marimo>=0.19.0",
 #     "polars==1.36.1",
 #     "sqlmodel==0.0.31",
+#     "numpy>=2.4.1"
 # ]
 # [tool.marimo.display]
 # theme = "dark"
@@ -39,6 +40,7 @@ async def _():
     from typing import get_args, Any, Literal
     import dataclasses
 
+    import numpy as np
     import altair as alt
     import marimo as mo
     from rich.console import Console
@@ -70,6 +72,7 @@ async def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -95,6 +98,7 @@ async def _():
         logging,
         math,
         mo,
+        np,
         re,
     )
 
@@ -658,6 +662,7 @@ def _(
                 {track_group_start}
                 {"".join(svg_elements)}
             </svg>"""
+
     return (render_game_track,)
 
 
@@ -2156,6 +2161,7 @@ def _(
     get_racer_color,
     matchup_metric_toggle,
     mo,
+    np,
     pl,
 ):
     # If no data is available (button not clicked yet), stop execution here.
@@ -2251,76 +2257,110 @@ def _(
     ):
         PLOT_BG = "#232826"
 
-        def _get_scale_props(col_name, threshold=3.0):
-            """
-            Automatically detects density to expand the region where data actually lies.
-            """
-            series = stats_df[col_name].drop_nulls()
-            if series.len() < 5:
-                return "linear", alt.Undefined, alt.Undefined
+        # --- STEP 1: RANK TRANSFORM ---
+        # This allocates visual space based on the distribution of the data itself.
+        # Dense regions get expanded. Empty regions get squashed.
 
-            min_v, max_v = series.min(), series.max()
-            med_v = series.median()
+        def _apply_rank_transform(df, col):
+            series = df[col].drop_nulls()
+            if series.len() < 3:
+                return df, col, [], []
 
-            if min_v == max_v:
-                return "linear", alt.Undefined, alt.Undefined
+            # 1. Compute Percentile Rank (0.0 to 1.0)
+            # We use 'average' so ties share the same position
+            # We assume the dataframe is small enough that this is fast
+            vals = series.to_numpy()
 
-            # Metrics
-            total_range = max_v - min_v
-            iqr = series.quantile(0.75) - series.quantile(0.25)
+            # Create a sorted reference for interpolation
+            sorted_vals = np.sort(vals)
+            # Ranks corresponding to values (0 to 1)
+            sorted_ranks = np.linspace(0, 1, len(vals))
 
-            # If spread is normal, stick to linear
-            if iqr > 0 and (total_range / iqr) < threshold:
-                return "linear", alt.Undefined, alt.Undefined
+            new_col = f"{col}_rank"
 
-            skew_pos = (med_v - min_v) / total_range
+            # Add the rank column to DataFrame
+            # We map each value to its percentile position
+            # Polars doesn't have a direct 'percentile_rank' that returns 0-1 floats easily
+            # so we use map_batches or just join.
+            # Actually, let's just use Python's interp which is safest for "Visual Position"
 
-            # CASE A: Dense High (Expand Top)
-            if skew_pos > 0.65:
-                return "pow", 3.0, alt.Undefined
+            def get_rank_pos(x):
+                return float(np.interp(x, sorted_vals, sorted_ranks))
 
-            # CASE B: Dense Low (Expand Bottom)
-            if skew_pos < 0.35:
-                if min_v >= 0:
-                    return "pow", 0.33, alt.Undefined
-                else:
-                    return "symlog", alt.Undefined, max(0.01, iqr / 10)
+            transformed_df = df.with_columns(
+                pl.col(col)
+                .map_elements(get_rank_pos, return_dtype=pl.Float64)
+                .alias(new_col)
+            )
 
-            # CASE C: Dense Middle (Expand Center)
-            return "symlog", alt.Undefined, max(0.001, iqr / 10)
+            # 2. Generate Axis Ticks (The hard part!)
+            # We want ticks at nice "Real" numbers (e.g. 0.1, 0.2),
+            # but placed at their "Rank" position.
 
-        # 1. Determine Scale Types
-        x_type, x_exp, x_const = _get_scale_props(x_col)
-        y_type, y_exp, y_const = _get_scale_props(y_col)
+            min_v, max_v = vals.min(), vals.max()
+            span = max_v - min_v
 
-        # 2. TIGHT Domain Calculation (No large margins)
-        # We calculate exact min/max to feed into domain, avoiding 'zero=True' behavior
-        vals_x = stats_df[x_col].drop_nulls().to_list()
-        vals_y = stats_df[y_col].drop_nulls().to_list()
+            # Simple heuristic for nice ticks
+            if span <= 0:
+                ticks = [min_v]
+            else:
+                # Try to pick 5 nice numbers covering the range
+                import math
 
-        if not vals_x or not vals_y:
-            return alt.Chart(stats_df).mark_text(text="No Data")
+                step = 10 ** math.floor(math.log10(span))
+                if span / step < 2:
+                    step /= 5
+                elif span / step < 5:
+                    step /= 2
 
-        min_x, max_x = min(vals_x), max(vals_x)
-        min_y, max_y = min(vals_y), max(vals_y)
+                start = math.ceil(min_v / step) * step
+                ticks = []
+                curr = start
+                while curr <= max_v + (step / 1000):
+                    if curr >= min_v - (step / 1000):
+                        ticks.append(curr)
+                    curr += step
 
-        # Add a tiny 5% buffer just so dots don't get cut off
-        span_x = max_x - min_x if max_x != min_x else 0.1
-        span_y = max_y - min_y if max_y != min_y else 0.1
+                # If naive stepping fails (too few ticks inside data range),
+                # fallback to percentiles
+                if len(ticks) < 3:
+                    ticks = np.unique(
+                        np.percentile(vals, [0, 25, 50, 75, 100])
+                    ).tolist()
 
-        domain_x = [min_x - span_x * 0.05, max_x + span_x * 0.05]
-        domain_y = [min_y - span_y * 0.05, max_y + span_y * 0.05]
+            # Filter ticks that are way outside (floating point issues)
+            real_ticks = [t for t in ticks if min_v <= t <= max_v]
 
-        # Calculate midpoints for the quadrant lines
-        mid_x, mid_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+            # Map Real Ticks -> Visual Rank Positions
+            vis_ticks = [
+                float(np.interp(t, sorted_vals, sorted_ranks)) for t in real_ticks
+            ]
 
-        # 3. Build Chart
+            return transformed_df, new_col, real_ticks, vis_ticks
+
+        # Apply transforms
+        df_x, vis_x_col, real_ticks_x, vis_ticks_x = _apply_rank_transform(
+            stats_df, x_col
+        )
+        df_final, vis_y_col, real_ticks_y, vis_ticks_y = _apply_rank_transform(
+            df_x, y_col
+        )
+
+        # --- STEP 2: PLOT SETUP ---
+        # Domain is always [0, 1] because we are plotting ranks!
+        # We add 5% padding so dots don't sit on the edge
+        domain = [-0.05, 1.05]
+
+        # Crosshairs at Median (Rank 0.5)
+        mid_x, mid_y = 0.5, 0.5
+
+        # --- STEP 3: BUILD CHART ---
         racer_to_hex = dict(zip(racers, colors))
         racer_to_stroke = {
             r: _get_contrasting_stroke(c) for r, c in racer_to_hex.items()
         }
 
-        chart_df = stats_df.with_columns(
+        chart_df = df_final.with_columns(
             pl.col("racer_name")
             .map_elements(
                 lambda n: racer_to_stroke.get(n, "white"), return_dtype=pl.String
@@ -2338,12 +2378,12 @@ def _(
 
         h_line = (
             alt.Chart(pl.DataFrame({"y": [mid_y]}))
-            .mark_rule(strokeDash=[4, 4], color="#888")
+            .mark_rule(strokeDash=[4, 4], color="#666")
             .encode(y="y:Q")
         )
         v_line = (
             alt.Chart(pl.DataFrame({"x": [mid_x]}))
-            .mark_rule(strokeDash=[4, 4], color="#888")
+            .mark_rule(strokeDash=[4, 4], color="#666")
             .encode(x="x:Q")
         )
 
@@ -2358,29 +2398,39 @@ def _(
 
         points = base.mark_circle(size=250, opacity=0.9).encode(
             x=alt.X(
-                f"{x_col}:Q",
+                f"{vis_x_col}:Q",
                 title=x_title,
-                scale=alt.Scale(
-                    domain=domain_x,  # <--- EXPLICIT TIGHT DOMAIN
-                    reverse=reverse_x,
-                    zero=False,  # <--- CRITICAL: Do not force 0 to be visible
-                    type=x_type,
-                    exponent=x_exp,
-                    constant=x_const,
+                scale=alt.Scale(domain=domain, nice=False, zero=False),
+                axis=alt.Axis(
+                    values=vis_ticks_x,
+                    # Label the Visual Position with the Real Value
+                    labelExpr=f"datum.value == {vis_ticks_x[0]} ? '{real_ticks_x[0]:.2f}' : "
+                    + " ".join(
+                        [
+                            f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
+                            for vt, rt in zip(vis_ticks_x[1:], real_ticks_x[1:])
+                        ]
+                    )
+                    + " ''",
+                    grid=True,
                 ),
-                axis=alt.Axis(grid=False),
             ),
             y=alt.Y(
-                f"{y_col}:Q",
+                f"{vis_y_col}:Q",
                 title=y_title,
-                scale=alt.Scale(
-                    domain=domain_y,  # <--- EXPLICIT TIGHT DOMAIN
-                    zero=False,  # <--- CRITICAL
-                    type=y_type,
-                    exponent=y_exp,
-                    constant=y_const,
+                scale=alt.Scale(domain=domain, nice=False, zero=False),
+                axis=alt.Axis(
+                    values=vis_ticks_y,
+                    labelExpr=f"datum.value == {vis_ticks_y[0]} ? '{real_ticks_y[0]:.2f}' : "
+                    + " ".join(
+                        [
+                            f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
+                            for vt, rt in zip(vis_ticks_y[1:], real_ticks_y[1:])
+                        ]
+                    )
+                    + " ''",
+                    grid=True,
                 ),
-                axis=alt.Axis(grid=False),
             ),
             tooltip=tips,
         )
@@ -2408,22 +2458,16 @@ def _(
 
         chart = h_line + v_line + points + text_outline + text_fill
 
-        # 4. Labels
+        # 4. Labels (Placed at 5% / 95% of the visual box)
         if quad_labels and len(quad_labels) == 4:
-            # Use the calculated tight domain for label positioning
-            dx_min, dx_max = domain_x
-            dy_min, dy_max = domain_y
-
-            # Simple padding for labels relative to the tight domain
-            px = (dx_max - dx_min) * 0.02
-            py = (dy_max - dy_min) * 0.02
+            low, high = 0.02, 0.98
 
             if reverse_x:
-                left_x, right_x = dx_max - px, dx_min + px
+                left_x, right_x = high, low
             else:
-                left_x, right_x = dx_min + px, dx_max - px
+                left_x, right_x = low, high
 
-            top_y, bot_y = dy_max - py, dy_min + py
+            top_y, bot_y = high, low
 
             text_props = {
                 "fontWeight": "bold",
