@@ -223,7 +223,6 @@ def _(df_racer_results, df_races, mo, pl):
     import json  # Required for the WASM fix
 
     HASH_COL = "config_hash"
-    BG_COLOR = "#181c1a"
 
     # 1. Get unique racers for column headers
     unique_racers = sorted(df_racer_results.get_column("racer_name").unique().to_list())
@@ -285,51 +284,65 @@ def _(df_racer_results, df_races, mo, pl):
         label="Races (Matrix View)",
         freeze_columns_left=priority_cols,
     )
-    return BG_COLOR, df_races_clean, racer_results_table, races_table
+    return df_races_clean, racer_results_table, races_table
 
 
 @app.cell
-def _(BG_COLOR, math):
+def _(math):
     from typing import NamedTuple
 
-    # --- DATA STRUCTURES ---
+    BG_COLOR = "#181c1a"
+
     class RacerPalette(NamedTuple):
         primary: str
         secondary: str | None = None
         outline: str = "#000000"
 
-    # --- CONSTANTS: RACERS ---
-    # Colors derived from the "Magical Athlete" magnets
     RACER_PALETTES = {
-        # --- THE PINKS/REDS ---
         "HugeBaby": RacerPalette("#FFB7C5", "#FFFFFF", "#39FF14"),  # Pastel Pink (Baby)
         "Scoocher": RacerPalette("#8B4513", "#FF0000", "#800080"),  # Brown (Snail/Dog?)
         "Genius": RacerPalette("#FF0000", "#0000FF", "#FFFF00"),  # Bright Red (Shirt)
-        # --- THE YELLOWS (Fixed the conflict) ---
         "Banana": RacerPalette("#FFE135", "#000000", "#800080"),  # Standard Yellow
-        # Skipper: Swapped Yellow skin -> Blue Coat
         "Skipper": RacerPalette(
             "#1A4099", "#FFD700", "#800080"
         ),  # Royal Blue (Primary)
-        # PartyAnimal: Swapped Yellow skin -> Green Shirt
         "PartyAnimal": RacerPalette(
             "#32CD32", "#FFFF00", "#FF00FF"
         ),  # Lime Green (Primary)
-        # Romantic: Swapped Yellow skin -> Pink/Purple Accents
         "Romantic": RacerPalette("#DA70D6", "#FFFF00", "#800080"),  # Orchid (Primary)
-        # Mastermind: Swapped Yellow skin -> Purple Accents
         "Mastermind": RacerPalette("#800080", "#FFD700", "#008000"),  # Purple (Primary)
-        # --- THE BLUES/GREENS ---
         "Copycat": RacerPalette(
             "#00BFFF", "#FFFFFF", "#FFA500"
         ),  # Deep Sky Blue (Cat?)
         "Magician": RacerPalette(
-            "#191970", "#9370DB", "#FFA500"
-        ),  # Midnight Blue (To distinguish from Copycat)
+            "#5D3FD3", "#9370DB", "#FFA500"
+        ),  # Electric Indigo / Iris (Lighter than Midnight Blue)
         "Gunk": RacerPalette("#556B2F", "#8B4513", "#FFA500"),  # Olive Drab
-        # --- OTHERS ---
         "Centaur": RacerPalette("#D2691E", "#8B4513", "#800080"),  # Chocolate
         "FlipFlop": RacerPalette("#9370DB", "#FFFF00", "#FF0000"),  # Medium Purple
+        "Hare": RacerPalette("#87CEEB", None, "#FF8C00"),  # Sky Blue & Dark Orange
+        "Blimp": RacerPalette(
+            "#D3D3D3", "#4169E1", "#000000"
+        ),  # Light Grey & Royal Blue
+        "Suckerfish": RacerPalette(
+            "#808000", "#FF4500", "#1E90FF"
+        ),  # Olive (Muddy) & OrangeRed & Dodger Blue
+        "Leapfrog": RacerPalette(
+            "#1E90FF", "#32CD32", "#FF8C00"
+        ),  # Dodger Blue & Lime Green & Dark Orange
+        "Sisyphus": RacerPalette(
+            "#C0C0C0", "#FFFFFF", "#FFD700"
+        ),  # Silver & White & Gold
+        "LovableLoser": RacerPalette(
+            "#008000", "#FF00FF", "#FFA500"
+        ),  # Green & Magenta & Orange
+        "Coach": RacerPalette("#636829", "#DC143C", "#8A2BE2"),  # Muddy Lizard Green
+        "Stickler": RacerPalette(
+            "#C71585", "#FF69B4", "#0000FF"
+        ),  # Medium Violet Red & Hot Pink & Blue
+        "BabaYaga": RacerPalette(
+            "#4682B4", "#FFD700", "#FF0000"
+        ),  # Steel Blue & Gold & Red
     }
 
     FALLBACK_PALETTES = [
@@ -424,7 +437,13 @@ def _(BG_COLOR, math):
     # Constants
     NUM_TILES = 31
     board_positions = generate_racetrack_positions(NUM_TILES, 120, 150, 350, 100)
-    return BOARD_THEME, board_positions, get_racer_color, get_racer_palette
+    return (
+        BG_COLOR,
+        BOARD_THEME,
+        board_positions,
+        get_racer_color,
+        get_racer_palette,
+    )
 
 
 @app.cell
