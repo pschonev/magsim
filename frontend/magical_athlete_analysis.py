@@ -72,6 +72,7 @@ async def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -680,6 +681,7 @@ def _(
                 {track_group_start}
                 {"".join(svg_elements)}
             </svg>"""
+
     return (render_game_track,)
 
 
@@ -2287,7 +2289,7 @@ def _(
 
         # --- BRANCH A: DYNAMIC ZOOM (Rank Scale) ---
         if use_rank_scale:
-            # 1. Rank Transform Logic
+
             def _apply_rank_transform(df, col):
                 series = df[col].drop_nulls()
                 if series.len() < 3:
@@ -2297,7 +2299,6 @@ def _(
                 sorted_vals = np.sort(vals)
                 sorted_ranks = np.linspace(0, 1, len(vals))
 
-                # Map values to 0-1 rank
                 new_col = f"{col}_rank"
 
                 def get_rank_pos(x):
@@ -2309,29 +2310,24 @@ def _(
                     .alias(new_col)
                 )
 
-                # Generate ticks
                 ticks = np.unique(
                     np.percentile(vals, [0, 20, 40, 60, 80, 100])
                 ).tolist()
                 vis_ticks = [
                     float(np.interp(t, sorted_vals, sorted_ranks)) for t in ticks
                 ]
-
                 return transformed_df, new_col, ticks, vis_ticks
 
-            # Apply transforms
             df_x, plot_x, ticks_x, vis_ticks_x = _apply_rank_transform(stats_df, x_col)
             chart_df, plot_y, ticks_y, vis_ticks_y = _apply_rank_transform(df_x, y_col)
 
-            # Setup Axes (Fixed 0-1 Domain)
             scale_x = alt.Scale(
                 domain=[-0.05, 1.05], nice=False, zero=False, reverse=reverse_x
             )
             scale_y = alt.Scale(domain=[-0.05, 1.05], nice=False, zero=False)
 
-            # Custom Grid Labels (Visual Position -> Real Value)
+            # NOTE: Removed 'values=' constraint to allow dynamic zooming
             axis_x = alt.Axis(
-                values=vis_ticks_x,
                 grid=True,
                 labelExpr=f"datum.value == {vis_ticks_x[0]} ? '{ticks_x[0]:.2f}' : "
                 + " ".join(
@@ -2340,10 +2336,9 @@ def _(
                         for vt, rt in zip(vis_ticks_x[1:], ticks_x[1:])
                     ]
                 )
-                + " ''",
+                + " format(datum.value, '.2f')",
             )
             axis_y = alt.Axis(
-                values=vis_ticks_y,
                 grid=True,
                 labelExpr=f"datum.value == {vis_ticks_y[0]} ? '{ticks_y[0]:.2f}' : "
                 + " ".join(
@@ -2352,9 +2347,8 @@ def _(
                         for vt, rt in zip(vis_ticks_y[1:], ticks_y[1:])
                     ]
                 )
-                + " ''",
+                + " format(datum.value, '.2f')",
             )
-
             mid_x, mid_y = 0.5, 0.5
 
         # --- BRANCH B: LINEAR SCALE (Original) ---
@@ -2362,7 +2356,6 @@ def _(
             plot_x, plot_y = x_col, y_col
             chart_df = stats_df
 
-            # Original Padding Logic
             vals_x = stats_df[x_col].drop_nulls().to_list()
             vals_y = stats_df[y_col].drop_nulls().to_list()
 
@@ -2385,7 +2378,6 @@ def _(
             scale_x = alt.Scale(domain=dom_x, reverse=reverse_x, zero=False)
             scale_y = alt.Scale(domain=dom_y, zero=False)
             axis_x, axis_y = alt.Axis(grid=False), alt.Axis(grid=False)
-
             mid_x, mid_y = (min_x + max_x) / 2, (min_y + max_y) / 2
 
         # --- COMMON PLOTTING ---
@@ -2397,39 +2389,40 @@ def _(
             .alias("txt_stroke")
         )
 
-        base = alt.Chart(chart_df).encode(
-            color=alt.Color(
-                "racer_name:N",
-                scale=alt.Scale(domain=racers, range=colors),
-                legend=None,
-            )
-        )
-
-        # Guidelines
+        # 1. Guidelines (Independent DataFrames sharing Scales)
         h_line = (
             alt.Chart(pl.DataFrame({"y": [mid_y]}))
             .mark_rule(strokeDash=[4, 4], color="#888")
-            .encode(y="y:Q")
+            .encode(y=alt.Y("y:Q", scale=scale_y))
         )
         v_line = (
             alt.Chart(pl.DataFrame({"x": [mid_x]}))
             .mark_rule(strokeDash=[4, 4], color="#888")
-            .encode(x="x:Q")
+            .encode(x=alt.X("x:Q", scale=scale_x))
         )
 
-        # Points
-        points = base.mark_circle(size=250, opacity=0.9).encode(
-            x=alt.X(f"{plot_x}:Q", title=x_title, scale=scale_x, axis=axis_x),
-            y=alt.Y(f"{plot_y}:Q", title=y_title, scale=scale_y, axis=axis_y),
-            tooltip=[
-                "racer_name:N",
-                alt.Tooltip(f"{x_col}:Q", format=".2f", title=x_title),
-                alt.Tooltip(f"{y_col}:Q", format=".2f", title=y_title),
-            ]
-            + (extra_tooltips or []),
+        # 2. Points
+        points = (
+            alt.Chart(chart_df)
+            .mark_circle(size=250, opacity=0.9)
+            .encode(
+                x=alt.X(f"{plot_x}:Q", title=x_title, scale=scale_x, axis=axis_x),
+                y=alt.Y(f"{plot_y}:Q", title=y_title, scale=scale_y, axis=axis_y),
+                color=alt.Color(
+                    "racer_name:N",
+                    scale=alt.Scale(domain=racers, range=colors),
+                    legend=None,
+                ),
+                tooltip=[
+                    "racer_name:N",
+                    alt.Tooltip(f"{x_col}:Q", format=".2f", title=x_title),
+                    alt.Tooltip(f"{y_col}:Q", format=".2f", title=y_title),
+                ]
+                + (extra_tooltips or []),
+            )
         )
 
-        # Text Layers
+        # 3. Text Layers
         text_outline = points.mark_text(
             align="center",
             baseline="middle",
@@ -2440,7 +2433,10 @@ def _(
             stroke=PLOT_BG,
             strokeWidth=3,
             opacity=1,
-        ).encode(text="racer_name:N")
+        ).encode(
+            text="racer_name:N",
+            color=alt.value(PLOT_BG),
+        )
         text_fill = points.mark_text(
             align="center",
             baseline="middle",
@@ -2455,9 +2451,8 @@ def _(
             ),
         )
 
-        chart = h_line + v_line + points + text_outline + text_fill
-
-        # Labels
+        # 4. Labels
+        label_layers = []
         if quad_labels and len(quad_labels) == 4:
             if use_rank_scale:
                 lx, rx = (0.98, 0.02) if reverse_x else (0.02, 0.98)
@@ -2479,25 +2474,40 @@ def _(
                 "color": "#e0e0e0",
             }
 
-            def _lbl(x, y, t, align, base):
+            def _lbl(x, y, t, align, baseline):
                 return (
                     alt.Chart(pl.DataFrame({"x": [x], "y": [y], "t": [t]}))
-                    .mark_text(align=align, baseline=base, **text_props)
-                    .encode(x="x:Q", y="y:Q", text="t:N")
+                    .mark_text(align=align, baseline=baseline, **text_props)
+                    .encode(
+                        x=alt.X("x:Q", scale=scale_x),
+                        y=alt.Y("y:Q", scale=scale_y),
+                        text="t:N",
+                    )
                 )
 
-            chart += (
-                _lbl(lx, ty, quad_labels[0], "left", "top")
-                + _lbl(rx, ty, quad_labels[1], "right", "top")
-                + _lbl(lx, by, quad_labels[2], "left", "bottom")
-                + _lbl(rx, by, quad_labels[3], "right", "bottom")
-            )
+            label_layers = [
+                _lbl(lx, ty, quad_labels[0], "left", "top"),
+                _lbl(rx, ty, quad_labels[1], "right", "top"),
+                _lbl(lx, by, quad_labels[2], "left", "bottom"),
+                _lbl(rx, by, quad_labels[3], "right", "bottom"),
+            ]
 
-        return chart.properties(
-            title=title,
-            width="container",
-            height=800,
-            background=BG_COLOR,
+        # 5. Composition (Fixed Width, Shared Scales, NO Internal Zoom)
+        layers = [points, text_outline, text_fill] + label_layers + [h_line, v_line]
+
+        xzoom = alt.selection_interval(
+            encodings=["x"], bind="scales", zoom="wheel![event.shiftKey]"
+        )
+        yzoom = alt.selection_interval(
+            encodings=["y"], bind="scales", zoom="wheel![event.altKey]"
+        )
+
+        xzoom = alt.selection_interval(bind="scales", encodings=["x"], zoom="wheel!")
+        return (
+            alt.layer(*layers)
+            .resolve_scale(x="shared", y="shared")
+            .add_params(xzoom)
+            .properties(width="container", height=800, background=BG_COLOR)
         )
 
     # --- 3. GENERATE CHARTS (Unchanged Logic, uses new builder) ---
@@ -2822,10 +2832,7 @@ def _(
             "🎯 Consistency": mo.vstack(
                 [
                     dynamic_zoom_toggle,
-                    mo.ui.altair_chart(
-                        c_consist.interactive(),
-                        chart_selection=False,
-                    ),
+                    c_consist.interactive(),
                     mo.md(
                         """**Stability**: Percentage of races where Final VP is within ±1 standard deviation (1σ) of the racer's mean VP."""
                     ),
@@ -2834,10 +2841,7 @@ def _(
             "🎲 Dice vs Ability": mo.vstack(
                 [
                     dynamic_zoom_toggle,
-                    mo.ui.altair_chart(
-                        c_sources.interactive(),
-                        chart_selection=False,
-                    ),
+                    c_sources.interactive(),
                     mo.md(
                         """**X: Ability Move Dependency** – Correlation of non-dice movement (ability-driven positioning) to VP.  \n**Y: Dice Dependency** – Correlation of total dice rolled to VP."""
                     ),
@@ -2846,10 +2850,7 @@ def _(
             "🌊 Momentum": mo.vstack(
                 [
                     dynamic_zoom_toggle,
-                    mo.ui.altair_chart(
-                        c_momentum.interactive(),
-                        chart_selection=False,
-                    ),
+                    c_momentum.interactive(),
                     mo.md(
                         """**X: Start Pos Bias** – Correlation of starting position (racer ID) to VP.  \n**Y: Mid-Game Bias** – Correlation of position at 66% mark to VP."""
                     ),
@@ -2858,10 +2859,7 @@ def _(
             "🔥 Excitement": mo.vstack(
                 [
                     dynamic_zoom_toggle,
-                    mo.ui.altair_chart(
-                        c_excitement.interactive(),
-                        chart_selection=False,
-                    ),
+                    c_excitement.interactive(),
                     mo.md(
                         """**Tightness** (X-axis, reversed): Average distance from mean position across all turns.  \n**Volatility** (Y-axis): Percentage of turns where at least one racer changes rank."""
                     ),
@@ -2870,10 +2868,7 @@ def _(
             "⚡ Abilities": mo.vstack(
                 [
                     dynamic_zoom_toggle,
-                    mo.ui.altair_chart(
-                        c_engine.interactive(),
-                        chart_selection=False,
-                    ),
+                    c_engine.interactive(),
                     mo.md(
                         """**X: Activity** – Average number of ability triggers per turn.  \n**Y: Efficacy** – Correlation between trigger count and Victory Points.  \n*Do more ability triggers mean more points?*"""
                     ),
