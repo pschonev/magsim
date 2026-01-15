@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
+from numpy import isin
+
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
@@ -40,9 +42,8 @@ class CoachBoost(RacerModifier, RollModificationMixin):
         engine: GameEngine,
         rolling_racer_idx: int,
     ) -> None:
-        if rolling_racer_idx == owner_idx:
-            query.modifiers.append(1)
-            query.modifier_sources.append((self.name, 1))
+        query.modifiers.append(1)
+        query.modifier_sources.append((self.name, 1))
 
     @override
     def send_ability_trigger(
@@ -73,17 +74,19 @@ class CoachAura(Ability, LifecycleManagedMixin):
     def _update_aura(self, engine: GameEngine, coach_idx: int) -> None:
         """Apply/remove CoachBoost to ALL racers at coach's position."""
         coach = engine.get_racer(coach_idx)
-        coach_pos = coach.position
 
         # Remove from everyone first (to handle position changes)
         for racer in engine.state.racers:
-            if racer.idx != coach_idx:
-                mod = next((m for m in racer.modifiers if m.name == "CoachBoost"), None)
+            if racer.idx != coach_idx and racer.position != coach.position:
+                mod = next(
+                    (m for m in racer.modifiers if isinstance(m, CoachBoost)),
+                    None,
+                )
                 if mod:
                     remove_racer_modifier(engine, racer.idx, mod)
 
         # Apply to everyone now at coach_pos (including self)
-        for racer in engine.get_racers_at_position(coach_pos):
+        for racer in engine.get_racers_at_position(coach.position):
             add_racer_modifier(engine, racer.idx, CoachBoost(owner_idx=coach_idx))
 
     @override
@@ -109,7 +112,13 @@ class CoachAura(Ability, LifecycleManagedMixin):
         if not isinstance(event, (PostMoveEvent, PostWarpEvent)):
             return "skip_trigger"
 
-        if event.target_racer_idx == owner_idx:
+        # check if owner (Coach) moved
+        # or another racer landed on his space
+        # or another racer moved away from his space
+        if (
+            event.target_racer_idx == owner_idx
+            or (owner := engine.get_racer(owner_idx)).position == event.start_tile
+            or owner.position == event.end_tile
+        ):
             self._update_aura(engine, owner_idx)
-        # else: Someone else moved. If they landed on coach, _update_aura will catch it next time.
         return "skip_trigger"
