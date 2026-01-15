@@ -2237,8 +2237,8 @@ def _(
         )
         .properties(
             title=f"Matchup Matrix ({metric_title})",
-            width=680,
-            height=680,
+            width="container",
+            height=800,
             background=BG_COLOR,
         )
     )
@@ -2493,7 +2493,12 @@ def _(
                 + _lbl(rx, by, quad_labels[3], "right", "bottom")
             )
 
-        return chart.properties(title=title, width=800, height=800, background=BG_COLOR)
+        return chart.properties(
+            title=title,
+            width="container",
+            height=800,
+            background=BG_COLOR,
+        )
 
     # --- 3. GENERATE CHARTS (Unchanged Logic, uses new builder) ---
     c_consist = _build_quadrant_chart(
@@ -2762,7 +2767,7 @@ def _(
         )
         .properties(
             title=f"Env Adaptability ({env_metric_title})",
-            width=680,
+            width="container",
             height=680,
             background=BG_COLOR,
         )
@@ -2817,7 +2822,10 @@ def _(
             "🎯 Consistency": mo.vstack(
                 [
                     dynamic_zoom_toggle,
-                    mo.ui.altair_chart(c_consist).interactive(),
+                    mo.ui.altair_chart(
+                        c_consist.interactive(),
+                        chart_selection=False,
+                    ),
                     mo.md(
                         """**Stability**: Percentage of races where Final VP is within ±1 standard deviation (1σ) of the racer's mean VP."""
                     ),
@@ -2826,7 +2834,10 @@ def _(
             "🎲 Dice vs Ability": mo.vstack(
                 [
                     dynamic_zoom_toggle,
-                    mo.ui.altair_chart(c_sources).interactive(),
+                    mo.ui.altair_chart(
+                        c_sources.interactive(),
+                        chart_selection=False,
+                    ),
                     mo.md(
                         """**X: Ability Move Dependency** – Correlation of non-dice movement (ability-driven positioning) to VP.  \n**Y: Dice Dependency** – Correlation of total dice rolled to VP."""
                     ),
@@ -2835,7 +2846,10 @@ def _(
             "🌊 Momentum": mo.vstack(
                 [
                     dynamic_zoom_toggle,
-                    mo.ui.altair_chart(c_momentum).interactive(),
+                    mo.ui.altair_chart(
+                        c_momentum.interactive(),
+                        chart_selection=False,
+                    ),
                     mo.md(
                         """**X: Start Pos Bias** – Correlation of starting position (racer ID) to VP.  \n**Y: Mid-Game Bias** – Correlation of position at 66% mark to VP."""
                     ),
@@ -2844,7 +2858,10 @@ def _(
             "🔥 Excitement": mo.vstack(
                 [
                     dynamic_zoom_toggle,
-                    mo.ui.altair_chart(c_excitement).interactive(),
+                    mo.ui.altair_chart(
+                        c_excitement.interactive(),
+                        chart_selection=False,
+                    ),
                     mo.md(
                         """**Tightness** (X-axis, reversed): Average distance from mean position across all turns.  \n**Volatility** (Y-axis): Percentage of turns where at least one racer changes rank."""
                     ),
@@ -2853,7 +2870,10 @@ def _(
             "⚡ Abilities": mo.vstack(
                 [
                     dynamic_zoom_toggle,
-                    mo.ui.altair_chart(c_engine).interactive(),
+                    mo.ui.altair_chart(
+                        c_engine.interactive(),
+                        chart_selection=False,
+                    ),
                     mo.md(
                         """**X: Activity** – Average number of ability triggers per turn.  \n**Y: Efficacy** – Correlation between trigger count and Victory Points.  \n*Do more ability triggers mean more points?*"""
                     ),
