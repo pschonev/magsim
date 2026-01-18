@@ -95,6 +95,7 @@ class RollResultEvent(GameEvent, HasTargetRacer):
 class ResolveMainMoveEvent(GameEvent, HasTargetRacer):
     roll_serial: int
     phase: Phase = Phase.MAIN_ACT
+    roll_event_triggered_events: list[AbilityTriggeredEvent]
 
 
 @dataclass(frozen=True, kw_only=True)

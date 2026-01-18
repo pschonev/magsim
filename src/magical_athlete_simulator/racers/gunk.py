@@ -36,30 +36,24 @@ class ModifierSlime(RacerModifier, RollModificationMixin):
         owner_idx: int | None,
         engine: GameEngine,
         rolling_racer_idx: int,
-    ) -> None:
+    ) -> list[AbilityTriggeredEvent]:
         # This modifier is attached to the VICTIM, and affects their roll
         # owner_idx is Gunk, query.racer_idx is the victim
+        if owner_idx is None:
+            msg = f"owner_idx should never be None for {self.name}"
+            raise ValueError(msg)
+
         query.modifiers.append(-1)
         query.modifier_sources.append((self.name, -1))
 
-    @override
-    def send_ability_trigger(
-        self,
-        owner_idx: int | None,
-        engine: GameEngine,
-        rolling_racer_idx: int,
-    ) -> None:
-        if owner_idx is None:
-            raise ValueError("owner_idx should never be None for ModifierSlime")
-
-        engine.push_event(
+        return [
             AbilityTriggeredEvent(
                 owner_idx,
                 self.name,
                 phase=Phase.ROLL_WINDOW,
                 target_racer_idx=rolling_racer_idx,
             ),
-        )
+        ]
 
 
 @dataclass

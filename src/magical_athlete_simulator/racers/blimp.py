@@ -36,9 +36,9 @@ class BlimpModifier(RacerModifier, RollModificationMixin):
         owner_idx: int | None,
         engine: GameEngine,
         rolling_racer_idx: int,
-    ) -> None:
+    ) -> list[AbilityTriggeredEvent]:
         if rolling_racer_idx != owner_idx:
-            return
+            return []
 
         if owner_idx is None:
             msg = f"owner_idx should never be None for {self.name}"
@@ -58,25 +58,14 @@ class BlimpModifier(RacerModifier, RollModificationMixin):
         query.modifiers.append(delta)
         query.modifier_sources.append((source, delta))
 
-    @override
-    def send_ability_trigger(
-        self,
-        owner_idx: int | None,
-        engine: GameEngine,
-        rolling_racer_idx: int,
-    ):
-        if owner_idx is None:
-            msg = f"owner_idx should never be None for {self.name}"
-            raise ValueError(msg)
-
-        engine.push_event(
+        return [
             AbilityTriggeredEvent(
                 owner_idx,
                 self.name,
                 phase=Phase.ROLL_WINDOW,
                 target_racer_idx=rolling_racer_idx,
             ),
-        )
+        ]
 
 
 @dataclass

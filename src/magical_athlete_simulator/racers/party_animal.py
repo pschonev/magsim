@@ -89,17 +89,18 @@ class ModifierPartySelfBoost(RacerModifier, RollModificationMixin):
         owner_idx: int | None,
         engine: GameEngine,
         rolling_racer_idx: int,
-    ) -> None:
+    ) -> list[AbilityTriggeredEvent]:
         # This modifier is attached to Party Animal, affects their own roll
         # owner_idx is Party Animal, query.racer_idx is also Party Animal
         if query.racer_idx != owner_idx:
-            return  # Safety check (should never happen)
+            return []  # Safety check (should never happen)
 
         if owner_idx is None:
             raise ValueError("owner_idx should never be None")
 
         owner = engine.get_racer(owner_idx)
 
+        ability_triggered_events: list[AbilityTriggeredEvent] = []
         if guests := engine.get_racers_at_position(
             owner.position,
             except_racer_idx=owner_idx,
@@ -107,22 +108,7 @@ class ModifierPartySelfBoost(RacerModifier, RollModificationMixin):
             bonus = len(guests)
             query.modifiers.append(bonus)
             query.modifier_sources.append((self.name, bonus))
-
-    @override
-    def send_ability_trigger(
-        self,
-        owner_idx: int | None,
-        engine: GameEngine,
-        rolling_racer_idx: int,
-    ) -> None:
-        if owner_idx is None:
-            raise ValueError("owner_idx should never be None")
-
-        for _ in engine.get_racers_at_position(
-            engine.get_racer(owner_idx).position,
-            except_racer_idx=owner_idx,
-        ):
-            engine.push_event(
+            ability_triggered_events.append(
                 AbilityTriggeredEvent(
                     owner_idx,
                     self.name,
@@ -130,6 +116,8 @@ class ModifierPartySelfBoost(RacerModifier, RollModificationMixin):
                     target_racer_idx=owner_idx,
                 ),
             )
+
+        return ability_triggered_events
 
 
 @dataclass

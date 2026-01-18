@@ -68,3 +68,42 @@ def test_magician_reroll_applies_new_roll(scenario: type[GameScenario]):
 
     magician = game.get_racer(0)
     assert magician.position == 6
+
+def test_magician_double_reroll_ignores_other_roll_effects(scenario: type[GameScenario]):
+    """
+    Scenario:
+      - Magician starts on the same tile as Coach and Gunk.
+      - Scoocher is in the game watching.
+      - Magician rolls 1 twice, causing 2 rerolls, then finally rolls a non-1.
+
+    Expectation:
+      - The first two rolls are completely ignored for game purposes:
+        Coach/Gunk/etc should NOT be applied/used/triggered on those ignored rolls.
+      - Scoocher DOES still react to the two MagicalReroll triggers (one per ignored roll).
+      - On the final (kept) roll, Coach and Gunk trigger normally.
+      - Total Scoocher moves = 2 (rerolls) + 2 (Coach+Gunk on final roll) = 4.
+    """
+    game = scenario(
+        [
+            RacerConfig(idx=0, name="Magician", start_pos=0, abilities={"MagicalReroll"}),
+            RacerConfig(1, "Coach", start_pos=0),
+            RacerConfig(2, "Gunk", start_pos=0),
+            RacerConfig(idx=3, name="Scoocher", start_pos=10, abilities={"ScoochStep"}),
+        ],
+        # Two ignored rolls (1, 1), then the kept roll (4).
+        dice_rolls=[1, 1, 4],
+    )
+
+    game.run_turn()
+
+    magician = game.get_racer(0)
+    scoocher = game.get_racer(3)
+
+    # Final kept roll should be 4, with Coach +1 and Gunk -1 cancelling out.
+    assert magician.position == 4, f"Magician should end at 4, got {magician.position}"
+
+    # Scoocher moves:
+    # - +1 for each MagicalReroll trigger (2x)
+    # - +1 for Coach boost trigger on the final kept roll
+    # - +1 for Gunk slime trigger on the final kept roll
+    assert scoocher.position == 14, f"Scoocher should have moved 4 times (10 -> 14), got {scoocher.position}"

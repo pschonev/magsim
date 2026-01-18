@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
-from numpy import isin
-
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
@@ -41,29 +39,22 @@ class CoachBoost(RacerModifier, RollModificationMixin):
         owner_idx: int | None,
         engine: GameEngine,
         rolling_racer_idx: int,
-    ) -> None:
-        query.modifiers.append(1)
-        query.modifier_sources.append((self.name, 1))
-
-    @override
-    def send_ability_trigger(
-        self,
-        owner_idx: int | None,
-        engine: GameEngine,
-        rolling_racer_idx: int,
-    ) -> None:
+    ) -> list[AbilityTriggeredEvent]:
         if owner_idx is None:
             msg = f"owner_idx should never be None for {self.name}"
             raise ValueError(msg)
 
-        engine.push_event(
+        query.modifiers.append(1)
+        query.modifier_sources.append((self.name, 1))
+
+        return [
             AbilityTriggeredEvent(
                 owner_idx,
                 self.name,
                 phase=Phase.ROLL_WINDOW,
                 target_racer_idx=rolling_racer_idx,
             ),
-        )
+        ]
 
 
 @dataclass

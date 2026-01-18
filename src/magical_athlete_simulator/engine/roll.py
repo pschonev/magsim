@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEvent,
     MoveDistanceQuery,
     PerformMainRollEvent,
     Phase,
@@ -30,14 +31,18 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
     base = engine.rng.randint(1, 6)
     query = MoveDistanceQuery(event.target_racer_idx, base)
 
-    # Apply ALL modifiers attached to this racer
+    # Apply ALL modifiers attached to this racer (operates on MoveDistanceQuery object)
+    # and create AbilityTriggeredEvents but don't push them until we know it's the final roll
+    roll_event_triggered_events: list[AbilityTriggeredEvent] = []
     for mod in engine.get_racer(event.target_racer_idx).modifiers:
         if isinstance(mod, RollModificationMixin):
-            mod.modify_roll(
-                query,
-                mod.owner_idx,
-                engine,
-                rolling_racer_idx=event.target_racer_idx,
+            roll_event_triggered_events.extend(
+                mod.modify_roll(
+                    query,
+                    mod.owner_idx,
+                    engine,
+                    rolling_racer_idx=event.target_racer_idx,
+                ),
             )
 
     final = query.final_value
@@ -74,6 +79,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
             roll_serial=current_serial,
             responsible_racer_idx=event.responsible_racer_idx,
             source=event.source,
+            roll_event_triggered_events=roll_event_triggered_events,
         ),
     )
 
@@ -83,11 +89,6 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
     if event.roll_serial != engine.state.roll_state.serial_id:
         engine.log_debug("Ignoring stale roll resolution (Re-roll occurred).")
         return
-
-    # now we can send an AbilityTriggeredEvent
-    for mod in engine.get_racer(event.target_racer_idx).modifiers:
-        if isinstance(mod, RollModificationMixin):
-            mod.send_ability_trigger(mod.owner_idx, engine, event.target_racer_idx)
 
     engine.push_event(
         RollResultEvent(
@@ -115,6 +116,9 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
             responsible_racer_idx=event.responsible_racer_idx,
             emit_ability_triggered="never",
         )
+
+    for ability_triggered_event in event.roll_event_triggered_events:
+        engine.push_event(ability_triggered_event)
 
 
 def trigger_reroll(engine: GameEngine, source_idx: int, source: Source):

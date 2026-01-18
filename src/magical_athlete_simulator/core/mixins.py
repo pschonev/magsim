@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import (
+        AbilityTriggeredEvent,
         GameEvent,
         MoveDistanceQuery,
         Phase,
@@ -22,17 +23,7 @@ class RollModificationMixin(ABC):
         owner_idx: int | None,
         engine: GameEngine,
         rolling_racer_idx: int,
-    ) -> None:
-        pass
-
-    @abstractmethod
-    def send_ability_trigger(
-        self,
-        owner_idx: int | None,
-        engine: GameEngine,
-        rolling_racer_idx: int,
-    ) -> None:
-        pass
+    ) -> list[AbilityTriggeredEvent]: ...
 
 
 class ApproachHookMixin(ABC):
@@ -92,7 +83,11 @@ class MovementValidatorMixin(ABC):
 
     @abstractmethod
     def validate_move(
-        self, engine: GameEngine, racer_idx: int, start_tile: int, end_tile: int
+        self,
+        engine: GameEngine,
+        racer_idx: int,
+        start_tile: int,
+        end_tile: int,
     ) -> bool:
         pass
 
