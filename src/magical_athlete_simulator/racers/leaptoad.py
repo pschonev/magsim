@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 from magical_athlete_simulator.core.abilities import Ability
+from magical_athlete_simulator.core.events import AbilityTriggeredEvent, MoveCmdEvent
 from magical_athlete_simulator.core.mixins import (
     DestinationCalculatorMixin,
     LifecycleManagedMixin,
@@ -38,11 +39,14 @@ class LeaptoadJumpModifier(RacerModifier, DestinationCalculatorMixin):
         racer_idx: int,
         start_tile: int,
         distance: int,
-    ) -> int:
+        move_cmd_event: MoveCmdEvent,
+    ) -> tuple[int, list[AbilityTriggeredEvent]]:
         current = start_tile
         remaining = abs(distance)
         direction = 1 if distance > 0 else -1
+        racer = engine.get_racer(racer_idx)
 
+        ability_triggered_events: list[AbilityTriggeredEvent] = []
         # We step through the path 1 by 1, skipping occupied tiles
         while remaining > 0:
             current += direction
@@ -58,11 +62,22 @@ class LeaptoadJumpModifier(RacerModifier, DestinationCalculatorMixin):
                     break
                 # Tile is occupied, jump over it (effectively not counting this step)
                 # We do NOT decrement 'remaining' because this step was "free"
+                engine.log_info(
+                    f"{racer.repr} used {self.name} to jump over position {current}.",
+                )
                 current += direction
+                ability_triggered_events.append(
+                    AbilityTriggeredEvent(
+                        responsible_racer_idx=racer_idx,
+                        source=self.name,
+                        phase=move_cmd_event.phase,
+                        target_racer_idx=occupied[0].idx,
+                    ),
+                )
 
             remaining -= 1
 
-        return current
+        return current, ability_triggered_events
 
 
 @dataclass

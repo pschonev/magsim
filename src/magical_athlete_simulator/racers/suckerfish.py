@@ -4,7 +4,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 from magical_athlete_simulator.core.abilities import Ability
-from magical_athlete_simulator.core.events import GameEvent, Phase, PostMoveEvent
+from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEvent,
+    GameEvent,
+    MoveCmdEvent,
+    Phase,
+    PostMoveEvent,
+)
 from magical_athlete_simulator.core.mixins import DestinationCalculatorMixin
 from magical_athlete_simulator.core.modifiers import RacerModifier
 from magical_athlete_simulator.engine.abilities import (
@@ -32,7 +38,8 @@ class SuckerfishTargetModifier(RacerModifier, DestinationCalculatorMixin):
         racer_idx: int,
         start_tile: int,
         distance: int,
-    ) -> int:
+        move_cmd_event: MoveCmdEvent,
+    ) -> tuple[int, list[AbilityTriggeredEvent]]:
         # We force the destination to be the specific tile we want.
         # This overrides normal distance math, but ensures we hit the target
         # even if other modifiers tried to mess with us.
@@ -40,7 +47,14 @@ class SuckerfishTargetModifier(RacerModifier, DestinationCalculatorMixin):
         # Cleanup self immediately
         remove_racer_modifier(engine, racer_idx, self)
 
-        return self.target_tile
+        return self.target_tile, [
+            AbilityTriggeredEvent(
+                responsible_racer_idx=racer_idx,
+                source=self.name,
+                phase=move_cmd_event.phase,
+                target_racer_idx=move_cmd_event.target_racer_idx,
+            ),
+        ]
 
 
 @dataclass
@@ -99,7 +113,7 @@ class SuckerfishRide(Ability):
             phase=Phase.REACTION,
             source=self.name,
             responsible_racer_idx=owner_idx,
-            emit_ability_triggered="after_resolution",
+            emit_ability_triggered="never",
         )
 
         return "skip_trigger"

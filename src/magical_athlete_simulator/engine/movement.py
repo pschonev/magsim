@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
@@ -43,25 +43,49 @@ def _publish_pre_move(engine: GameEngine, evt: MoveCmdEvent):
     )
 
 
-def _resolve_move_path(engine: GameEngine, evt: MoveCmdEvent) -> int:
+def _resolve_move_path(
+    engine: GameEngine,
+    evt: MoveCmdEvent,
+) -> tuple[int, list[AbilityTriggeredEvent]]:
     racer = engine.get_racer(evt.target_racer_idx)
     start = racer.position
 
     # --- 1. CALCULATE PHYSICS DESTINATION (Leaptoad) ---
     phys_end = start + evt.distance
 
+    movement_event_triggered_events: list[AbilityTriggeredEvent] = []
     for mod in racer.modifiers:
         if isinstance(mod, DestinationCalculatorMixin):
-            phys_end = mod.calculate_destination(engine, racer.idx, start, evt.distance)
+            phys_end, triggered_events = mod.calculate_destination(
+                engine,
+                racer.idx,
+                start,
+                evt.distance,
+                move_cmd_event=evt,
+            )
+            movement_event_triggered_events.extend(triggered_events)
             break
 
     # --- 2. VALIDATE MOVE (Stickler) ---
     for mod in racer.modifiers:
         if isinstance(mod, MovementValidatorMixin) and not mod.validate_move(
-            engine, racer.idx, start, phys_end
+            engine,
+            racer.idx,
+            start,
+            phys_end,
         ):
             engine.log_info(f"Move vetoed by {mod.name}")
-            return start  # Cancel move
+            if mod.owner_idx is None:
+                msg = f"MovementValidatorMixin should always have valid owner_idx but found None for {mod.name}"
+                raise ValueError(msg)
+            return start, [
+                AbilityTriggeredEvent(
+                    mod.owner_idx,
+                    mod.name,
+                    phase=evt.phase,
+                    target_racer_idx=evt.target_racer_idx,
+                ),
+            ]  # Cancel move
 
     # --- 3. RESOLVE BOARD INTERACTIONS (Huge Baby) ---
     # Pass the event object itself to the board logic
@@ -82,7 +106,14 @@ def _resolve_move_path(engine: GameEngine, evt: MoveCmdEvent) -> int:
         )
         final_end = 0
 
-    return final_end
+    # if racer didn't move, movement related abilities were not triggered
+    triggered = (
+        final_end != start
+    ) or engine.state.rules.count_0_moves_for_ability_triggered
+    if not triggered:
+        movement_event_triggered_events = []
+
+    return final_end, movement_event_triggered_events
 
 
 def _process_passing_and_logs(
@@ -158,14 +189,23 @@ def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
 
     start = racer.position
 
+    # first handle anything that is pre-move
     _publish_pre_move(engine, evt)
 
-    # All complex logic is now inside here
-    end = _resolve_move_path(engine, evt)
+    # resolve path for movement manipulators (Leaptoad, Suckerfish, Stickler)
+    end, movement_event_triggered_events = _resolve_move_path(engine, evt)
+    racer.position = end
 
+    # first we push ability triggered events for all events that happened during movement
+    # we already filtered abilities that did not happen because of 0 movement
+    for mvt_evt in movement_event_triggered_events:
+        engine.push_event(mvt_evt)
+
+    # if we have 0 movement, we can stop resolving things here
     if end == start:
         return
 
+    # then for any ability that moves the racer (if the racer moved)
     if evt.emit_ability_triggered == "after_resolution":
         triggered = (
             end != start
@@ -173,14 +213,21 @@ def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
         if triggered:
             engine.push_event(AbilityTriggeredEvent.from_event(evt))
 
+    # lastly we handle passing
     _process_passing_and_logs(engine, evt, start, end)
 
-    racer.position = end
+    # and handle landing (and landing abilities)
     _finalize_committed_move(engine, evt, start, end)
 
 
 def handle_simultaneous_move_cmd(engine: GameEngine, evt: SimultaneousMoveCmdEvent):
-    planned: list[tuple[MoveCmdEvent, int, int]] = []
+    class PlannedMove(NamedTuple):
+        move_cmd_event: MoveCmdEvent
+        start: int
+        end: int
+        ability_triggered_events: list[AbilityTriggeredEvent]
+
+    planned: list[PlannedMove] = []
 
     for racer_idx, distance in evt.moves:
         if distance == 0:
@@ -202,27 +249,37 @@ def handle_simultaneous_move_cmd(engine: GameEngine, evt: SimultaneousMoveCmdEve
         start = racer.position
         _publish_pre_move(engine, sub_evt)
 
-        # Now use the shared logic!
-        end = _resolve_move_path(engine, sub_evt)
+        end, movement_event_triggered_events = _resolve_move_path(engine, sub_evt)
 
-        if end == start:
-            continue
-
-        planned.append((sub_evt, start, end))
+        planned.append(
+            PlannedMove(sub_evt, start, end, movement_event_triggered_events),
+        )
 
     if not planned:
         return
 
+    # first we send all ability triggered events
+    # (we already removed events that were not triggered due to 0 movement before)
+    for planned_move_command in planned:
+        for ability_triggered_event in planned_move_command.ability_triggered_events:
+            engine.push_event(ability_triggered_event)
+
+    filtered_planned = [
+        planned_move_cmd
+        for planned_move_cmd in planned
+        if planned_move_cmd.start != planned_move_cmd.end
+    ]
+
     if evt.emit_ability_triggered == "after_resolution":
         engine.push_event(AbilityTriggeredEvent.from_event(evt))
 
-    for sub_evt, start, end in planned:
+    for sub_evt, start, end, _ in filtered_planned:
         _process_passing_and_logs(engine, sub_evt, start, end)
 
-    for sub_evt, _, end in planned:
+    for sub_evt, _, end, _ in filtered_planned:
         engine.get_racer(sub_evt.target_racer_idx).position = end
 
-    for sub_evt, start, end in planned:
+    for sub_evt, start, end, _ in filtered_planned:
         _finalize_committed_move(engine, sub_evt, start, end)
 
 

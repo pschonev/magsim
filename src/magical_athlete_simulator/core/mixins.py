@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import (
         AbilityTriggeredEvent,
         GameEvent,
+        MoveCmdEvent,
         MoveDistanceQuery,
         Phase,
     )
@@ -74,7 +75,8 @@ class DestinationCalculatorMixin(ABC):
         racer_idx: int,
         start_tile: int,
         distance: int,
-    ) -> int:
+        move_cmd_event: MoveCmdEvent,
+    ) -> tuple[int, list[AbilityTriggeredEvent]]:
         pass
 
 
