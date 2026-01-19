@@ -7,14 +7,17 @@ def test_lovable_loser_vp_gain(scenario: type[GameScenario]):
         [
             RacerConfig(0, "LovableLoser", start_pos=0),
             RacerConfig(1, "Banana", start_pos=5),  # Ahead
-            RacerConfig(2, "Mastermind", start_pos=1)
+            RacerConfig(2, "Mastermind", start_pos=1),
+            RacerConfig(3, "Scoocher", start_pos=10),
         ],
         dice_rolls=[1],
     )
 
     game.run_turn()
     loser = game.get_racer(0)
+    scoocher = game.get_racer(3)
     assert loser.victory_points == 1, "Should gain VP for being last"
+    assert scoocher.position == 11
 
 
 def test_lovable_loser_no_gain_if_tied(scenario: type[GameScenario]):
