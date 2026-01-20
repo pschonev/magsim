@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
+    ExecuteMainMoveEvent,
     MoveDistanceQuery,
     PerformMainRollEvent,
     Phase,
@@ -42,8 +43,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
 
     query = MoveDistanceQuery(event.target_racer_idx, base)
 
-    # Apply ALL modifiers attached to this racer (operates on MoveDistanceQuery object)
-    # and create AbilityTriggeredEvents but don't push them until we know it's the final roll
+    # Apply ALL modifiers attached to this racer
     roll_event_triggered_events: list[AbilityTriggeredEvent] = []
     for mod in engine.get_racer(event.target_racer_idx).modifiers:
         if isinstance(mod, RollModificationMixin):
@@ -60,7 +60,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
     engine.state.roll_state.base_value = base
     engine.state.roll_state.final_value = final
 
-    # Logging with sources
+    # Logging
     if query.modifier_sources:
         parts = [f"{name}:{delta:+d}" for (name, delta) in query.modifier_sources]
         mods_str = ", ".join(parts)
@@ -82,8 +82,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
         ),
     )
 
-    # 4. Schedule the resolution. If trigger_reroll() was called in step 3,
-    # serial_id will increment, and this event will be ignored in _resolve_main_move.
+    # 4. Schedule the resolution.
     engine.push_event(
         ResolveMainMoveEvent(
             target_racer_idx=event.target_racer_idx,
@@ -96,11 +95,15 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
 
 
 def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
-    # If serial doesn't match, it means a re-roll happened.
+    """
+    Resolves the roll window. It announces the result, fires modifier events,
+    then schedules the physical execution.
+    """
     if event.roll_serial != engine.state.roll_state.serial_id:
         engine.log_debug("Ignoring stale roll resolution (Re-roll occurred).")
         return
 
+    # 1. Notify listeners (RollResultEvent) - Phase 20 (MAIN_ACT)
     engine.push_event(
         RollResultEvent(
             target_racer_idx=event.target_racer_idx,
@@ -113,11 +116,42 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
         ),
     )
 
-    # make sure that nothing made the racer skip the main move
-    if engine.get_racer(event.target_racer_idx).main_move_consumed:
+    # 2. Emit ability triggers generated during roll calculation (e.g. +1 modifiers)
+    # RESTORED: These fire now, immediately after the result is announced,
+    # restoring the original timing behavior.
+    for ability_triggered_event in event.roll_event_triggered_events:
+        engine.push_event(ability_triggered_event)
+
+    # 3. Schedule the physical move - Phase 21 (MOVE_EXEC)
+    # This delay allows Inchworm/Lackey (listening to step 1) to intervene
+    # before step 3 actually runs.
+    engine.push_event(
+        ExecuteMainMoveEvent(
+            target_racer_idx=event.target_racer_idx,
+            responsible_racer_idx=event.responsible_racer_idx,
+            source=event.source,
+            roll_serial=event.roll_serial,
+            # We don't need to pass the events forward anymore, as we emitted them above.
+            roll_event_triggered_events=[],
+        ),
+    )
+
+
+def handle_execute_main_move(engine: GameEngine, event: ExecuteMainMoveEvent):
+    """
+    Actually performs the move if it hasn't been cancelled.
+    """
+    racer = engine.get_racer(event.target_racer_idx)
+
+    # Check if Inchworm cancelled this move in the previous event step
+    if racer.main_move_consumed:
+        engine.log_info(
+            f"Skipped execution: {racer.repr} main move was consumed/cancelled."
+        )
         return
 
     dist = engine.state.roll_state.final_value
+
     if dist > 0:
         push_move(
             engine=engine,
@@ -129,16 +163,12 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
             emit_ability_triggered="never",
         )
 
-    for ability_triggered_event in event.roll_event_triggered_events:
-        engine.push_event(ability_triggered_event)
-
 
 def trigger_reroll(engine: GameEngine, source_idx: int, source: Source):
     """Cancels the current roll resolution and schedules a new roll immediately."""
     engine.log_info(
         f"RE-ROLL TRIGGERED by {engine.get_racer(source_idx).name} ({source})",
     )
-    # Increment serial to kill any pending ResolveMainMove events
     engine.state.roll_state.serial_id += 1
 
     engine.push_event(

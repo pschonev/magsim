@@ -18,6 +18,8 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Gunk": {"GunkSlime"},
     "Hare": {"HareHubris"},
     "HugeBaby": {"HugeBabyPush"},
+    "Inchworm": {"InchwormCreep"},
+    "Lackey": {"LackeyLoyalty"},
     "Leaptoad": {"LeaptoadJumpManager"},
     "Legs": {"LegsMove"},
     "LovableLoser": {"LovableLoserBonus"},

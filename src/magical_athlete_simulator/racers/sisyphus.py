@@ -24,7 +24,7 @@ class SisyphusCurse(Ability, SetupPhaseMixin):
         racer = engine.get_racer(owner_idx)
         racer.victory_points += 4
         engine.log_info(
-            f"{racer.repr} starts with +4 VP (Total: {racer.victory_points})."
+            f"{racer.repr} starts with +4 VP (Total: {racer.victory_points}).",
         )
 
     @override
@@ -64,7 +64,7 @@ class SisyphusCurse(Ability, SetupPhaseMixin):
             if racer.victory_points > 0:
                 racer.victory_points -= 1
                 engine.log_info(
-                    f"{racer.repr} loses 1 VP (Total: {racer.victory_points})."
+                    f"{racer.repr} loses 1 VP (Total: {racer.victory_points}).",
                 )
 
         return "skip_trigger"

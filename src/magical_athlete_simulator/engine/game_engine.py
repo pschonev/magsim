@@ -10,6 +10,7 @@ from magical_athlete_simulator.ai.smart_agent import SmartAgent
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     EmitsAbilityTriggeredEvent,
+    ExecuteMainMoveEvent,
     GameEvent,
     MainMoveSkippedEvent,
     MoveCmdEvent,
@@ -43,6 +44,7 @@ from magical_athlete_simulator.engine.movement import (
     handle_warp_cmd,
 )
 from magical_athlete_simulator.engine.roll import (
+    handle_execute_main_move,
     handle_perform_main_roll,
     resolve_main_move,
 )
@@ -391,6 +393,8 @@ class GameEngine:
             case ResolveMainMoveEvent():
                 self.publish_to_subscribers(event)
                 resolve_main_move(self, event)
+            case ExecuteMainMoveEvent():
+                handle_execute_main_move(self, event)
 
             case _:
                 pass

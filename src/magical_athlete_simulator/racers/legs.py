@@ -29,7 +29,11 @@ class LegsMoveAbility(Ability, BooleanDecisionMixin):
 
     @override
     def execute(
-        self, event: GameEvent, owner_idx: int, engine: GameEngine, agent: Agent
+        self,
+        event: GameEvent,
+        owner_idx: int,
+        engine: GameEngine,
+        agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
         if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner_idx:
             return "skip_trigger"

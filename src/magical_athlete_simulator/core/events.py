@@ -93,6 +93,20 @@ class RollResultEvent(GameEvent, HasTargetRacer):
 
 
 @dataclass(frozen=True, kw_only=True)
+class ExecuteMainMoveEvent(GameEvent, HasTargetRacer):
+    """
+    The physical act of moving the racer based on the roll result.
+    Scheduled AFTER RollResultEvent to allow abilities (Inchworm) to cancel the move.
+    """
+
+    roll_serial: int
+    phase: Phase = Phase.MOVE_EXEC
+    roll_event_triggered_events: list[AbilityTriggeredEvent] = field(
+        default_factory=list,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
 class ResolveMainMoveEvent(GameEvent, HasTargetRacer):
     roll_serial: int
     phase: Phase = Phase.MAIN_ACT
