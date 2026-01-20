@@ -54,3 +54,67 @@ def test_inchworm_ignores_own_one_roll(scenario: type[GameScenario]):
     
     # Should move 1 space normally but -1 due to Gunk.
     assert inchworm.position == 0
+
+from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+
+
+def test_inchworm_and_skipper_on_one_skip_to_skipper():
+    """
+    Scenario (turn order by idx):
+      0: Centaur (roller)
+      1: Inchworm (reacts to others rolling 1)
+      2: Banana (filler, should be skipped by turn override)
+      3: Skipper (reacts to others rolling 1 -> steals next turn)
+
+    Turn 0: Centaur rolls 1
+      - Inchworm triggers: cancels Centaur move, Inchworm moves +1
+      - Skipper triggers: next_turn_override = Skipper
+
+    Expect after Turn 0:
+      - Current racer is Skipper (3), skipping idx 1 and 2.
+
+    Turn 1: Skipper takes stolen turn and rolls normally (non-1)
+    Expect after Turn 1:
+      - Turn order resumes normally to idx 0 (Centaur).
+    """
+    game = GameScenario(
+        racers_config=[
+            RacerConfig(0, "Centaur"),
+            RacerConfig(1, "Inchworm"),
+            RacerConfig(2, "Banana"),
+            RacerConfig(3, "Skipper"),
+        ],
+        dice_rolls=[
+            1,  # Turn 0: Centaur rolls 1 -> triggers both Inchworm and Skipper
+            2,  # Turn 1: Skipper stolen turn roll (non-1)
+        ],
+    )
+
+    # --- Turn 0: Centaur ---
+    game.run_turn()
+
+    centaur = game.get_racer(0)
+    inchworm = game.get_racer(1)
+    banana = game.get_racer(2)
+
+    # Inchworm: cancels Centaur and moves +1
+    assert centaur.position == 0, f"Centaur should be cancelled, got {centaur.position}"
+    assert inchworm.position == 1, f"Inchworm should creep +1, got {inchworm.position}"
+    assert banana.position == 0, f"Banana should not have moved, got {banana.position}"
+
+    # Skipper: steals next turn (override consumed by advance_turn)
+    assert game.engine.state.current_racer_idx == 3, (
+        f"Expected Skipper (3) to take next turn, got {game.engine.state.current_racer_idx}"
+    )
+    assert game.engine.state.next_turn_override is None, "next_turn_override should be consumed after advancing"
+
+    # --- Turn 1: Skipper (stolen turn) ---
+    game.run_turn()
+
+    skipper = game.get_racer(3)
+    assert skipper.position == 2, f"Skipper should have moved 2 on stolen turn, got {skipper.position}"
+
+    # After Skipper, order resumes normally to Centaur (wraparound), skipping Inchworm/Banana.
+    assert game.engine.state.current_racer_idx == 0, (
+        f"After Skipper's turn, expected Centaur (0), got {game.engine.state.current_racer_idx}"
+    )
