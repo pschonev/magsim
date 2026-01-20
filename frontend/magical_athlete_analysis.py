@@ -72,7 +72,6 @@ async def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -661,7 +660,7 @@ def _(
         active_idx = turn_data.current_racer
         active_name = turn_data.names[active_idx]
         active_pal = get_racer_palette(active_name)
-        roll = turn_data.last_roll
+        roll: int | None = turn_data.last_roll
 
         # Active Racer Name (Floating)
         svg_elements.append(
@@ -681,7 +680,6 @@ def _(
                 {track_group_start}
                 {"".join(svg_elements)}
             </svg>"""
-
     return (render_game_track,)
 
 
