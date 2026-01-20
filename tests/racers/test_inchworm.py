@@ -55,8 +55,6 @@ def test_inchworm_ignores_own_one_roll(scenario: type[GameScenario]):
     # Should move 1 space normally but -1 due to Gunk.
     assert inchworm.position == 0
 
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-
 
 def test_inchworm_and_skipper_on_one_skip_to_skipper():
     """

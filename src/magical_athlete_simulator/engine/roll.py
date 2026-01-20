@@ -146,7 +146,7 @@ def handle_execute_main_move(engine: GameEngine, event: ExecuteMainMoveEvent):
     # Check if Inchworm cancelled this move in the previous event step
     if racer.main_move_consumed:
         engine.log_info(
-            f"Skipped execution: {racer.repr} main move was consumed/cancelled."
+            f"Skipped execution: {racer.repr} main move was consumed/cancelled.",
         )
         return
 
