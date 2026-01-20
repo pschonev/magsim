@@ -28,7 +28,18 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
     engine.state.roll_state.serial_id += 1
     current_serial = engine.state.roll_state.serial_id
 
-    base = engine.rng.randint(1, 6)
+    if racer.roll_override is not None:
+        base = racer.roll_override
+        engine.state.roll_state.dice_value = None  # Not a dice roll
+        engine.state.roll_state.can_reroll = False
+        racer.roll_override = None  # Consume it
+    else:
+        base = engine.rng.randint(1, 6)
+        engine.state.roll_state.dice_value = base
+        engine.state.roll_state.can_reroll = True
+
+    engine.state.roll_state.base_value = base
+
     query = MoveDistanceQuery(event.target_racer_idx, base)
 
     # Apply ALL modifiers attached to this racer (operates on MoveDistanceQuery object)
@@ -95,6 +106,7 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent):
             target_racer_idx=event.target_racer_idx,
             responsible_racer_idx=event.responsible_racer_idx,
             source=event.source,
+            dice_value=engine.state.roll_state.dice_value,
             base_value=engine.state.roll_state.base_value,
             final_value=engine.state.roll_state.final_value,
             phase=Phase.MAIN_ACT,

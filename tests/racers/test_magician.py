@@ -10,8 +10,8 @@ def test_magician_reroll_scoocher_interaction(scenario: type[GameScenario]):
     # We can omit start_pos since it defaults to 0.
     game = scenario(
         [
-            RacerConfig(idx=0, name="Magician", abilities={"MagicalReroll"}),
-            RacerConfig(idx=1, name="Scoocher", abilities={"ScoochStep"}),
+            RacerConfig(idx=0, name="Magician"),
+            RacerConfig(idx=1, name="Scoocher"),
         ],
         dice_rolls=[1, 6],
     )
@@ -32,8 +32,8 @@ def test_magician_reroll_uses_new_roll_value(scenario: type[GameScenario]):
     """
     game = scenario(
         [
-            RacerConfig(idx=0, name="Magician", abilities={"MagicalReroll"}),
-            RacerConfig(idx=1, name="Scoocher", abilities={"ScoochStep"}),
+            RacerConfig(idx=0, name="Magician"),
+            RacerConfig(idx=1, name="Scoocher"),
         ],
         dice_rolls=[1, 1, 6],
     )
@@ -58,7 +58,7 @@ def test_magician_reroll_applies_new_roll(scenario: type[GameScenario]):
     """
     game = scenario(
         [
-            RacerConfig(idx=0, name="Magician", abilities={"MagicalReroll"}),
+            RacerConfig(idx=0, name="Magician"),
             RacerConfig(1, "Centaur", start_pos=10),
         ],
         dice_rolls=[1, 6],
@@ -85,10 +85,10 @@ def test_magician_double_reroll_ignores_other_roll_effects(scenario: type[GameSc
     """
     game = scenario(
         [
-            RacerConfig(idx=0, name="Magician", start_pos=0, abilities={"MagicalReroll"}),
+            RacerConfig(idx=0, name="Magician", start_pos=0),
             RacerConfig(1, "Coach", start_pos=0),
             RacerConfig(2, "Gunk", start_pos=0),
-            RacerConfig(idx=3, name="Scoocher", start_pos=10, abilities={"ScoochStep"}),
+            RacerConfig(idx=3, name="Scoocher", start_pos=10),
         ],
         # Two ignored rolls (1, 1), then the kept roll (4).
         dice_rolls=[1, 1, 4],

@@ -77,4 +77,5 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
-        return ctx.game_state.roll_state.base_value <= 3
+        dice_val = ctx.game_state.roll_state.dice_value
+        return dice_val is not None and dice_val <= 3

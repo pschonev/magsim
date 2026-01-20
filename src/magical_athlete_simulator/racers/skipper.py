@@ -8,7 +8,7 @@ from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     AbilityTriggeredEventOrSkipped,
     GameEvent,
-    ResolveMainMoveEvent,
+    RollResultEvent,
 )
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 @dataclass
 class AbilitySkipper(Ability):
     name: AbilityName = "SkipperTurn"
-    triggers: tuple[type[GameEvent], ...] = (ResolveMainMoveEvent,)
+    triggers: tuple[type[GameEvent], ...] = (RollResultEvent,)
 
     @override
     def execute(
@@ -30,23 +30,14 @@ class AbilitySkipper(Ability):
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, ResolveMainMoveEvent):
+        if not isinstance(event, RollResultEvent):
             return "skip_trigger"
 
-        if event.roll_serial != engine.state.roll_state.serial_id:
-            engine.log_debug(
-                f"{engine.get_racer(owner_idx).repr} ignores stale roll resolution for {self.name}.",
-            )
-            return "skip_trigger"
-
-        # "Whenever any racer rolls a 1..."
-        if engine.state.roll_state.base_value == 1:
+        if event.dice_value == 1:
             me = engine.get_racer(owner_idx)
             engine.log_info(
                 f"{self.name}: A 1 was rolled! {me.repr} steals the next turn!",
             )
-
-            # Simple override. If Genius already set this, we overwrite it.
             engine.state.next_turn_override = owner_idx
 
             return AbilityTriggeredEvent(

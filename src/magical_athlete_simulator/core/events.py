@@ -86,6 +86,7 @@ class RollResultEvent(GameEvent, HasTargetRacer):
     Fired exactly once per valid main roll, containing the final locked-in values.
     """
 
+    dice_value: int | None
     base_value: int
     final_value: int
     phase: Phase = Phase.MAIN_ACT

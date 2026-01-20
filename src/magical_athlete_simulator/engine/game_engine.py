@@ -32,6 +32,7 @@ from magical_athlete_simulator.core.mixins import (
     SetupPhaseMixin,
 )
 from magical_athlete_simulator.core.registry import RACER_ABILITIES
+from magical_athlete_simulator.core.state import RollState
 from magical_athlete_simulator.engine.logging import ContextFilter
 from magical_athlete_simulator.engine.loop_detection import LoopDetector
 from magical_athlete_simulator.engine.movement import (
@@ -116,11 +117,16 @@ class GameEngine:
 
         cr = self.state.current_racer_idx
         racer = self.state.racers[cr]
+
+        # reset roll state
+        self.state.roll_state = RollState()
         racer.reroll_count = 0
+        racer.roll_override = None
+        racer.can_reroll = True
+        racer.main_move_consumed = False
 
         self.log_context.start_turn_log(racer.repr)
         self.log_info(f"=== START TURN: {racer.repr} ===")
-        racer.main_move_consumed = False
 
         if racer.tripped:
             self.log_info(f"{racer.repr} recovers from Trip.")

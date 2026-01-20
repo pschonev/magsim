@@ -24,22 +24,33 @@ class GameRules:
 @dataclass(slots=True)
 class RollState:
     serial_id: int = 0
+    dice_value: int | None = None
     base_value: int = 0
     final_value: int = 0
+    can_reroll: bool = True
 
 
 @dataclass(slots=True)
 class RacerState:
     idx: int
     name: RacerName
+
+    # game state
     position: int = 0
     victory_points: int = 0
     tripped: bool = False
+
+    # rolls
     main_move_consumed: bool = False
     reroll_count: int = 0
+    roll_override: int | None = None
+    can_reroll: bool = True
+
+    # finished
     finish_position: int | None = None
     eliminated: bool = False
 
+    # abilities and modifiers
     modifiers: list[RacerModifier] = field(default_factory=list)
     active_abilities: dict[AbilityName, Ability] = field(default_factory=dict)
 

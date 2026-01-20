@@ -44,7 +44,7 @@ class StepSnapshot:
     positions: list[int]
     tripped: list[bool]
     vp: list[int]
-    last_roll: int
+    last_roll: int | None
     current_racer: int
     names: list[str]
     modifiers: list[list[AbilityName | ModifierName]]
@@ -104,7 +104,7 @@ class SnapshotRecorder:
             positions=[r.position for r in engine.state.racers],
             tripped=[r.tripped for r in engine.state.racers],
             vp=[r.victory_points for r in engine.state.racers],
-            last_roll=engine.state.roll_state.base_value,
+            last_roll=engine.state.roll_state.dice_value,
             current_racer=engine.state.current_racer_idx,
             names=[r.name for r in engine.state.racers],
             modifiers=[[m.name for m in r.modifiers] for r in engine.state.racers],

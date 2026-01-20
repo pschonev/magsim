@@ -34,7 +34,7 @@ def test_blimp_coach_gunk_triggers_scoocher_three_times(scenario: type[GameScena
             RacerConfig(0, "Blimp", start_pos=0),
             RacerConfig(1, "Coach", start_pos=0),
             RacerConfig(2, "Gunk", start_pos=0),
-            RacerConfig(idx=3, name="Scoocher", start_pos=10, abilities={"ScoochStep"}),
+            RacerConfig(idx=3, name="Scoocher", start_pos=10),
         ],
         dice_rolls=[2],  # Blimp roll (single roll this turn)
     )

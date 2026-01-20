@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 RacerName = Literal[
+    "Alchemist",
     "BabaYaga",
     "Banana",
     "Blimp",
@@ -16,6 +17,7 @@ RacerName = Literal[
     "Hare",
     "HugeBaby",
     "Leaptoad",
+    "Legs",
     "LovableLoser",
     "Magician",
     "Mastermind",
@@ -29,6 +31,7 @@ RacerName = Literal[
 ]
 
 AbilityName = Literal[
+    "AlchemistAlchemy",
     "BabaYagaTrip",
     "BananaTrip",
     "BlimpModifierManager",
@@ -42,6 +45,7 @@ AbilityName = Literal[
     "HareHubris",
     "HugeBabyPush",
     "LeaptoadJumpManager",
+    "LegsMove",
     "LovableLoserBonus",
     "MagicalReroll",
     "MastermindPredict",
