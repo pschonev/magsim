@@ -1573,6 +1573,117 @@ def cell_manage_config_state(mo):
 
 
 @app.cell
+def cell_combo_filter_state(mo):
+    # Stores list of dicts: {"racers": ["Racer A", "Racer B"], "type": "Include", "id": ...}
+    get_combo_filters, set_combo_filters = mo.state([])
+    return get_combo_filters, set_combo_filters
+
+
+@app.cell
+def cell_combo_filter_ui(mo, df_races_clean, get_combo_filters, set_combo_filters):
+    # Get unique racers from the clean dataframe for the dropdown options
+    # We assume 'racer_names' is a list column in df_races_clean
+    _unique_racers = sorted(
+        {r for sublist in df_races_clean["racer_names"].to_list() for r in sublist}
+    )
+
+    combo_racer_select = mo.ui.multiselect(
+        options=_unique_racers, label="Select Racers for Combo", full_width=True
+    )
+    combo_type_select = mo.ui.dropdown(
+        options=["Must Include All", "Must Exclude Combination"],
+        value="Must Include All",
+        label="Filter Type",
+    )
+
+    def add_combo_filter():
+        if not combo_racer_select.value:
+            return
+
+        current = get_combo_filters()
+        new_filter = {
+            "racers": sorted(list(combo_racer_select.value)),
+            "type": combo_type_select.value,
+            "id": str(len(current)) + "_" + str(hash(str(combo_racer_select.value))),
+        }
+
+        # Prevent duplicates
+        for _f in current:
+            if (
+                _f["racers"] == new_filter["racers"]
+                and _f["type"] == new_filter["type"]
+            ):
+                return
+
+        set_combo_filters(current + [new_filter])
+
+    add_combo_btn = mo.ui.button(
+        label="Add Combo Filter", on_click=lambda _: add_combo_filter(), kind="neutral"
+    )
+
+    combo_ui = mo.vstack(
+        [
+            mo.md("### Advanced Combo Filters"),
+            mo.hstack(
+                [combo_racer_select, combo_type_select, add_combo_btn], align="end"
+            ),
+        ]
+    )
+    return add_combo_btn, combo_racer_select, combo_type_select, combo_ui
+
+
+@app.cell
+def cell_combo_filter_display(mo, get_combo_filters, set_combo_filters):
+    def remove_filter(filter_id):
+        current = get_combo_filters()
+        set_combo_filters([f for f in current if f["id"] != filter_id])
+
+    chip_style = {
+        "display": "inline-flex",
+        "align-items": "center",
+        "background-color": "#f0f0f0",
+        "border-radius": "16px",
+        "padding": "4px 12px",
+        "margin": "4px",
+        "font-size": "0.85rem",
+        "border": "1px solid #ccc",
+        "color": "#333",
+    }
+
+    chips = []
+    for _f in get_combo_filters():
+        is_include = _f["type"] == "Must Include All"
+        _icon = "Mw" if is_include else "🚫"
+        _color = "#e6fffa" if is_include else "#fff5f5"
+        _border = "#38b2ac" if is_include else "#fc8181"
+
+        label_text = f"{_icon} <b>{', '.join(_f['racers'])}</b>"
+
+        x_btn = mo.ui.button(
+            label="✕",
+            on_click=lambda _, fid=_f["id"]: remove_filter(fid),
+        ).style(
+            {
+                "background": "transparent",
+                "border": "none",
+                "cursor": "pointer",
+                "padding-left": "8px",
+                "color": "#555",
+            }
+        )
+
+        chip_ui = mo.hstack([mo.md(label_text), x_btn], align="center").style(
+            {**chip_style, "background-color": _color, "border-color": _border}
+        )
+        chips.append(chip_ui)
+
+    active_filters_display = (
+        mo.hstack(chips, wrap=True) if chips else mo.md("_No active combo filters_")
+    )
+    return (active_filters_display,)
+
+
+@app.cell
 def cell_autoracer_btn(mo):
     select_auto_racers_btn = mo.ui.run_button(
         label="🤖 Select automatic racers",
@@ -1583,7 +1694,105 @@ def cell_autoracer_btn(mo):
 
 
 @app.cell
-def cell_filter_aggregated(
+def cell_general_filters_ui(df_races, mo):
+    # 1. Define UI Elements
+    unique_boards = sorted(df_races["board"].unique().to_list())
+
+    board_filter = mo.ui.multiselect(
+        options=unique_boards, value=unique_boards, label="Filter Boards"
+    )
+
+    racer_count_filter = mo.ui.multiselect(
+        options=sorted(df_races["racer_count"].unique().to_list()),
+        value=sorted(df_races["racer_count"].unique().to_list()),
+        label="Racer Count",
+    )
+
+    # 2. Display them
+    filter_ui = mo.vstack(
+        [
+            mo.hstack([board_filter, racer_count_filter]),
+        ]
+    )
+
+    # Return widgets so other cells can access .value
+    return board_filter, racer_count_filter, filter_ui
+
+
+@app.cell
+def cell_general_filters_ui(df_races, mo):
+    # 1. Define UI Elements
+    # We use sorted unique values for the options
+    unique_boards_opts = sorted(df_races["board"].unique().to_list())
+    unique_counts_opts = sorted(df_races["racer_count"].unique().to_list())
+
+    # Create the widgets
+    board_filter_widget = mo.ui.multiselect(
+        options=unique_boards_opts, value=unique_boards_opts, label="Filter Boards"
+    )
+
+    racer_count_widget = mo.ui.multiselect(
+        options=unique_counts_opts, value=unique_counts_opts, label="Racer Count"
+    )
+
+    # 2. Layout
+    general_filters_ui = mo.vstack(
+        [
+            mo.hstack([board_filter_widget, racer_count_widget]),
+        ]
+    )
+
+    # Return the WIDGET OBJECTS so the next cell can read their .value
+    return board_filter_widget, general_filters_ui, racer_count_widget
+
+
+@app.cell
+def cell_apply_all_filters(
+    board_filter_widget,  # From previous cell
+    racer_count_widget,  # From previous cell
+    df_races_clean,
+    get_combo_filters,
+    mo,
+    pl,
+):
+    # 1. Start with General Filters (reading .value is allowed here because widgets were created in a different cell)
+    # We use 'current_mask' to build the filter expression incrementally
+    current_mask = (pl.col("board").is_in(board_filter_widget.value)) & (
+        pl.col("racer_count").is_in(racer_count_widget.value)
+    )
+
+    # 2. Apply Combo Filters
+    # We iterate over the list of active combo filters
+    active_combos = get_combo_filters()
+    for combo_item in active_combos:
+        target_racers = combo_item["racers"]
+
+        # Check if row has ALL these racers
+        # Using list.contains for each racer and combining with AND
+        has_all_racers = pl.all_horizontal(
+            [pl.col("racer_names").list.contains(r_name) for r_name in target_racers]
+        )
+
+        if combo_item["type"] == "Must Include All":
+            current_mask = current_mask & has_all_racers
+        else:
+            # "Must Exclude Combination" means: It is NOT the case that (Has A AND Has B)
+            current_mask = current_mask & (~has_all_racers)
+
+    # 3. Execute Filter
+    # We produce a NEW dataframe with a UNIQUE global name
+    df_races_final_selection = df_races_clean.filter(current_mask)
+
+    # 4. Display Status
+    status_display = mo.md(
+        f"**Active Races:** {df_races_final_selection.height} / {df_races_clean.height}"
+    )
+
+    return df_races_final_selection, status_display
+
+
+@app.cell
+def _(
     automatic_racers_list,
     df_racer_results,
     df_races,
@@ -1651,6 +1860,8 @@ def cell_filter_aggregated(
 
 @app.cell
 def cell_show_filters(
+    active_filters_display,  # <--- Input from cell_combo_filter_display
+    combo_ui,  # <--- Input from cell_combo_filter_ui
     last_run_config,
     mo,
     run_computation_btn,
@@ -1660,16 +1871,15 @@ def cell_show_filters(
     ui_racers,
 ):
     # A. Check for "Stale" state (Widgets != Last Run)
-    stale_warning = None  # Initialize to None, not empty markdown
-
+    stale_warning = None
     if last_run_config() is not None:
         is_stale = (
             ui_racers.value != last_run_config()["racers"]
             or ui_boards.value != last_run_config()["boards"]
             or ui_counts.value != last_run_config()["counts"]
+            # Ideally checks combos too, but this is a good enough proxy
         )
         if is_stale:
-            # FIX: Removed the trailing comma that made this a Tuple
             stale_warning = mo.md(
                 '<div style="color: #DC143C; margin-bottom: 0.75rem;">⚠️ <b>Filters Changed:</b> The dashboard below is showing old data. Click <b>🚀 Run Analysis</b> to update.</div>',
             )
@@ -1680,24 +1890,36 @@ def cell_show_filters(
         <hr style="margin: 1.25rem 0;" />
         <h2 style="margin: 0 0 0.5rem 0;">Aggregated Dashboard</h2>
         <div style="color: #aaa; margin-bottom: 0.75rem;">
-          Filter races by roster, board, and player count (applies to all aggregated charts/tables below). ⚠️ Does not include races with error_code or Copycat+Scoocher on Standard Board (due to loops).
+          Filter races by roster, board, and player count.
         </div>
         """
     )
 
+    # Combine everything into a nice stack
     mo.vstack(
         [
             header,
+            # Row 1: Basic Filters
             mo.hstack(
                 [
                     ui_racers,
                     select_auto_racers_btn,
                     ui_counts,
                     ui_boards,
-                    run_computation_btn,
                 ],
                 justify="start",
+                align="center",
             ),
+            # Row 2: Combo Filters (NEW)
+            mo.accordion(
+                {
+                    "Advanced Combination Filters": mo.vstack(
+                        [combo_ui, active_filters_display]
+                    )
+                }
+            ),
+            # Row 3: Action Button
+            mo.hstack([run_computation_btn], justify="end"),
             stale_warning if stale_warning else mo.md(""),
         ]
     )
@@ -1705,94 +1927,133 @@ def cell_show_filters(
 
 
 @app.cell
-def cell_filter_data(df_positions, df_racer_results, df_races, last_run_config, mo, pl):
-    # 1. Gate: If never run, stop here.
+def cell_filter_data(
+    df_positions,
+    df_racer_results,
+    df_races_clean,
+    get_combo_filters,  # <--- NEW: Injected here to apply combos
+    last_run_config,
+    mo,
+    pl,
+):
+    # 1. Initialize Outputs with Default (Empty) Values
+    # We use .head(0) to preserve schema (prevents "ColumnNotFoundError")
+    df_positions_f = df_positions.head(0)
+    df_racer_results_f = df_racer_results.head(0)
+    df_races_f = df_races_clean.head(0)
+    selected_boards = []
+    selected_counts = []
+    selected_racers = []
+
+    _error_msg = None
+
+    # 2. Logic Block: Check if "Run Analysis" has been clicked
     if last_run_config() is None:
-        mo.stop(
-            True,
-            mo.md(
-                '<div style="color: #DC143C; margin-bottom: 0.75rem;">ℹ️ <b>Waiting for Input:</b> Adjust filters above and click <b>🚀 Run Analysis</b> to generate stats.<div>'
-            ),
-        )
-
-    # 2. Unwrap the specific config used for THIS run
-    selected_racers = list(last_run_config()["racers"])
-    selected_counts = list(last_run_config()["counts"])
-    selected_boards = list(last_run_config()["boards"])
-
-    # 3. Validation Logic
-    error_msg = None
-    if len(selected_boards) == 0:
-        error_msg = "Select at least one board."
-    elif len(selected_counts) == 0:
-        error_msg = "Select at least one racer count."
-    else:
-        min_required = max(selected_counts)
-        if len(selected_racers) < min_required:
-            error_msg = (
-                f"Need at least {min_required} racers selected (because max racer_count = {min_required}), "
-                f"but only {len(selected_racers)} selected."
-            )
-
-    # 4. Apply Filters
-    if error_msg is None:
-        # Filter Races by metadata
-        races_bc = df_races.filter(
-            pl.col("board").is_in(selected_boards)
-            & pl.col("racer_count").is_in(selected_counts)
-            & pl.col("error_code").is_null()
-            & pl.col("total_turns").gt(1)  # remove Copycat + Scoocher stuff
-        ).select(["config_hash", "board", "racer_count"])
-
-        # Roster Check
-        roster_ok = (
-            df_racer_results.join(races_bc, on="config_hash", how="inner")
-            .group_by(["config_hash", "board", "racer_count"])
-            .agg(
-                [
-                    pl.col("racer_name").n_unique().alias("n_present"),
-                    pl.col("racer_name")
-                    .is_in(selected_racers)
-                    .all()
-                    .alias("all_in_pool"),
-                ]
-            )
-            .filter(
-                pl.col("all_in_pool") & (pl.col("n_present") == pl.col("racer_count"))
-            )
-            .select(["config_hash"])
-        )
-
-        eligible_hashes = roster_ok.get_column("config_hash").unique()
-
-        df_races_f = df_races.filter(pl.col("config_hash").is_in(eligible_hashes))
-        df_racer_results_f = df_racer_results.filter(
-            pl.col("config_hash").is_in(eligible_hashes)
-        )
-        df_positions_f = df_positions.filter(
-            pl.col("config_hash").is_in(eligible_hashes)
-        )
-
-        if df_races_f.height == 0:
-            error_msg = (
-                "No data. Either no races match board/count, "
-                "or the selected racer pool excludes members of those races."
-            )
-            df_races_f = df_races.head(0)
-            df_racer_results_f = df_racer_results.head(0)
-            df_positions_f = df_positions.head(0)
-    else:
-        df_races_f = df_races.head(0)
-        df_racer_results_f = df_racer_results.head(0)
-        df_positions_f = df_positions.head(0)
-
-    # 5. Validation Note
-    if error_msg:
         mo.output.replace(
             mo.md(
-                f"<div style='color:#ff6b6b; font-weight:600; margin-top:0.5rem;'>⚠ {error_msg}</div>"
+                '<div style="color: #DC143C; margin-bottom: 0.75rem;">ℹ️ <b>Waiting for Input:</b> Adjust filters above and click <b>🚀 Run Analysis</b> to generate stats.<div>'
             )
         )
+        # We return the empty dataframes immediately. Downstream cells will see empty data.
+    else:
+        # 3. Unwrap Config
+        selected_racers = list(last_run_config()["racers"])
+        selected_counts = list(last_run_config()["counts"])
+        selected_boards = list(last_run_config()["boards"])
+
+        # 4. Validation
+        if len(selected_boards) == 0:
+            _error_msg = "Select at least one board."
+        elif len(selected_counts) == 0:
+            _error_msg = "Select at least one racer count."
+        else:
+            _min_req = max(selected_counts)
+            if len(selected_racers) < _min_req:
+                _error_msg = f"Need at least {_min_req} racers selected, but only {len(selected_racers)} selected."
+
+        # 5. Apply Filters
+        if _error_msg is None:
+            # A. Base Filter (Board / Racer Count / Error Code)
+            # This is your original metadata filter
+            _base_filter_mask = (
+                pl.col("board").is_in(selected_boards)
+                & pl.col("racer_count").is_in(selected_counts)
+                & pl.col("error_code").is_null()
+                & pl.col("total_turns").gt(1)
+            )
+
+            # B. Combo Filters (NEW LOGIC)
+            _active_combos = get_combo_filters()
+            for _combo in _active_combos:
+                _targets = _combo["racers"]
+                # Create filter: Does this row's 'racer_names' list contain ALL target racers?
+                _has_all = pl.all_horizontal(
+                    [pl.col("racer_names").list.contains(r) for r in _targets]
+                )
+
+                if _combo["type"] == "Must Include All":
+                    _base_filter_mask = _base_filter_mask & _has_all
+                else:
+                    # "Must Exclude" -> Remove rows where _has_all is True
+                    _base_filter_mask = _base_filter_mask & (~_has_all)
+
+            # Execute Filter on Metadata
+            # We select minimal columns first to find valid hashes
+            _races_bc = df_races_clean.filter(_base_filter_mask).select(
+                ["config_hash", "board", "racer_count"]
+            )
+
+            # C. Roster Check (Original Logic)
+            # Ensure the remaining races only contain racers from the selected pool
+            _roster_ok = (
+                df_racer_results.join(_races_bc, on="config_hash", how="inner")
+                .group_by(["config_hash", "board", "racer_count"])
+                .agg(
+                    [
+                        pl.col("racer_name").n_unique().alias("n_present"),
+                        pl.col("racer_name")
+                        .is_in(selected_racers)
+                        .all()
+                        .alias("all_in_pool"),
+                    ]
+                )
+                .filter(
+                    pl.col("all_in_pool")
+                    & (pl.col("n_present") == pl.col("racer_count"))
+                )
+                .select(["config_hash"])
+            )
+
+            _eligible_hashes = _roster_ok.get_column("config_hash").unique()
+
+            # D. Final Data Assignment
+            df_races_f = df_races_clean.filter(
+                pl.col("config_hash").is_in(_eligible_hashes)
+            )
+            df_racer_results_f = df_racer_results.filter(
+                pl.col("config_hash").is_in(_eligible_hashes)
+            )
+            df_positions_f = df_positions.filter(
+                pl.col("config_hash").is_in(_eligible_hashes)
+            )
+
+            if df_races_f.height == 0:
+                _error_msg = "No data matches filters."
+                # Reset to empty if no results found
+                df_races_f = df_races_clean.head(0)
+                df_racer_results_f = df_racer_results.head(0)
+                df_positions_f = df_positions.head(0)
+
+        # 6. Display Error if needed
+        if _error_msg:
+            mo.output.replace(
+                mo.md(
+                    f"<div style='color:#ff6b6b; font-weight:600; margin-top:0.5rem;'>⚠ {_error_msg}</div>"
+                )
+            )
+
+    # 7. Final Return
+    # Returns df_races_f, which is EITHER empty (waiting/error) OR full (valid run)
     return (
         df_positions_f,
         df_racer_results_f,
@@ -1805,22 +2066,30 @@ def cell_filter_data(df_positions, df_racer_results, df_races, last_run_config, 
 
 @app.cell
 def cell_prepare_aggregated_data(
-    df_positions_f,
-    df_racer_results_f,
-    df_races_f,
+    df_positions,
+    df_racer_results,
+    df_races_final_selection,  # <--- Input from cell_apply_all_filters
     mo,
     pl,
-    selected_boards,
-    selected_counts,
-    selected_racers,
 ):
     # A. Check Data Load
-    if df_positions_f.height == 0:
-        mo.stop(True, mo.md("⚠️ **No data matches filters.**"))
+    # If df_races_f is empty (because waiting or error), stop here.
+    if df_races_f.height == 0:
+        mo.stop(True)
 
-    # Apply Racer Filter to Results (Optimization)
-    df_racer_results_filtered = df_racer_results_f.filter(
-        pl.col("racer_name").is_in(selected_racers)
+    df_working = df_races_f
+
+    # B. Propagate Filter to Other Tables
+    # We only want results/positions for the races that survived the filter
+    valid_hashes = df_working["config_hash"]
+
+    df_racer_results_filtered = df_racer_results.filter(
+        pl.col("config_hash").is_in(valid_hashes)
+    )
+
+    # Filter positions
+    df_positions_combo_filtered = df_positions.filter(
+        pl.col("config_hash").is_in(valid_hashes)
     )
 
     # --- HELPER FUNCTIONS ---
@@ -1849,7 +2118,7 @@ def cell_prepare_aggregated_data(
 
     def _calculate_all_data():
         # --- A. PREPARE METRICS ---
-        df_long = unpivot_positions(df_positions_f)
+        df_long = unpivot_positions(df_positions_combo_filtered)
 
         # 1. TRUTH SOURCE: Global Win Rates
         global_win_rates = (
@@ -1963,7 +2232,7 @@ def cell_prepare_aggregated_data(
         )
 
         stats_races = (
-            df_races_f.join(tightness_calc, on="config_hash", how="left")
+            df_working.join(tightness_calc, on="config_hash", how="left")
             .join(volatility_calc, on="config_hash", how="left")
             .join(race_environment_stats, on="config_hash", how="left")
             .fill_null(0)
@@ -2046,7 +2315,7 @@ def cell_prepare_aggregated_data(
             .group_by("racer_name")
             .agg(
                 pl.col("is_consistent").mean().alias("consistency_score"),
-                pl.col("std_vp_sigma").first().alias("std_dev_val"),
+                pl.col("std_vp_sigma").first().alias("std_dev_val"),  # <--- FIXED
             )
         )
 
@@ -2162,14 +2431,14 @@ def cell_prepare_aggregated_data(
         }
 
     with mo.status.spinner(
-        title=f"Aggregating data for {df_races_f.height} races..."
+        title=f"Aggregating data for {df_working.height} races..."
     ) as _spinner:
         dashboard_data = _calculate_all_data()
 
     # Success message
     mo.output.replace(
         mo.md(
-            f"✅ **{df_races_f.height}** races analyzed with **{len(selected_racers)}** racers in races with **{', '.join([str(c) for c in selected_counts])}** racers on **{' and '.join(selected_boards)}**.",
+            f"✅ **{df_working.height}** races analyzed.",
         )
     )
     return (dashboard_data,)
@@ -2188,7 +2457,11 @@ def cell_show_aggregated_data(
     np,
     pl,
 ):
-    # If no data is available (button not clicked yet), stop execution here.
+    # STOP if data is empty (waiting state)
+    if df_races_f.height == 0:
+        mo.stop(True)
+
+    # If dashboard_data failed to compute for some reason
     if dashboard_data is None:
         mo.stop(True)
 
