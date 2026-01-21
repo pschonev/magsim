@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Protocol, TypedDict
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     MainMoveSkippedEvent,
+    PostMoveEvent,
+    PostWarpEvent,
     RollResultEvent,
     TripRecoveryEvent,
 )
@@ -210,6 +212,11 @@ class MetricsAggregator:
         if isinstance(event, MainMoveSkippedEvent):
             stats = self._get_result(event.responsible_racer_idx)
             stats.skipped_main_moves += 1
+
+        if isinstance(event, (PostMoveEvent, PostWarpEvent)):
+            stats = self._get_result(event.target_racer_idx)
+            if event.responsible_racer_idx == event.target_racer_idx:
+                stats.ability_movement += event.end_tile - event.start_tile
 
     def on_turn_end(
         self,
