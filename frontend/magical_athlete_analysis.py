@@ -72,7 +72,6 @@ async def cell_import():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -681,7 +680,6 @@ def cell_vsialize_track(
                 {track_group_start}
                 {"".join(svg_elements)}
             </svg>"""
-
     return (render_game_track,)
 
 
@@ -1336,7 +1334,13 @@ def cell_update_step_state(mo):
 
 
 @app.cell
-def cell_simulation_navigation(get_step_idx, mo, set_step_idx, step_history, turn_map):
+def cell_simulation_navigation(
+    get_step_idx,
+    mo,
+    set_step_idx,
+    step_history,
+    turn_map,
+):
     # --- NAVIGATION LOGIC ---
     current_step_idx = get_step_idx()
 
@@ -1451,7 +1455,12 @@ def cell_display_simulation_nav(
 
 @app.cell
 def cell_log_viewer(
-    BG_COLOR, current_data, current_turn_idx, mo, step_history, turn_map
+    BG_COLOR,
+    current_data,
+    current_turn_idx,
+    mo,
+    step_history,
+    turn_map,
 ):
     # --- LOG VIEWER ---
     if not current_data:
@@ -1575,12 +1584,17 @@ def cell_manage_config_state(mo):
 @app.cell
 def cell_combo_filter_state(mo):
     # Stores list of dicts: {"racers": ["Racer A", "Racer B"], "type": "Include", "id": ...}
-    get_combo_filters, set_combo_filters = mo.state([])
+    get_combo_filters, set_combo_filters = mo.state([], allow_self_loops=True)
     return get_combo_filters, set_combo_filters
 
 
 @app.cell
-def cell_combo_filter_ui(mo, df_races_clean, get_combo_filters, set_combo_filters):
+def cell_combo_filter_ui(
+    df_races_clean,
+    get_combo_filters,
+    mo,
+    set_combo_filters,
+):
     # Get unique racers from the clean dataframe for the dropdown options
     # We assume 'racer_names' is a list column in df_races_clean
     _unique_racers = sorted(
@@ -1623,63 +1637,64 @@ def cell_combo_filter_ui(mo, df_races_clean, get_combo_filters, set_combo_filter
 
     combo_ui = mo.vstack(
         [
-            mo.md("### Advanced Combo Filters"),
             mo.hstack(
-                [combo_racer_select, combo_type_select, add_combo_btn], align="end"
+                [combo_type_select, combo_racer_select, add_combo_btn],
+                align="end",  # Aligns items vertically to bottom (so button lines up with inputs)
+                justify="start",  # Aligns items horizontally to the left
             ),
-        ]
+        ],
+        align="start",  # Aligns the whole stack to the left
     )
-    return add_combo_btn, combo_racer_select, combo_type_select, combo_ui
+    return (combo_ui,)
 
 
 @app.cell
-def cell_combo_filter_display(mo, get_combo_filters, set_combo_filters):
-    def remove_filter(filter_id):
+def cell_combo_filter_display(get_combo_filters, mo, set_combo_filters):
+    import functools
+
+    # 1. Define Remove Handler
+    def _remove_id(target_id):
         current = get_combo_filters()
-        set_combo_filters([f for f in current if f["id"] != filter_id])
+        # Filter by ID (robust string comparison)
+        new_list = [c for c in current if str(c["id"]) != str(target_id)]
+        set_combo_filters(new_list)
 
-    chip_style = {
-        "display": "inline-flex",
-        "align-items": "center",
-        "background-color": "#f0f0f0",
-        "border-radius": "16px",
-        "padding": "4px 12px",
-        "margin": "4px",
-        "font-size": "0.85rem",
-        "border": "1px solid #ccc",
-        "color": "#333",
-    }
+    # 2. Render Buttons from State
+    current_filters = get_combo_filters()
+    filter_buttons = []
 
-    chips = []
-    for _f in get_combo_filters():
-        is_include = _f["type"] == "Must Include All"
-        _icon = "Mw" if is_include else "🚫"
-        _color = "#e6fffa" if is_include else "#fff5f5"
-        _border = "#38b2ac" if is_include else "#fc8181"
+    for combo in current_filters:
+        c_id = str(combo["id"])
+        is_include = combo["type"] == "Must Include All"
 
-        label_text = f"{_icon} <b>{', '.join(_f['racers'])}</b>"
+        # Symbol & Color Logic
+        if is_include:
+            symbol = "✅"
+            kind_val = "success"
+        else:
+            symbol = "🚫"
+            kind_val = "danger"
 
-        x_btn = mo.ui.button(
-            label="✕",
-            on_click=lambda _, fid=_f["id"]: remove_filter(fid),
-        ).style(
-            {
-                "background": "transparent",
-                "border": "none",
-                "cursor": "pointer",
-                "padding-left": "8px",
-                "color": "#555",
-            }
+        label = f"{symbol} {', '.join(combo['racers'])}  [x]"
+        handler = functools.partial(lambda _, fid: _remove_id(fid), fid=c_id)
+
+        btn = mo.ui.button(
+            label=label,
+            on_click=handler,  # <--- FIXED: using the bound handler
+            kind=kind_val,
+            tooltip="Click to remove",
         )
+        filter_buttons.append(btn)
 
-        chip_ui = mo.hstack([mo.md(label_text), x_btn], align="center").style(
-            {**chip_style, "background-color": _color, "border-color": _border}
+    # 3. Output UI
+    if not filter_buttons:
+        active_filters_display = mo.md(
+            "<span style='color:#999; font-style:italic; font-size:0.9rem'>No active filters</span>"
         )
-        chips.append(chip_ui)
-
-    active_filters_display = (
-        mo.hstack(chips, wrap=True) if chips else mo.md("_No active combo filters_")
-    )
+    else:
+        active_filters_display = mo.hstack(
+            filter_buttons, wrap=True, gap=0.5, justify="start"
+        )
     return (active_filters_display,)
 
 
@@ -1716,7 +1731,7 @@ def cell_general_filters_ui(df_races, mo):
     )
 
     # Return widgets so other cells can access .value
-    return board_filter, racer_count_filter, filter_ui
+    return
 
 
 @app.cell
@@ -1743,17 +1758,17 @@ def cell_general_filters_ui(df_races, mo):
     )
 
     # Return the WIDGET OBJECTS so the next cell can read their .value
-    return board_filter_widget, general_filters_ui, racer_count_widget
+    return board_filter_widget, racer_count_widget
 
 
 @app.cell
 def cell_apply_all_filters(
-    board_filter_widget,  # From previous cell
-    racer_count_widget,  # From previous cell
+    board_filter_widget,
     df_races_clean,
     get_combo_filters,
     mo,
     pl,
+    racer_count_widget,
 ):
     # 1. Start with General Filters (reading .value is allowed here because widgets were created in a different cell)
     # We use 'current_mask' to build the filter expression incrementally
@@ -1783,12 +1798,26 @@ def cell_apply_all_filters(
     # We produce a NEW dataframe with a UNIQUE global name
     df_races_final_selection = df_races_clean.filter(current_mask)
 
-    # 4. Display Status
-    status_display = mo.md(
-        f"**Active Races:** {df_races_final_selection.height} / {df_races_clean.height}"
-    )
+    # 4. Rich Status Display
+    n_selected_racers = len(
+        racer_count_widget.value
+    )  # Assuming you can access this or pass it
+    # Actually, better to read from the dataframe or the widgets directly available in this cell
 
-    return df_races_final_selection, status_display
+    selected_boards = board_filter_widget.value
+    selected_counts = racer_count_widget.value
+    n_combos = len(active_combos)
+
+    summary_md = f"""
+    **Analysis Scope:**
+    - **Races Found:** {df_races_final_selection.height} (of {df_races_clean.height})
+    - **Boards:** {", ".join(selected_boards) if len(selected_boards) < 4 else f"{len(selected_boards)} boards"}
+    - **Player Counts:** {", ".join(map(str, selected_counts))}
+    - **Active Constraints:** {n_combos} combo filters
+    """
+
+    status_display = mo.callout(mo.md(summary_md), kind="info")
+    return
 
 
 @app.cell
@@ -1796,6 +1825,7 @@ def _(
     automatic_racers_list,
     df_racer_results,
     df_races,
+    get_combo_filters,
     mo,
     select_auto_racers_btn,
     set_last_run_config,
@@ -1839,6 +1869,7 @@ def _(
                 "racers": ui_racers.value,
                 "boards": ui_boards.value,
                 "counts": ui_counts.value,
+                "combo_filters": get_combo_filters(),
             }
         )
 
@@ -1860,8 +1891,9 @@ def _(
 
 @app.cell
 def cell_show_filters(
-    active_filters_display,  # <--- Input from cell_combo_filter_display
-    combo_ui,  # <--- Input from cell_combo_filter_ui
+    active_filters_display,
+    combo_ui,
+    get_combo_filters,
     last_run_config,
     mo,
     run_computation_btn,
@@ -1870,21 +1902,28 @@ def cell_show_filters(
     ui_counts,
     ui_racers,
 ):
-    # A. Check for "Stale" state (Widgets != Last Run)
-    stale_warning = None
+    stale_warning = None  # Initialize to None, not empty markdown
+
     if last_run_config() is not None:
+
+        def _norm_combos(cs):
+            return sorted((c["type"], tuple(c["racers"])) for c in (cs or []))
+
+        run_cfg = last_run_config()
         is_stale = (
-            ui_racers.value != last_run_config()["racers"]
-            or ui_boards.value != last_run_config()["boards"]
-            or ui_counts.value != last_run_config()["counts"]
-            # Ideally checks combos too, but this is a good enough proxy
+            ui_racers.value != run_cfg["racers"]
+            or ui_boards.value != run_cfg["boards"]
+            or ui_counts.value != run_cfg["counts"]
+            or _norm_combos(get_combo_filters()) != _norm_combos(run_cfg.get("combos"))
         )
+
         if is_stale:
+            # FIX: Removed the trailing comma that made this a Tuple
             stale_warning = mo.md(
                 '<div style="color: #DC143C; margin-bottom: 0.75rem;">⚠️ <b>Filters Changed:</b> The dashboard below is showing old data. Click <b>🚀 Run Analysis</b> to update.</div>',
             )
 
-    # B. Layout
+    # Layout
     header = mo.md(
         """
         <hr style="margin: 1.25rem 0;" />
@@ -1895,30 +1934,29 @@ def cell_show_filters(
         """
     )
 
-    # Combine everything into a nice stack
+    # Combine everything
     mo.vstack(
         [
             header,
             # Row 1: Basic Filters
             mo.hstack(
-                [
-                    ui_racers,
-                    select_auto_racers_btn,
-                    ui_counts,
-                    ui_boards,
-                ],
+                [ui_racers, select_auto_racers_btn, ui_counts, ui_boards],
                 justify="start",
                 align="center",
             ),
-            # Row 2: Combo Filters (NEW)
+            # Row 2: Combo Filters (Accordion + Display)
             mo.accordion(
                 {
                     "Advanced Combination Filters": mo.vstack(
-                        [combo_ui, active_filters_display]
+                        [
+                            combo_ui,  # The "Add" interface
+                            mo.md("---"),  # Separator
+                            active_filters_display,  # The list of removal buttons
+                        ]
                     )
                 }
             ),
-            # Row 3: Action Button
+            # Row 3: Run Button
             mo.hstack([run_computation_btn], justify="end"),
             stale_warning if stale_warning else mo.md(""),
         ]
@@ -1931,7 +1969,6 @@ def cell_filter_data(
     df_positions,
     df_racer_results,
     df_races_clean,
-    get_combo_filters,  # <--- NEW: Injected here to apply combos
     last_run_config,
     mo,
     pl,
@@ -1941,8 +1978,8 @@ def cell_filter_data(
     df_positions_f = df_positions.head(0)
     df_racer_results_f = df_racer_results.head(0)
     df_races_f = df_races_clean.head(0)
-    selected_boards = []
-    selected_counts = []
+    _selected_boards = []
+    _selected_counts = []
     selected_racers = []
 
     _error_msg = None
@@ -1958,16 +1995,16 @@ def cell_filter_data(
     else:
         # 3. Unwrap Config
         selected_racers = list(last_run_config()["racers"])
-        selected_counts = list(last_run_config()["counts"])
-        selected_boards = list(last_run_config()["boards"])
+        _selected_counts = list(last_run_config()["counts"])
+        _selected_boards = list(last_run_config()["boards"])
 
         # 4. Validation
-        if len(selected_boards) == 0:
+        if len(_selected_boards) == 0:
             _error_msg = "Select at least one board."
-        elif len(selected_counts) == 0:
+        elif len(_selected_counts) == 0:
             _error_msg = "Select at least one racer count."
         else:
-            _min_req = max(selected_counts)
+            _min_req = max(_selected_counts)
             if len(selected_racers) < _min_req:
                 _error_msg = f"Need at least {_min_req} racers selected, but only {len(selected_racers)} selected."
 
@@ -1976,14 +2013,15 @@ def cell_filter_data(
             # A. Base Filter (Board / Racer Count / Error Code)
             # This is your original metadata filter
             _base_filter_mask = (
-                pl.col("board").is_in(selected_boards)
-                & pl.col("racer_count").is_in(selected_counts)
+                pl.col("board").is_in(_selected_boards)
+                & pl.col("racer_count").is_in(_selected_counts)
                 & pl.col("error_code").is_null()
                 & pl.col("total_turns").gt(1)
             )
 
             # B. Combo Filters (NEW LOGIC)
-            _active_combos = get_combo_filters()
+            _active_combos = last_run_config().get("combo_filters", [])
+
             for _combo in _active_combos:
                 _targets = _combo["racers"]
                 # Create filter: Does this row's 'racer_names' list contain ALL target racers?
@@ -2054,21 +2092,14 @@ def cell_filter_data(
 
     # 7. Final Return
     # Returns df_races_f, which is EITHER empty (waiting/error) OR full (valid run)
-    return (
-        df_positions_f,
-        df_racer_results_f,
-        df_races_f,
-        selected_boards,
-        selected_counts,
-        selected_racers,
-    )
+    return (df_races_f,)
 
 
 @app.cell
 def cell_prepare_aggregated_data(
     df_positions,
     df_racer_results,
-    df_races_final_selection,  # <--- Input from cell_apply_all_filters
+    df_races_f,
     mo,
     pl,
 ):
