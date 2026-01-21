@@ -30,7 +30,7 @@ def _():
 
 
 @app.cell
-async def _():
+async def cell_import():
     from __future__ import annotations
 
     import logging
@@ -72,6 +72,7 @@ async def _():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -103,7 +104,7 @@ async def _():
 
 
 @app.cell
-def _(mo):
+def cell_file_browser(mo):
     import polars as pl
     from pathlib import Path
 
@@ -141,7 +142,7 @@ def _(mo):
 
 
 @app.cell
-def _(
+def cell_load_data(
     Path,
     default_results_path,
     is_url,
@@ -219,7 +220,7 @@ def _(
 
 
 @app.cell
-def _(df_racer_results, df_races, mo, pl):
+def cell_display_data(df_racer_results, df_races, mo, pl):
     import json  # Required for the WASM fix
 
     HASH_COL = "config_hash"
@@ -288,7 +289,7 @@ def _(df_racer_results, df_races, mo, pl):
 
 
 @app.cell
-def _(math):
+def cell_visual_setup(math):
     from typing import NamedTuple
 
     BG_COLOR = "#181c1a"
@@ -447,7 +448,7 @@ def _(math):
 
 
 @app.cell
-def _(
+def cell_vsialize_track(
     BOARD_THEME,
     MoveDeltaTile,
     StepSnapshot,
@@ -680,11 +681,12 @@ def _(
                 {track_group_start}
                 {"".join(svg_elements)}
             </svg>"""
+
     return (render_game_track,)
 
 
 @app.cell
-def _(mo):
+def cell_manage_state(mo):
     # --- PERSISTENCE STATE ---
     # We only use this to remember values when the UI refreshes (Add/Remove).
     get_selected_racers, set_selected_racers = mo.state(
@@ -736,7 +738,7 @@ def _(mo):
 
 
 @app.cell
-def _(
+def cell_config_ui(
     BOARD_DEFINITIONS,
     RacerName,
     get_args,
@@ -944,7 +946,7 @@ def _(
 
 
 @app.cell
-def _(board_selector, current_roster, mo, scenario_seed):
+def cell_share_widget(board_selector, current_roster, mo, scenario_seed):
     from magical_athlete_simulator.simulation.hashing import GameConfiguration
 
     # Generate string from current state
@@ -964,7 +966,7 @@ def _(board_selector, current_roster, mo, scenario_seed):
 
 
 @app.cell
-def _(
+def cell_display_config(
     add_button,
     add_racer_dropdown,
     board_selector,
@@ -1021,7 +1023,7 @@ def _(
 
 
 @app.cell
-def _(
+def cell_load_config(
     df_races_clean,
     get_last_race_hash,
     get_last_result_hash,
@@ -1104,13 +1106,13 @@ def _(
 
 
 @app.cell
-def _(dice_rolls_text_ui, mo, use_scripted_dice_ui):
+def cell_dice_input(dice_rolls_text_ui, mo, use_scripted_dice_ui):
     dice_input = dice_rolls_text_ui if use_scripted_dice_ui.value else mo.Html("")
     return (dice_input,)
 
 
 @app.cell
-def _(
+def cell_display_config_ui(
     MAGICAL_ATHLETE_SIMULATOR_VERSION,
     load_status,
     mo,
@@ -1148,7 +1150,7 @@ def _(
 
 
 @app.cell
-def _(
+def cell_setup_log(
     BOARD_DEFINITIONS,
     Console,
     GameLogHighlighter,
@@ -1322,19 +1324,19 @@ def _(
 
 
 @app.cell
-def _(info_md):
+def cell_show_simulation_info(info_md):
     info_md
     return
 
 
 @app.cell
-def _(mo):
+def cell_update_step_state(mo):
     get_step_idx, set_step_idx = mo.state(0, allow_self_loops=True)
     return get_step_idx, set_step_idx
 
 
 @app.cell
-def _(get_step_idx, mo, set_step_idx, step_history, turn_map):
+def cell_simulation_navigation(get_step_idx, mo, set_step_idx, step_history, turn_map):
     # --- NAVIGATION LOGIC ---
     current_step_idx = get_step_idx()
 
@@ -1409,7 +1411,7 @@ def _(get_step_idx, mo, set_step_idx, step_history, turn_map):
 
 
 @app.cell
-def _(
+def cell_display_simulation_nav(
     Any,
     Literal,
     btn_next_step,
@@ -1448,7 +1450,9 @@ def _(
 
 
 @app.cell
-def _(BG_COLOR, current_data, current_turn_idx, mo, step_history, turn_map):
+def cell_log_viewer(
+    BG_COLOR, current_data, current_turn_idx, mo, step_history, turn_map
+):
     # --- LOG VIEWER ---
     if not current_data:
         log_ui = mo.md("No logs")
@@ -1500,7 +1504,7 @@ def _(BG_COLOR, current_data, current_turn_idx, mo, step_history, turn_map):
 
 
 @app.cell
-def _(
+def cell_show_simulation_section(
     BOARD_DEFINITIONS,
     board_positions,
     current_data,
@@ -1533,7 +1537,7 @@ def _(
 
 
 @app.cell
-def _():
+def cell_filter_autoracers():
     from magical_athlete_simulator.core.registry import RACER_ABILITIES
     from magical_athlete_simulator.racers import get_ability_classes
     from magical_athlete_simulator.core.agent import (
@@ -1561,7 +1565,7 @@ def _():
 
 
 @app.cell
-def _(mo):
+def cell_manage_config_state(mo):
     # last_run_config starts as None.
     # It only updates when "Run Analysis" is clicked.
     last_run_config, set_last_run_config = mo.state(None)
@@ -1569,7 +1573,7 @@ def _(mo):
 
 
 @app.cell
-def _(mo):
+def cell_autoracer_btn(mo):
     select_auto_racers_btn = mo.ui.run_button(
         label="🤖 Select automatic racers",
         kind="neutral",
@@ -1579,7 +1583,7 @@ def _(mo):
 
 
 @app.cell
-def _(
+def cell_filter_aggregated(
     automatic_racers_list,
     df_racer_results,
     df_races,
@@ -1646,7 +1650,7 @@ def _(
 
 
 @app.cell
-def _(
+def cell_show_filters(
     last_run_config,
     mo,
     run_computation_btn,
@@ -1701,7 +1705,7 @@ def _(
 
 
 @app.cell
-def _(df_positions, df_racer_results, df_races, last_run_config, mo, pl):
+def cell_filter_data(df_positions, df_racer_results, df_races, last_run_config, mo, pl):
     # 1. Gate: If never run, stop here.
     if last_run_config() is None:
         mo.stop(
@@ -1800,7 +1804,7 @@ def _(df_positions, df_racer_results, df_races, last_run_config, mo, pl):
 
 
 @app.cell
-def _(
+def cell_prepare_aggregated_data(
     df_positions_f,
     df_racer_results_f,
     df_races_f,
@@ -2172,7 +2176,7 @@ def _(
 
 
 @app.cell
-def _(
+def cell_show_aggregated_data(
     BG_COLOR,
     alt,
     dashboard_data,
@@ -2548,7 +2552,12 @@ def _(
         "Sources of Victory",
         "Ability Move Dep (Corr to VP)",
         "Dice Dep (Corr to VP)",
-        quad_labels=["Dice-Driven", "Hybrid Winner", "Low Signal", "Ability-Driven"],
+        quad_labels=[
+            "Dice-Driven",
+            "Hybrid Winner",
+            "Low Signal",
+            "Ability-Driven",
+        ],
         use_rank_scale=dynamic_zoom_toggle.value,
         extra_tooltips=[
             alt.Tooltip("avg_ability_move:Q", format=".2f", title="Ability Mvmt/Turn"),
@@ -2685,7 +2694,9 @@ def _(
         )
         .resolve_scale(y="independent")
         .properties(
-            width=120, height=200, title="Victory Correlations & Ability Usage by Board"
+            width=120,
+            height=200,
+            title="Victory Correlations & Ability Usage by Board",
         )
     )
 
