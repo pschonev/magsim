@@ -1,4 +1,5 @@
 include_racers = [
+    "Alchemist",
     "BabaYaga",
     "Banana",
     "Blimp",
@@ -10,7 +11,10 @@ include_racers = [
     "Gunk",
     "Hare",
     "HugeBaby",
+    "Inchworm",
+    "Lackey",
     "Leaptoad",
+    "Legs",
     "LovableLoser",
     "Magician",
     "Mastermind",

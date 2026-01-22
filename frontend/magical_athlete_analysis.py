@@ -153,31 +153,24 @@ def cell_load_data(
 
     # 1. Determine the Base Folder
     if is_url:
-        # URL Mode: Use the URLPath object directly
         base_folder = default_results_path
     else:
-        # Local Mode: Use browser value if selected, else default
         if results_folder_browser.value:
             base_folder = Path(results_folder_browser.value[0].path)
         else:
             base_folder = Path("results")
 
-    # 2. Construct Paths
-    # (The / operator works on both pathlib.Path and marimo URLPath objects)
+    # 2. Construct Paths (Only need Races and Results now)
     path_races = base_folder / "races.parquet"
     path_res = base_folder / "racer_results.parquet"
-    path_positions = base_folder / "race_positions.parquet"
+    # path_positions = base_folder / "race_positions.parquet"  <-- GONE
 
     # 3. Load Data
     try:
         if not is_url:  # noqa: SIM102
-            if (
-                not Path(path_races).exists()
-                or not Path(path_res).exists()
-                or not Path(path_positions).exists()
-            ):
+            if not Path(path_races).exists() or not Path(path_res).exists():
                 raise FileNotFoundError(
-                    f"Folder '{base_folder}' must contain 'races.parquet', 'racer_results.parquet' and 'race_positions.parquet'"
+                    f"Folder '{base_folder}' must contain 'races.parquet' and 'racer_results.parquet'"
                 )
 
         if is_url:
@@ -192,30 +185,23 @@ def cell_load_data(
 
             df_racer_results = _wasm_read_parquet(path_res)
             df_races = _wasm_read_parquet(path_races)
-            df_positions = _wasm_read_parquet(path_positions)
         else:
             df_racer_results = pl.read_parquet(path_res)
             df_races = pl.read_parquet(path_races)
-            df_positions = pl.read_parquet(path_positions)
+
         load_status = f"✅ Loaded from: `{base_folder}`"
 
     except Exception as e:
         df_racer_results = pl.DataFrame()
         df_races = pl.DataFrame()
-        df_positions = pl.DataFrame()
         load_status = f"❌ Error: {str(e)}"
         print(load_status)
 
+    print(f"df_races: {df_races.height} rows, columns: {df_races.columns}")
     print(
-        f"df_racer_results: {df_racer_results.height} rows, path `{path_races}` and columns: {df_racer_results.columns}"
+        f"df_racer_results: {df_racer_results.height} rows, columns: {df_racer_results.columns}"
     )
-    print(
-        f"df_racer_results: {df_races.height} rows, path `{path_res}` and columns: {df_races.columns}"
-    )
-    print(
-        f"df_racer_results: {df_positions.height} rows, path `{path_positions}` and columns: {df_positions.columns}"
-    )
-    return df_positions, df_racer_results, df_races, load_status
+    return df_racer_results, df_races, load_status
 
 
 @app.cell
@@ -1966,7 +1952,6 @@ def cell_show_filters(
 
 @app.cell
 def cell_filter_data(
-    df_positions,
     df_racer_results,
     df_races_clean,
     last_run_config,
@@ -1974,8 +1959,6 @@ def cell_filter_data(
     pl,
 ):
     # 1. Initialize Outputs with Default (Empty) Values
-    # We use .head(0) to preserve schema (prevents "ColumnNotFoundError")
-    df_positions_f = df_positions.head(0)
     df_racer_results_f = df_racer_results.head(0)
     df_races_f = df_races_clean.head(0)
     _selected_boards = []
@@ -1991,7 +1974,6 @@ def cell_filter_data(
                 '<div style="color: #DC143C; margin-bottom: 0.75rem;">ℹ️ <b>Waiting for Input:</b> Adjust filters above and click <b>🚀 Run Analysis</b> to generate stats.<div>'
             )
         )
-        # We return the empty dataframes immediately. Downstream cells will see empty data.
     else:
         # 3. Unwrap Config
         selected_racers = list(last_run_config()["racers"])
@@ -2010,8 +1992,7 @@ def cell_filter_data(
 
         # 5. Apply Filters
         if _error_msg is None:
-            # A. Base Filter (Board / Racer Count / Error Code)
-            # This is your original metadata filter
+            # A. Base Filter
             _base_filter_mask = (
                 pl.col("board").is_in(_selected_boards)
                 & pl.col("racer_count").is_in(_selected_counts)
@@ -2019,33 +2000,31 @@ def cell_filter_data(
                 & pl.col("total_turns").gt(1)
             )
 
-            # B. Combo Filters (NEW LOGIC)
+            # B. Combo Filters
             _active_combos = last_run_config().get("combo_filters", [])
-
             for _combo in _active_combos:
                 _targets = _combo["racers"]
-                # Create filter: Does this row's 'racer_names' list contain ALL target racers?
                 _has_all = pl.all_horizontal(
                     [pl.col("racer_names").list.contains(r) for r in _targets]
                 )
-
                 if _combo["type"] == "Must Include All":
                     _base_filter_mask = _base_filter_mask & _has_all
                 else:
-                    # "Must Exclude" -> Remove rows where _has_all is True
                     _base_filter_mask = _base_filter_mask & (~_has_all)
 
             # Execute Filter on Metadata
-            # We select minimal columns first to find valid hashes
-            _races_bc = df_races_clean.filter(_base_filter_mask).select(
-                ["config_hash", "board", "racer_count"]
-            )
+            # df_races_clean ALREADY has tightness/volatility scores!
+            _races_bc = df_races_clean.filter(_base_filter_mask)
 
-            # C. Roster Check (Original Logic)
+            # C. Roster Check
             # Ensure the remaining races only contain racers from the selected pool
             _roster_ok = (
-                df_racer_results.join(_races_bc, on="config_hash", how="inner")
-                .group_by(["config_hash", "board", "racer_count"])
+                df_racer_results.join(
+                    _races_bc.select("config_hash", "racer_count"),
+                    on="config_hash",
+                    how="inner",
+                )
+                .group_by(["config_hash", "racer_count"])
                 .agg(
                     [
                         pl.col("racer_name").n_unique().alias("n_present"),
@@ -2071,16 +2050,11 @@ def cell_filter_data(
             df_racer_results_f = df_racer_results.filter(
                 pl.col("config_hash").is_in(_eligible_hashes)
             )
-            df_positions_f = df_positions.filter(
-                pl.col("config_hash").is_in(_eligible_hashes)
-            )
 
             if df_races_f.height == 0:
                 _error_msg = "No data matches filters."
-                # Reset to empty if no results found
                 df_races_f = df_races_clean.head(0)
                 df_racer_results_f = df_racer_results.head(0)
-                df_positions_f = df_positions.head(0)
 
         # 6. Display Error if needed
         if _error_msg:
@@ -2091,66 +2065,20 @@ def cell_filter_data(
             )
 
     # 7. Final Return
-    # Returns df_races_f, which is EITHER empty (waiting/error) OR full (valid run)
-    return (df_races_f,)
+    # Only returning races and results. No positions.
+    return df_racer_results_f, df_races_f
 
 
 @app.cell
-def cell_prepare_aggregated_data(
-    df_positions,
-    df_racer_results,
-    df_races_f,
-    mo,
-    pl,
-):
+def cell_prepare_aggregated_data(df_racer_results_f, df_races_f, mo, pl):
     # A. Check Data Load
-    # If df_races_f is empty (because waiting or error), stop here.
     if df_races_f.height == 0:
         mo.stop(True)
 
     df_working = df_races_f
-
-    # B. Propagate Filter to Other Tables
-    # We only want results/positions for the races that survived the filter
-    valid_hashes = df_working["config_hash"]
-
-    df_racer_results_filtered = df_racer_results.filter(
-        pl.col("config_hash").is_in(valid_hashes)
-    )
-
-    # Filter positions
-    df_positions_combo_filtered = df_positions.filter(
-        pl.col("config_hash").is_in(valid_hashes)
-    )
-
-    # --- HELPER FUNCTIONS ---
-    def unpivot_positions(df_flat: pl.DataFrame) -> pl.DataFrame:
-        return (
-            df_flat.unpivot(
-                index=["config_hash", "turn_index", "current_racer_id"],
-                on=["pos_r0", "pos_r1", "pos_r2", "pos_r3", "pos_r4", "pos_r5"],
-                variable_name="racer_slot",
-                value_name="position",
-            )
-            .with_columns(
-                pl.col("racer_slot")
-                .str.extract(r"pos_r(\d+)", 1)
-                .cast(pl.Int64)
-                .alias("racer_id")
-            )
-            .with_columns(
-                (pl.col("racer_id") == pl.col("current_racer_id")).alias(
-                    "is_current_turn"
-                )
-            )
-            .drop("racer_slot")
-            .filter(pl.col("position").is_not_null())
-        )
+    df_racer_results_filtered = df_racer_results_f
 
     def _calculate_all_data():
-        # --- A. PREPARE METRICS ---
-        df_long = unpivot_positions(df_positions_combo_filtered)
-
         # 1. TRUTH SOURCE: Global Win Rates
         global_win_rates = (
             df_racer_results_filtered.group_by("racer_name")
@@ -2163,96 +2091,7 @@ def cell_prepare_aggregated_data(
             )
         )
 
-        # 2. Tightness & Volatility (race-level)
-        turn_stats = df_long.group_by(["config_hash", "turn_index"]).agg(
-            pl.col("position").mean().alias("mean_pos")
-        )
-
-        tightness_calc = (
-            df_long.join(turn_stats, on=["config_hash", "turn_index"])
-            .with_columns((pl.col("position") - pl.col("mean_pos")).abs().alias("dev"))
-            .group_by("config_hash")
-            .agg(pl.col("dev").mean().alias("race_tightness_score"))
-        )
-
-        volatility_calc = (
-            df_long.with_columns(
-                pl.col("position")
-                .rank(method="dense", descending=True)
-                .over(["config_hash", "turn_index"])
-                .alias("rank_now")
-            )
-            .sort(["config_hash", "racer_id", "turn_index"])
-            .with_columns(
-                pl.col("rank_now")
-                .shift(1)
-                .over(["config_hash", "racer_id"])
-                .alias("rank_prev")
-            )
-            .filter(pl.col("rank_prev").is_not_null())
-            .with_columns(
-                (pl.col("rank_now") != pl.col("rank_prev"))
-                .cast(pl.Int8)
-                .alias("rank_changed")
-            )
-            .group_by("config_hash")
-            .agg(pl.col("rank_changed").mean().alias("race_volatility_score"))
-        )
-
-        # --- NEW: GROSS SPEED (accurate) ---
-        df_pos_sorted = df_long.sort(["config_hash", "racer_id", "turn_index"])
-
-        df_gross_dist = (
-            df_pos_sorted.with_columns(
-                pl.col("position")
-                .shift(1)
-                .over(["config_hash", "racer_id"])
-                .alias("prev_pos")
-            )
-            .with_columns(
-                (pl.col("position") - pl.col("prev_pos").fill_null(0)).alias(
-                    "move_delta"
-                )
-            )
-            .filter(pl.col("move_delta") > 0)
-            .group_by(["config_hash", "racer_id"])
-            .agg(pl.col("move_delta").sum().alias("gross_distance"))
-        )
-
-        # --- NEW: Late-game snapshot (66%) + position-vs-median ---
-        winner_turns = (
-            df_racer_results_filtered.filter(pl.col("rank") == 1)
-            .group_by("config_hash")
-            .agg(pl.col("turns_taken").min().alias("winner_turns"))
-        )
-
-        snapshot_target = winner_turns.with_columns(
-            (pl.col("winner_turns") * 0.66)
-            .floor()
-            .clip(lower_bound=1)
-            .cast(pl.Int32)
-            .alias("snapshot_turn")
-        )
-
-        df_snap_pos = df_long.join(snapshot_target, on="config_hash").filter(
-            pl.col("turn_index") == pl.col("snapshot_turn")
-        )
-
-        df_race_medians = df_snap_pos.group_by("config_hash").agg(
-            pl.col("position").median().alias("median_pos_at_snap")
-        )
-
-        df_late_game = (
-            df_snap_pos.join(df_race_medians, on="config_hash")
-            .with_columns(
-                (pl.col("position") - pl.col("median_pos_at_snap")).alias(
-                    "pos_diff_from_median"
-                )
-            )
-            .select(["config_hash", "racer_id", "pos_diff_from_median"])
-        )
-
-        # 3. Race environment stats
+        # 2. Race environment stats
         race_environment_stats = df_racer_results_filtered.group_by("config_hash").agg(
             (pl.col("ability_trigger_count").sum() / pl.col("racer_id").count()).alias(
                 "race_avg_triggers"
@@ -2262,71 +2101,52 @@ def cell_prepare_aggregated_data(
             ),
         )
 
-        stats_races = (
-            df_working.join(tightness_calc, on="config_hash", how="left")
-            .join(volatility_calc, on="config_hash", how="left")
-            .join(race_environment_stats, on="config_hash", how="left")
-            .fill_null(0)
+        # Merge Race Stats (Tightness/Volatility are already in df_working!)
+        stats_races = df_working.join(
+            race_environment_stats, on="config_hash", how="left"
+        ).fill_null(0)
+
+        # 3. Results enriched with movement features
+        stats_results = df_racer_results_filtered.with_columns(
+            # 3. Convert 0 -> Null for clean division
+            pl.when(pl.col("turns_taken") <= 0)
+            .then(None)
+            .otherwise(pl.col("turns_taken"))
+            .alias("total_turns_clean"),
+            pl.when(pl.col("rolling_turns") <= 0)
+            .then(None)
+            .otherwise(pl.col("rolling_turns"))
+            .alias("rolling_turns_clean"),
+        ).with_columns(
+            # A. MOVEMENT (New Definition: Sum Dice + Ability Movement)
+            (
+                (pl.col("sum_dice_rolled") + pl.col("ability_movement"))
+                / pl.col("total_turns_clean")
+            ).alias("speed_gross"),
+            # B. ABILITIES
+            (pl.col("ability_trigger_count") / pl.col("total_turns_clean")).alias(
+                "triggers_per_turn"
+            ),
+            (pl.col("ability_self_target_count") / pl.col("total_turns_clean")).alias(
+                "self_per_turn"
+            ),
+            (pl.col("ability_target_count") / pl.col("total_turns_clean")).alias(
+                "target_per_turn"
+            ),
+            # C. DICE
+            (pl.col("sum_dice_rolled") / pl.col("rolling_turns_clean")).alias(
+                "dice_per_rolling_turn"
+            ),
+            (pl.col("sum_dice_rolled_final") / pl.col("rolling_turns_clean")).alias(
+                "final_roll_per_rolling_turn"
+            ),
+            # D. Movement split
+            (pl.col("ability_movement") / pl.col("total_turns_clean")).alias(
+                "avg_ability_move"
+            ),
         )
 
-        # 4. Results enriched with movement features
-        stats_results = (
-            df_racer_results_filtered.join(
-                df_gross_dist, on=["config_hash", "racer_id"], how="left"
-            )
-            .join(df_late_game, on=["config_hash", "racer_id"], how="left")
-            .with_columns(
-                # 1. Fill basic nulls
-                pl.col("gross_distance").fill_null(0),
-                pl.col("pos_diff_from_median").fill_null(0),
-            )
-            .with_columns(
-                # 3. THE FIX: Convert 0 -> Null (None)
-                # This tells Polars "Do not count this row in averages"
-                pl.when(pl.col("turns_taken") <= 0)
-                .then(None)
-                .otherwise(pl.col("turns_taken"))
-                .alias("total_turns_clean"),
-                pl.when(pl.col("rolling_turns") <= 0)
-                .then(None)
-                .otherwise(pl.col("rolling_turns"))
-                .alias("rolling_turns_clean"),
-            )
-            .with_columns(
-                # 4. Apply Specific Denominators
-                # A. MOVEMENT (Uses Total Turns)
-                # If total_turns is Null, speed becomes Null (ignored in avg), which is correct.
-                (pl.col("gross_distance") / pl.col("total_turns_clean")).alias(
-                    "speed_gross"
-                ),
-                # B. ABILITIES (Uses Total Turns)
-                (pl.col("ability_trigger_count") / pl.col("total_turns_clean")).alias(
-                    "triggers_per_turn"
-                ),
-                (
-                    pl.col("ability_self_target_count") / pl.col("total_turns_clean")
-                ).alias("self_per_turn"),
-                (pl.col("ability_target_count") / pl.col("total_turns_clean")).alias(
-                    "target_per_turn"
-                ),
-                # C. DICE (Uses Rolling Turns)
-                # Only calculated if they actually rolled.
-                (pl.col("sum_dice_rolled") / pl.col("rolling_turns_clean")).alias(
-                    "dice_per_rolling_turn"
-                ),
-                (pl.col("sum_dice_rolled_final") / pl.col("rolling_turns_clean")).alias(
-                    "final_roll_per_rolling_turn"
-                ),
-            )
-            .with_columns(
-                (
-                    (pl.col("gross_distance") - pl.col("sum_dice_rolled"))
-                    / pl.col("total_turns_clean")
-                ).alias("non_dice_movement")
-            )
-        )
-
-        # --- UPDATED: Consistency = within 1 std dev of mean (per racer) ---
+        # --- Consistency Calc ---
         racer_mu_sigma = stats_results.group_by("racer_name").agg(
             pl.col("final_vp").mean().alias("mean_vp_mu"),
             pl.col("final_vp").std().fill_null(0).alias("std_vp_sigma"),
@@ -2346,7 +2166,7 @@ def cell_prepare_aggregated_data(
             .group_by("racer_name")
             .agg(
                 pl.col("is_consistent").mean().alias("consistency_score"),
-                pl.col("std_vp_sigma").first().alias("std_dev_val"),  # <--- FIXED
+                pl.col("std_vp_sigma").first().alias("std_dev_val"),
             )
         )
 
@@ -2356,8 +2176,8 @@ def cell_prepare_aggregated_data(
                 stats_races.select(
                     [
                         "config_hash",
-                        "race_tightness_score",
-                        "race_volatility_score",
+                        "tightness_score",  # Pre-computed in race metadata
+                        "volatility_score",  # Pre-computed in race metadata
                         "race_avg_triggers",
                         "race_avg_trip_rate",
                         pl.col("total_turns").alias("race_global_turns"),
@@ -2373,13 +2193,13 @@ def cell_prepare_aggregated_data(
                 (pl.col("rank") == 2).sum().alias("cnt_2nd"),
                 pl.len().alias("races_run"),
                 # Dynamics
-                pl.col("race_tightness_score").mean().alias("avg_race_tightness"),
-                pl.col("race_volatility_score").mean().alias("avg_race_volatility"),
+                pl.col("tightness_score").mean().alias("avg_race_tightness"),
+                pl.col("volatility_score").mean().alias("avg_race_volatility"),
                 pl.col("race_avg_triggers").mean().alias("avg_env_triggers"),
                 pl.col("race_avg_trip_rate").mean().alias("avg_env_trip_rate"),
                 pl.col("race_global_turns").mean().alias("avg_game_duration"),
                 # Movement / Dice
-                pl.col("non_dice_movement").mean().alias("avg_ability_move"),
+                pl.col("avg_ability_move").mean(),
                 pl.col("speed_gross").mean().alias("avg_speed_gross"),
                 pl.col("dice_per_rolling_turn").mean().alias("avg_dice_base"),
                 pl.col("final_roll_per_rolling_turn").mean().alias("avg_final_roll"),
@@ -2395,11 +2215,12 @@ def cell_prepare_aggregated_data(
             stats_results.group_by("racer_name")
             .agg(
                 pl.corr("dice_per_rolling_turn", "final_vp").alias("dice_dependency"),
-                pl.corr("non_dice_movement", "final_vp").alias(
+                pl.corr("avg_ability_move", "final_vp").alias(
                     "ability_move_dependency"
                 ),
                 (pl.corr("racer_id", "final_vp") * -1).alias("start_pos_bias"),
-                pl.corr("pos_diff_from_median", "final_vp").alias("midgame_bias"),
+                # NEW: Use pre-computed midgame bias
+                pl.corr("midgame_relative_pos", "final_vp").alias("midgame_bias"),
                 pl.corr("ability_trigger_count", "final_vp").alias(
                     "trigger_dependency"
                 ),
@@ -2427,7 +2248,7 @@ def cell_prepare_aggregated_data(
             )
         )
 
-        # --- B. MATRICES ---
+        # --- B. MATRICES (Matchup Logic) ---
         global_means = final_stats.select(
             ["racer_name", pl.col("mean_vp").alias("my_global_avg")]
         )
@@ -2914,8 +2735,8 @@ def cell_show_aggregated_data(
 
     race_level_agg = races_with_meta.group_by(["board", "racer_count"]).agg(
         pl.col("total_turns").mean().alias("Avg Turns"),
-        pl.col("race_tightness_score").mean().alias("Tightness"),
-        pl.col("race_volatility_score").mean().alias("Volatility"),
+        pl.col("tightness_score").mean().alias("Tightness"),
+        pl.col("volatility_score").mean().alias("Volatility"),
         pl.col("race_avg_trip_rate").mean().alias("Trip Rate"),
         pl.col("race_avg_triggers").mean().alias("Abilities Triggered"),
     )
@@ -2925,9 +2746,9 @@ def cell_show_aggregated_data(
         .agg(
             pl.col("final_vp").mean().alias("Avg VP"),
             pl.corr("sum_dice_rolled", "final_vp").alias("Dice Dep"),
-            pl.corr("non_dice_movement", "final_vp").alias("Ability Dep"),
+            pl.corr("ability_movement", "final_vp").alias("Ability Dep"),
             (pl.corr("racer_id", "final_vp") * -1).alias("Start Bias"),
-            pl.corr("pos_diff_from_median", "final_vp").alias("MidGame Bias"),
+            pl.corr("midgame_relative_pos", "final_vp").alias("MidGame Bias"),
         )
         .fill_nan(0)
     )

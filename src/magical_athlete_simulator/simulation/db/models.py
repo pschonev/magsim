@@ -39,6 +39,10 @@ class Race(SQLModel, table=True):
         default_factory=lambda: datetime.datetime.now(datetime.UTC),
     )
 
+    # --- NEW METRICS (Calculated from positions) ---
+    tightness_score: float = 0.0
+    volatility_score: float = 0.0
+
 
 class RacerResult(SQLModel, table=True):
     """
@@ -75,6 +79,9 @@ class RacerResult(SQLModel, table=True):
 
     # Ranking
     rank: int | None = None
+
+    # Position relative to median at 66% of race duration
+    midgame_relative_pos: float = 0.0
 
 
 class RacePositionLog(SQLModel, table=True):
