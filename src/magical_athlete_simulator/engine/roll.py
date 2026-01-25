@@ -87,7 +87,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
         ResolveMainMoveEvent(
             target_racer_idx=event.target_racer_idx,
             roll_serial=current_serial,
-            responsible_racer_idx=event.responsible_racer_idx,
+            responsible_racer_idx=None,
             source=event.source,
             roll_event_triggered_events=roll_event_triggered_events,
         ),

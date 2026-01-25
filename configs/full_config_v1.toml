@@ -34,7 +34,7 @@ boards = ["standard", "wild_wilds"]
 
 # Execution limits
 runs_per_combination = 1
-max_total_runs = 15_000
+max_total_runs = 5_000
 max_turns_per_race = 300
 
 # --- Filters ---

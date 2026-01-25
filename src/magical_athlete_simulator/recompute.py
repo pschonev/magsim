@@ -13,7 +13,10 @@ import cappa
 import polars as pl
 from tqdm import tqdm
 
-from magical_athlete_simulator.simulation.metrics import compute_race_metrics
+from magical_athlete_simulator.simulation.metrics import (
+    compute_race_metrics,
+    prepare_position_data,  # <--- Import the new function
+)
 
 # Suppress Polars internal warnings if necessary
 logging.getLogger("polars").setLevel(logging.WARNING)
@@ -49,25 +52,9 @@ class RecomputeArgs:
 
         tqdm.write("🔄 Preparing position data...")
 
-        # 1. Unpivot Position Logs (Wide -> Long)
-        pos_cols = [c for c in df_pos_wide.columns if c.startswith("pos_r")]
-
-        df_pos_long = (
-            df_pos_wide.unpivot(
-                index=["config_hash", "turn_index"],
-                on=pos_cols,
-                variable_name="racer_slot",
-                value_name="position",
-            )
-            .with_columns(
-                pl.col("racer_slot")
-                .str.extract(r"(\d+)")
-                .cast(pl.Int64)
-                .alias("racer_id")
-            )
-            .filter(pl.col("position").is_not_null())
-            .select(["config_hash", "turn_index", "racer_id", "position"])
-        )
+        # --- CHANGED: Use the shared function instead of hardcoded logic ---
+        df_pos_long = prepare_position_data(df_pos_wide)
+        # -----------------------------------------------------------------
 
         tqdm.write("🧮 Computing Metrics via Polars...")
 

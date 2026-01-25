@@ -9,6 +9,35 @@ from __future__ import annotations
 import polars as pl
 
 
+def prepare_position_data(df_pos_wide: pl.DataFrame) -> pl.DataFrame:
+    """
+    Standardizes wide position logs into the long format required for metrics.
+    Handles the unpivot and strict type casting for racer IDs.
+
+    Args:
+        df_pos_wide: DataFrame with columns [config_hash, turn_index, pos_r0, pos_r1...]
+
+    Returns:
+        DataFrame in long format [config_hash, turn_index, racer_id, position]
+        with racer_id strictly cast to Int64.
+    """
+    pos_cols = [c for c in df_pos_wide.columns if c.startswith("pos_r")]
+
+    return (
+        df_pos_wide.unpivot(
+            index=["config_hash", "turn_index"],
+            on=pos_cols,
+            variable_name="racer_slot",
+            value_name="position",
+        )
+        .with_columns(
+            pl.col("racer_slot").str.extract(r"(\d+)").cast(pl.Int64).alias("racer_id")
+        )
+        .filter(pl.col("position").is_not_null())
+        .select(["config_hash", "turn_index", "racer_id", "position"])
+    )
+
+
 def compute_race_metrics(
     df_positions: pl.DataFrame,
     df_results: pl.DataFrame,
@@ -17,8 +46,7 @@ def compute_race_metrics(
     Computes complex race metrics from position logs and results.
 
     Args:
-        df_positions: DataFrame with columns [config_hash, turn_index, racer_id, position]
-                      Must be in LONG format (one row per racer per turn).
+        df_positions: Long-format DataFrame (see prepare_position_data)
         df_results: DataFrame with columns [config_hash, racer_id, turns_taken, rank]
 
     Returns:

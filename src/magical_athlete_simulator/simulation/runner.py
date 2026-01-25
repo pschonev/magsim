@@ -9,9 +9,13 @@ from typing import TYPE_CHECKING
 import polars as pl
 from tqdm import tqdm
 
+from magical_athlete_simulator.core.events import PostMoveEvent, PostWarpEvent
 from magical_athlete_simulator.engine.board import BOARD_DEFINITIONS
 from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-from magical_athlete_simulator.simulation.metrics import compute_race_metrics
+from magical_athlete_simulator.simulation.metrics import (
+    compute_race_metrics,
+    prepare_position_data,
+)
 from magical_athlete_simulator.simulation.telemetry import (
     MetricsAggregator,
     PositionLogColumns,
@@ -76,11 +80,29 @@ def run_single_simulation(
 
     turn_counter = 0
 
-    def on_event(_: GameEngine, event: GameEvent):
+    # -------------------------------------------------------------------------
+    # EVENT LISTENER SETUP
+    # -------------------------------------------------------------------------
+
+    # 1. Standard Scheduled Events
+    # These events come from the main loop processing.
+    def on_event_processed(_: GameEngine, event: GameEvent):
         aggregator.on_event(event=event)
 
-    engine.on_event_processed = on_event
+    engine.on_event_processed = on_event_processed
 
+    # 2. Bridge for Notification Events (Fix for Ability Movement)
+    # PostMove/PostWarp bypass the queue, so we must subscribe directly.
+    def bridge_notification_event(event: GameEvent, _owner: int, _eng: GameEngine):
+        aggregator.on_event(event)
+
+    # Use owner_idx=-1 (System) or similar to just listen globally
+    engine.subscribe(PostMoveEvent, bridge_notification_event, owner_idx=-1)
+    engine.subscribe(PostWarpEvent, bridge_notification_event, owner_idx=-1)
+
+    # -------------------------------------------------------------------------
+    # MAIN LOOP
+    # -------------------------------------------------------------------------
     error_code: ErrorCode | None = None
 
     while not engine.state.race_over:
@@ -142,33 +164,31 @@ def run_single_simulation(
         positions = aggregator.finalize_positions()
 
         # ---------------------------------------------------------------------
-        # METRIC CALCULATION (Polars Integration)
+        # COMPUTE ADVANCED METRICS (Fix for Live Stats)
         # ---------------------------------------------------------------------
-        # We perform this calculation NOW so we can populate the Race/RacerResult models.
-        # But we ALSO return 'positions' so they can be saved to disk.
 
-        # 1. Prepare DataFrames from aggregator outputs
-        df_pos_wide = pl.DataFrame(positions)
-
-        # Unpivot to Long Format (required by metrics logic)
-        df_pos_long = (
-            df_pos_wide.unpivot(
-                index=["config_hash", "turn_index"],
-                on=[c for c in positions.keys() if c.startswith("pos_r")],
-                variable_name="racer_slot",
-                value_name="position",
-            )
-            .with_columns(
-                pl.col("racer_slot")
-                .str.extract(r"(\d+)")
-                .cast(pl.Int64)
-                .alias("racer_id"),
-            )
-            .filter(pl.col("position").is_not_null())
-            .select(["config_hash", "turn_index", "racer_id", "position"])
+        # 1. Sort & Assign Rank (Crucial for Midgame Metric)
+        # Sort by finish position (asc), then VP (desc) to match game rules
+        metrics.sort(
+            key=lambda r: (
+                r.finish_position if r.finish_position is not None else 999,
+                -r.final_vp,
+            ),
         )
 
-        # Minimal Results DF for winner calculation
+        winner_name = metrics[0].racer_name if metrics else "N/A"
+        runner_up = metrics[1].racer_name if len(metrics) > 1 else "None"
+
+        # Explicitly assign rank into the RacerResult objects
+        for rank, r in enumerate(metrics, start=1):
+            r.rank = rank
+
+        # 2. Prepare DataFrames using Shared Logic
+        # Convert dictionary-of-lists to Polars DF
+        df_pos_wide = pl.DataFrame(positions)
+        df_pos_long = prepare_position_data(df_pos_wide)
+
+        # Create results DF with the newly populated 'rank'
         df_results_min = pl.DataFrame(
             [
                 {
@@ -181,13 +201,13 @@ def run_single_simulation(
             ],
         )
 
-        # 2. Compute
+        # 3. Compute
         df_race_stats, df_racer_stats = compute_race_metrics(
             df_pos_long,
             df_results_min,
         )
 
-        # 3. Extract & Assign to our objects
+        # 4. Extract & Assign to our objects
         if df_race_stats.height > 0:
             stats_row = df_race_stats.row(0, named=True)
             race_tightness = stats_row["tightness_score"]
@@ -203,20 +223,8 @@ def run_single_simulation(
             if r.racer_id in midgame_map:
                 r.midgame_relative_pos = midgame_map[r.racer_id]
 
-        # --- END LOGGING ---
-        sorted_results = sorted(
-            metrics,
-            key=lambda r: (
-                r.finish_position if r.finish_position else 999,
-                -r.final_vp,
-            ),
-        )
-
-        winner = sorted_results[0].racer_name if len(sorted_results) > 0 else "N/A"
-        runner_up = sorted_results[1].racer_name if len(sorted_results) > 1 else "None"
-
         tqdm.write(
-            f"🏁 Done in {execution_time_ms:.2f}ms | {turn_counter} turns | 1st: {winner}, 2nd: {runner_up}",
+            f"🏁 Done in {execution_time_ms:.2f}ms | {turn_counter} turns | 1st: {winner_name}, 2nd: {runner_up}",
         )
 
     return SimulationResult(

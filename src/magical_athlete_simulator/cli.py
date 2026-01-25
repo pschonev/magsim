@@ -47,8 +47,8 @@ class Args:
 
     config: Path
     runs_per_combination: int | None = None
-    max_total_runs: int | None = 100_000
-    max_turns: int = 500
+    max_total_runs: int | None = None
+    max_turns: int | None = None
     seed_offset: int = 0
 
     def __call__(self) -> int:
@@ -76,9 +76,9 @@ class Args:
 
         config = SimulationConfig.from_toml(str(self.config))
 
-        runs_per_combo = self.runs_per_combination or config.runs_per_combination
-        max_total = self.max_total_runs or config.max_total_runs
-        max_turns = self.max_turns or config.max_turns_per_race
+        runs_per_combo = self.runs_per_combination or config.runs_per_combination or 1
+        max_total = self.max_total_runs or config.max_total_runs or 100_000
+        max_turns = self.max_turns or config.max_turns_per_race or 300
 
         eligible_racers = config.get_eligible_racers()
         if not eligible_racers:
