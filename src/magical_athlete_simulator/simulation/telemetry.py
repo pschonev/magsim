@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Protocol, TypedDict
 
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
+    BaseValueModificationEvent,
     MainMoveSkippedEvent,
     PostMoveEvent,
     PostWarpEvent,
@@ -186,13 +187,42 @@ class MetricsAggregator:
     def _get_result(self, racer_idx: int) -> RacerResult:
         return self.results[racer_idx]
 
-    def on_event(self, event: GameEvent) -> None:
+    def on_event(self, event: GameEvent, _: GameEngine | None = None) -> None:
+        # --- 1. DIRECT MOVEMENT (Abilities) ---
+        if isinstance(event, (PostMoveEvent, PostWarpEvent)):
+            dist = event.end_tile - event.start_tile
+
+            # Self-Movement
+            if event.responsible_racer_idx == event.target_racer_idx:
+                stats = self._get_result(event.target_racer_idx)
+                stats.ability_movement += dist
+
+            # Movement on other racers (Huge Baby / Centaur)
+            elif event.responsible_racer_idx is not None:
+                pusher_stats = self._get_result(event.responsible_racer_idx)
+                pusher_stats.movement_impact += dist
+
+        # --- BASE VALUE MANIPULATION (Legs / Alchemist) ---
+        if isinstance(event, BaseValueModificationEvent):
+            stats = self._get_result(event.target_racer_idx)
+            # Directly add the gain (e.g. +1.5 for Legs, +3 for Alchemist)
+            stats.ability_movement += event.gain
+
+        # --- DICE MODIFIERS (Hare / Gunk) ---
         if isinstance(event, RollResultEvent):
-            racer_metrics = self._get_result(event.target_racer_idx)
+            stats = self._get_result(event.target_racer_idx)
             if event.dice_value is not None:
-                racer_metrics.sum_dice_rolled += event.dice_value
-                racer_metrics.sum_dice_rolled_final += event.final_value
-                racer_metrics.rolling_turns += 1
+                stats.sum_dice_rolled += event.dice_value
+                stats.rolling_turns += 1
+
+            for owner_idx, delta in event.modifier_breakdown:
+                if owner_idx == event.target_racer_idx:
+                    # I buffed myself (Hare)
+                    stats.ability_movement += delta
+                else:
+                    # I buffed/nerfed someone else (Gunk)
+                    giver_stats = self._get_result(owner_idx)
+                    giver_stats.movement_impact += delta
 
         if isinstance(event, AbilityTriggeredEvent):
             stats = self._get_result(event.responsible_racer_idx)
@@ -213,11 +243,6 @@ class MetricsAggregator:
         if isinstance(event, MainMoveSkippedEvent):
             stats = self._get_result(event.responsible_racer_idx)
             stats.skipped_main_moves += 1
-
-        if isinstance(event, (PostMoveEvent, PostWarpEvent)):
-            stats = self._get_result(event.target_racer_idx)
-            if event.responsible_racer_idx == event.target_racer_idx:
-                stats.ability_movement += event.end_tile - event.start_tile
 
     def on_turn_end(
         self,

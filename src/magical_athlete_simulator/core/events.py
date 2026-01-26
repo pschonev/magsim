@@ -81,18 +81,6 @@ class RollModificationWindowEvent(GameEvent, HasTargetRacer):
 
 
 @dataclass(frozen=True, kw_only=True)
-class RollResultEvent(GameEvent, HasTargetRacer):
-    """
-    Fired exactly once per valid main roll, containing the final locked-in values.
-    """
-
-    dice_value: int | None
-    base_value: int
-    final_value: int
-    phase: Phase = Phase.MAIN_ACT
-
-
-@dataclass(frozen=True, kw_only=True)
 class ExecuteMainMoveEvent(GameEvent, HasTargetRacer):
     """
     The physical act of moving the racer based on the roll result.
@@ -107,10 +95,42 @@ class ExecuteMainMoveEvent(GameEvent, HasTargetRacer):
 
 
 @dataclass(frozen=True, kw_only=True)
+class BaseValueModificationEvent(GameEvent):
+    """
+    Fired when a racer manipulates the base dice value directly.
+    Used for telemetry to calculate 'movement_self' gain vs expectation.
+    """
+
+    target_racer_idx: int
+    old_value: float  # usually 3.5 (expectation) or the previous roll
+    new_value: int
+    phase: Phase = Phase.ROLL_WINDOW
+
+    @property
+    def gain(self) -> float:
+        return self.new_value - self.old_value
+
+
+@dataclass(frozen=True, kw_only=True)
 class ResolveMainMoveEvent(GameEvent, HasTargetRacer):
     roll_serial: int
     phase: Phase = Phase.MAIN_ACT
     roll_event_triggered_events: list[AbilityTriggeredEvent]
+    # NEW: Attribution for +/- modifiers (e.g. Hare +2)
+    modifier_breakdown: list[tuple[int, int]] = field(default_factory=list)
+
+
+@dataclass(frozen=True, kw_only=True)
+class RollResultEvent(GameEvent, HasTargetRacer):
+    """
+    Fired exactly once per valid main roll, containing the final locked-in values.
+    """
+
+    dice_value: int | None
+    base_value: int
+    final_value: int
+    phase: Phase = Phase.MAIN_ACT
+    modifier_breakdown: list[tuple[int, int]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, kw_only=True)

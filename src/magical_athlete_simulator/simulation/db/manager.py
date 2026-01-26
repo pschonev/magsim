@@ -150,7 +150,7 @@ class SimulationDatabase:
 
                 # Bulk Insert
                 self.raw_conn.execute(
-                    "INSERT OR IGNORE INTO races SELECT * FROM temp_races_buffer",
+                    "INSERT OR IGNORE INTO races BY NAME SELECT * FROM temp_races_buffer",
                 )
 
                 # Cleanup
@@ -177,7 +177,7 @@ class SimulationDatabase:
 
                 # Bulk insert millions of rows in milliseconds
                 self.raw_conn.execute(
-                    "INSERT OR IGNORE INTO race_position_logs SELECT * FROM temp_pos_buffer",
+                    "INSERT OR IGNORE INTO race_position_logs BY NAME SELECT * FROM temp_pos_buffer",
                 )
 
                 self.raw_conn.unregister("temp_pos_buffer")

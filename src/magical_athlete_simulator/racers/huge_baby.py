@@ -127,10 +127,13 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
                     template = self._get_modifier(owner_idx)
                     # Check existence before removing
                     if template in engine.state.board.dynamic_modifiers.get(
-                        event.start_tile, []
+                        event.start_tile,
+                        [],
                     ):
                         engine.state.board.unregister_modifier(
-                            event.start_tile, template, engine
+                            event.start_tile,
+                            template,
+                            engine,
                         )
                 return "skip_trigger"
 
@@ -140,7 +143,9 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
                 # Here we WANT a warning if it's missing, because that would be a bug
                 # in normal operation (we expect to have a blocker).
                 engine.state.board.unregister_modifier(
-                    event.start_tile, mod_to_remove, engine
+                    event.start_tile,
+                    mod_to_remove,
+                    engine,
                 )
 
             if event.end_tile == 0:

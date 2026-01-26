@@ -43,7 +43,7 @@ class RacerState:
     # rolls
     main_move_consumed: bool = False
     reroll_count: int = 0
-    roll_override: int | None = None
+    roll_override: tuple[AbilityName, int] | None = None
     can_reroll: bool = True
 
     # finished

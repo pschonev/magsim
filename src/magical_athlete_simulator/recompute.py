@@ -43,7 +43,7 @@ class RecomputeArgs:
             df_pos_wide = pl.read_parquet(p_pos)
             df_results = pl.read_parquet(p_res)
             df_races = pl.read_parquet(p_races)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             tqdm.write(f"❌ Error reading parquet files: {e}")
             return 1
 
@@ -68,14 +68,18 @@ class RecomputeArgs:
         df_races = df_races.drop(["tightness_score", "volatility_score"], strict=False)
 
         df_races_updated = df_races.join(
-            df_race_stats, on="config_hash", how="left"
+            df_race_stats,
+            on="config_hash",
+            how="left",
         ).fill_null(0.0)
 
         # Update Racer Results
         df_results = df_results.drop(["midgame_relative_pos"], strict=False)
 
         df_results_updated = df_results.join(
-            df_racer_stats, on=["config_hash", "racer_id"], how="left"
+            df_racer_stats,
+            on=["config_hash", "racer_id"],
+            how="left",
         ).with_columns(pl.col("midgame_relative_pos").fill_null(0.0))
 
         # Write Back

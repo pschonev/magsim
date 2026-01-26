@@ -39,7 +39,7 @@ class Race(SQLModel, table=True):
         default_factory=lambda: datetime.datetime.now(datetime.UTC),
     )
 
-    # --- NEW METRICS (Calculated from positions) ---
+    # --- METRICS (Calculated from positions) ---
     tightness_score: float = 0.0
     volatility_score: float = 0.0
 
@@ -62,16 +62,31 @@ class RacerResult(SQLModel, table=True):
     final_vp: int = 0
     turns_taken: int = 0
     recovery_turns: int = 0
-    skipped_main_moves: int = 0
-    rolling_turns: int = 0
-    sum_dice_rolled: int = 0
-    sum_dice_rolled_final: int = 0
+    skipped_main_moves: int = 0  # Times I was skipped
 
-    # Abilities
+    # 1. SELF-GENERATED MOVEMENT (The "Speed" Score)
+    # Sum of:
+    # - Physical moves (Scoocher)
+    # - Dice Modifiers (Hare)
+    # - Base Value Gain (Legs/Alchemist)
+    ability_movement: float = 0.0
+
+    # 2. MOVEMENT IMPACT (The "Control" Score)
+    # Sum of:
+    # - Pushing/Pulling/Blocking others
+    # - Modifying others' dice
+    movement_impact: float = 0.0
+
+    # Raw Dice Stats (for calculating Re-roll value in frontend)
+    sum_dice_rolled: int = 0  # Raw base values
+    rolling_turns: int = 0  # Count of rolls
+
+    # --------------------------------------------------------------------------
+
+    # Abilities (Legacy / Detail counts)
     ability_trigger_count: int = 0
     ability_self_target_count: int = 0
     ability_target_count: int = 0
-    ability_movement: int = 0
 
     # Status
     finish_position: int | None = None

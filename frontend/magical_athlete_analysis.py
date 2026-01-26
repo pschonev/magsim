@@ -2091,8 +2091,99 @@ def cell_prepare_aggregated_data(df_racer_results_f, df_races_f, mo, pl):
             )
         )
 
-        # 2. Race environment stats
-        race_environment_stats = df_racer_results_filtered.group_by("config_hash").agg(
+        # ---------------------------------------------------------------------
+        # 2. TURN ADVANTAGE BASELINE CALCULATION (NEW)
+        # ---------------------------------------------------------------------
+        # Filter for "The Pack" (Rank > 1, Not Eliminated)
+        df_pack = df_racer_results_filtered.filter(
+            (pl.col("rank") > 1) & (~pl.col("eliminated"))
+        )
+        # Calculate Median Turns per Race
+        df_baselines = df_pack.group_by("config_hash").agg(
+            pl.col("turns_taken").median().alias("median_turns_baseline")
+        )
+
+        # Merge Baseline back to filtered results
+        # Winners/Eliminated get the median of their race's pack
+        stats_results = (
+            df_racer_results_filtered.join(df_baselines, on="config_hash", how="left")
+            .join(
+                df_working.select(["config_hash", "racer_count"]),
+                on="config_hash",
+                how="left",
+            )
+            .with_columns(
+                pl.col("median_turns_baseline").fill_null(pl.col("turns_taken"))
+            )
+        )
+
+        # ---------------------------------------------------------------------
+        # 3. METRIC ENRICHMENT
+        # ---------------------------------------------------------------------
+        stats_results = (
+            stats_results.with_columns(
+                # 3. Convert 0 -> Null for clean division
+                pl.when(pl.col("turns_taken") <= 0)
+                .then(None)
+                .otherwise(pl.col("turns_taken"))
+                .alias("total_turns_clean"),
+                pl.when(pl.col("rolling_turns") <= 0)
+                .then(None)
+                .otherwise(pl.col("rolling_turns"))
+                .alias("rolling_turns_clean"),
+            )
+            .with_columns(
+                # A. TOTAL PHYSICAL DISTANCE (Dice + Abilities)
+                (pl.col("sum_dice_rolled") + pl.col("ability_movement")).alias(
+                    "dist_physical"
+                ),
+                # B. TIME GENERATION (Turn Delta)
+                (pl.col("turns_taken") - pl.col("median_turns_baseline")).alias(
+                    "turn_delta"
+                ),
+                # C. IMPACT MAGNITUDE
+                (
+                    (pl.col("movement_impact") / pl.col("total_turns_clean"))
+                    / (pl.col("racer_count") - 1)
+                ).alias("impact_per_opp"),
+            )
+            .with_columns(
+                # D. RAW SPEED (Distance / Turn)
+                (pl.col("dist_physical") / pl.col("total_turns_clean")).alias(
+                    "speed_raw"
+                ),
+            )
+            .with_columns(
+                # E. EFFECTIVE DISTANCE (Physical + Time Benefit)
+                # Credit = Extra Turns * My Speed
+                (
+                    pl.col("dist_physical")
+                    + (pl.col("turn_delta") * pl.col("speed_raw"))
+                ).alias("dist_effective"),
+            )
+            .with_columns(
+                # G. LEGACY METRICS
+                (pl.col("ability_trigger_count") / pl.col("total_turns_clean")).alias(
+                    "triggers_per_turn"
+                ),
+                (pl.col("sum_dice_rolled") / pl.col("rolling_turns_clean")).alias(
+                    "dice_per_rolling_turn"
+                ),
+                (pl.col("ability_movement") / pl.col("total_turns_clean")).alias(
+                    "avg_ability_move"
+                ),
+            )
+            .with_columns(
+                # F. CONTROL RATIO (Impact / Total Volume)
+                # How much of my "Move Volume" is messing with others?
+                (pl.col("avg_ability_move") + pl.col("impact_per_opp")).alias(
+                    "control_ratio"
+                )
+            )
+        )
+
+        # 4. Race environment stats
+        race_environment_stats = stats_results.group_by("config_hash").agg(
             (pl.col("ability_trigger_count").sum() / pl.col("racer_id").count()).alias(
                 "race_avg_triggers"
             ),
@@ -2101,50 +2192,10 @@ def cell_prepare_aggregated_data(df_racer_results_f, df_races_f, mo, pl):
             ),
         )
 
-        # Merge Race Stats (Tightness/Volatility are already in df_working!)
+        # Merge Race Stats
         stats_races = df_working.join(
             race_environment_stats, on="config_hash", how="left"
         ).fill_null(0)
-
-        # 3. Results enriched with movement features
-        stats_results = df_racer_results_filtered.with_columns(
-            # 3. Convert 0 -> Null for clean division
-            pl.when(pl.col("turns_taken") <= 0)
-            .then(None)
-            .otherwise(pl.col("turns_taken"))
-            .alias("total_turns_clean"),
-            pl.when(pl.col("rolling_turns") <= 0)
-            .then(None)
-            .otherwise(pl.col("rolling_turns"))
-            .alias("rolling_turns_clean"),
-        ).with_columns(
-            # A. MOVEMENT (New Definition: Sum Dice + Ability Movement)
-            (
-                (pl.col("sum_dice_rolled") + pl.col("ability_movement"))
-                / pl.col("total_turns_clean")
-            ).alias("speed_gross"),
-            # B. ABILITIES
-            (pl.col("ability_trigger_count") / pl.col("total_turns_clean")).alias(
-                "triggers_per_turn"
-            ),
-            (pl.col("ability_self_target_count") / pl.col("total_turns_clean")).alias(
-                "self_per_turn"
-            ),
-            (pl.col("ability_target_count") / pl.col("total_turns_clean")).alias(
-                "target_per_turn"
-            ),
-            # C. DICE
-            (pl.col("sum_dice_rolled") / pl.col("rolling_turns_clean")).alias(
-                "dice_per_rolling_turn"
-            ),
-            (pl.col("sum_dice_rolled_final") / pl.col("rolling_turns_clean")).alias(
-                "final_roll_per_rolling_turn"
-            ),
-            # D. Movement split
-            (pl.col("ability_movement") / pl.col("total_turns_clean")).alias(
-                "avg_ability_move"
-            ),
-        )
 
         # --- Consistency Calc ---
         racer_mu_sigma = stats_results.group_by("racer_name").agg(
@@ -2176,8 +2227,8 @@ def cell_prepare_aggregated_data(df_racer_results_f, df_races_f, mo, pl):
                 stats_races.select(
                     [
                         "config_hash",
-                        "tightness_score",  # Pre-computed in race metadata
-                        "volatility_score",  # Pre-computed in race metadata
+                        "tightness_score",
+                        "volatility_score",
                         "race_avg_triggers",
                         "race_avg_trip_rate",
                         pl.col("total_turns").alias("race_global_turns"),
@@ -2200,13 +2251,14 @@ def cell_prepare_aggregated_data(df_racer_results_f, df_races_f, mo, pl):
                 pl.col("race_global_turns").mean().alias("avg_game_duration"),
                 # Movement / Dice
                 pl.col("avg_ability_move").mean(),
-                pl.col("speed_gross").mean().alias("avg_speed_gross"),
+                pl.col("speed_raw").mean().alias("avg_speed_gross"),
+                pl.col("dist_effective").mean().alias("avg_dist_effective"),
+                pl.col("turn_delta").mean().alias("avg_turn_delta"),
+                pl.col("control_ratio").mean().alias("avg_control_ratio"),
+                pl.col("impact_per_opp").mean().alias("avg_movement_impact"),
                 pl.col("dice_per_rolling_turn").mean().alias("avg_dice_base"),
-                pl.col("final_roll_per_rolling_turn").mean().alias("avg_final_roll"),
                 # Ability usage
                 pl.col("triggers_per_turn").mean(),
-                pl.col("self_per_turn").mean(),
-                pl.col("target_per_turn").mean(),
             )
         )
 
@@ -2214,12 +2266,15 @@ def cell_prepare_aggregated_data(df_racer_results_f, df_races_f, mo, pl):
         corr_df = (
             stats_results.group_by("racer_name")
             .agg(
-                pl.corr("dice_per_rolling_turn", "final_vp").alias("dice_dependency"),
+                # NEW: Sensitivity to Dice Magnitude
+                pl.corr("dice_per_rolling_turn", "final_vp")
+                .abs()
+                .alias("dice_sensitivity"),
+                # Legacy correlations
                 pl.corr("avg_ability_move", "final_vp").alias(
                     "ability_move_dependency"
                 ),
                 (pl.corr("racer_id", "final_vp") * -1).alias("start_pos_bias"),
-                # NEW: Use pre-computed midgame bias
                 pl.corr("midgame_relative_pos", "final_vp").alias("midgame_bias"),
                 pl.corr("ability_trigger_count", "final_vp").alias(
                     "trigger_dependency"
@@ -2241,9 +2296,6 @@ def cell_prepare_aggregated_data(df_racer_results_f, df_races_f, mo, pl):
                 (pl.col("cnt_2nd") / pl.col("races_run")).alias("pct_2nd"),
                 pl.col("consistency_score").fill_null(0),
                 pl.col("global_win_rate").fill_null(0),
-                (pl.col("avg_final_roll") - pl.col("avg_dice_base")).alias(
-                    "plus_minus_modified"
-                ),
                 pl.col("std_dev_val").fill_null(0).alias("std_vp_sigma"),
             )
         )
@@ -2338,14 +2390,7 @@ def cell_show_aggregated_data(
                 f"{metric_col}:Q",
                 title=metric_title,
                 scale=alt.Scale(
-                    # [Deep Pink, Soft Pink, GREY, Soft Blue, Deep Blue]
-                    range=[
-                        "#AD1457",  # Deep Pink (New, for negative outliers)
-                        "#F06292",  # Your original Pink
-                        "#3E3B45",  # Grey (Anchor at 0)
-                        "#42A5F5",  # Your original Blue
-                        "#0D47A1",  # Deep Blue (New, for positive outliers)
-                    ],
+                    range=["#AD1457", "#F06292", "#3E3B45", "#42A5F5", "#0D47A1"],
                     domainMid=0,
                     interpolate="rgb",
                 ),
@@ -2354,14 +2399,9 @@ def cell_show_aggregated_data(
             tooltip=[
                 "racer_name",
                 "opponent_name",
-                alt.Tooltip(
-                    "avg_vp_with_opponent:Q", format=".2f", title="Avg VP vs Opp"
-                ),
-                alt.Tooltip("my_global_avg:Q", format=".2f", title="My Global Avg"),
-                alt.Tooltip(
-                    "residual_matchup:Q", format="+.2f", title="Residual (Pts)"
-                ),
-                alt.Tooltip("percentage_shift:Q", format="+.1%", title="Shift (%)"),
+                alt.Tooltip("avg_vp_with_opponent:Q", format=".2f"),
+                alt.Tooltip("residual_matchup:Q", format="+.2f"),
+                alt.Tooltip("percentage_shift:Q", format="+.1%"),
             ],
         )
         .properties(
@@ -2372,11 +2412,10 @@ def cell_show_aggregated_data(
         )
     )
 
-    # --- 2. QUADRANT CHART BUILDER (UPDATED) ---
+    # --- 2. QUADRANT CHART BUILDER ---
     r_list = stats["racer_name"].unique().to_list()
     c_list = [get_racer_color(r) for r in r_list]
 
-    # [HELPER] Calculate contrast color (Black or White) based on luminance
     def _get_contrasting_stroke(hex_color):
         if not hex_color or not hex_color.startswith("#"):
             return "white"
@@ -2407,25 +2446,20 @@ def cell_show_aggregated_data(
         extra_tooltips=None,
     ):
         PLOT_BG = "#232826"
-
-        # --- PREPARE COLOR MAPPING ---
         racer_to_hex = dict(zip(racers, colors))
         racer_to_stroke = {
             r: _get_contrasting_stroke(c) for r, c in racer_to_hex.items()
         }
 
-        # --- BRANCH A: DYNAMIC ZOOM (Rank Scale) ---
         if use_rank_scale:
 
             def _apply_rank_transform(df, col):
                 series = df[col].drop_nulls()
                 if series.len() < 3:
                     return df, col, [], []
-
                 vals = series.to_numpy()
                 sorted_vals = np.sort(vals)
                 sorted_ranks = np.linspace(0, 1, len(vals))
-
                 new_col = f"{col}_rank"
 
                 def get_rank_pos(x):
@@ -2436,7 +2470,6 @@ def cell_show_aggregated_data(
                     .map_elements(get_rank_pos, return_dtype=pl.Float64)
                     .alias(new_col)
                 )
-
                 ticks = np.unique(
                     np.percentile(vals, [0, 20, 40, 60, 80, 100])
                 ).tolist()
@@ -2452,8 +2485,6 @@ def cell_show_aggregated_data(
                 domain=[-0.05, 1.05], nice=False, zero=False, reverse=reverse_x
             )
             scale_y = alt.Scale(domain=[-0.05, 1.05], nice=False, zero=False)
-
-            # NOTE: Removed 'values=' constraint to allow dynamic zooming
             axis_x = alt.Axis(
                 grid=True,
                 labelExpr=f"datum.value == {vis_ticks_x[0]} ? '{ticks_x[0]:.2f}' : "
@@ -2477,18 +2508,15 @@ def cell_show_aggregated_data(
                 + " format(datum.value, '.2f')",
             )
             mid_x, mid_y = 0.5, 0.5
-
-        # --- BRANCH B: LINEAR SCALE (Original) ---
         else:
             plot_x, plot_y = x_col, y_col
             chart_df = stats_df
-
-            vals_x = stats_df[x_col].drop_nulls().to_list()
-            vals_y = stats_df[y_col].drop_nulls().to_list()
-
+            vals_x, vals_y = (
+                stats_df[x_col].drop_nulls().to_list(),
+                stats_df[y_col].drop_nulls().to_list(),
+            )
             if not vals_x:
                 return alt.Chart(stats_df).mark_text(text="No Data")
-
             min_x, max_x = min(vals_x), max(vals_x)
             min_y, max_y = min(vals_y), max(vals_y)
             if min_x == max_x:
@@ -2497,17 +2525,16 @@ def cell_show_aggregated_data(
             if min_y == max_y:
                 max_y += 0.01
                 min_y -= 0.01
-
             pad_x, pad_y = (max_x - min_x) * 0.15, (max_y - min_y) * 0.15
-            dom_x = [min_x - pad_x, max_x + pad_x]
-            dom_y = [min_y - pad_y, max_y + pad_y]
-
+            dom_x, dom_y = (
+                [min_x - pad_x, max_x + pad_x],
+                [min_y - pad_y, max_y + pad_y],
+            )
             scale_x = alt.Scale(domain=dom_x, reverse=reverse_x, zero=False)
             scale_y = alt.Scale(domain=dom_y, zero=False)
             axis_x, axis_y = alt.Axis(grid=False), alt.Axis(grid=False)
             mid_x, mid_y = (min_x + max_x) / 2, (min_y + max_y) / 2
 
-        # --- COMMON PLOTTING ---
         chart_df = chart_df.with_columns(
             pl.col("racer_name")
             .map_elements(
@@ -2516,7 +2543,6 @@ def cell_show_aggregated_data(
             .alias("txt_stroke")
         )
 
-        # 1. Guidelines (Independent DataFrames sharing Scales)
         h_line = (
             alt.Chart(pl.DataFrame({"y": [mid_y]}))
             .mark_rule(strokeDash=[4, 4], color="#888")
@@ -2528,7 +2554,6 @@ def cell_show_aggregated_data(
             .encode(x=alt.X("x:Q", scale=scale_x))
         )
 
-        # 2. Points
         points = (
             alt.Chart(chart_df)
             .mark_circle(size=250, opacity=0.9)
@@ -2549,7 +2574,6 @@ def cell_show_aggregated_data(
             )
         )
 
-        # 3. Text Layers
         text_outline = points.mark_text(
             align="center",
             baseline="middle",
@@ -2560,10 +2584,7 @@ def cell_show_aggregated_data(
             stroke=PLOT_BG,
             strokeWidth=3,
             opacity=1,
-        ).encode(
-            text="racer_name:N",
-            color=alt.value(PLOT_BG),
-        )
+        ).encode(text="racer_name:N", color=alt.value(PLOT_BG))
         text_fill = points.mark_text(
             align="center",
             baseline="middle",
@@ -2578,7 +2599,6 @@ def cell_show_aggregated_data(
             ),
         )
 
-        # 4. Labels
         label_layers = []
         if quad_labels and len(quad_labels) == 4:
             if use_rank_scale:
@@ -2588,9 +2608,12 @@ def cell_show_aggregated_data(
                 dom_x, dom_y = scale_x.domain, scale_y.domain
                 px, py = (dom_x[1] - dom_x[0]) * 0.05, (dom_y[1] - dom_y[0]) * 0.05
                 lx, rx = (
-                    (dom_x[1] - px, dom_x[0] + px)
-                    if reverse_x
-                    else (dom_x[0] + px, dom_x[1] - px)
+                    (
+                        (dom_x[1] - px, dom_x[0] + px)
+                        if reverse_x
+                        else (dom_x[0] + px, dom_x[1] - px)
+                    ),
+                    (dom_y[1] - py, dom_y[0] + py),
                 )
                 ty, by = dom_y[1] - py, dom_y[0] + py
 
@@ -2619,16 +2642,7 @@ def cell_show_aggregated_data(
                 _lbl(rx, by, quad_labels[3], "right", "bottom"),
             ]
 
-        # 5. Composition (Fixed Width, Shared Scales, NO Internal Zoom)
         layers = [points, text_outline, text_fill] + label_layers + [h_line, v_line]
-
-        xzoom = alt.selection_interval(
-            encodings=["x"], bind="scales", zoom="wheel![event.shiftKey]"
-        )
-        yzoom = alt.selection_interval(
-            encodings=["y"], bind="scales", zoom="wheel![event.altKey]"
-        )
-
         xzoom = alt.selection_interval(bind="scales", encodings=["x"], zoom="wheel!")
         return (
             alt.layer(*layers)
@@ -2637,20 +2651,42 @@ def cell_show_aggregated_data(
             .properties(width="container", height=800, background=BG_COLOR)
         )
 
-    # --- 3. GENERATE CHARTS (Unchanged Logic, uses new builder) ---
+    # --- 3. GENERATE CHARTS ---
+    # NEW: Archetype Chart (Strategy vs Dice)
+    c_archetypes = _build_quadrant_chart(
+        stats,
+        r_list,
+        c_list,
+        "avg_control_ratio",
+        "dice_sensitivity",
+        "Racer Archetypes",
+        "Strategy Focus (0=Speed, 1=Control)",
+        "Dice Preference (Neg=Low, Pos=High)",
+        quad_labels=[
+            "Control / High Rolls",
+            "Control / Low Rolls",
+            "Speed / Low Rolls",
+            "Speed / High Rolls",
+        ],
+        use_rank_scale=dynamic_zoom_toggle.value,
+        extra_tooltips=[
+            alt.Tooltip("mean_vp:Q", format=".2f", title="Avg VP"),
+        ],
+    )
+
     c_consist = _build_quadrant_chart(
         stats,
         r_list,
         c_list,
         "consistency_score",
         "mean_vp",
-        "Consistency (Stability)",
-        "Stability (% within 1σ of mean VP)",
+        "Consistency",
+        "Stability (% within 1σ)",
         "Avg VP",
         quad_labels=["Wildcard", "Reliable Winner", "Erratic", "Reliable Loser"],
         use_rank_scale=dynamic_zoom_toggle.value,
         extra_tooltips=[
-            alt.Tooltip("std_vp_sigma:Q", format=".2f", title="1σ (Std Dev)"),
+            alt.Tooltip("std_vp_sigma:Q", format=".2f", title="1σ (Std Dev)")
         ],
     )
 
@@ -2661,33 +2697,11 @@ def cell_show_aggregated_data(
         "avg_race_tightness",
         "avg_race_volatility",
         "Excitement Profile",
-        "Tightness (Avg distance from mean position)",
-        "Volatility (% of turns with rank changes)",
+        "Tightness",
+        "Volatility",
         reverse_x=True,
         quad_labels=["Rubber Band", "Thriller", "Procession", "Stalemate"],
         use_rank_scale=dynamic_zoom_toggle.value,
-    )
-
-    c_sources = _build_quadrant_chart(
-        stats,
-        r_list,
-        c_list,
-        "ability_move_dependency",
-        "dice_dependency",
-        "Sources of Victory",
-        "Ability Move Dep (Corr to VP)",
-        "Dice Dep (Corr to VP)",
-        quad_labels=[
-            "Dice-Driven",
-            "Hybrid Winner",
-            "Low Signal",
-            "Ability-Driven",
-        ],
-        use_rank_scale=dynamic_zoom_toggle.value,
-        extra_tooltips=[
-            alt.Tooltip("avg_ability_move:Q", format=".2f", title="Ability Mvmt/Turn"),
-            alt.Tooltip("avg_dice_base:Q", format=".2f", title="Dice/Rolling Turn"),
-        ],
     )
 
     c_momentum = _build_quadrant_chart(
@@ -2697,13 +2711,13 @@ def cell_show_aggregated_data(
         "start_pos_bias",
         "midgame_bias",
         "Momentum Profile",
-        "Start Pos Bias (+ = comeback)",
-        "Mid-Game Bias (+ = leader wins)",
+        "Start Pos Bias",
+        "Mid-Game Bias",
         quad_labels=["Late Bloomer", "Snowballer", "Comeback King", "Frontrunner"],
         use_rank_scale=dynamic_zoom_toggle.value,
         extra_tooltips=[
-            alt.Tooltip("pct_1st:Q", format=".1%", title="Win%"),
-            alt.Tooltip("mean_vp:Q", format=".2f", title="Avg VP"),
+            alt.Tooltip("pct_1st:Q", format=".1%"),
+            alt.Tooltip("mean_vp:Q", format=".2f"),
         ],
     )
 
@@ -2714,21 +2728,13 @@ def cell_show_aggregated_data(
         "triggers_per_turn",
         "trigger_dependency",
         "Engine Profile",
-        "Activity (Avg Triggers / Turn)",
-        "Efficacy (Corr Triggers to VP)",
+        "Activity (Avg Triggers/Turn)",
+        "Efficacy (Corr Triggers/VP)",
         use_rank_scale=dynamic_zoom_toggle.value,
-        quad_labels=[
-            "Potent",
-            "Ability Abuser",
-            "Low Reliance",
-            "Spammer",
-        ],
+        quad_labels=["Potent", "Ability Abuser", "Low Reliance", "Spammer"],
     )
 
-    # ... (Rest of global charts and UI layout logic remains exactly the same) ...
-    # To save space, I am keeping the logic below identical to your previous cell.
-
-    # --- 4. GLOBAL DYNAMICS ---
+    # --- 4. GLOBAL DYNAMICS (Restored) ---
     race_meta = df_races_f.select(["config_hash", "board", "racer_count"])
     races_with_meta = proc_races.join(race_meta, on="config_hash", how="left")
     results_with_meta = proc_results.join(race_meta, on="config_hash", how="left")
@@ -2768,7 +2774,6 @@ def cell_show_aggregated_data(
             "Trip Rate",
         ]
     ).unpivot(index=["board", "racer_count"], variable_name="metric", value_name="val")
-
     global_grp2 = global_wide.select(
         [
             "board",
@@ -2800,7 +2805,6 @@ def cell_show_aggregated_data(
         .resolve_scale(y="independent")
         .properties(width=120, height=200, title="Race Metrics by Board & Player Count")
     )
-
     c_global_2 = (
         alt.Chart(global_grp2)
         .mark_bar()
@@ -2819,20 +2823,20 @@ def cell_show_aggregated_data(
         )
         .resolve_scale(y="independent")
         .properties(
-            width=120,
-            height=200,
-            title="Victory Correlations & Ability Usage by Board",
+            width=120, height=200, title="Victory Correlations & Ability Usage by Board"
         )
     )
-
     global_ui = mo.vstack(
         [mo.ui.altair_chart(c_global_1), mo.ui.altair_chart(c_global_2)]
     )
 
-    # --- 5. ENVIRONMENT MATRIX ---
-    env_metric_col = "relative_shift" if use_pct else "absolute_shift"
-    env_metric_title = "Shift vs Own Avg (%)" if use_pct else "Shift vs Own Avg (VP)"
-    env_legend_fmt = ".0%" if use_pct else "+.2f"
+    # --- 5. ENVIRONMENT MATRIX (Restored) ---
+    use_pct_env = use_pct
+    env_metric_col = "relative_shift" if use_pct_env else "absolute_shift"
+    env_metric_title = (
+        "Shift vs Own Avg (%)" if use_pct_env else "Shift vs Own Avg (VP)"
+    )
+    env_legend_fmt = ".0%" if use_pct_env else "+.2f"
 
     joined = proc_results.join(race_meta, on="config_hash", how="inner")
     racer_baselines = joined.group_by("racer_name").agg(
@@ -2861,7 +2865,6 @@ def cell_show_aggregated_data(
             ).alias("env_label"),
         )
     )
-
     sort_order = (
         env_stats.select(["env_label", "board", "racer_count"])
         .unique()
@@ -2885,14 +2888,7 @@ def cell_show_aggregated_data(
                 f"{env_metric_col}:Q",
                 title=env_metric_title,
                 scale=alt.Scale(
-                    # [Deep Pink, Soft Pink, GREY, Soft Blue, Deep Blue]
-                    range=[
-                        "#AD1457",  # Deep Pink (New, for negative outliers)
-                        "#F06292",  # Your original Pink
-                        "#3E3B45",  # Grey (Anchor at 0)
-                        "#42A5F5",  # Your original Blue
-                        "#0D47A1",  # Deep Blue (New, for positive outliers)
-                    ],
+                    range=["#AD1457", "#F06292", "#3E3B45", "#42A5F5", "#0D47A1"],
                     domainMid=0,
                     interpolate="rgb",
                 ),
@@ -2929,19 +2925,17 @@ def cell_show_aggregated_data(
     )
     df_movement = master_df.select(
         pl.col("racer_name").alias("Racer"),
-        pl.col("avg_speed_gross").round(2).alias("Speed"),
-        pl.col("avg_dice_base").round(2).alias("Base Roll"),
-        pl.col("dice_dependency").round(2).alias("Dice Dep"),
-        pl.col("plus_minus_modified").round(2).alias("+-Modified"),
-        pl.col("avg_ability_move").round(2).alias("Ability Mvmt/Turn"),
-        pl.col("ability_move_dependency").round(2).alias("Ability Move Dep"),
+        pl.col("avg_speed_gross").round(2).alias("Speed (Raw)"),
+        pl.col("avg_dist_effective").round(2).alias("Eff Dist"),
+        pl.col("avg_turn_delta").round(2).alias("Time Δ"),
+        pl.col("avg_movement_impact").round(2).alias("Impact"),
+        pl.col("avg_ability_move").round(2).alias("Abil Move"),
+        pl.col("avg_dice_base").round(2).alias("Dice Avg"),
     )
     df_abilities = master_df.select(
         pl.col("racer_name").alias("Racer"),
-        pl.col("avg_ability_move").round(2).alias("Ability Mvmt/Turn"),
         pl.col("triggers_per_turn").round(2).alias("Trig/Turn"),
-        pl.col("self_per_turn").round(2).alias("Self/Turn"),
-        pl.col("target_per_turn").round(2).alias("Tgt/Turn"),
+        pl.col("avg_control_ratio").round(2).alias("Ctrl %"),
     )
     df_dynamics = master_df.select(
         pl.col("racer_name").alias("Racer"),
@@ -2954,7 +2948,8 @@ def cell_show_aggregated_data(
     df_vp = master_df.select(
         pl.col("racer_name").alias("Racer"),
         pl.col("mean_vp").round(2).alias("Avg VP"),
-        pl.col("dice_dependency").round(2).alias("Dice Dep"),
+        pl.col("dice_sensitivity").round(2).alias("Dice Sens"),  # NEW
+        pl.col("dice_sensitivity").round(2).alias("Dice Dep (Legacy)"),
         pl.col("ability_move_dependency").round(2).alias("Ability Move Dep"),
         pl.col("start_pos_bias").round(2).alias("Start Bias"),
         pl.col("midgame_bias").round(2).alias("MidGame Bias"),
@@ -2963,97 +2958,55 @@ def cell_show_aggregated_data(
     # --- 7. UI COMPOSITION ---
     left_charts_ui = mo.ui.tabs(
         {
-            "🎯 Consistency": mo.vstack(
+            "🎭 Archetypes": mo.vstack(
                 [
                     dynamic_zoom_toggle,
-                    c_consist.interactive(),
+                    c_archetypes.interactive(),
                     mo.md(
-                        """**Stability**: Percentage of races where Final VP is within ±1 standard deviation (1σ) of the racer's mean VP."""
+                        """**X: Strategy Focus**: How much of their movement volume is devoted to impacting others (Control) vs moving themselves (Speed). \n**Y: Dice Preference**: Do they win by rolling High (Positive) or Low (Negative)?"""
                     ),
                 ]
             ),
-            "🎲 Dice vs Ability": mo.vstack(
-                [
-                    dynamic_zoom_toggle,
-                    c_sources.interactive(),
-                    mo.md(
-                        """**X: Ability Move Dependency** – Correlation of non-dice movement (ability-driven positioning) to VP.  \n**Y: Dice Dependency** – Correlation of total dice rolled to VP."""
-                    ),
-                ]
-            ),
-            "🌊 Momentum": mo.vstack(
-                [
-                    dynamic_zoom_toggle,
-                    c_momentum.interactive(),
-                    mo.md(
-                        """**X: Start Pos Bias** – Correlation of starting position (racer ID) to VP.  \n**Y: Mid-Game Bias** – Correlation of position at 66% mark to VP."""
-                    ),
-                ]
-            ),
+            "🎯 Consistency": mo.vstack([dynamic_zoom_toggle, c_consist.interactive()]),
+            "🌊 Momentum": mo.vstack([dynamic_zoom_toggle, c_momentum.interactive()]),
             "🔥 Excitement": mo.vstack(
-                [
-                    dynamic_zoom_toggle,
-                    c_excitement.interactive(),
-                    mo.md(
-                        """**Tightness** (X-axis, reversed): Average distance from mean position across all turns.  \n**Volatility** (Y-axis): Percentage of turns where at least one racer changes rank."""
-                    ),
-                ]
+                [dynamic_zoom_toggle, c_excitement.interactive()]
             ),
             "⚡ Abilities": mo.vstack(
-                [
-                    dynamic_zoom_toggle,
-                    c_engine.interactive(),
-                    mo.md(
-                        """**X: Activity** – Average number of ability triggers per turn.  \n**Y: Efficacy** – Correlation between trigger count and Victory Points.  \n*Do more ability triggers mean more points?*"""
-                    ),
-                ]
-            ),
-            "🌍 Global": global_ui,
+                [dynamic_zoom_toggle, c_engine.interactive()]
+            ),  # Restored
+            "🌍 Global": global_ui,  # Restored
         }
     )
 
     right_ui = mo.ui.tabs(
         {
             "🏆 Overview": mo.vstack(
-                [
-                    mo.ui.table(df_overview, selection=None, page_size=50),
-                    mo.md(
-                        """**Avg VP**: Mean victory points across all races.\n**Consist%**: Reliability.\n**1st%** / **2nd%**: Win rate and runner-up rate."""
-                    ),
-                ]
+                [mo.ui.table(df_overview, selection=None, page_size=50)]
             ),
             "⚔️ Interactions": mo.vstack(
                 [matchup_metric_toggle, mo.ui.altair_chart(c_matrix)]
             ),
             "🌍 Environments": mo.vstack(
                 [matchup_metric_toggle, mo.ui.altair_chart(c_env)]
-            ),
+            ),  # Restored
             "🏃 Movement": mo.vstack(
                 [
                     mo.ui.table(df_movement, selection=None, page_size=50),
-                    mo.md("""**Speed**: Average gross distance moved per turn."""),
-                ]
-            ),
-            "💎 VP Analysis": mo.vstack(
-                [
-                    mo.ui.table(df_vp, selection=None, page_size=50),
                     mo.md(
-                        """**Start Bias**: Positive = comeback. Negative = frontrunner."""
+                        """**Eff Dist**: Total Distance + (Time Advantage * Speed). This is the true measure of velocity."""
                     ),
                 ]
             ),
+            "💎 VP Analysis": mo.vstack(
+                [mo.ui.table(df_vp, selection=None, page_size=50)]
+            ),
             "⚡ Abilities": mo.vstack(
-                [
-                    mo.ui.table(df_abilities, selection=None, page_size=50),
-                    mo.md("""**Trig/Turn**: Average ability triggers per turn."""),
-                ]
+                [mo.ui.table(df_abilities, selection=None, page_size=50)]
             ),
             "🔥 Dynamics": mo.vstack(
-                [
-                    mo.ui.table(df_dynamics, selection=None, page_size=50),
-                    mo.md("""**Volatility**: Rank changes per turn."""),
-                ]
-            ),
+                [mo.ui.table(df_dynamics, selection=None, page_size=50)]
+            ),  # Restored
         }
     )
 

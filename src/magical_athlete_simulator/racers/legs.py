@@ -40,7 +40,7 @@ class LegsMoveAbility(Ability, BooleanDecisionMixin):
 
         ctx = DecisionContext[BooleanInteractive](self, engine.state, owner_idx)
         if agent.make_boolean_decision(engine, ctx):
-            engine.get_racer(owner_idx).roll_override = 5
+            engine.get_racer(owner_idx).roll_override = (self.name, 5)
             return AbilityTriggeredEvent(
                 responsible_racer_idx=owner_idx,
                 source=self.name,
