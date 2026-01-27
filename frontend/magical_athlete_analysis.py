@@ -2106,6 +2106,7 @@ def _(BG_COLOR, alt, np, pl):
             r: get_contrasting_stroke(c) for r, c in racer_to_hex.items()
         }
 
+        # 1. Prepare Data & Domains
         if use_rank_scale:
 
             def _apply_rank_transform(df, col):
@@ -2136,10 +2137,11 @@ def _(BG_COLOR, alt, np, pl):
             df_x, plot_x, ticks_x, vis_ticks_x = _apply_rank_transform(stats_df, x_col)
             chart_df, plot_y, ticks_y, vis_ticks_y = _apply_rank_transform(df_x, y_col)
 
-            scale_x = alt.Scale(
-                domain=[-0.05, 1.05], nice=False, zero=False, reverse=reverse_x
-            )
-            scale_y = alt.Scale(domain=[-0.05, 1.05], nice=False, zero=False)
+            # Rank domains are always [0, 1] (plus padding)
+            dom_x = [-0.05, 1.05]
+            dom_y = [-0.05, 1.05]
+
+            # Custom Axis Labels for Rank Mode
             axis_x = alt.Axis(
                 grid=True,
                 labelExpr=f"datum.value == {vis_ticks_x[0]} ? '{ticks_x[0]:.2f}' : "
@@ -2163,33 +2165,44 @@ def _(BG_COLOR, alt, np, pl):
                 + " format(datum.value, '.2f')",
             )
             mid_x, mid_y = 0.5, 0.5
+
         else:
+            # Absolute Mode
             plot_x, plot_y = x_col, y_col
             chart_df = stats_df
             vals_x, vals_y = (
                 stats_df[x_col].drop_nulls().to_list(),
                 stats_df[y_col].drop_nulls().to_list(),
             )
+
             if not vals_x:
                 return alt.Chart(stats_df).mark_text(text="No Data")
-            min_x, max_x = min(vals_x), max(vals_x)
-            min_y, max_y = min(vals_y), max(vals_y)
-            if min_x == max_x:
-                max_x += 0.01
-                min_x -= 0.01
-            if min_y == max_y:
-                max_y += 0.01
-                min_y -= 0.01
-            pad_x, pad_y = (max_x - min_x) * 0.15, (max_y - min_y) * 0.15
-            dom_x, dom_y = (
-                [min_x - pad_x, max_x + pad_x],
-                [min_y - pad_y, max_y + pad_y],
-            )
-            scale_x = alt.Scale(domain=dom_x, reverse=reverse_x, zero=False)
-            scale_y = alt.Scale(domain=dom_y, zero=False)
-            axis_x, axis_y = alt.Axis(grid=False), alt.Axis(grid=False)
-            mid_x, mid_y = (min_x + max_x) / 2, (min_y + max_y) / 2
 
+            min_x_val, max_x_val = min(vals_x), max(vals_x)
+            min_y_val, max_y_val = min(vals_y), max(vals_y)
+
+            # Avoid singular matrix if all values are same
+            if min_x_val == max_x_val:
+                max_x_val += 0.01
+                min_x_val -= 0.01
+            if min_y_val == max_y_val:
+                max_y_val += 0.01
+                min_y_val -= 0.01
+
+            pad_x = (max_x_val - min_x_val) * 0.15
+            pad_y = (max_y_val - min_y_val) * 0.15
+
+            dom_x = [min_x_val - pad_x, max_x_val + pad_x]
+            dom_y = [min_y_val - pad_y, max_y_val + pad_y]
+
+            axis_x, axis_y = alt.Axis(grid=False), alt.Axis(grid=False)
+            mid_x, mid_y = (min_x_val + max_x_val) / 2, (min_y_val + max_y_val) / 2
+
+        # 2. Build Scales
+        scale_x = alt.Scale(domain=dom_x, reverse=reverse_x, zero=False, nice=False)
+        scale_y = alt.Scale(domain=dom_y, zero=False, nice=False)
+
+        # 3. Add Stroke Data
         chart_df = chart_df.with_columns(
             pl.col("racer_name")
             .map_elements(
@@ -2198,6 +2211,7 @@ def _(BG_COLOR, alt, np, pl):
             .alias("txt_stroke")
         )
 
+        # 4. Reference Lines
         h_line = (
             alt.Chart(pl.DataFrame({"y": [mid_y]}))
             .mark_rule(strokeDash=[4, 4], color="#888")
@@ -2209,6 +2223,7 @@ def _(BG_COLOR, alt, np, pl):
             .encode(x=alt.X("x:Q", scale=scale_x))
         )
 
+        # 5. Points & Labels
         points = (
             alt.Chart(chart_df)
             .mark_circle(size=250, opacity=0.9)
@@ -2240,6 +2255,7 @@ def _(BG_COLOR, alt, np, pl):
             strokeWidth=3,
             opacity=1,
         ).encode(text="racer_name:N", color=alt.value(PLOT_BG))
+
         text_fill = points.mark_text(
             align="center",
             baseline="middle",
@@ -2254,23 +2270,40 @@ def _(BG_COLOR, alt, np, pl):
             ),
         )
 
+        # 6. Quadrant Labels (Fixed Positioning)
         label_layers = []
         if quad_labels and len(quad_labels) == 4:
-            if use_rank_scale:
-                lx, rx = (0.98, 0.02) if reverse_x else (0.02, 0.98)
-                ty, by = 0.98, 0.02
+            # Calculate positions based on the definitive domains we calculated earlier
+            x_min, x_max = dom_x
+            y_min, y_max = dom_y
+
+            # 5% padding from the edges
+            x_range = x_max - x_min
+            y_range = y_max - y_min
+
+            px = x_range * 0.05
+            py = y_range * 0.05
+
+            # Define coordinates (Left/Right, Top/Bottom)
+            # Note: If reverse_x is True, "Left" visually is x_max numerically
+            if reverse_x:
+                left_x = x_max - px
+                right_x = x_min + px
             else:
-                dom_x, dom_y = scale_x.domain, scale_y.domain
-                px, py = (dom_x[1] - dom_x[0]) * 0.05, (dom_y[1] - dom_y[0]) * 0.05
-                lx, rx = (
-                    (
-                        (dom_x[1] - px, dom_x[0] + px)
-                        if reverse_x
-                        else (dom_x[0] + px, dom_x[1] - px)
-                    ),
-                    (dom_y[1] - py, dom_y[0] + py),
-                )
-                ty, by = dom_y[1] - py, dom_y[0] + py
+                left_x = x_min + px
+                right_x = x_max - px
+
+            top_y = y_max - py
+            bottom_y = y_min + py
+
+            # Labels: TL, TR, BL, BR
+            # quad_labels input order: [TL, TR, BL, BR]
+            labels_config = [
+                (left_x, top_y, quad_labels[0], "left", "top"),  # Top-Left
+                (right_x, top_y, quad_labels[1], "right", "top"),  # Top-Right
+                (left_x, bottom_y, quad_labels[2], "left", "bottom"),  # Bottom-Left
+                (right_x, bottom_y, quad_labels[3], "right", "bottom"),  # Bottom-Right
+            ]
 
             text_props = {
                 "fontWeight": "bold",
@@ -2290,12 +2323,7 @@ def _(BG_COLOR, alt, np, pl):
                     )
                 )
 
-            label_layers = [
-                _lbl(lx, ty, quad_labels[0], "left", "top"),
-                _lbl(rx, ty, quad_labels[1], "right", "top"),
-                _lbl(lx, by, quad_labels[2], "left", "bottom"),
-                _lbl(rx, by, quad_labels[3], "right", "bottom"),
-            ]
+            label_layers = [_lbl(*cfg) for cfg in labels_config]
 
         layers = [points, text_outline, text_fill] + label_layers + [h_line, v_line]
         xzoom = alt.selection_interval(bind="scales", encodings=["x"], zoom="wheel!")
@@ -2319,8 +2347,6 @@ def _(df_racer_results_f, df_races_f, mo, pl):
 
     def _calculate_all_data():
         # 0. RECONSTRUCT LEGACY COLUMNS FROM NEW DATA STRUCTURE
-        #    - ability_movement: Net Self Movement (Pos - Neg) for distance calc
-        #    - movement_impact: Total Other Movement (Pos + Neg) for impact calc
         results_augmented = df_racer_results_filtered.with_columns(
             [
                 pl.col("pos_self_ability_movement").fill_null(0),
@@ -2351,20 +2377,14 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             )
         )
 
-        # ---------------------------------------------------------------------
-        # 2. TURN ADVANTAGE BASELINE CALCULATION (NEW)
-        # ---------------------------------------------------------------------
-        # Filter for "The Pack" (Rank > 1, Not Eliminated)
+        # 2. TURN ADVANTAGE BASELINE CALCULATION
         df_pack = results_augmented.filter(
             (pl.col("rank") > 1) & (~pl.col("eliminated"))
         )
-        # Calculate Median Turns per Race
         df_baselines = df_pack.group_by("config_hash").agg(
             pl.col("turns_taken").median().alias("median_turns_baseline")
         )
 
-        # Merge Baseline back to filtered results
-        # Winners/Eliminated get the median of their race's pack
         stats_results = (
             results_augmented.join(df_baselines, on="config_hash", how="left")
             .join(
@@ -2377,12 +2397,9 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             )
         )
 
-        # ---------------------------------------------------------------------
         # 3. METRIC ENRICHMENT
-        # ---------------------------------------------------------------------
         stats_results = (
             stats_results.with_columns(
-                # 3. Convert 0 -> Null for clean division
                 pl.when(pl.col("turns_taken") <= 0)
                 .then(None)
                 .otherwise(pl.col("turns_taken"))
@@ -2393,36 +2410,29 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 .alias("rolling_turns_clean"),
             )
             .with_columns(
-                # A. TOTAL PHYSICAL DISTANCE (Dice + Net Ability Movement)
                 (pl.col("sum_dice_rolled") + pl.col("ability_movement")).alias(
                     "dist_physical"
                 ),
-                # B. TIME GENERATION (Turn Delta)
                 (pl.col("turns_taken") - pl.col("median_turns_baseline")).alias(
                     "turn_delta"
                 ),
-                # C. IMPACT MAGNITUDE
                 (
                     (pl.col("movement_impact") / pl.col("total_turns_clean"))
                     / (pl.col("racer_count") - 1)
                 ).alias("impact_per_opp"),
             )
             .with_columns(
-                # D. RAW SPEED (Distance / Turn)
                 (pl.col("dist_physical") / pl.col("total_turns_clean")).alias(
                     "speed_raw"
                 ),
             )
             .with_columns(
-                # E. EFFECTIVE DISTANCE (Physical + Time Benefit)
-                # Credit = Extra Turns * My Speed
                 (
                     pl.col("dist_physical")
                     + (pl.col("turn_delta") * pl.col("speed_raw"))
                 ).alias("dist_effective"),
             )
             .with_columns(
-                # G. LEGACY METRICS
                 (pl.col("ability_trigger_count") / pl.col("total_turns_clean")).alias(
                     "triggers_per_turn"
                 ),
@@ -2434,8 +2444,6 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 ),
             )
             .with_columns(
-                # F. CONTROL RATIO (Impact / Total Volume)
-                # How much of my "Move Volume" is messing with others?
                 (pl.col("avg_ability_move") + pl.col("impact_per_opp")).alias(
                     "control_ratio"
                 )
@@ -2451,7 +2459,6 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 "race_avg_trip_rate"
             ),
         )
-        # Merge Race Stats
         stats_races = df_working.join(
             race_environment_stats, on="config_hash", how="left"
         ).fill_null(0)
@@ -2525,19 +2532,17 @@ def _(df_racer_results_f, df_races_f, mo, pl):
         corr_df = (
             stats_results.group_by("racer_name")
             .agg(
-                # NEW: Sensitivity to Dice Magnitude
                 pl.corr("dice_per_rolling_turn", "final_vp")
                 .abs()
                 .alias("dice_sensitivity"),
-                # Legacy correlations
                 pl.corr("avg_ability_move", "final_vp").alias(
                     "ability_move_dependency"
                 ),
                 (pl.corr("racer_id", "final_vp") * -1).alias("start_pos_bias"),
                 pl.corr("midgame_relative_pos", "final_vp").alias("midgame_bias"),
-                pl.corr("ability_trigger_count", "final_vp").alias(
-                    "trigger_dependency"
-                ),
+                pl.corr("ability_trigger_count", "final_vp")
+                .abs()
+                .alias("trigger_dependency"),
             )
             .fill_nan(0)
         )
@@ -2559,16 +2564,14 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             )
         )
 
-        # --- B. MATRICES (Matchup Logic) ---
+        # --- B. MATRICES ---
         global_means = final_stats.select(
             ["racer_name", pl.col("mean_vp").alias("my_global_avg")]
         )
-
         subjects = stats_results.select(["config_hash", "racer_name", "final_vp"])
         opponents = stats_results.select(
             [pl.col("config_hash"), pl.col("racer_name").alias("opponent_name")]
         )
-
         matchup_df = (
             subjects.join(opponents, on="config_hash", how="inner")
             .filter(pl.col("racer_name") != pl.col("opponent_name"))
@@ -2586,7 +2589,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             )
         )
 
-        # --- C. ABILITIES BREAKDOWN (New Chart Data) ---
+        # --- C. ABILITIES BREAKDOWN (Revised with Net Benefit) ---
         df_abilities_agg = (
             results_augmented.with_columns(
                 pl.col("turns_taken").max().over("config_hash").alias("race_duration")
@@ -2619,14 +2622,29 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 ]
             )
             .with_columns(
-                [
-                    (pl.col("pos_self_norm") + pl.col("neg_self_norm")).alias(
-                        "total_self_norm"
-                    ),
-                    (pl.col("pos_other_norm") + pl.col("neg_other_norm")).alias(
-                        "total_other_norm"
-                    ),
-                ]
+                # Calculate NET BENEFIT SCORE for sorting
+                # (Good stuff) - (Bad stuff)
+                # Good = abs(pos_self) + abs(neg_other)
+                # Bad  = abs(neg_self) + abs(pos_other)
+                (
+                    (pl.col("pos_self_norm").abs() + pl.col("neg_other_norm").abs())
+                    - (pl.col("neg_self_norm").abs() + pl.col("pos_other_norm").abs())
+                ).alias("net_benefit_score"),
+                # Legacy columns just in case other charts needed them
+                (pl.col("pos_self_norm") + pl.col("neg_self_norm")).alias(
+                    "total_self_norm"
+                ),
+                (pl.col("pos_other_norm") + pl.col("neg_other_norm")).alias(
+                    "total_other_norm"
+                ),
+            )
+            .rename(
+                {
+                    "pos_self_norm": "+ Self",
+                    "neg_self_norm": "- Self",
+                    "pos_other_norm": "+ Others",
+                    "neg_other_norm": "- Others",
+                }
             )
         )
 
@@ -2643,40 +2661,28 @@ def _(df_racer_results_f, df_races_f, mo, pl):
     ) as _spinner:
         dashboard_data = _calculate_all_data()
 
-    # Success message
-    mo.output.replace(
-        mo.md(
-            f"✅ **{df_working.height}** races analyzed.",
-        )
-    )
+    mo.output.replace(mo.md(f"✅ **{df_working.height}** races analyzed."))
     return (dashboard_data,)
 
 
 @app.cell
 def cell_prepare_aggregated_data(alt):
-    # Updated Palette: Accessible, Dark Mode Friendly, Story-Driven
-    # + Self: Teal (Growth)
-    # - Self: Blue (Investment/Cost)
-    # + Other: Gold (Help/Assist)
-    # - Other: Rose (Attack/Harm)
+    METRIC_ORDER = ["+ Self", "- Others", "- Self", "+ Others"]
+
     BAR_CHART_COLORS = alt.Scale(
-        domain=[
-            "pos_self_norm",
-            "neg_self_norm",
-            "pos_other_norm",
-            "neg_other_norm",
-        ],
-        range=["#40B0A6", "#1E88E5", "#FFC107", "#D81B60"],
+        domain=METRIC_ORDER,
+        range=["#40B0A6", "#D81B60", "#1E88E5", "#FFC107"],
     )
 
     X_AXIS_TICK_STEP = 0.5
-    return BAR_CHART_COLORS, X_AXIS_TICK_STEP
+    return BAR_CHART_COLORS, METRIC_ORDER, X_AXIS_TICK_STEP
 
 
 @app.cell
 def cell_show_aggregated_data(
     BAR_CHART_COLORS,
     BG_COLOR,
+    METRIC_ORDER,
     X_AXIS_TICK_STEP,
     alt,
     build_quadrant_chart,
@@ -2703,137 +2709,74 @@ def cell_show_aggregated_data(
     proc_races = dashboard_data["races_raw"]
     abilities_df = dashboard_data["abilities_df"]
 
-    # --- 1. DYNAMIC MATCHUP CHART ---
-    use_pct = matchup_metric_toggle.value
-    metric_col = "percentage_shift" if use_pct else "residual_matchup"
-    metric_title = "Pct Shift vs Own Avg" if use_pct else "Residual vs Own Avg"
-    legend_format = "+.1%" if use_pct else "+.2f"
-
-    c_matrix = (
-        alt.Chart(matchup_df)
-        .mark_rect()
-        .encode(
-            x=alt.X("opponent_name:N", title="Opponent Present"),
-            y=alt.Y("racer_name:N", title="Subject Racer"),
-            color=alt.Color(
-                f"{metric_col}:Q",
-                title=metric_title,
-                scale=alt.Scale(
-                    range=["#AD1457", "#F06292", "#3E3B45", "#42A5F5", "#0D47A1"],
-                    domainMid=0,
-                    interpolate="rgb",
-                ),
-                legend=alt.Legend(format=legend_format),
-            ),
-            tooltip=[
-                "racer_name",
-                "opponent_name",
-                alt.Tooltip("avg_vp_with_opponent:Q", format=".2f"),
-                alt.Tooltip("residual_matchup:Q", format="+.2f"),
-                alt.Tooltip("percentage_shift:Q", format="+.1%"),
-            ],
-        )
-        .properties(
-            title=f"Matchup Matrix ({metric_title})",
-            width="container",
-            height=800,
-            background=BG_COLOR,
-        )
-    )
-
-    # --- 2. HELPERS ---
+    # --- 1. HELPERS ---\n
     r_list = stats["racer_name"].unique().to_list()
     c_list = [get_racer_color(r) for r in r_list]
 
-    # --- 3. GENERATE CHARTS ---
-    # NEW: Diverging Bar Chart (Replaces Archetypes)
-    # Sort
-    df_racer = abilities_df.sort(
-        ["total_self_norm", "total_other_norm"], descending=[True, False]
-    )
+    # --- 2. ABILITY SHIFT CHART (The Bar Chart) ---
+    # Sort by Net Benefit (Good - Bad)
+    df_racer = abilities_df.with_columns(
+        (
+            (pl.col("+ Self").abs() + pl.col("- Others").abs())
+            - (pl.col("- Self").abs() + pl.col("+ Others").abs())
+        ).alias("net_benefit_score")
+    ).sort("net_benefit_score", descending=True)
+
     y_sort_order = df_racer["racer_name"].to_list()
 
-    # Melt
     df_long = df_racer.melt(
         id_vars=["racer_name"],
-        value_vars=[
-            "pos_self_norm",
-            "neg_self_norm",
-            "pos_other_norm",
-            "neg_other_norm",
-        ],
+        value_vars=METRIC_ORDER,
         variable_name="metric",
         value_name="magnitude",
     )
 
-    # Layout Logic
+    # Layout: Good (Left) vs Cost (Right)
     df_long = df_long.with_columns(
         [
-            pl.when(pl.col("metric").is_in(["pos_self_norm", "neg_self_norm"]))
-            .then(-pl.col("magnitude"))
-            .otherwise(pl.col("magnitude"))
+            pl.when(pl.col("metric").is_in(["+ Self", "- Others"]))
+            .then(-pl.col("magnitude").abs())
+            .otherwise(pl.col("magnitude").abs())
             .alias("magnitude_signed"),
-            pl.when(pl.col("metric").is_in(["neg_self_norm", "pos_other_norm"]))
+            pl.when(pl.col("metric").is_in(["+ Self", "- Self"]))
             .then(pl.lit(0))
             .otherwise(pl.lit(1))
             .alias("stack_order"),
         ]
     )
 
-    # Ticks
-    min_val = df_long["magnitude_signed"].min()
-    max_val = df_long["magnitude_signed"].max()
+    # Ticks & Axis
+    min_val, max_val = (
+        df_long["magnitude_signed"].min(),
+        df_long["magnitude_signed"].max(),
+    )
     tick_min = np.floor(min_val) if min_val else 0
     tick_max = np.ceil(max_val) if max_val else 0
     custom_ticks = np.arange(
         tick_min, tick_max + X_AXIS_TICK_STEP, X_AXIS_TICK_STEP
     ).tolist()
 
-    # Build Chart
     y_axis_config = alt.Y("racer_name:N", sort=y_sort_order, axis=None)
-
-    # Use proper racer colors for labels and grid
     racer_color_scale = alt.Scale(domain=r_list, range=c_list)
 
-    # 1. Define the base position.
-    # x=alt.value(140) moves text to the right edge of the 150px container,
-    # significantly reducing the visual gap to the bars.
+    # Labels (Stroke + Fill)
     base_text = alt.Chart(df_racer).encode(y=y_axis_config, x=alt.value(140))
-
-    # 2. The Outline (Stroke) Layer
-    # We draw the text in the background color (thickly) to create the outline
-    name_stroke = base_text.mark_text(
-        align="right",
-        baseline="middle",  # Centers text vertically on the tick
-        dx=0,
-        fontSize=12,
-        fontWeight=800,  # Bold to match other charts
-        stroke=BG_COLOR,  # Use the dashboard background for the outline
-        strokeWidth=3,  # Thickness of the outline
-        opacity=1,
-    ).encode(text="racer_name:N", color=alt.value(BG_COLOR))
-
-    # 3. The Fill Layer
-    # We draw the text again on top in the correct racer color
-    name_fill = base_text.mark_text(
-        align="right", baseline="middle", dx=0, fontSize=12, fontWeight=800
-    ).encode(
-        text="racer_name:N",
-        color=alt.Color("racer_name:N", legend=None, scale=racer_color_scale),
-    )
-
-    # 4. Combine into the final labels chart
-    name_labels = alt.layer(name_stroke, name_fill).properties(width=150, height=800)
-
-    grid_lines = (
-        alt.Chart(df_racer)
-        .mark_rule(strokeWidth=1.5, opacity=0.7)
-        .encode(
-            y=y_axis_config,
+    name_labels = alt.layer(
+        base_text.mark_text(
+            align="right",
+            dx=0,
+            fontSize=12,
+            fontWeight=800,
+            stroke=BG_COLOR,
+            strokeWidth=3,
+        ).encode(text="racer_name:N", color=alt.value(BG_COLOR)),
+        base_text.mark_text(align="right", dx=0, fontSize=12, fontWeight=800).encode(
+            text="racer_name:N",
             color=alt.Color("racer_name:N", legend=None, scale=racer_color_scale),
-        )
-    )
+        ),
+    ).properties(width=150, height=800)
 
+    # Bars
     bar_chart = (
         alt.Chart(df_long)
         .mark_bar()
@@ -2841,7 +2784,7 @@ def cell_show_aggregated_data(
             y=y_axis_config,
             x=alt.X(
                 "magnitude_signed:Q",
-                title="Movement per Turn (Normalized)",
+                title="Movement Impact (Normalized)",
                 axis=alt.Axis(
                     grid=False,
                     labelColor="#E0E0E0",
@@ -2852,6 +2795,7 @@ def cell_show_aggregated_data(
             color=alt.Color(
                 "metric:N",
                 scale=BAR_CHART_COLORS,
+                sort=METRIC_ORDER,
                 legend=alt.Legend(title="Ability Type"),
             ),
             order=alt.Order("stack_order"),
@@ -2863,29 +2807,36 @@ def cell_show_aggregated_data(
         )
     )
 
-    c_ability_breakdown = (
-        alt.layer(grid_lines, bar_chart)
-        .resolve_scale(color="independent")
-        .properties(
-            width=700,
-            height=800,
-            title=alt.TitleParams(
-                "Racer Ability Shift Profile",
-                color="#E0E0E0",
-                anchor="middle",
-            ),
+    grid_lines = (
+        alt.Chart(df_racer)
+        .mark_rule(strokeWidth=1.5, opacity=0.7)
+        .encode(
+            y=y_axis_config,
+            color=alt.Color("racer_name:N", legend=None, scale=racer_color_scale),
         )
     )
 
     final_ability_chart = (
-        alt.hconcat(name_labels, c_ability_breakdown, spacing=0)
+        alt.hconcat(
+            name_labels,
+            alt.layer(grid_lines, bar_chart)
+            .resolve_scale(color="independent")
+            .properties(
+                width=700,
+                height=800,
+                title=alt.TitleParams(
+                    "Racer Ability Shift Profile", color="#E0E0E0", anchor="middle"
+                ),
+            ),
+        )
         .resolve_scale(color="independent")
         .configure_view(strokeWidth=0)
         .configure_legend(labelColor="#E0E0E0", titleColor="#E0E0E0")
         .configure(background="transparent")
     )
 
-    # Existing Charts
+    # --- 3. QUADRANT CHARTS ---
+
     c_consist = build_quadrant_chart(
         stats,
         r_list,
@@ -2893,12 +2844,29 @@ def cell_show_aggregated_data(
         "consistency_score",
         "mean_vp",
         "Consistency",
-        "Stability (% within 1σ)",
+        "Stability (High = Predictable)",
         "Avg VP",
         quad_labels=["Wildcard", "Reliable Winner", "Erratic", "Reliable Loser"],
         use_rank_scale=dynamic_zoom_toggle.value,
         extra_tooltips=[
             alt.Tooltip("std_vp_sigma:Q", format=".2f", title="1σ (Std Dev)")
+        ],
+    )
+
+    c_momentum = build_quadrant_chart(
+        stats,
+        r_list,
+        c_list,
+        "start_pos_bias",
+        "midgame_bias",
+        "Momentum Profile",
+        "Start Pos Bias (High = Needs Pole)",
+        "Mid-Game Bias (High = Surges)",
+        quad_labels=["Late Bloomer", "Snowballer", "Comeback King", "Frontrunner"],
+        use_rank_scale=dynamic_zoom_toggle.value,
+        extra_tooltips=[
+            alt.Tooltip("pct_1st:Q", format=".1%"),
+            alt.Tooltip("mean_vp:Q", format=".2f"),
         ],
     )
 
@@ -2909,44 +2877,28 @@ def cell_show_aggregated_data(
         "avg_race_tightness",
         "avg_race_volatility",
         "Excitement Profile",
-        "Tightness",
-        "Volatility",
+        "Tightness (Left = Close)",
+        "Volatility (Top = Chaos)",
         reverse_x=True,
         quad_labels=["Rubber Band", "Thriller", "Procession", "Stalemate"],
         use_rank_scale=dynamic_zoom_toggle.value,
-    )
-
-    c_momentum = build_quadrant_chart(
-        stats,
-        r_list,
-        c_list,
-        "start_pos_bias",
-        "midgame_bias",
-        "Momentum Profile",
-        "Start Pos Bias",
-        "Mid-Game Bias",
-        quad_labels=["Late Bloomer", "Snowballer", "Comeback King", "Frontrunner"],
-        use_rank_scale=dynamic_zoom_toggle.value,
-        extra_tooltips=[
-            alt.Tooltip("pct_1st:Q", format=".1%"),
-            alt.Tooltip("mean_vp:Q", format=".2f"),
-        ],
     )
 
     c_engine = build_quadrant_chart(
         stats,
         r_list,
         c_list,
-        "triggers_per_turn",
+        "dice_sensitivity",
         "trigger_dependency",
         "Engine Profile",
-        "Activity (Avg Triggers/Turn)",
-        "Efficacy (Corr Triggers/VP)",
+        "Dice Sensitivity",
+        "Ability Sensivity",
         use_rank_scale=dynamic_zoom_toggle.value,
-        quad_labels=["Potent", "Ability Abuser", "Low Reliance", "Spammer"],
+        quad_labels=["Precision Tool", "Unstable", "Independent", "Gambler"],
     )
 
-    # --- 4. GLOBAL DYNAMICS (Restored) ---
+    # --- 4. GLOBAL DYNAMICS & MATRIX ---
+    # Global Dynamics (Bar Charts)
     race_meta = df_races_f.select(["config_hash", "board", "racer_count"])
     races_with_meta = proc_races.join(race_meta, on="config_hash", how="left")
     results_with_meta = proc_results.join(race_meta, on="config_hash", how="left")
@@ -2986,6 +2938,7 @@ def cell_show_aggregated_data(
             "Trip Rate",
         ]
     ).unpivot(index=["board", "racer_count"], variable_name="metric", value_name="val")
+
     global_grp2 = global_wide.select(
         [
             "board",
@@ -3017,6 +2970,7 @@ def cell_show_aggregated_data(
         .resolve_scale(y="independent")
         .properties(width=120, height=200, title="Race Metrics by Board & Player Count")
     )
+
     c_global_2 = (
         alt.Chart(global_grp2)
         .mark_bar()
@@ -3038,11 +2992,50 @@ def cell_show_aggregated_data(
             width=120, height=200, title="Victory Correlations & Ability Usage by Board"
         )
     )
+
     global_ui = mo.vstack(
         [mo.ui.altair_chart(c_global_1), mo.ui.altair_chart(c_global_2)]
     )
 
-    # --- 5. ENVIRONMENT MATRIX (Restored) ---
+    # Matchup Matrix
+    use_pct = matchup_metric_toggle.value
+    metric_col = "percentage_shift" if use_pct else "residual_matchup"
+    metric_title = "Pct Shift vs Own Avg" if use_pct else "Residual vs Own Avg"
+    legend_format = "+.1%" if use_pct else "+.2f"
+
+    c_matrix = (
+        alt.Chart(matchup_df)
+        .mark_rect()
+        .encode(
+            x=alt.X("opponent_name:N", title="Opponent Present"),
+            y=alt.Y("racer_name:N", title="Subject Racer"),
+            color=alt.Color(
+                f"{metric_col}:Q",
+                title=metric_title,
+                scale=alt.Scale(
+                    range=["#AD1457", "#F06292", "#3E3B45", "#42A5F5", "#0D47A1"],
+                    domainMid=0,
+                    interpolate="rgb",
+                ),
+                legend=alt.Legend(format=legend_format),
+            ),
+            tooltip=[
+                "racer_name",
+                "opponent_name",
+                alt.Tooltip("avg_vp_with_opponent:Q", format=".2f"),
+                alt.Tooltip("residual_matchup:Q", format="+.2f"),
+                alt.Tooltip("percentage_shift:Q", format="+.1%"),
+            ],
+        )
+        .properties(
+            title=f"Matchup Matrix ({metric_title})",
+            width="container",
+            height=800,
+            background=BG_COLOR,
+        )
+    )
+
+    # Environment Matrix
     use_pct_env = use_pct
     env_metric_col = "relative_shift" if use_pct_env else "absolute_shift"
     env_metric_title = (
@@ -3077,6 +3070,7 @@ def cell_show_aggregated_data(
             ).alias("env_label"),
         )
     )
+
     sort_order = (
         env_stats.select(["env_label", "board", "racer_count"])
         .unique()
@@ -3125,7 +3119,7 @@ def cell_show_aggregated_data(
         )
     )
 
-    # --- 6. TABLES ---
+    # --- 5. TABLES ---
     master_df = stats.sort("mean_vp", descending=True)
     df_overview = master_df.select(
         pl.col("racer_name").alias("Racer"),
@@ -3160,25 +3154,60 @@ def cell_show_aggregated_data(
     df_vp = master_df.select(
         pl.col("racer_name").alias("Racer"),
         pl.col("mean_vp").round(2).alias("Avg VP"),
-        pl.col("dice_sensitivity").round(2).alias("Dice Sens"),  # NEW
-        pl.col("dice_sensitivity").round(2).alias("Dice Dep (Legacy)"),
+        pl.col("dice_sensitivity").round(2).alias("Dice Sens"),
         pl.col("ability_move_dependency").round(2).alias("Ability Move Dep"),
         pl.col("start_pos_bias").round(2).alias("Start Bias"),
         pl.col("midgame_bias").round(2).alias("MidGame Bias"),
     )
 
-    # --- 7. UI COMPOSITION ---
+    # --- 6. UI COMPOSITION WITH DESCRIPTIONS ---
+
+    desc_ability = mo.md("""
+    **Ability Shift Analysis**
+    *   **Left Side (Beneficial):** `+ Self` (Speed Boosts) and `- Others` (Pushing others/Tripping).  
+    *   **Right Side (Cost/Altruism):** `- Self` (Investments/Cooldowns) and `+ Others` (Helping).  
+    *   **Sorting:** Racers are ordered by Net Benefit (Total Good - Total Cost).
+    """)
+
+    desc_consist = mo.md("""
+    **Consistency Profile**
+    *   **Y-Axis (Avg VP):** How many points they score on average.  
+    *   **X-Axis (Stability):** How reliably they hit that average. High stability means low variance.
+    """)
+
+    desc_momentum = mo.md("""
+    **Momentum Profile**
+    *   **Start Bias:** Does starting earlier help them win more VP?.  
+    *   **Mid-Game Bias:** How many VPs do they gain from from a leading position after 2/3 of the race.
+    """)
+
+    desc_excitement = mo.md("""
+    **Excitement Profile**
+    *   **Tightness:** How close the racers are together throughout the race (Right = Closer).  
+    *   **Volatility:** How much the lead changes (Top = More Chaos).
+    """)
+
+    desc_engine = mo.md("""
+    **Engine Profile**
+    *   **Y-Axis (Ability Sensitivity):** Correlation between using abilities and VP. High = Ability trigger counts decide how many VP are earned.
+    *   **X-Axis (Dice Sensitivity):** Correlation between rolls and VP. High = Needs high (or low) rolls to get VP.
+    """)
+
     left_charts_ui = mo.ui.tabs(
         {
-            "⚡ Ability Shift": final_ability_chart,  # Replaced Archetypes
-            "🎯 Consistency": mo.vstack([dynamic_zoom_toggle, c_consist.interactive()]),
-            "🌊 Momentum": mo.vstack([dynamic_zoom_toggle, c_momentum.interactive()]),
+            "⚡ Ability Shift": mo.vstack([final_ability_chart, desc_ability]),
+            "🎯 Consistency": mo.vstack(
+                [dynamic_zoom_toggle, c_consist.interactive(), desc_consist]
+            ),
+            "🌊 Momentum": mo.vstack(
+                [dynamic_zoom_toggle, c_momentum.interactive(), desc_momentum]
+            ),
             "🔥 Excitement": mo.vstack(
-                [dynamic_zoom_toggle, c_excitement.interactive()]
+                [dynamic_zoom_toggle, c_excitement.interactive(), desc_excitement]
             ),
             "⚙️ Engine": mo.vstack(
-                [dynamic_zoom_toggle, c_engine.interactive()]
-            ),  # Renamed for clarity vs Ability Shift
+                [dynamic_zoom_toggle, c_engine.interactive(), desc_engine]
+            ),
             "🌍 Global": global_ui,
         }
     )
@@ -3186,30 +3215,58 @@ def cell_show_aggregated_data(
     right_ui = mo.ui.tabs(
         {
             "🏆 Overview": mo.vstack(
-                [mo.ui.table(df_overview, selection=None, page_size=50)]
+                [
+                    mo.ui.table(df_overview, selection=None, page_size=50),
+                    mo.md("**Overview**: High-level stats summary."),
+                ]
             ),
             "⚔️ Interactions": mo.vstack(
-                [matchup_metric_toggle, mo.ui.altair_chart(c_matrix)]
+                [
+                    matchup_metric_toggle,
+                    mo.ui.altair_chart(c_matrix),
+                    mo.md(
+                        "**Matchups**: Red = Subject performs worse than usual against this Opponent. Blue = Better."
+                    ),
+                ]
             ),
             "🌍 Environments": mo.vstack(
-                [matchup_metric_toggle, mo.ui.altair_chart(c_env)]
+                [
+                    matchup_metric_toggle,
+                    mo.ui.altair_chart(c_env),
+                    mo.md(
+                        "**Environment**: Performance shifts based on board layout and player count."
+                    ),
+                ]
             ),
             "🏃 Movement": mo.vstack(
                 [
                     mo.ui.table(df_movement, selection=None, page_size=50),
                     mo.md(
-                        """**Eff Dist**: Total Distance + (Time Advantage * Speed). This is the true measure of velocity."""
+                        "**Eff Dist**: Total Distance + (Time Advantage * Speed). This is the true measure of velocity."
                     ),
                 ]
             ),
             "💎 VP Analysis": mo.vstack(
-                [mo.ui.table(df_vp, selection=None, page_size=50)]
+                [
+                    mo.ui.table(df_vp, selection=None, page_size=50),
+                    mo.md(
+                        "**VP Analysis**: Correlations between game factors and final Victory Points."
+                    ),
+                ]
             ),
             "⚡ Abilities": mo.vstack(
-                [mo.ui.table(df_abilities, selection=None, page_size=50)]
+                [
+                    mo.ui.table(df_abilities, selection=None, page_size=50),
+                    mo.md("**Abilities**: Frequency and control stats."),
+                ]
             ),
             "🔥 Dynamics": mo.vstack(
-                [mo.ui.table(df_dynamics, selection=None, page_size=50)]
+                [
+                    mo.ui.table(df_dynamics, selection=None, page_size=50),
+                    mo.md(
+                        "**Dynamics**: How the racer affects the 'feel' of the race (Chaos/Speed)."
+                    ),
+                ]
             ),
         }
     )
