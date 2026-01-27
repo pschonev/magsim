@@ -250,18 +250,14 @@ def _(FEATURES_DERIVED, X_scaled, alt, df_feat, pl, umap):
 @app.cell
 def _(alt, df, pl):
     # --- Constants ---
-    # High-Contrast "Neon" Palette (Optimized for Dark Backgrounds)
-    # Green (Teal), Red (Vermilion), Blue (Sky), Orange (Amber)
     COLOR_BLIND_SCALE = alt.Scale(
         domain=["pos_self_norm", "neg_self_norm", "pos_other_norm", "neg_other_norm"],
         range=["#00D084", "#FF4154", "#3D91F3", "#FF8C00"]
     )
 
-    # --- 1. Aggregation per racer ---
+    # --- 1. Aggregation (Same as before) ---
     df_racer = (
         df
-        # A. Calculate Race Duration (Max turns taken by ANY racer in that race)
-        #    We use 'config_hash' as the race identifier.
         .with_columns(
             pl.col("turns_taken").max().over("config_hash").alias("race_duration")
         )
@@ -271,23 +267,15 @@ def _(alt, df, pl):
             pl.sum("neg_self_ability_movement").alias("neg_self"),
             pl.sum("pos_other_ability_movement").alias("pos_other"),
             pl.sum("neg_other_ability_movement").alias("neg_other"),
-        
-            # Denominators:
-            # For Self: Sum of turns THIS racer took
             pl.sum("turns_taken").alias("total_racer_turns"),
-            # For Other: Sum of durations of races this racer participated in
             pl.sum("race_duration").alias("total_race_turns_sum") 
         ])
         .with_columns([
-            # Normalize SELF by the racer's own turns
             (pl.col("pos_self") / pl.col("total_racer_turns")).alias("pos_self_norm"),
             (pl.col("neg_self") / pl.col("total_racer_turns")).alias("neg_self_norm"),
-        
-            # Normalize OTHER by the sum of race durations
             (pl.col("pos_other") / pl.col("total_race_turns_sum")).alias("pos_other_norm"),
             (pl.col("neg_other") / pl.col("total_race_turns_sum")).alias("neg_other_norm"),
         ])
-        # Compute NORMALIZED Totals for correct sorting
         .with_columns([
             (pl.col("pos_self_norm") + pl.col("neg_self_norm")).alias("total_self_norm"),
             (pl.col("pos_other_norm") + pl.col("neg_other_norm")).alias("total_other_norm"),
@@ -295,11 +283,10 @@ def _(alt, df, pl):
     )
 
     # --- 2. Sort ---
-    # Sort by the NORMALIZED totals (as improved previously)
-    # Primary: total_self_norm (Descending), Secondary: total_other_norm (Ascending)
     df_racer = df_racer.sort(["total_self_norm", "total_other_norm"], descending=[True, False])
+    y_sort_order = df_racer["racer_name"].to_list() 
 
-    # --- 3. Melt to long form ---
+    # --- 3. Melt ---
     df_long = df_racer.melt(
         id_vars=["racer_name"],
         value_vars=["pos_self_norm","neg_self_norm","pos_other_norm","neg_other_norm"],
@@ -309,15 +296,11 @@ def _(alt, df, pl):
 
     # --- 4. Layout Logic ---
     df_long = df_long.with_columns([
-        # Signed Magnitude
         pl.when(pl.col("metric").is_in(["pos_self_norm", "neg_self_norm"]))
         .then(-pl.col("magnitude"))
         .otherwise(pl.col("magnitude"))
         .alias("magnitude_signed"),
 
-        # Stack Order: Common Outside
-        # Inner (0): neg_self, pos_other
-        # Outer (1): pos_self, neg_other
         pl.when(pl.col("metric").is_in(["neg_self_norm", "pos_other_norm"]))
         .then(pl.lit(0))
         .otherwise(pl.lit(1))
@@ -325,63 +308,64 @@ def _(alt, df, pl):
     ])
 
     # --- 5. Charts ---
+    y_axis_config = alt.Y("racer_name:N", sort=y_sort_order, axis=None)
 
-    # A. Horizontal Grid Lines (Colored by Racer)
+    # A. Name Labels (Left Chart)
+    name_labels = (
+        alt.Chart(df_racer)
+        .mark_text(align='right', dx=-5, fontSize=12) 
+        .encode(
+            y=y_axis_config,
+            text="racer_name:N",
+            color=alt.Color("racer_name:N", legend=None, scale=alt.Scale(scheme="tableau20"))
+        )
+        .properties(width=150, height=800) 
+    )
+
+    # B. Main Plot Layers (Right Chart)
+    # Layer 1: Colored Grid Lines
     grid_lines = (
         alt.Chart(df_racer)
         .mark_rule(strokeWidth=1.5, opacity=0.7)
         .encode(
-            y=alt.Y("racer_name:N", sort=df_racer["racer_name"].to_list()),
-            # This generates the Legend for Racer Names
-            color=alt.Color("racer_name:N", legend=alt.Legend(title="Racer Name"), scale=alt.Scale(scheme="tableau20"))
+            y=y_axis_config,
+            color=alt.Color("racer_name:N", legend=None, scale=alt.Scale(scheme="tableau20"))
         )
     )
 
-    # B. Main Bar Chart
+    # Layer 2: Diverging Bars
     bar_chart = (
         alt.Chart(df_long)
         .mark_bar()
         .encode(
-            y=alt.Y("racer_name:N", 
-                    sort=df_racer["racer_name"].to_list(), 
-                    axis=alt.Axis(
-                        labelFontSize=12, 
-                        ticks=False, 
-                        domain=False, 
-                        title=None,
-                        labelColor="#E0E0E0" # Light text for dark mode
-                    )),
+            y=y_axis_config,
             x=alt.X("magnitude_signed:Q", 
                     title="Movement per Turn (Normalized)",
-                    axis=alt.Axis(
-                        grid=False, 
-                        labelColor="#E0E0E0", 
-                        titleColor="#E0E0E0"
-                    )),
+                    axis=alt.Axis(grid=False, labelColor="#E0E0E0", titleColor="#E0E0E0")),
             color=alt.Color("metric:N", scale=COLOR_BLIND_SCALE, legend=alt.Legend(title="Ability Type")),
             order=alt.Order("stack_order"),
             tooltip=["racer_name:N", "metric:N", alt.Tooltip("magnitude:Q", format=".2f")]
         )
     )
 
-    # C. Combine
-    final_chart = (
+    # Combine Grid + Bars and RESOLVE SCALES INDEPENDENTLY
+    # This ensures the Grid keeps its 'racer_name' color and Bars keep their 'metric' color
+    main_plot = (
         alt.layer(grid_lines, bar_chart)
-        .resolve_scale(color='independent') # Allows both Color Legends to exist (Racer & Ability)
+        .resolve_scale(color='independent')
+        .properties(width=900, height=800)
+    )
+
+    # --- 6. Final Concatenation ---
+    final_chart = (
+        alt.hconcat(name_labels, main_plot, spacing=0)
+        # We also resolve independent here to keep the Name Labels safe from the Bars' influence
+        .resolve_scale(color='independent')
         .properties(
-            width=900, 
-            height=800, 
-            title=alt.TitleParams("Diverging Bar Chart: Racer Abilities", color="#E0E0E0")
-        )
-        .configure_axis(
-            grid=False,
-            domain=False
+            title=alt.TitleParams("Diverging Bar Chart: Racer Abilities", color="#E0E0E0", anchor="middle")
         )
         .configure_view(strokeWidth=0)
-        .configure_legend(
-            labelColor="#E0E0E0",
-            titleColor="#E0E0E0"
-        )
+        .configure_legend(labelColor="#E0E0E0", titleColor="#E0E0E0")
     )
 
     final_chart
