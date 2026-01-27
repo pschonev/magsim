@@ -2769,7 +2769,7 @@ def cell_show_aggregated_data(
     y_axis_config = alt.Y("racer_name:N", sort=y_sort_order, axis=None)
     racer_color_scale = alt.Scale(domain=r_list, range=c_list)
 
-    # LAYER 2: The Data Bars
+    # LAYER 2: The Data Bars (Updated with Legend Config)
     bars = (
         alt.Chart(df_long)
         .mark_bar()
@@ -2778,16 +2778,28 @@ def cell_show_aggregated_data(
             x=alt.X(
                 "magnitude_signed:Q",
                 title="Movement Impact (Normalized)",
-                scale=alt.Scale(
-                    domain=[domain_min, domain_max]
-                ),  # Explicit domain fixes the zoom
+                scale=alt.Scale(domain=[domain_min, domain_max]),
                 axis=alt.Axis(grid=False, labelColor="#E0E0E0", titleColor="#E0E0E0"),
             ),
             color=alt.Color(
                 "metric:N",
                 scale=BAR_CHART_COLORS,
                 sort=METRIC_ORDER,
-                legend=alt.Legend(title="Ability Type"),
+                legend=alt.Legend(
+                    title="Ability Type",
+                    orient="none",  # Free positioning
+                    legendX=60,  # 10px from left edge of plot area
+                    legendY=620,  # Near the bottom (assuming height=800)
+                    direction="vertical",
+                    titleColor="#E0E0E0",
+                    labelColor="#E0E0E0",
+                    titleFontSize=16,  # Bigger Title
+                    labelFontSize=14,  # Bigger Labels
+                    symbolSize=200,  # Bigger Colored Squares
+                    fillColor=BG_COLOR,  # Background to block grid lines if any
+                    padding=10,
+                    cornerRadius=5,
+                ),
             ),
             order=alt.Order("stack_order"),
             tooltip=[
