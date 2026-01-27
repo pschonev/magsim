@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 # ==============================================================================
-# VISUALIZATION / FRONTEND TOOLS (Restored)
+# VISUALIZATION / FRONTEND TOOLS (Unchanged)
 # ==============================================================================
 
 
@@ -58,11 +58,6 @@ class StepSnapshot:
 
 @dataclass(slots=True)
 class SnapshotRecorder:
-    """
-    Captures full game state snapshots for frontend visualization/replay.
-    Used primarily in interactive sessions (Notebooks), not batch CLI.
-    """
-
     policy: SnapshotPolicy
     log_source: LogSource
     step_history: list[StepSnapshot] = field(default_factory=list)
@@ -153,7 +148,7 @@ class TurnRecord:
 class MetricsAggregator:
     """
     High-performance aggregator for batch simulations.
-    Uses columnar buffering for position logs to avoid object overhead.
+    Tracks granular movement statistics (Self/Other x Positive/Negative).
     """
 
     config_hash: str
@@ -187,62 +182,88 @@ class MetricsAggregator:
     def _get_result(self, racer_idx: int) -> RacerResult:
         return self.results[racer_idx]
 
+    def _record_movement_bucket(
+        self,
+        responsible_idx: int,
+        target_idx: int,
+        delta: float,
+    ) -> None:
+        """Helper to bucket a movement delta into (Self/Other) x (Pos/Neg)."""
+        if delta == 0:
+            return
+
+        stats = self._get_result(responsible_idx)
+
+        # Self-Movement
+        if responsible_idx == target_idx:
+            if delta > 0:
+                stats.pos_self_ability_movement += delta
+            else:
+                stats.neg_self_ability_movement += abs(delta)
+        # Other-Movement
+        else:
+            if delta > 0:
+                stats.pos_other_ability_movement += delta
+            else:
+                stats.neg_other_ability_movement += abs(delta)
+
     def on_event(self, event: GameEvent, _: GameEngine | None = None) -> None:
-        # --- 1. DIRECT MOVEMENT (Abilities) ---
-        if isinstance(event, (PostMoveEvent, PostWarpEvent)):
-            dist = event.end_tile - event.start_tile
+        match event:
+            # --- 1. DIRECT MOVEMENT (Abilities) ---
+            case PostMoveEvent() | PostWarpEvent():
+                dist = event.end_tile - event.start_tile
+                # Only track if triggered by an ability (responsible_racer_idx is set)
+                if event.responsible_racer_idx is not None:
+                    self._record_movement_bucket(
+                        responsible_idx=event.responsible_racer_idx,
+                        target_idx=event.target_racer_idx,
+                        delta=dist,
+                    )
 
-            # Self-Movement
-            if event.responsible_racer_idx == event.target_racer_idx:
+            # --- 2. BASE VALUE MANIPULATION (Legs / Alchemist) ---
+            case BaseValueModificationEvent():
+                # Base Value Mods are always "Self" movements for the target
+                if event.gain != 0:
+                    self._record_movement_bucket(
+                        responsible_idx=event.target_racer_idx,
+                        target_idx=event.target_racer_idx,
+                        delta=event.gain,
+                    )
+
+            # --- 3. DICE MODIFIERS (Hare / Gunk) ---
+            case RollResultEvent():
                 stats = self._get_result(event.target_racer_idx)
-                stats.ability_movement += dist
+                if event.dice_value is not None:
+                    stats.sum_dice_rolled += event.dice_value
+                    stats.rolling_turns += 1
 
-            # Movement on other racers (Huge Baby / Centaur)
-            elif event.responsible_racer_idx is not None:
-                pusher_stats = self._get_result(event.responsible_racer_idx)
-                pusher_stats.movement_impact += dist
+                for owner_idx, delta in event.modifier_breakdown:
+                    # Treat dice modification as movement
+                    self._record_movement_bucket(
+                        responsible_idx=owner_idx,
+                        target_idx=event.target_racer_idx,
+                        delta=delta,
+                    )
 
-        # --- BASE VALUE MANIPULATION (Legs / Alchemist) ---
-        if isinstance(event, BaseValueModificationEvent):
-            stats = self._get_result(event.target_racer_idx)
-            # Directly add the gain (e.g. +1.5 for Legs, +3 for Alchemist)
-            stats.ability_movement += event.gain
+            # --- 4. ABILITY TRIGGERS ---
+            case AbilityTriggeredEvent():
+                stats = self._get_result(event.responsible_racer_idx)
+                stats.ability_trigger_count += 1
+                if event.responsible_racer_idx == event.target_racer_idx:
+                    stats.ability_self_target_count += 1
 
-        # --- DICE MODIFIERS (Hare / Gunk) ---
-        if isinstance(event, RollResultEvent):
-            stats = self._get_result(event.target_racer_idx)
-            if event.dice_value is not None:
-                stats.sum_dice_rolled += event.dice_value
-                stats.rolling_turns += 1
+            # --- 5. RECOVERY ---
+            case TripRecoveryEvent():
+                stats = self._get_result(event.target_racer_idx)
+                stats.recovery_turns += 1
 
-            for owner_idx, delta in event.modifier_breakdown:
-                if owner_idx == event.target_racer_idx:
-                    # I buffed myself (Hare)
-                    stats.ability_movement += delta
-                else:
-                    # I buffed/nerfed someone else (Gunk)
-                    giver_stats = self._get_result(owner_idx)
-                    giver_stats.movement_impact += delta
+            # --- 6. SKIPS ---
+            case MainMoveSkippedEvent():
+                stats = self._get_result(event.responsible_racer_idx)
+                stats.skipped_main_moves += 1
 
-        if isinstance(event, AbilityTriggeredEvent):
-            stats = self._get_result(event.responsible_racer_idx)
-            stats.ability_trigger_count += 1
-            if event.responsible_racer_idx == event.target_racer_idx:
-                stats.ability_self_target_count += 1
-            if (
-                event.target_racer_idx is not None
-                and event.target_racer_idx != event.responsible_racer_idx
-            ):
-                target_stats = self._get_result(event.target_racer_idx)
-                target_stats.ability_target_count += 1
-
-        if isinstance(event, TripRecoveryEvent):
-            stats = self._get_result(event.target_racer_idx)
-            stats.recovery_turns += 1
-
-        if isinstance(event, MainMoveSkippedEvent):
-            stats = self._get_result(event.responsible_racer_idx)
-            stats.skipped_main_moves += 1
+            case _:
+                pass
 
     def on_turn_end(
         self,
@@ -299,8 +320,6 @@ class MetricsAggregator:
             stats.final_vp = racer.victory_points
             stats.finish_position = racer.finish_position
             stats.eliminated = racer.eliminated
-            # Note: 'finished' isn't on RacerResult in your previous schema,
-            # but is used in your frontend snippet. Add if needed.
             output.append(stats)
         return output
 

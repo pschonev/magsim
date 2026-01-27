@@ -64,18 +64,20 @@ class RacerResult(SQLModel, table=True):
     recovery_turns: int = 0
     skipped_main_moves: int = 0  # Times I was skipped
 
-    # 1. SELF-GENERATED MOVEMENT (The "Speed" Score)
+    # 1. Self-Movement (The "Speed" Score)
     # Sum of:
     # - Physical moves (Scoocher)
     # - Dice Modifiers (Hare)
     # - Base Value Gain (Legs/Alchemist)
-    ability_movement: float = 0.0
+    pos_self_ability_movement: float = 0.0
+    neg_self_ability_movement: float = 0.0
 
-    # 2. MOVEMENT IMPACT (The "Control" Score)
+    # 2. Moving Others (The "Control" Score)
     # Sum of:
     # - Pushing/Pulling/Blocking others
     # - Modifying others' dice
-    movement_impact: float = 0.0
+    pos_other_ability_movement: float = 0.0
+    neg_other_ability_movement: float = 0.0
 
     # Raw Dice Stats (for calculating Re-roll value in frontend)
     sum_dice_rolled: int = 0  # Raw base values
@@ -86,7 +88,6 @@ class RacerResult(SQLModel, table=True):
     # Abilities (Legacy / Detail counts)
     ability_trigger_count: int = 0
     ability_self_target_count: int = 0
-    ability_target_count: int = 0
 
     # Status
     finish_position: int | None = None
