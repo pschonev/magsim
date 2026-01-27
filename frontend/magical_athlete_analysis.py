@@ -2675,7 +2675,7 @@ def cell_prepare_aggregated_data(alt):
     )
 
     X_AXIS_TICK_STEP = 0.5
-    return BAR_CHART_COLORS, METRIC_ORDER, X_AXIS_TICK_STEP
+    return BAR_CHART_COLORS, METRIC_ORDER
 
 
 @app.cell
@@ -2683,7 +2683,6 @@ def cell_show_aggregated_data(
     BAR_CHART_COLORS,
     BG_COLOR,
     METRIC_ORDER,
-    X_AXIS_TICK_STEP,
     alt,
     build_quadrant_chart,
     dashboard_data,
@@ -2692,14 +2691,12 @@ def cell_show_aggregated_data(
     get_racer_color,
     matchup_metric_toggle,
     mo,
-    np,
     pl,
 ):
     # STOP if data is empty (waiting state)
     if df_races_f.height == 0:
         mo.stop(True)
 
-    # If dashboard_data failed to compute for some reason
     if dashboard_data is None:
         mo.stop(True)
 
@@ -2709,11 +2706,11 @@ def cell_show_aggregated_data(
     proc_races = dashboard_data["races_raw"]
     abilities_df = dashboard_data["abilities_df"]
 
-    # --- 1. HELPERS ---\n
+    # --- 1. HELPERS ---
     r_list = stats["racer_name"].unique().to_list()
     c_list = [get_racer_color(r) for r in r_list]
 
-    # --- 2. ABILITY SHIFT CHART (The Bar Chart) ---
+    # --- 2. ABILITY SHIFT CHART (Single Responsive Chart) ---
     # Sort by Net Benefit (Good - Bad)
     df_racer = abilities_df.with_columns(
         (
@@ -2724,6 +2721,7 @@ def cell_show_aggregated_data(
 
     y_sort_order = df_racer["racer_name"].to_list()
 
+    # Melt for Bars
     df_long = df_racer.melt(
         id_vars=["racer_name"],
         value_vars=METRIC_ORDER,
@@ -2731,7 +2729,7 @@ def cell_show_aggregated_data(
         value_name="magnitude",
     )
 
-    # Layout: Good (Left) vs Cost (Right)
+    # Process Data
     df_long = df_long.with_columns(
         [
             pl.when(pl.col("metric").is_in(["+ Self", "- Others"]))
@@ -2745,39 +2743,45 @@ def cell_show_aggregated_data(
         ]
     )
 
-    # Ticks & Axis
-    min_val, max_val = (
-        df_long["magnitude_signed"].min(),
-        df_long["magnitude_signed"].max(),
-    )
-    tick_min = np.floor(min_val) if min_val else 0
-    tick_max = np.ceil(max_val) if max_val else 0
-    custom_ticks = np.arange(
-        tick_min, tick_max + X_AXIS_TICK_STEP, X_AXIS_TICK_STEP
-    ).tolist()
+    # Calculate Axis Range for "Fake" Labels
+    min_data = df_long["magnitude_signed"].min() or 0
+    max_data = df_long["magnitude_signed"].max() or 0
 
-    y_axis_config = alt.Y("racer_name:N", sort=y_sort_order, axis=None)
+    # We place labels at 15% to the left of the minimum bar
+    # If min_data is 0 (unlikely for "Good"), we default to -1
+    label_x_pos = (
+        min_data - (abs(min_data - max_data) * 0.25) if min_data != max_data else -1.0
+    )
+
+    # Merge label position into df_racer for the text layer
+    df_racer = df_racer.with_columns(pl.lit(label_x_pos).alias("label_x"))
+
+    y_axis_config = alt.Y(
+        "racer_name:N", sort=y_sort_order, axis=None
+    )  # Hide default axis
     racer_color_scale = alt.Scale(domain=r_list, range=c_list)
 
-    # Labels (Stroke + Fill)
-    base_text = alt.Chart(df_racer).encode(y=y_axis_config, x=alt.value(140))
-    name_labels = alt.layer(
-        base_text.mark_text(
+    # 1. Text Layer (The "Axis" Labels)
+    # We use a text mark at a calculated X position
+    text_labels = (
+        alt.Chart(df_racer)
+        .mark_text(
             align="right",
-            dx=0,
+            baseline="middle",
+            dx=-10,  # Slight padding
             fontSize=12,
-            fontWeight=800,
-            stroke=BG_COLOR,
-            strokeWidth=3,
-        ).encode(text="racer_name:N", color=alt.value(BG_COLOR)),
-        base_text.mark_text(align="right", dx=0, fontSize=12, fontWeight=800).encode(
+            fontWeight=700,
+        )
+        .encode(
+            y=y_axis_config,
+            x=alt.X("label_x:Q"),  # Positioned manually
             text="racer_name:N",
-            color=alt.Color("racer_name:N", legend=None, scale=racer_color_scale),
-        ),
-    ).properties(width=150, height=800)
+            color=alt.Color("racer_name:N", scale=racer_color_scale, legend=None),
+        )
+    )
 
-    # Bars
-    bar_chart = (
+    # 2. Bar Layer
+    bars = (
         alt.Chart(df_long)
         .mark_bar()
         .encode(
@@ -2785,12 +2789,9 @@ def cell_show_aggregated_data(
             x=alt.X(
                 "magnitude_signed:Q",
                 title="Movement Impact (Normalized)",
-                axis=alt.Axis(
-                    grid=False,
-                    labelColor="#E0E0E0",
-                    titleColor="#E0E0E0",
-                    values=custom_ticks,
-                ),
+                # Ensure the scale covers the labels
+                scale=alt.Scale(domain=[label_x_pos * 1.05, max_data]),
+                axis=alt.Axis(grid=False, labelColor="#E0E0E0", titleColor="#E0E0E0"),
             ),
             color=alt.Color(
                 "metric:N",
@@ -2807,36 +2808,38 @@ def cell_show_aggregated_data(
         )
     )
 
-    grid_lines = (
+    # 3. Grid Lines
+    grid = (
         alt.Chart(df_racer)
-        .mark_rule(strokeWidth=1.5, opacity=0.7)
+        .mark_rule(strokeWidth=1, opacity=0.3)
         .encode(
             y=y_axis_config,
-            color=alt.Color("racer_name:N", legend=None, scale=racer_color_scale),
+            x=alt.value(0),  # Just a vertical line at 0? No, full row lines.
+            # Actually, for row lines we need a rule spanning the width?
+            # Simpler: just color the Y axis ticks? No, we hid them.
+            # Let's just use a vertical rule at 0 for reference.
         )
     )
+    zero_line = (
+        alt.Chart(pl.DataFrame({"x": [0]})).mark_rule(color="#666").encode(x="x:Q")
+    )
 
+    # Combine into ONE chart
+    # This enables true responsive resizing because it's a single container
     final_ability_chart = (
-        alt.hconcat(
-            name_labels,
-            alt.layer(grid_lines, bar_chart)
-            .resolve_scale(color="independent")
-            .properties(
-                width=700,
-                height=800,
-                title=alt.TitleParams(
-                    "Racer Ability Shift Profile", color="#E0E0E0", anchor="middle"
-                ),
-            ),
-        )
+        alt.layer(bars, text_labels, zero_line)
         .resolve_scale(color="independent")
-        .configure_view(strokeWidth=0)
-        .configure_legend(labelColor="#E0E0E0", titleColor="#E0E0E0")
-        .configure(background="transparent")
+        .properties(
+            width="container",  # This now works reliably!
+            height=800,
+            title=alt.TitleParams(
+                "Racer Ability Shift Profile", color="#E0E0E0", anchor="middle"
+            ),
+            background="transparent",
+        )
     )
 
     # --- 3. QUADRANT CHARTS ---
-
     c_consist = build_quadrant_chart(
         stats,
         r_list,
@@ -2844,7 +2847,7 @@ def cell_show_aggregated_data(
         "consistency_score",
         "mean_vp",
         "Consistency",
-        "Stability (High = Predictable)",
+        "Stability",
         "Avg VP",
         quad_labels=["Wildcard", "Reliable Winner", "Erratic", "Reliable Loser"],
         use_rank_scale=dynamic_zoom_toggle.value,
@@ -2860,8 +2863,8 @@ def cell_show_aggregated_data(
         "start_pos_bias",
         "midgame_bias",
         "Momentum Profile",
-        "Start Pos Bias (High = Needs Pole)",
-        "Mid-Game Bias (High = Surges)",
+        "Start Pos Bias",
+        "Mid-Game Bias",
         quad_labels=["Late Bloomer", "Snowballer", "Comeback King", "Frontrunner"],
         use_rank_scale=dynamic_zoom_toggle.value,
         extra_tooltips=[
@@ -2877,8 +2880,8 @@ def cell_show_aggregated_data(
         "avg_race_tightness",
         "avg_race_volatility",
         "Excitement Profile",
-        "Tightness (Left = Close)",
-        "Volatility (Top = Chaos)",
+        "Tightness",
+        "Volatility",
         reverse_x=True,
         quad_labels=["Rubber Band", "Thriller", "Procession", "Stalemate"],
         use_rank_scale=dynamic_zoom_toggle.value,
@@ -2892,13 +2895,12 @@ def cell_show_aggregated_data(
         "trigger_dependency",
         "Engine Profile",
         "Dice Sensitivity",
-        "Ability Sensivity",
+        "Ability Efficacy",
         use_rank_scale=dynamic_zoom_toggle.value,
-        quad_labels=["Precision Tool", "Unstable", "Independent", "Gambler"],
+        quad_labels=["Technician", "Rocket", "Passenger", "Gambler"],
     )
 
-    # --- 4. GLOBAL DYNAMICS & MATRIX ---
-    # Global Dynamics (Bar Charts)
+    # --- 4. GLOBAL DYNAMICS ---
     race_meta = df_races_f.select(["config_hash", "board", "racer_count"])
     races_with_meta = proc_races.join(race_meta, on="config_hash", how="left")
     results_with_meta = proc_results.join(race_meta, on="config_hash", how="left")
@@ -2968,7 +2970,12 @@ def cell_show_aggregated_data(
             ],
         )
         .resolve_scale(y="independent")
-        .properties(width=120, height=200, title="Race Metrics by Board & Player Count")
+        .properties(
+            width=120,
+            height=200,
+            title="Race Metrics by Board & Player Count",
+            background="transparent",
+        )
     )
 
     c_global_2 = (
@@ -2989,7 +2996,10 @@ def cell_show_aggregated_data(
         )
         .resolve_scale(y="independent")
         .properties(
-            width=120, height=200, title="Victory Correlations & Ability Usage by Board"
+            width=120,
+            height=200,
+            title="Victory Correlations & Ability Usage by Board",
+            background="transparent",
         )
     )
 
@@ -3160,37 +3170,37 @@ def cell_show_aggregated_data(
         pl.col("midgame_bias").round(2).alias("MidGame Bias"),
     )
 
-    # --- 6. UI COMPOSITION WITH DESCRIPTIONS ---
+    # --- 6. UI COMPOSITION ---
 
     desc_ability = mo.md("""
     **Ability Shift Analysis**
-    *   **Left Side (Beneficial):** `+ Self` (Speed Boosts) and `- Others` (Pushing others/Tripping).  
-    *   **Right Side (Cost/Altruism):** `- Self` (Investments/Cooldowns) and `+ Others` (Helping).  
+    *   **Left Side (Beneficial):** `+ Self` (Speed Boosts) and `- Others` (Attacks/Slows).
+    *   **Right Side (Cost/Altruism):** `- Self` (Investments/Cooldowns) and `+ Others` (Helping).
     *   **Sorting:** Racers are ordered by Net Benefit (Total Good - Total Cost).
     """)
 
     desc_consist = mo.md("""
     **Consistency Profile**
-    *   **Y-Axis (Avg VP):** How many points they score on average.  
+    *   **Y-Axis (Avg VP):** How many points they score on average.
     *   **X-Axis (Stability):** How reliably they hit that average. High stability means low variance.
     """)
 
     desc_momentum = mo.md("""
     **Momentum Profile**
-    *   **Start Bias:** Does starting earlier help them win more VP?.  
-    *   **Mid-Game Bias:** How many VPs do they gain from from a leading position after 2/3 of the race.
+    *   **Start Bias:** Does starting 1st help them win? (Frontrunners vs Late Bloomers).
+    *   **Mid-Game Bias:** Do they gain positions mid-race? (Snowballers).
     """)
 
     desc_excitement = mo.md("""
     **Excitement Profile**
-    *   **Tightness:** How close the racers are together throughout the race (Right = Closer).  
+    *   **Tightness:** How close the scores are at the end (Left = Closer).
     *   **Volatility:** How much the lead changes (Top = More Chaos).
     """)
 
     desc_engine = mo.md("""
     **Engine Profile**
-    *   **Y-Axis (Ability Sensitivity):** Correlation between using abilities and VP. High = Ability trigger counts decide how many VP are earned.
-    *   **X-Axis (Dice Sensitivity):** Correlation between rolls and VP. High = Needs high (or low) rolls to get VP.
+    *   **Y-Axis (Efficacy):** Correlation between using abilities and Winning. High = Abilities determine the win.
+    *   **X-Axis (Dice Sens):** Correlation between high rolls and Winning. High = Needs good rolls to win.
     """)
 
     left_charts_ui = mo.ui.tabs(
