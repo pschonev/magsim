@@ -124,7 +124,6 @@ def _(FEATURES_DERIVED, FEATURES_RAW, df, pl):
         pl.all().null_count()
     )
 
-
     return (df_feat,)
 
 
@@ -208,7 +207,6 @@ def _(FEATURES_DERIVED, TSNE, X_scaled, alt, df_feat, pl):
         height=600,
         title="t-SNE (composition-focused, exploratory)",
     )
-
     return
 
 
@@ -243,7 +241,6 @@ def _(FEATURES_DERIVED, X_scaled, alt, df_feat, pl, umap):
         height=600,
         title="UMAP on Derived Ability Space",
     )
-
     return
 
 
@@ -369,7 +366,6 @@ def _(alt, df, pl):
     )
 
     final_chart
-
     return
 
 
