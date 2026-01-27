@@ -2070,22 +2070,6 @@ def cell_filter_data(
 
 
 @app.cell
-def cell_prepare_aggregated_data(alt):
-    BAR_CHART_COLORS = alt.Scale(
-        domain=[
-            "pos_self_norm",
-            "neg_self_norm",
-            "pos_other_norm",
-            "neg_other_norm",
-        ],
-        range=["#59A14F", "#76B7B2", "#F28E2B", "#E15759"],
-    )
-
-    X_AXIS_TICK_STEP = 0.5
-    return BAR_CHART_COLORS, X_AXIS_TICK_STEP
-
-
-@app.cell
 def _(BG_COLOR, alt, np, pl):
     def get_contrasting_stroke(hex_color):
         if not hex_color or not hex_color.startswith("#"):
@@ -2669,6 +2653,27 @@ def _(df_racer_results_f, df_races_f, mo, pl):
 
 
 @app.cell
+def cell_prepare_aggregated_data(alt):
+    # Updated Palette: Accessible, Dark Mode Friendly, Story-Driven
+    # + Self: Teal (Growth)
+    # - Self: Blue (Investment/Cost)
+    # + Other: Gold (Help/Assist)
+    # - Other: Rose (Attack/Harm)
+    BAR_CHART_COLORS = alt.Scale(
+        domain=[
+            "pos_self_norm",
+            "neg_self_norm",
+            "pos_other_norm",
+            "neg_other_norm",
+        ],
+        range=["#40B0A6", "#1E88E5", "#FFC107", "#D81B60"],
+    )
+
+    X_AXIS_TICK_STEP = 0.5
+    return BAR_CHART_COLORS, X_AXIS_TICK_STEP
+
+
+@app.cell
 def cell_show_aggregated_data(
     BAR_CHART_COLORS,
     BG_COLOR,
@@ -2790,16 +2795,35 @@ def cell_show_aggregated_data(
     # Use proper racer colors for labels and grid
     racer_color_scale = alt.Scale(domain=r_list, range=c_list)
 
-    name_labels = (
-        alt.Chart(df_racer)
-        .mark_text(align="right", dx=-5, fontSize=12)
-        .encode(
-            y=y_axis_config,
-            text="racer_name:N",
-            color=alt.Color("racer_name:N", legend=None, scale=racer_color_scale),
-        )
-        .properties(width=150, height=800)
+    # 1. Define the base position.
+    # x=alt.value(140) moves text to the right edge of the 150px container,
+    # significantly reducing the visual gap to the bars.
+    base_text = alt.Chart(df_racer).encode(y=y_axis_config, x=alt.value(140))
+
+    # 2. The Outline (Stroke) Layer
+    # We draw the text in the background color (thickly) to create the outline
+    name_stroke = base_text.mark_text(
+        align="right",
+        baseline="middle",  # Centers text vertically on the tick
+        dx=0,
+        fontSize=12,
+        fontWeight=800,  # Bold to match other charts
+        stroke=BG_COLOR,  # Use the dashboard background for the outline
+        strokeWidth=3,  # Thickness of the outline
+        opacity=1,
+    ).encode(text="racer_name:N", color=alt.value(BG_COLOR))
+
+    # 3. The Fill Layer
+    # We draw the text again on top in the correct racer color
+    name_fill = base_text.mark_text(
+        align="right", baseline="middle", dx=0, fontSize=12, fontWeight=800
+    ).encode(
+        text="racer_name:N",
+        color=alt.Color("racer_name:N", legend=None, scale=racer_color_scale),
     )
+
+    # 4. Combine into the final labels chart
+    name_labels = alt.layer(name_stroke, name_fill).properties(width=150, height=800)
 
     grid_lines = (
         alt.Chart(df_racer)
