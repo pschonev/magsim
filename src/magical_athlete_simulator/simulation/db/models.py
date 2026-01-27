@@ -88,6 +88,7 @@ class RacerResult(SQLModel, table=True):
     # Abilities (Legacy / Detail counts)
     ability_trigger_count: int = 0
     ability_self_target_count: int = 0
+    ability_own_turn_count: int = 0
 
     # Status
     finish_position: int | None = None

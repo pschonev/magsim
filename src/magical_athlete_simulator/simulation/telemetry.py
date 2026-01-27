@@ -207,7 +207,7 @@ class MetricsAggregator:
             else:
                 stats.neg_other_ability_movement += abs(delta)
 
-    def on_event(self, event: GameEvent, _: GameEngine | None = None) -> None:
+    def on_event(self, event: GameEvent, engine: GameEngine) -> None:
         match event:
             # --- 1. DIRECT MOVEMENT (Abilities) ---
             case PostMoveEvent() | PostWarpEvent():
@@ -251,6 +251,8 @@ class MetricsAggregator:
                 stats.ability_trigger_count += 1
                 if event.responsible_racer_idx == event.target_racer_idx:
                     stats.ability_self_target_count += 1
+                if event.responsible_racer_idx == engine.state.current_racer_idx:
+                    stats.ability_own_turn_count += 1
 
             # --- 5. RECOVERY ---
             case TripRecoveryEvent():

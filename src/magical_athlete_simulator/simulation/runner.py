@@ -75,13 +75,13 @@ def run_single_simulation(
 
     turn_counter = 0
 
-    def on_event_processed(_: GameEngine, event: GameEvent):
-        aggregator.on_event(event=event)
+    def on_event_processed(engine: GameEngine, event: GameEvent):
+        aggregator.on_event(event=event, engine=engine)
 
     engine.on_event_processed = on_event_processed
 
-    def bridge_notification_event(event: GameEvent, _owner: int, _eng: GameEngine):
-        aggregator.on_event(event=event)
+    def bridge_notification_event(event: GameEvent, _owner: int, engine: GameEngine):
+        aggregator.on_event(event=event, engine=engine)
 
     engine.subscribe(PostMoveEvent, bridge_notification_event, owner_idx=-1)
     engine.subscribe(PostWarpEvent, bridge_notification_event, owner_idx=-1)
