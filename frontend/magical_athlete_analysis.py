@@ -2729,7 +2729,7 @@ def cell_show_aggregated_data(
         value_name="magnitude",
     )
 
-    # Process Data
+    # Process Data & Calculate Signed Magnitude
     df_long = df_long.with_columns(
         [
             pl.when(pl.col("metric").is_in(["+ Self", "- Others"]))
@@ -2743,44 +2743,33 @@ def cell_show_aggregated_data(
         ]
     )
 
-    # Calculate Axis Range for "Fake" Labels
-    min_data = df_long["magnitude_signed"].min() or 0
-    max_data = df_long["magnitude_signed"].max() or 0
-
-    # We place labels at 15% to the left of the minimum bar
-    # If min_data is 0 (unlikely for "Good"), we default to -1
-    label_x_pos = (
-        min_data - (abs(min_data - max_data) * 0.25) if min_data != max_data else -1.0
+    # --- CALCULATE LEFT EDGES FOR TEXT PLACEMENT ---
+    # 1. Find the sum of negative values (the left-most point of the bar stack)
+    neg_sums = (
+        df_long.filter(pl.col("magnitude_signed") < 0)
+        .group_by("racer_name")
+        .agg(pl.col("magnitude_signed").sum().alias("left_edge"))
     )
 
-    # Merge label position into df_racer for the text layer
-    df_racer = df_racer.with_columns(pl.lit(label_x_pos).alias("label_x"))
+    # 2. Join back. If a racer has no negative bars (only boosts), their left edge is 0.
+    df_racer = df_racer.join(neg_sums, on="racer_name", how="left").with_columns(
+        pl.col("left_edge").fill_null(0),
+        (pl.arange(0, pl.len()) % 2).alias("row_parity"),  # 0 or 1 for stripes
+    )
 
-    y_axis_config = alt.Y(
-        "racer_name:N", sort=y_sort_order, axis=None
-    )  # Hide default axis
+    # 3. Calculate Scale Domain
+    # We need the axis to start slightly to the left of the longest name
+    global_min_edge = df_racer["left_edge"].min()
+    global_max_val = df_long["magnitude_signed"].max()
+
+    # Heuristic: Add 30% padding to the left of the min value for text
+    domain_min = global_min_edge * 1.35 if global_min_edge < 0 else -1.0
+    domain_max = global_max_val * 1.05
+
+    y_axis_config = alt.Y("racer_name:N", sort=y_sort_order, axis=None)
     racer_color_scale = alt.Scale(domain=r_list, range=c_list)
 
-    # 1. Text Layer (The "Axis" Labels)
-    # We use a text mark at a calculated X position
-    text_labels = (
-        alt.Chart(df_racer)
-        .mark_text(
-            align="right",
-            baseline="middle",
-            dx=-10,  # Slight padding
-            fontSize=12,
-            fontWeight=700,
-        )
-        .encode(
-            y=y_axis_config,
-            x=alt.X("label_x:Q"),  # Positioned manually
-            text="racer_name:N",
-            color=alt.Color("racer_name:N", scale=racer_color_scale, legend=None),
-        )
-    )
-
-    # 2. Bar Layer
+    # LAYER 2: The Data Bars
     bars = (
         alt.Chart(df_long)
         .mark_bar()
@@ -2789,8 +2778,9 @@ def cell_show_aggregated_data(
             x=alt.X(
                 "magnitude_signed:Q",
                 title="Movement Impact (Normalized)",
-                # Ensure the scale covers the labels
-                scale=alt.Scale(domain=[label_x_pos * 1.05, max_data]),
+                scale=alt.Scale(
+                    domain=[domain_min, domain_max]
+                ),  # Explicit domain fixes the zoom
                 axis=alt.Axis(grid=False, labelColor="#E0E0E0", titleColor="#E0E0E0"),
             ),
             color=alt.Color(
@@ -2808,29 +2798,38 @@ def cell_show_aggregated_data(
         )
     )
 
-    # 3. Grid Lines
-    grid = (
+    # LAYER 3: The Text Labels (Racer Names)
+    # Positioned exactly at the 'left_edge' of the bar stack
+    text_labels = (
         alt.Chart(df_racer)
-        .mark_rule(strokeWidth=1, opacity=0.3)
+        .mark_text(
+            align="right",
+            baseline="middle",
+            dx=-8,  # 8px padding between text and bar
+            fontSize=12,
+            fontWeight=700,
+        )
         .encode(
             y=y_axis_config,
-            x=alt.value(0),  # Just a vertical line at 0? No, full row lines.
-            # Actually, for row lines we need a rule spanning the width?
-            # Simpler: just color the Y axis ticks? No, we hid them.
-            # Let's just use a vertical rule at 0 for reference.
+            x=alt.X("left_edge:Q"),
+            text="racer_name:N",
+            color=alt.Color("racer_name:N", scale=racer_color_scale, legend=None),
         )
     )
+
+    # LAYER 4: Zero Line Reference
     zero_line = (
-        alt.Chart(pl.DataFrame({"x": [0]})).mark_rule(color="#666").encode(x="x:Q")
+        alt.Chart(pl.DataFrame({"x": [0]}))
+        .mark_rule(color="#888", strokeDash=[2, 2])
+        .encode(x="x:Q")
     )
 
-    # Combine into ONE chart
-    # This enables true responsive resizing because it's a single container
+    # Combine
     final_ability_chart = (
-        alt.layer(bars, text_labels, zero_line)
+        alt.layer(bars, zero_line, text_labels)
         .resolve_scale(color="independent")
         .properties(
-            width="container",  # This now works reliably!
+            width="container",
             height=800,
             title=alt.TitleParams(
                 "Racer Ability Shift Profile", color="#E0E0E0", anchor="middle"
@@ -3205,10 +3204,10 @@ def cell_show_aggregated_data(
 
     left_charts_ui = mo.ui.tabs(
         {
-            "⚡ Ability Shift": mo.vstack([final_ability_chart, desc_ability]),
             "🎯 Consistency": mo.vstack(
                 [dynamic_zoom_toggle, c_consist.interactive(), desc_consist]
             ),
+            "⚡ Ability Movement": mo.vstack([final_ability_chart, desc_ability]),
             "🌊 Momentum": mo.vstack(
                 [dynamic_zoom_toggle, c_momentum.interactive(), desc_momentum]
             ),
