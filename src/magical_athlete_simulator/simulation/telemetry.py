@@ -256,13 +256,31 @@ class MetricsAggregator:
 
             # --- 5. RECOVERY ---
             case TripRecoveryEvent():
-                stats = self._get_result(event.target_racer_idx)
-                stats.recovery_turns += 1
+                stats_tripped_racer = self._get_result(event.target_racer_idx)
+                stats_tripped_racer.recovery_turns += 1
+
+                for tripping_racer_idx in event.tripping_racers:
+                    if tripping_racer_idx is not None:
+                        stats_tripper = self._get_result(tripping_racer_idx)
+                        if tripping_racer_idx == event.target_racer_idx:
+                            stats_tripper.skipped_self_main_move += len(
+                                event.tripping_racers,
+                            )
+                        else:
+                            stats_tripper.skipped_other_main_move += len(
+                                event.tripping_racers,
+                            )
 
             # --- 6. SKIPS ---
             case MainMoveSkippedEvent():
-                stats = self._get_result(event.responsible_racer_idx)
-                stats.skipped_main_moves += 1
+                stats_skipped_racer = self._get_result(event.target_racer_idx)
+                stats_skipping_racer = self._get_result(event.responsible_racer_idx)
+                stats_skipped_racer.skipped_main_moves += 1
+
+                if event.responsible_racer_idx == event.target_racer_idx:
+                    stats_skipped_racer.skipped_self_main_move += 1
+                else:
+                    stats_skipping_racer.skipped_other_main_move += 1
 
             case _:
                 pass

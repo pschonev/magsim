@@ -134,7 +134,7 @@ class RollResultEvent(GameEvent, HasTargetRacer):
 
 
 @dataclass(frozen=True, kw_only=True)
-class MainMoveSkippedEvent(GameEvent):
+class MainMoveSkippedEvent(GameEvent, HasTargetRacer):
     responsible_racer_idx: int
     phase: Phase = Phase.ROLL_DICE
 
@@ -188,7 +188,12 @@ class TripCmdEvent(GameEvent, EmitsAbilityTriggeredEvent, HasTargetRacer): ...
 
 
 @dataclass(frozen=True)
+class PostTripEvent(GameEvent, HasTargetRacer): ...
+
+
+@dataclass(frozen=True)
 class TripRecoveryEvent(GameEvent, HasTargetRacer):
+    tripping_racers: list[int | None] = field(default_factory=list)
     phase: Phase = Phase.PRE_MAIN
 
 

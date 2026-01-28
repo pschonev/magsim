@@ -83,7 +83,11 @@ class HareHubris(Ability, LifecycleManagedMixin):
         # Check if strictly last (no ties)
         max_others = max(r.position for r in others)
         if me.position > max_others:
-            engine.skip_main_move(owner_idx, source=self.name)
+            engine.skip_main_move(
+                responsible_racer_idx=owner_idx,
+                source=self.name,
+                skipped_racer_idx=owner_idx,
+            )
             engine.log_info("Hare is sole leader! Hubris triggers - skips main move.")
             return AbilityTriggeredEvent(
                 responsible_racer_idx=owner_idx,

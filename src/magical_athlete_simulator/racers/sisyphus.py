@@ -58,7 +58,11 @@ class SisyphusCurse(Ability, SetupPhaseMixin):
             )
 
             # 2. Lose Main Move
-            engine.skip_main_move(owner_idx, source=self.name)
+            engine.skip_main_move(
+                responsible_racer_idx=owner_idx,
+                source=self.name,
+                skipped_racer_idx=owner_idx,
+            )
 
             # 3. Lose 1 VP
             if racer.victory_points > 0:

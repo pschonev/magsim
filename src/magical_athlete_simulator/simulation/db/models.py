@@ -72,6 +72,8 @@ class RacerResult(SQLModel, table=True):
     pos_self_ability_movement: float = 0.0
     neg_self_ability_movement: float = 0.0
 
+    skipped_self_main_move: float = 0.0
+
     # 2. Moving Others (The "Control" Score)
     # Sum of:
     # - Pushing/Pulling/Blocking others
@@ -79,13 +81,15 @@ class RacerResult(SQLModel, table=True):
     pos_other_ability_movement: float = 0.0
     neg_other_ability_movement: float = 0.0
 
+    skipped_other_main_move: float = 0.0  # time I skipped someone else
+
     # Raw Dice Stats (for calculating Re-roll value in frontend)
     sum_dice_rolled: int = 0  # Raw base values
     rolling_turns: int = 0  # Count of rolls
 
     # --------------------------------------------------------------------------
 
-    # Abilities (Legacy / Detail counts)
+    # Abilities
     ability_trigger_count: int = 0
     ability_self_target_count: int = 0
     ability_own_turn_count: int = 0

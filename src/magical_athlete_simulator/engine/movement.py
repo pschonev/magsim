@@ -9,6 +9,7 @@ from magical_athlete_simulator.core.events import (
     PassingEvent,
     Phase,
     PostMoveEvent,
+    PostTripEvent,
     PostWarpEvent,
     PreMoveEvent,
     PreWarpEvent,
@@ -459,7 +460,14 @@ def handle_trip_cmd(engine: GameEngine, evt: TripCmdEvent):
     racer = engine.get_racer(evt.target_racer_idx)
 
     # If already tripped or finished, do nothing AND emit nothing.
-    if not racer.active or racer.tripped:
+    if not racer.active:
+        return
+
+    # whoever did the tripping will be added as responsible for trip,
+    # regardless of whether already tripped
+    racer.tripping_racers.append(evt.responsible_racer_idx)
+
+    if racer.tripped:
         return
 
     # Apply effect
@@ -469,6 +477,16 @@ def handle_trip_cmd(engine: GameEngine, evt: TripCmdEvent):
     if evt.emit_ability_triggered != "never":
         engine.push_event(
             event=AbilityTriggeredEvent.from_event(evt),
+        )
+    if evt.responsible_racer_idx is not None and engine.on_event_processed is not None:
+        engine.on_event_processed(
+            engine,
+            PostTripEvent(
+                responsible_racer_idx=evt.responsible_racer_idx,
+                source=evt.source,
+                target_racer_idx=evt.target_racer_idx,
+                phase=evt.phase,
+            ),
         )
 
 

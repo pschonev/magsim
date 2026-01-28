@@ -75,7 +75,11 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
         )
 
         # FlipFlop skips main move when using his ability
-        engine.skip_main_move(owner_idx, self.name)
+        engine.skip_main_move(
+            responsible_racer_idx=owner_idx,
+            source=self.name,
+            skipped_racer_idx=owner_idx,
+        )
 
         return "skip_trigger"
 

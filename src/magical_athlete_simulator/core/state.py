@@ -39,6 +39,7 @@ class RacerState:
     position: int = 0
     victory_points: int = 0
     tripped: bool = False
+    tripping_racers: list[int | None] = field(default_factory=list)
 
     # rolls
     main_move_consumed: bool = False
