@@ -2346,7 +2346,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
     df_racer_results_filtered = df_racer_results_f
 
     def _calculate_all_data():
-        # 0. PREP & FILL NULLS
+        # 0. PREP
         results_augmented = (
             df_racer_results_filtered.with_columns(
                 [
@@ -2382,7 +2382,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             )
         )
 
-        # 1. TRUTH SOURCE
+        # 1. TRUTH
         global_win_rates = (
             results_augmented.group_by("racer_name")
             .agg(
@@ -2400,7 +2400,6 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             .group_by("config_hash")
             .agg(pl.col("turns_taken").median().alias("median_turns_baseline"))
         )
-
         stats_results = results_augmented.join(
             df_baselines, on="config_hash", how="left"
         ).with_columns(
@@ -2411,7 +2410,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             .alias("total_turns_clean"),
         )
 
-        # 3. RACE ENVIRONMENT
+        # 3. RACE ENV
         race_meta_stats = df_working.select(
             [
                 "config_hash",
@@ -2480,7 +2479,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                     (pl.col("final_vp") - pl.col("mean_vp_mu")).abs()
                     <= pl.col("std_vp_sigma")
                 )
-                .alias("is_consistent"),
+                .alias("is_consistent")
             )
             .group_by("racer_name")
             .agg(
@@ -2625,18 +2624,11 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             )
         )
 
-        # --- D. NEW: DISTRIBUTION DATA FOR FACETED CHART ---
-        # 1. Aggregate Total VP per Race
+        # --- D. NEW: DISTRIBUTION DATA (PERCENTAGE NORMALIZED & LABELED) ---
         race_vp_agg = results_augmented.group_by("config_hash").agg(
             pl.col("final_vp").sum().alias("total_race_vp")
         )
-
-        # 2. Join with Races Data
-        dist_base = stats_races.join(
-            race_vp_agg,
-            on="config_hash",
-            how="inner",
-        ).select(
+        dist_base = stats_races.join(race_vp_agg, on="config_hash", how="inner").select(
             [
                 "config_hash",
                 "board",
@@ -2646,67 +2638,92 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             ]
         )
 
-        # 3. Simple numeric binning (0..9) for both metrics, shared per full dataset
+        # Limits & Steps
         n_bins = 10
-
         turns_min = float(dist_base["race_global_turns"].min())
         turns_max = float(dist_base["race_global_turns"].max())
         vp_min = float(dist_base["total_race_vp"].min())
         vp_max = float(dist_base["total_race_vp"].max())
-
         turns_step = (turns_max - turns_min) / n_bins if turns_max > turns_min else 1.0
         vp_step = (vp_max - vp_min) / n_bins if vp_max > vp_min else 1.0
 
+        # Binning & Labeling
+        def add_bins(df, col, min_v, step_v, prefix):
+            idx = (
+                ((pl.col(col) - min_v) / step_v)
+                .floor()
+                .cast(pl.Int64)
+                .clip(0, n_bins - 1)
+            )
+            start = (pl.lit(min_v) + idx * pl.lit(step_v)).round(0).cast(pl.Int64)
+            end = (start + pl.lit(step_v)).round(0).cast(pl.Int64)
+            label = start.cast(pl.Utf8) + pl.lit("-") + end.cast(pl.Utf8)
+            return [idx.alias(f"{prefix}_idx"), label.alias(f"{prefix}_label")]
+
         dist_binned = dist_base.with_columns(
-            [
-                (
-                    ((pl.col("race_global_turns") - turns_min) / turns_step)
-                    .floor()
-                    .cast(pl.Int64)
-                    .clip(0, n_bins - 1)
-                ).alias("turns_bin_idx"),
-                (
-                    ((pl.col("total_race_vp") - vp_min) / vp_step)
-                    .floor()
-                    .cast(pl.Int64)
-                    .clip(0, n_bins - 1)
-                ).alias("vp_bin_idx"),
+            add_bins(dist_base, "race_global_turns", turns_min, turns_step, "turns")
+            + add_bins(dist_base, "total_race_vp", vp_min, vp_step, "vp")
+        )
+
+        def make_long_dist(df, group_cols):
+            # Compute a safe grouping list (at least one key)
+            if len(group_cols) == 0:
+                df = df.with_columns(pl.lit(1).alias("_grp"))
+                group_cols_eff = ["_grp"]
+            else:
+                group_cols_eff = group_cols
+
+            # Turns (Up)
+            t = (
+                df.group_by(group_cols_eff + ["turns_idx", "turns_label"])
+                .agg(pl.len().alias("count"))
+                .with_columns(
+                    (
+                        pl.col("count") / pl.col("count").sum().over(group_cols_eff)
+                    ).alias("pct"),
+                    pl.col("turns_idx").alias("bin_index"),
+                    pl.col("turns_label").alias("bin_label"),
+                    pl.lit("Game Length (Turns)").alias("series_type"),
+                    pl.lit(1).alias("direction"),
+                )
+            )
+
+            # VP (Down)
+            v = (
+                df.group_by(group_cols_eff + ["vp_idx", "vp_label"])
+                .agg(pl.len().alias("count"))
+                .with_columns(
+                    (
+                        pl.col("count") / pl.col("count").sum().over(group_cols_eff)
+                    ).alias("pct"),
+                    pl.col("vp_idx").alias("bin_index"),
+                    pl.col("vp_label").alias("bin_label"),
+                    pl.lit("Total VP").alias("series_type"),
+                    pl.lit(-1).alias("direction"),
+                )
+            )
+
+            # Columns to keep (drop the helper _grp if present)
+            base_cols = group_cols_eff + [
+                "bin_index",
+                "bin_label",
+                "series_type",
+                "pct",
+                "direction",
             ]
-        )
+            out = pl.concat([t.select(base_cols), v.select(base_cols)])
 
-        # 4. Aggregate Counts – enforce identical schema explicitly
-        agg_turns = (
-            dist_binned.group_by(["board", "racer_count", "turns_bin_idx"])
-            .agg(pl.len().alias("count"))
-            .with_columns(
-                [
-                    pl.col("board").cast(pl.Utf8),
-                    pl.col("racer_count").cast(pl.Int64),
-                    pl.col("turns_bin_idx").cast(pl.Int64).alias("bin_index"),
-                    pl.lit("Game Length (Turns)").cast(pl.Utf8).alias("series_type"),
-                    pl.col("count").cast(pl.Int64).alias("value"),
-                ]
-            )
-            .select(["board", "racer_count", "bin_index", "series_type", "value"])
-        )
+            if "_grp" in out.columns:
+                out = out.drop("_grp")
 
-        agg_vp = (
-            dist_binned.group_by(["board", "racer_count", "vp_bin_idx"])
-            .agg(pl.len().alias("count"))
-            .with_columns(
-                [
-                    pl.col("board").cast(pl.Utf8),
-                    pl.col("racer_count").cast(pl.Int64),
-                    pl.col("vp_bin_idx").cast(pl.Int64).alias("bin_index"),
-                    pl.lit("Total Victory Points").cast(pl.Utf8).alias("series_type"),
-                    (pl.col("count").cast(pl.Int64) * -1).alias("value"),
-                ]
-            )
-            .select(["board", "racer_count", "bin_index", "series_type", "value"])
-        )
+            return out
 
-        # 5. Now concat with guaranteed identical dtypes
-        df_dist_long = pl.concat([agg_turns, agg_vp])
+        # 1. Faceted Distribution
+        df_dist_faceted = make_long_dist(dist_binned, ["board", "racer_count"])
+
+        # 2. Global Distribution (One big chart)
+        # We dummy the group cols to reuse logic easily or just pass empty list
+        df_dist_global = make_long_dist(dist_binned, [])
 
         return {
             "stats": final_stats,
@@ -2714,7 +2731,8 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             "results_raw": stats_results,
             "races_raw": stats_races,
             "abilities_df": df_abilities_agg,
-            "dist_long": df_dist_long,
+            "dist_faceted": df_dist_faceted,
+            "dist_global": df_dist_global,
         }
 
     with mo.status.spinner(
@@ -2765,7 +2783,8 @@ def cell_show_aggregated_data(
     proc_results = dashboard_data["results_raw"]
     proc_races = dashboard_data["races_raw"]
     abilities_df = dashboard_data["abilities_df"]
-    df_dist_long = dashboard_data["dist_long"]
+    df_dist_faceted = dashboard_data["dist_faceted"]
+    df_dist_global = dashboard_data["dist_global"]
 
     # --- 1. HELPERS ---
     r_list = stats["racer_name"].unique().to_list()
@@ -2778,7 +2797,6 @@ def cell_show_aggregated_data(
             - (pl.col("- Self").abs() + pl.col("+ Others").abs())
         ).alias("net_benefit_score")
     ).sort("net_benefit_score", descending=True)
-
     y_sort_order = df_racer["racer_name"].to_list()
     df_long = df_racer.melt(
         id_vars=["racer_name"],
@@ -2786,7 +2804,6 @@ def cell_show_aggregated_data(
         variable_name="metric",
         value_name="magnitude",
     )
-
     df_long = df_long.with_columns(
         [
             pl.when(pl.col("metric").is_in(["+ Self", "- Others"]))
@@ -2799,7 +2816,6 @@ def cell_show_aggregated_data(
             .alias("stack_order"),
         ]
     )
-
     neg_sums = (
         df_long.filter(pl.col("magnitude_signed") < 0)
         .group_by("racer_name")
@@ -2808,14 +2824,11 @@ def cell_show_aggregated_data(
     df_racer = df_racer.join(neg_sums, on="racer_name", how="left").with_columns(
         pl.col("left_edge").fill_null(0)
     )
-
     global_min_edge = df_racer["left_edge"].min()
     global_max_val = df_long["magnitude_signed"].max()
     domain_min = global_min_edge * 1.35 if global_min_edge < 0 else -1.0
     domain_max = global_max_val * 1.05
-
     y_axis_config = alt.Y("racer_name:N", sort=y_sort_order, axis=None)
-    racer_color_scale = alt.Scale(domain=r_list, range=c_list)
 
     bars = (
         alt.Chart(df_long)
@@ -2840,12 +2853,6 @@ def cell_show_aggregated_data(
                     direction="vertical",
                     titleColor="#E0E0E0",
                     labelColor="#E0E0E0",
-                    titleFontSize=16,
-                    labelFontSize=14,
-                    symbolSize=200,
-                    fillColor=BG_COLOR,
-                    padding=10,
-                    cornerRadius=5,
                 ),
             ),
             order=alt.Order("stack_order"),
@@ -2863,23 +2870,26 @@ def cell_show_aggregated_data(
             y=y_axis_config,
             x=alt.X("left_edge:Q"),
             text="racer_name:N",
-            color=alt.Color("racer_name:N", scale=racer_color_scale, legend=None),
+            color=alt.Color(
+                "racer_name:N",
+                scale=alt.Scale(domain=r_list, range=c_list),
+                legend=None,
+            ),
         )
     )
-    zero_line = (
-        alt.Chart(pl.DataFrame({"x": [0]}))
-        .mark_rule(color="#888", strokeDash=[2, 2])
-        .encode(x="x:Q")
-    )
     final_ability_chart = (
-        alt.layer(bars, zero_line, text_labels)
+        alt.layer(
+            bars,
+            alt.Chart(pl.DataFrame({"x": [0]}))
+            .mark_rule(color="#888", strokeDash=[2, 2])
+            .encode(x="x:Q"),
+            text_labels,
+        )
         .resolve_scale(color="independent")
         .properties(
             width="container",
             height=800,
-            title=alt.TitleParams(
-                "Racer Ability Shift Profile", color="#E0E0E0", anchor="middle"
-            ),
+            title=alt.TitleParams("Racer Ability Shift Profile", color="#E0E0E0"),
             background="transparent",
         )
     )
@@ -2896,9 +2906,7 @@ def cell_show_aggregated_data(
         "Avg VP",
         quad_labels=["Wildcard", "Reliable Winner", "Erratic", "Reliable Loser"],
         use_rank_scale=dynamic_zoom_toggle.value,
-        extra_tooltips=[
-            alt.Tooltip("std_vp_sigma:Q", format=".2f", title="1σ (Std Dev)")
-        ],
+        extra_tooltips=[alt.Tooltip("std_vp_sigma:Q", format=".2f")],
     )
     c_momentum = build_quadrant_chart(
         stats,
@@ -2944,7 +2952,7 @@ def cell_show_aggregated_data(
 
     # --- 4. GLOBAL DYNAMICS ---
     race_meta = df_races_f.select(["config_hash", "board", "racer_count"])
-    results_with_meta = proc_results.join(race_meta, on="config_hash", how="left")
+    joined_env = proc_results.join(race_meta, on="config_hash", how="inner")
 
     race_level_agg = proc_races.group_by(["board", "racer_count"]).agg(
         pl.col("race_global_turns").mean().alias("Avg Turns"),
@@ -2954,7 +2962,7 @@ def cell_show_aggregated_data(
         pl.col("race_avg_triggers").mean().alias("Abilities Triggered"),
     )
     result_level_agg = (
-        results_with_meta.group_by(["board", "racer_count"])
+        joined_env.group_by(["board", "racer_count"])
         .agg(
             pl.col("final_vp").mean().alias("Avg VP"),
             pl.corr("sum_dice_rolled", "final_vp").alias("Dice Dep"),
@@ -2964,35 +2972,26 @@ def cell_show_aggregated_data(
         )
         .fill_nan(0)
     )
+
     global_wide = race_level_agg.join(
         result_level_agg, on=["board", "racer_count"], how="inner"
     ).fill_nan(0)
-
-    global_grp1 = global_wide.select(
-        [
-            "board",
-            "racer_count",
-            "Avg VP",
-            "Avg Turns",
-            "Tightness",
-            "Volatility",
-            "Trip Rate",
-        ]
-    ).unpivot(index=["board", "racer_count"], variable_name="metric", value_name="val")
-    global_grp2 = global_wide.select(
-        [
-            "board",
-            "racer_count",
-            "Dice Dep",
-            "Ability Dep",
-            "Start Bias",
-            "MidGame Bias",
-            "Abilities Triggered",
-        ]
-    ).unpivot(index=["board", "racer_count"], variable_name="metric", value_name="val")
-
     c_global_1 = (
-        alt.Chart(global_grp1)
+        alt.Chart(
+            global_wide.select(
+                [
+                    "board",
+                    "racer_count",
+                    "Avg VP",
+                    "Avg Turns",
+                    "Tightness",
+                    "Volatility",
+                    "Trip Rate",
+                ]
+            ).unpivot(
+                index=["board", "racer_count"], variable_name="metric", value_name="val"
+            )
+        )
         .mark_bar()
         .encode(
             x=alt.X("board:N", title="Board", axis=alt.Axis(labelAngle=0)),
@@ -3009,14 +3008,25 @@ def cell_show_aggregated_data(
         )
         .resolve_scale(y="independent")
         .properties(
-            width=120,
-            height=200,
-            title="Race Metrics by Board & Player Count",
-            background="transparent",
+            width=120, height=200, title="Race Metrics", background="transparent"
         )
     )
     c_global_2 = (
-        alt.Chart(global_grp2)
+        alt.Chart(
+            global_wide.select(
+                [
+                    "board",
+                    "racer_count",
+                    "Dice Dep",
+                    "Ability Dep",
+                    "Start Bias",
+                    "MidGame Bias",
+                    "Abilities Triggered",
+                ]
+            ).unpivot(
+                index=["board", "racer_count"], variable_name="metric", value_name="val"
+            )
+        )
         .mark_bar()
         .encode(
             x=alt.X("board:N", title="Board", axis=alt.Axis(labelAngle=0)),
@@ -3035,94 +3045,132 @@ def cell_show_aggregated_data(
         .properties(
             width=120,
             height=200,
-            title="Victory Correlations & Ability Usage by Board",
+            title="Victory Correlations",
             background="transparent",
         )
     )
-    global_ui = mo.vstack(
-        [mo.ui.altair_chart(c_global_1), mo.ui.altair_chart(c_global_2)]
+
+    # --- 4.5 DISTRIBUTIONS (Global & Faceted) ---
+    dist_scale = alt.Scale(
+        domain=["Game Length (Turns)", "Total VP"],
+        range=["#42A5F5", "#EF5350"],
     )
 
-    # --- 4.5 NEW: DISTRIBUTIONS FACET ---
-    c_dist = (
-        alt.Chart(df_dist_long)
-        .mark_bar()
-        .encode(
-            x=alt.X(
-                "bin_index:O", title="Bin (Low -> High)", axis=alt.Axis(labelAngle=0)
-            ),
-            y=alt.Y("value:Q", title="Count (Up: Turns, Down: VP)"),
-            color=alt.Color(
-                "series_type:N",
-                title="Metric",
-                scale=alt.Scale(
-                    domain=["Game Length (Turns)", "Total Victory Points"],
-                    range=["#42A5F5", "#EF5350"],
+    def build_dist_chart(data, w, h, title):
+        # NOTE: Do NOT pass `data` into alt.Chart() here.
+        # We pass it to the layer() at the end to support faceting.
+        base = (
+            alt.Chart()
+            .transform_calculate(pct_signed="datum.pct * datum.direction")
+            .mark_bar()
+            .encode(
+                x=alt.X(
+                    "bin_index:O",
+                    title="Bin Range (Low → High)",
+                    axis=alt.Axis(labelAngle=0),
                 ),
-            ),
-            tooltip=[
-                "board",
-                "racer_count",
-                "series_type",
-                alt.Tooltip("value:Q", format="d"),
-            ],
+                y=alt.Y(
+                    "pct_signed:Q",
+                    title="Proportion %",
+                    axis=alt.Axis(format="%"),
+                ),
+                color=alt.Color(
+                    "series_type:N",
+                    title=None,
+                    scale=dist_scale,
+                ),
+                tooltip=[
+                    alt.Tooltip("series_type:N", title="Metric"),
+                    alt.Tooltip("bin_label:N", title="Range"),
+                    alt.Tooltip("pct:Q", title="Percent", format=".1%"),
+                ],
+            )
+            .properties(
+                width=w,
+                height=h,
+                title=title,
+            )
         )
-        .properties(width=180, height=180)
+
+        # Use alt.datum(0) to draw the rule without needing a separate DataFrame.
+        # This prevents the "Multiple data sources in faceted chart" error.
+        rule = (
+            alt.Chart().mark_rule(color="#FFFFFF", opacity=0.3).encode(y=alt.datum(0))
+        )
+
+        # Data is attached to the LayerChart, which Facet can then partition.
+        return alt.layer(base, rule, data=data)
+
+    # Global Chart (Big)
+    c_dist_global = build_dist_chart(
+        df_dist_global,
+        w=600,
+        h=250,
+        title="Global Distribution: Game Length vs Total VP (All Games)",
+    ).configure_view(stroke=None)
+
+    # Faceted Chart (by board & player count)
+    c_dist_faceted = (
+        build_dist_chart(
+            df_dist_faceted,
+            w=140,
+            h=140,
+            title="",
+        )
         .facet(
             row=alt.Row("board:N", title="Board"),
             column=alt.Column("racer_count:N", title="Player Count"),
         )
-        .resolve_scale(y="independent")
+        .configure_view(stroke=None)
     )
 
-    # Matchup & Env
+    global_ui = mo.vstack(
+        [
+            mo.md("### 📊 Global Averages"),
+            mo.ui.altair_chart(c_global_1),
+            mo.ui.altair_chart(c_global_2),
+            mo.md("### 📉 Global Distributions"),
+            mo.ui.altair_chart(c_dist_global),
+            mo.md("### 🧩 Board & Player Distributions"),
+            mo.ui.altair_chart(c_dist_faceted),
+        ]
+    )
+
+    # --- 5. MATCHUPS & ENV ---
     use_pct = matchup_metric_toggle.value
     metric_col = "percentage_shift" if use_pct else "residual_matchup"
     c_matrix = (
         alt.Chart(matchup_df)
         .mark_rect()
         .encode(
-            x=alt.X("opponent_name:N", title="Opponent Present"),
-            y=alt.Y("racer_name:N", title="Subject Racer"),
+            x=alt.X("opponent_name:N"),
+            y=alt.Y("racer_name:N"),
             color=alt.Color(
                 f"{metric_col}:Q",
-                title=("Pct Shift" if use_pct else "Residual"),
                 scale=alt.Scale(
                     range=["#AD1457", "#F06292", "#3E3B45", "#42A5F5", "#0D47A1"],
                     domainMid=0,
-                    interpolate="rgb",
                 ),
                 legend=alt.Legend(format=("+.1%" if use_pct else "+.2f")),
             ),
             tooltip=[
                 "racer_name",
                 "opponent_name",
-                alt.Tooltip("avg_vp_with_opponent:Q", format=".2f"),
-                alt.Tooltip("residual_matchup:Q", format="+.2f"),
                 alt.Tooltip("percentage_shift:Q", format="+.1%"),
             ],
         )
         .properties(
-            title=f"Matchup Matrix", width="container", height=800, background=BG_COLOR
+            title="Matchup Matrix", width="container", height=800, background=BG_COLOR
         )
     )
 
-    env_metric_col = "relative_shift" if use_pct else "absolute_shift"
-
-    # Rebuild the joined results + meta inside this cell
-    race_meta = df_races_f.select(["config_hash", "board", "racer_count"])
-    joined_env = proc_results.join(race_meta, on="config_hash", how="inner")
-
+    # Rebuild env_stats locally (fixed joined error)
     racer_baselines = joined_env.group_by("racer_name").agg(
         pl.col("final_vp").mean().alias("racer_global_avg_vp")
     )
-
     env_stats = (
         joined_env.group_by(["racer_name", "board", "racer_count"])
-        .agg(
-            pl.col("final_vp").mean().alias("cond_avg_vp"),
-            pl.col("final_vp").count().alias("sample_size"),
-        )
+        .agg(pl.col("final_vp").mean().alias("cond_avg_vp"))
         .join(racer_baselines, on="racer_name", how="left")
         .with_columns(
             (
@@ -3139,104 +3187,72 @@ def cell_show_aggregated_data(
             ).alias("env_label"),
         )
     )
-
-    sort_order = (
-        env_stats.select(["env_label", "board", "racer_count"])
-        .unique()
-        .sort(["board", "racer_count"])
-        .get_column("env_label")
-        .to_list()
-    )
     c_env = (
         alt.Chart(env_stats)
         .mark_rect()
         .encode(
-            x=alt.X(
-                "env_label:N",
-                title="Environment",
-                sort=sort_order,
-                axis=alt.Axis(labelAngle=0, labelLimit=180),
-            ),
-            y=alt.Y("racer_name:N", title="Racer"),
+            x=alt.X("env_label:N", sort=env_stats["env_label"].unique().to_list()),
+            y=alt.Y("racer_name:N"),
             color=alt.Color(
-                f"{env_metric_col}:Q",
-                title=("Shift %" if use_pct else "Shift VP"),
+                f"{('relative_shift' if use_pct else 'absolute_shift')}:Q",
                 scale=alt.Scale(
                     range=["#AD1457", "#F06292", "#3E3B45", "#42A5F5", "#0D47A1"],
                     domainMid=0,
-                    interpolate="rgb",
                 ),
                 legend=alt.Legend(format=(".0%" if use_pct else "+.2f")),
             ),
             tooltip=[
                 "racer_name:N",
-                "board:N",
-                "racer_count:N",
-                alt.Tooltip("cond_avg_vp:Q", format=".2f"),
-                alt.Tooltip("absolute_shift:Q", format="+.2f"),
+                "env_label:N",
                 alt.Tooltip("relative_shift:Q", format="+.1%"),
             ],
         )
         .properties(
-            title=f"Env Adaptability",
-            width="container",
-            height=680,
-            background=BG_COLOR,
+            title="Env Adaptability", width="container", height=680, background=BG_COLOR
         )
     )
 
-    # --- 5. TABLES ---
+    # --- 6. TABLES ---
     master_df = stats.sort("mean_vp", descending=True)
     df_overview = master_df.select(
-        pl.col("racer_name").alias("Racer"),
-        pl.col("mean_vp").round(2).alias("Avg VP"),
+        pl.col("racer_name"),
+        pl.col("mean_vp").round(2),
         (pl.col("consistency_score") * 100).round(1).alias("Consist%"),
         (pl.col("pct_1st") * 100).round(1).alias("1st%"),
-        (pl.col("pct_2nd") * 100).round(1).alias("2nd%"),
-        pl.col("races_run").alias("# Races"),
+        pl.col("races_run"),
     )
     df_movement = master_df.select(
-        pl.col("racer_name").alias("Racer"),
-        pl.col("avg_speed_raw").round(2).alias("Speed (Raw)"),
-        pl.col("avg_net_movement").round(2).alias("Rel Speed (Net)"),
+        pl.col("racer_name"),
+        pl.col("avg_speed_raw").round(2),
+        pl.col("avg_net_movement").round(2).alias("Rel Speed"),
         (pl.col("avg_active_turns_pct") * 100).round(1).alias("Active Turns %"),
         pl.col("avg_pos_self").round(2).alias("Abil +Self"),
-        pl.col("avg_neg_self").round(2).alias("Abil -Self"),
     )
     df_abilities = master_df.select(
-        pl.col("racer_name").alias("Racer"),
-        pl.col("triggers_per_turn").round(2).alias("Trig/Turn"),
-        pl.col("self_targets_per_turn").round(2).alias("Self-Targ/Turn"),
-        pl.col("own_turn_triggers_per_turn").round(2).alias("OwnTurn Trig/Turn"),
-        pl.col("avg_pos_other").round(2).alias("Abil +Other"),
-        pl.col("avg_neg_other").round(2).alias("Abil -Other"),
+        pl.col("racer_name"),
+        pl.col("triggers_per_turn").round(2),
+        pl.col("self_targets_per_turn").round(2),
+        pl.col("avg_pos_other").round(2),
     )
     df_dynamics = master_df.select(
-        pl.col("racer_name").alias("Racer"),
-        pl.col("avg_race_volatility").round(2).alias("Volatility"),
-        pl.col("avg_race_tightness").round(2).alias("Tightness"),
-        pl.col("avg_game_duration").round(1).alias("Avg Game Len"),
-        pl.col("avg_env_triggers").round(1).alias("Race Trigs"),
-        (pl.col("avg_env_trip_rate") * 100).round(1).alias("Race Trip%"),
+        pl.col("racer_name"),
+        pl.col("avg_race_volatility").round(2),
+        pl.col("avg_race_tightness").round(2),
+        pl.col("avg_game_duration").round(1),
     )
     df_vp = master_df.select(
-        pl.col("racer_name").alias("Racer"),
-        pl.col("mean_vp").round(2).alias("Avg VP"),
-        pl.col("dice_sensitivity").round(2).alias("Dice Sens"),
-        pl.col("trigger_dependency").round(2).alias("Ability Trig Sens"),
-        pl.col("start_pos_bias").round(2).alias("Start Bias"),
-        pl.col("midgame_bias").round(2).alias("MidGame Bias"),
+        pl.col("racer_name"),
+        pl.col("mean_vp").round(2),
+        pl.col("dice_sensitivity").round(2),
+        pl.col("trigger_dependency").round(2),
     )
 
-    # --- 6. UI COMPOSITION ---
+    # --- UI ---
     desc_ability = mo.md("""**Ability Shift Analysis**...""")
     desc_consist = mo.md("""**Consistency Profile**...""")
     desc_momentum = mo.md("""**Momentum Profile**...""")
     desc_excitement = mo.md("""**Excitement Profile**...""")
     desc_engine = mo.md("""**Engine Profile**...""")
-    desc_dist = mo.md(
-        """**Game Distributions**: Top (Blue) = Game Length in Turns. Bottom (Red) = Total VP Scored by All Players. Aligned by bin index (Low -> High)."""
-    )
 
     left_charts_ui = mo.ui.tabs(
         {
@@ -3254,7 +3270,6 @@ def cell_show_aggregated_data(
                 [dynamic_zoom_toggle, c_engine.interactive(), desc_engine]
             ),
             "🌍 Global": global_ui,
-            "📊 Distributions": mo.vstack([mo.ui.altair_chart(c_dist), desc_dist]),
         }
     )
 
@@ -3262,56 +3277,46 @@ def cell_show_aggregated_data(
         {
             "🏆 Overview": mo.vstack(
                 [
-                    mo.ui.table(df_overview, selection=None, page_size=50),
-                    mo.md("**Overview**: High-level stats summary."),
+                    mo.ui.table(df_overview, page_size=20),
+                    mo.md("**Overview**: Summary stats."),
                 ]
             ),
             "⚔️ Interactions": mo.vstack(
                 [
                     matchup_metric_toggle,
                     mo.ui.altair_chart(c_matrix),
-                    mo.md(
-                        "**Matchups**: Red = Subject performs worse than usual against this Opponent. Blue = Better."
-                    ),
+                    mo.md("**Matchups**: Subject vs Opponent."),
                 ]
             ),
             "🌍 Environments": mo.vstack(
                 [
                     matchup_metric_toggle,
                     mo.ui.altair_chart(c_env),
-                    mo.md(
-                        "**Environment**: Performance shifts based on board layout and player count."
-                    ),
+                    mo.md("**Environment**: Board/Player Count effects."),
                 ]
             ),
             "🏃 Movement": mo.vstack(
                 [
-                    mo.ui.table(df_movement, selection=None, page_size=50),
-                    mo.md(
-                        "**Eff Dist**: Total Distance + (Time Advantage * Speed). This is the true measure of velocity."
-                    ),
+                    mo.ui.table(df_movement, page_size=20),
+                    mo.md("**Movement**: Speed & Efficiency."),
                 ]
             ),
             "💎 VP Analysis": mo.vstack(
                 [
-                    mo.ui.table(df_vp, selection=None, page_size=50),
-                    mo.md(
-                        "**VP Analysis**: Correlations between game factors and final Victory Points."
-                    ),
+                    mo.ui.table(df_vp, page_size=20),
+                    mo.md("**VP Analysis**: Correlations."),
                 ]
             ),
             "⚡ Abilities": mo.vstack(
                 [
-                    mo.ui.table(df_abilities, selection=None, page_size=50),
-                    mo.md("**Abilities**: Frequency and control stats."),
+                    mo.ui.table(df_abilities, page_size=20),
+                    mo.md("**Abilities**: Triggers & Control."),
                 ]
             ),
             "🔥 Dynamics": mo.vstack(
                 [
-                    mo.ui.table(df_dynamics, selection=None, page_size=50),
-                    mo.md(
-                        "**Dynamics**: How the racer affects the 'feel' of the race (Chaos/Speed)."
-                    ),
+                    mo.ui.table(df_dynamics, page_size=20),
+                    mo.md("**Dynamics**: Chaos & Duration."),
                 ]
             ),
         }
