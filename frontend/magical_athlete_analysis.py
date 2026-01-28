@@ -2135,7 +2135,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
         global_win_rates = (
             results_augmented.group_by("racer_name")
             .agg(
-                (pl.col("rank") == 1).sum().alias("total_wins"),
+                (pl.col("finish_position") == 1).sum().alias("total_wins"),
                 pl.len().alias("total_races"),
             )
             .with_columns(
@@ -2145,7 +2145,9 @@ def _(df_racer_results_f, df_races_f, mo, pl):
 
         # 2. BASELINE
         df_baselines = (
-            results_augmented.filter((pl.col("rank") > 1) & (~pl.col("eliminated")))
+            results_augmented.filter(
+                (~pl.col("finish_position") == 1) & (~pl.col("eliminated"))
+            )
             .group_by("config_hash")
             .agg(pl.col("turns_taken").median().alias("median_turns_baseline"))
         )
@@ -2243,8 +2245,8 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             .group_by("racer_name")
             .agg(
                 pl.col("final_vp").mean().alias("mean_vp"),
-                (pl.col("rank") == 1).sum().alias("cnt_1st"),
-                (pl.col("rank") == 2).sum().alias("cnt_2nd"),
+                (pl.col("finish_position") == 1).sum().alias("cnt_1st"),
+                (pl.col("finish_position") == 2).sum().alias("cnt_2nd"),
                 pl.len().alias("races_run"),
                 pl.col("tightness_score").mean().alias("avg_race_tightness"),
                 pl.col("volatility_score").mean().alias("avg_race_volatility"),
@@ -2343,11 +2345,8 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                     pl.col("neg_self_ability_movement").sum().alias("neg_self"),
                     pl.col("pos_other_ability_movement").sum().alias("pos_other"),
                     pl.col("neg_other_ability_movement").sum().alias("neg_other"),
-                    # New: Sum the "Virtual Distance" lost to skips
-                    (
-                        pl.col("skipped_self_main_move")
-                        * pl.col("raw_speed_per_active_turn")
-                    )
+                    # Use global average for BOTH to standardize cost and fix Flip Flop circularity
+                    (pl.col("skipped_self_main_move") * global_avg_active_speed)
                     .sum()
                     .alias("dist_lost_self_skip"),
                     (pl.col("skipped_other_main_move") * global_avg_active_speed)
@@ -2899,7 +2898,7 @@ def cell_show_aggregated_data(
         "Dice Sensitivity",
         "Ability Efficacy",
         use_rank_scale=dynamic_zoom_toggle.value,
-        quad_labels=["Technician", "Rocket", "Passenger", "Gambler"],
+        quad_labels=["Technician", "Unstable", "Independent", "Gambler"],
     )
 
     # --- 4. GLOBAL DYNAMICS ---
@@ -3363,10 +3362,10 @@ def cell_show_aggregated_data(
 
     left_charts_ui = mo.ui.tabs(
         {
-            "⚡ Ability Shift": mo.vstack([final_ability_chart, desc_ability]),
             "🎯 Consistency": mo.vstack(
                 [dynamic_zoom_toggle, c_consist.interactive(), desc_consist]
             ),
+            "⚡ Ability Shift": mo.vstack([final_ability_chart, desc_ability]),
             "🌊 Momentum": mo.vstack(
                 [dynamic_zoom_toggle, c_momentum.interactive(), desc_momentum]
             ),
