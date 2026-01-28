@@ -2655,273 +2655,6 @@ def _(BG_COLOR, alt, np, pl):
 
 
 @app.cell
-def _(BG_COLOR, alt, np, pl):
-    def get_contrasting_stroke(hex_color):
-        if not hex_color or not hex_color.startswith("#"):
-            return "white"
-        hex_color = hex_color.lstrip("#")
-        try:
-            r, g, b = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-            return (
-                "black"
-                if ((0.299 * r + 0.587 * g + 0.114 * b) / 255) > 0.6
-                else "white"
-            )
-        except:
-            return "white"
-
-    def build_quadrant_chart(
-        stats_df,
-        racers,
-        colors,
-        x_col,
-        y_col,
-        title,
-        x_title,
-        y_title,
-        *,
-        use_rank_scale: bool,
-        reverse_x=False,
-        quad_labels=None,
-        extra_tooltips=None,
-    ):
-        PLOT_BG = "#232826"
-        racer_to_hex = dict(zip(racers, colors))
-        racer_to_stroke = {
-            r: get_contrasting_stroke(c) for r, c in racer_to_hex.items()
-        }
-
-        # 1. Prepare Data & Domains
-        if use_rank_scale:
-
-            def _apply_rank_transform(df, col):
-                series = df[col].drop_nulls()
-                if series.len() < 3:
-                    return df, col, [], []
-                vals = series.to_numpy()
-                sorted_vals = np.sort(vals)
-                sorted_ranks = np.linspace(0, 1, len(vals))
-                new_col = f"{col}_rank"
-
-                def get_rank_pos(x):
-                    return float(np.interp(x, sorted_vals, sorted_ranks))
-
-                transformed_df = df.with_columns(
-                    pl.col(col)
-                    .map_elements(get_rank_pos, return_dtype=pl.Float64)
-                    .alias(new_col)
-                )
-                ticks = np.unique(
-                    np.percentile(vals, [0, 20, 40, 60, 80, 100])
-                ).tolist()
-                vis_ticks = [
-                    float(np.interp(t, sorted_vals, sorted_ranks)) for t in ticks
-                ]
-                return transformed_df, new_col, ticks, vis_ticks
-
-            df_x, plot_x, ticks_x, vis_ticks_x = _apply_rank_transform(stats_df, x_col)
-            chart_df, plot_y, ticks_y, vis_ticks_y = _apply_rank_transform(df_x, y_col)
-
-            # Rank domains are always [0, 1] (plus padding)
-            dom_x = [-0.05, 1.05]
-            dom_y = [-0.05, 1.05]
-
-            # Custom Axis Labels for Rank Mode
-            axis_x = alt.Axis(
-                grid=True,
-                labelExpr=f"datum.value == {vis_ticks_x[0]} ? '{ticks_x[0]:.2f}' : "
-                + " ".join(
-                    [
-                        f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
-                        for vt, rt in zip(vis_ticks_x[1:], ticks_x[1:])
-                    ]
-                )
-                + " format(datum.value, '.2f')",
-            )
-            axis_y = alt.Axis(
-                grid=True,
-                labelExpr=f"datum.value == {vis_ticks_y[0]} ? '{ticks_y[0]:.2f}' : "
-                + " ".join(
-                    [
-                        f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
-                        for vt, rt in zip(vis_ticks_y[1:], ticks_y[1:])
-                    ]
-                )
-                + " format(datum.value, '.2f')",
-            )
-            mid_x, mid_y = 0.5, 0.5
-
-        else:
-            # Absolute Mode
-            plot_x, plot_y = x_col, y_col
-            chart_df = stats_df
-            vals_x, vals_y = (
-                stats_df[x_col].drop_nulls().to_list(),
-                stats_df[y_col].drop_nulls().to_list(),
-            )
-
-            if not vals_x:
-                return alt.Chart(stats_df).mark_text(text="No Data")
-
-            min_x_val, max_x_val = min(vals_x), max(vals_x)
-            min_y_val, max_y_val = min(vals_y), max(vals_y)
-
-            # Avoid singular matrix if all values are same
-            if min_x_val == max_x_val:
-                max_x_val += 0.01
-                min_x_val -= 0.01
-            if min_y_val == max_y_val:
-                max_y_val += 0.01
-                min_y_val -= 0.01
-
-            pad_x = (max_x_val - min_x_val) * 0.15
-            pad_y = (max_y_val - min_y_val) * 0.15
-
-            dom_x = [min_x_val - pad_x, max_x_val + pad_x]
-            dom_y = [min_y_val - pad_y, max_y_val + pad_y]
-
-            axis_x, axis_y = alt.Axis(grid=False), alt.Axis(grid=False)
-            mid_x, mid_y = (min_x_val + max_x_val) / 2, (min_y_val + max_y_val) / 2
-
-        # 2. Build Scales
-        scale_x = alt.Scale(domain=dom_x, reverse=reverse_x, zero=False, nice=False)
-        scale_y = alt.Scale(domain=dom_y, zero=False, nice=False)
-
-        # 3. Add Stroke Data
-        chart_df = chart_df.with_columns(
-            pl.col("racer_name")
-            .map_elements(
-                lambda n: racer_to_stroke.get(n, "white"), return_dtype=pl.String
-            )
-            .alias("txt_stroke")
-        )
-
-        # 4. Reference Lines
-        h_line = (
-            alt.Chart(pl.DataFrame({"y": [mid_y]}))
-            .mark_rule(strokeDash=[4, 4], color="#888")
-            .encode(y=alt.Y("y:Q", scale=scale_y))
-        )
-        v_line = (
-            alt.Chart(pl.DataFrame({"x": [mid_x]}))
-            .mark_rule(strokeDash=[4, 4], color="#888")
-            .encode(x=alt.X("x:Q", scale=scale_x))
-        )
-
-        # 5. Points & Labels
-        points = (
-            alt.Chart(chart_df)
-            .mark_circle(size=250, opacity=0.9)
-            .encode(
-                x=alt.X(f"{plot_x}:Q", title=x_title, scale=scale_x, axis=axis_x),
-                y=alt.Y(f"{plot_y}:Q", title=y_title, scale=scale_y, axis=axis_y),
-                color=alt.Color(
-                    "racer_name:N",
-                    scale=alt.Scale(domain=racers, range=colors),
-                    legend=None,
-                ),
-                tooltip=[
-                    "racer_name:N",
-                    alt.Tooltip(f"{x_col}:Q", format=".2f", title=x_title),
-                    alt.Tooltip(f"{y_col}:Q", format=".2f", title=y_title),
-                ]
-                + (extra_tooltips or []),
-            )
-        )
-
-        text_outline = points.mark_text(
-            align="center",
-            baseline="middle",
-            dy=-22,
-            dx=-22,
-            fontSize=15,
-            fontWeight=800,
-            stroke=PLOT_BG,
-            strokeWidth=3,
-            opacity=1,
-        ).encode(text="racer_name:N", color=alt.value(PLOT_BG))
-
-        text_fill = points.mark_text(
-            align="center",
-            baseline="middle",
-            dy=-22,
-            dx=-22,
-            fontSize=15,
-            fontWeight=800,
-        ).encode(
-            text="racer_name:N",
-            color=alt.Color(
-                "racer_name:N", scale=alt.Scale(domain=racers, range=colors)
-            ),
-        )
-
-        # 6. Quadrant Labels (Fixed Positioning)
-        label_layers = []
-        if quad_labels and len(quad_labels) == 4:
-            # Calculate positions based on the definitive domains we calculated earlier
-            x_min, x_max = dom_x
-            y_min, y_max = dom_y
-
-            # 5% padding from the edges
-            x_range = x_max - x_min
-            y_range = y_max - y_min
-
-            px = x_range * 0.05
-            py = y_range * 0.05
-
-            # Define coordinates (Left/Right, Top/Bottom)
-            # Note: If reverse_x is True, "Left" visually is x_max numerically
-            if reverse_x:
-                left_x = x_max - px
-                right_x = x_min + px
-            else:
-                left_x = x_min + px
-                right_x = x_max - px
-
-            top_y = y_max - py
-            bottom_y = y_min + py
-
-            # Labels: TL, TR, BL, BR
-            # quad_labels input order: [TL, TR, BL, BR]
-            labels_config = [
-                (left_x, top_y, quad_labels[0], "left", "top"),  # Top-Left
-                (right_x, top_y, quad_labels[1], "right", "top"),  # Top-Right
-                (left_x, bottom_y, quad_labels[2], "left", "bottom"),  # Bottom-Left
-                (right_x, bottom_y, quad_labels[3], "right", "bottom"),  # Bottom-Right
-            ]
-
-            text_props = {
-                "fontWeight": "bold",
-                "opacity": 0.6,
-                "fontSize": 14,
-                "color": "#e0e0e0",
-            }
-
-            def _lbl(x, y, t, align, baseline):
-                return (
-                    alt.Chart(pl.DataFrame({"x": [x], "y": [y], "t": [t]}))
-                    .mark_text(align=align, baseline=baseline, **text_props)
-                    .encode(
-                        x=alt.X("x:Q", scale=scale_x),
-                        y=alt.Y("y:Q", scale=scale_y),
-                        text="t:N",
-                    )
-                )
-
-            label_layers = [_lbl(*cfg) for cfg in labels_config]
-
-        layers = [points, text_outline, text_fill] + label_layers + [h_line, v_line]
-        xzoom = alt.selection_interval(bind="scales", encodings=["x"], zoom="wheel!")
-        return (
-            alt.layer(*layers)
-            .resolve_scale(x="shared", y="shared")
-            .add_params(xzoom)
-            .properties(width="container", height=800, background=BG_COLOR)
-        )
-    return (build_quadrant_chart,)
-
-
-@app.cell
 def cell_prepare_aggregated_data(alt):
     METRIC_ORDER = ["+ Self", "- Others", "- Self", "+ Others"]
 
@@ -3129,6 +2862,14 @@ def cell_show_aggregated_data(
     )
 
     # --- 4. GLOBAL DYNAMICS ---
+    color_turns = "#40B0A6"  # Teal
+    color_vp = "#D81B60"  # Pink
+
+    # Scale for Player Counts matching dashboard palette
+    player_count_scale = alt.Scale(
+        range=["#40B0A6", "#FFC107", "#D81B60", "#1E88E5", "#9C27B0"]
+    )
+
     race_meta = df_races_f.select(["config_hash", "board", "racer_count"])
     joined_env = proc_results.join(race_meta, on="config_hash", how="inner")
 
@@ -3154,6 +2895,7 @@ def cell_show_aggregated_data(
     global_wide = race_level_agg.join(
         result_level_agg, on=["board", "racer_count"], how="inner"
     ).fill_nan(0)
+
     c_global_1 = (
         alt.Chart(
             global_wide.select(
@@ -3175,7 +2917,7 @@ def cell_show_aggregated_data(
             x=alt.X("board:N", title="Board", axis=alt.Axis(labelAngle=0)),
             xOffset=alt.XOffset("racer_count:N"),
             y=alt.Y("val:Q", title=None),
-            color=alt.Color("racer_count:N", title="Players"),
+            color=alt.Color("racer_count:N", title="Players", scale=player_count_scale),
             column=alt.Column("metric:N", title=None),
             tooltip=[
                 "board:N",
@@ -3210,7 +2952,7 @@ def cell_show_aggregated_data(
             x=alt.X("board:N", title="Board", axis=alt.Axis(labelAngle=0)),
             xOffset=alt.XOffset("racer_count:N"),
             y=alt.Y("val:Q", title=None),
-            color=alt.Color("racer_count:N", title="Players"),
+            color=alt.Color("racer_count:N", title="Players", scale=player_count_scale),
             column=alt.Column("metric:N", title=None),
             tooltip=[
                 "board:N",
@@ -3228,8 +2970,7 @@ def cell_show_aggregated_data(
         )
     )
 
-    # --- 4.5 DISTRIBUTIONS (BINNING + FILTERING HERE) ---
-    # 1. Surgical Filtering for Visualization Only (2nd - 98th Percentile)
+    # --- 4.5 DISTRIBUTIONS ---
     q_low, q_high = 0.02, 0.98
     bounds = dist_raw.select(
         [
@@ -3245,7 +2986,6 @@ def cell_show_aggregated_data(
         & pl.col("total_race_vp").is_between(bounds["v_min"], bounds["v_max"])
     )
 
-    # 2. Binning Logic (Moved from cell_filter_data)
     n_bins = 20
     turns_min = float(dist_viz["race_global_turns"].min())
     turns_max = float(dist_viz["race_global_turns"].max())
@@ -3317,10 +3057,6 @@ def cell_show_aggregated_data(
     df_dist_faceted = make_long_dist(dist_binned, ["board", "racer_count"])
 
     # 3. Chart Construction
-    color_turns = "#40B0A6"
-    color_vp = "#D81B60"
-
-    # Global Chart (VConcat)
     df_turns = df_dist_global.filter(pl.col("direction") == 1)
     df_vp = df_dist_global.filter(pl.col("direction") == -1)
 
@@ -3331,12 +3067,17 @@ def cell_show_aggregated_data(
             x=alt.X(
                 "bin_label:N",
                 sort=alt.SortField("bin_index"),
-                axis=alt.Axis(orient="top", title="Game Length (Turns)", labelAngle=0),
+                axis=alt.Axis(
+                    orient="top",
+                    title="Game Length (Turns)",
+                    labelAngle=-45,
+                    labelOverlap="parity",
+                ),
             ),
             y=alt.Y("pct:Q", axis=alt.Axis(format="%", title=None)),
             tooltip=["bin_label", alt.Tooltip("pct", format=".1%")],
         )
-        .properties(width=600, height=120)
+        .properties(width="container", height=140)
     )
 
     c_dist_global_bottom = (
@@ -3346,7 +3087,12 @@ def cell_show_aggregated_data(
             x=alt.X(
                 "bin_label:N",
                 sort=alt.SortField("bin_index"),
-                axis=alt.Axis(orient="bottom", title="Total VP", labelAngle=0),
+                axis=alt.Axis(
+                    orient="bottom",
+                    title="Total VP",
+                    labelAngle=-45,
+                    labelOverlap="parity",
+                ),
             ),
             y=alt.Y(
                 "pct:Q",
@@ -3355,19 +3101,20 @@ def cell_show_aggregated_data(
             ),
             tooltip=["bin_label", alt.Tooltip("pct", format=".1%")],
         )
-        .properties(width=600, height=120)
+        .properties(width="container", height=140)
     )
 
     c_dist_global = (
-        alt.vconcat(c_dist_global_top, c_dist_global_bottom, spacing=0)
+        alt.vconcat(c_dist_global_top, c_dist_global_bottom, spacing=10)
         .properties(
             title="Global Distribution: Game Length (Top) vs Total VP (Bottom)",
             background="transparent",
+            autosize={"contains": "padding"},
         )
         .configure_view(stroke=None)
+        .configure(autosize={"type": "fit-x", "contains": "padding"})
     )
 
-    # Faceted Chart
     scale_facet = alt.Scale(
         domain=["Game Length (Turns)", "Total VP"], range=[color_turns, color_vp]
     )
@@ -3383,12 +3130,15 @@ def cell_show_aggregated_data(
                 axis=alt.Axis(labels=False, ticks=False),
             ),
             y=alt.Y(
-                "pct_signed:Q", title=None, axis=alt.Axis(format="%", labels=False)
+                "pct_signed:Q",
+                title=None,
+                axis=alt.Axis(format="%", labels=False),
+                scale=alt.Scale(domain=[-0.3, 0.3], clamp=True),
             ),
             color=alt.Color("series_type:N", scale=scale_facet, legend=None),
             tooltip=["series_type", "bin_label", alt.Tooltip("pct", format=".1%")],
         )
-        .properties(width=140, height=140)
+        .properties(width=300, height=200)
     )
 
     rule_facet = alt.Chart().mark_rule(color="#FFF", opacity=0.3).encode(y=alt.datum(0))
@@ -3400,18 +3150,6 @@ def cell_show_aggregated_data(
         )
         .properties(background="transparent")
         .configure_view(stroke=None)
-    )
-
-    global_ui = mo.vstack(
-        [
-            mo.md("### 📊 Global Averages"),
-            mo.ui.altair_chart(c_global_1),
-            mo.ui.altair_chart(c_global_2),
-            mo.md("### 📉 Global Distributions"),
-            mo.ui.altair_chart(c_dist_global),
-            mo.md("### 🧩 Board & Player Distributions"),
-            mo.ui.altair_chart(c_dist_faceted),
-        ]
     )
 
     # --- 5. MATCHUPS & ENV ---
@@ -3490,47 +3228,97 @@ def cell_show_aggregated_data(
         )
     )
 
-    # --- 6. TABLES ---
+    # --- 6. TABLES (RESTORED DETAILED VERSIONS) ---
     master_df = stats.sort("mean_vp", descending=True)
+
     df_overview = master_df.select(
-        pl.col("racer_name"),
-        pl.col("mean_vp").round(2),
+        pl.col("racer_name").alias("Racer"),
+        pl.col("mean_vp").round(2).alias("Avg VP"),
         (pl.col("consistency_score") * 100).round(1).alias("Consist%"),
         (pl.col("pct_1st") * 100).round(1).alias("1st%"),
-        pl.col("races_run"),
-    )
-    df_movement = master_df.select(
-        pl.col("racer_name"),
-        pl.col("avg_speed_raw").round(2),
-        pl.col("avg_net_movement").round(2).alias("Rel Speed"),
-        (pl.col("avg_active_turns_pct") * 100).round(1).alias("Active Turns %"),
-        pl.col("avg_pos_self").round(2).alias("Abil +Self"),
-    )
-    df_abilities = master_df.select(
-        pl.col("racer_name"),
-        pl.col("triggers_per_turn").round(2),
-        pl.col("self_targets_per_turn").round(2),
-        pl.col("avg_pos_other").round(2),
-    )
-    df_dynamics = master_df.select(
-        pl.col("racer_name"),
-        pl.col("avg_race_volatility").round(2),
-        pl.col("avg_race_tightness").round(2),
-        pl.col("avg_game_duration").round(1),
-    )
-    df_vp = master_df.select(
-        pl.col("racer_name"),
-        pl.col("mean_vp").round(2),
-        pl.col("dice_sensitivity").round(2),
-        pl.col("trigger_dependency").round(2),
+        (pl.col("pct_2nd") * 100).round(1).alias("2nd%"),
+        pl.col("races_run").alias("# Races"),
     )
 
-    # --- UI ---
-    desc_ability = mo.md("""**Ability Shift Analysis**...""")
-    desc_consist = mo.md("""**Consistency Profile**...""")
-    desc_momentum = mo.md("""**Momentum Profile**...""")
-    desc_excitement = mo.md("""**Excitement Profile**...""")
-    desc_engine = mo.md("""**Engine Profile**...""")
+    df_movement = master_df.select(
+        pl.col("racer_name").alias("Racer"),
+        pl.col("avg_speed_raw").round(2).alias("Speed (Raw)"),
+        pl.col("avg_net_movement").round(2).alias("+Rel Abil Speed"),
+        (pl.col("avg_active_turns_pct") * 100).round(1).alias("Rolling Turns %"),
+        pl.col("avg_pos_self").round(2).alias("Abil +Self"),
+        pl.col("avg_neg_self").round(2).alias("Abil -Self"),
+    )
+
+    df_abilities = master_df.select(
+        pl.col("racer_name").alias("Racer"),
+        pl.col("triggers_per_turn").round(2).alias("Trig/Turn"),
+        pl.col("self_targets_per_turn").round(2).alias("Self-Targ/Turn"),
+        pl.col("own_turn_triggers_per_turn").round(2).alias("OwnTurn Trig/Turn"),
+        pl.col("avg_pos_other").round(2).alias("Abil +Other"),
+        pl.col("avg_neg_other").round(2).alias("Abil -Other"),
+    )
+
+    df_dynamics = master_df.select(
+        pl.col("racer_name").alias("Racer"),
+        pl.col("avg_race_volatility").cast(pl.Float64).round(2).alias("Volatility"),
+        pl.col("avg_race_tightness").cast(pl.Float64).round(2).alias("Tightness"),
+        pl.col("avg_game_duration").round(1).alias("Avg Game Len"),
+        pl.col("avg_env_triggers").round(1).alias("Race Trigs"),
+        (pl.col("avg_env_trip_rate") * 100).round(1).alias("Race Trip%"),
+    )
+
+    df_vp = master_df.select(
+        pl.col("racer_name").alias("Racer"),
+        pl.col("mean_vp").round(2).alias("Avg VP"),
+        pl.col("dice_sensitivity").round(2).alias("Dice Sens"),
+        pl.col("trigger_dependency").round(2).alias("Ability Trig Sens"),
+        pl.col("start_pos_bias").round(2).alias("Start Bias"),
+        pl.col("midgame_bias").round(2).alias("MidGame Bias"),
+    )
+
+    # --- 7. UI COMPOSITION WITH RESTORED DESCRIPTIONS ---
+
+    desc_ability = mo.md("""
+    **Ability Shift Analysis**
+    * **Left Side (Beneficial):** `+Self` (Speed Boosts) and `-Others` (Pushing others/Tripping).  
+    * **Right Side (Cost/Altruism):** `-Self` (Investments/Cooldowns) and `+Others` (Helping).  
+    * **Sorting:** Racers are ordered by Net Benefit (Total Good - Total Cost).
+    """)
+
+    desc_consist = mo.md("""
+    **Consistency Profile**
+    * **Y-Axis (Avg VP):** How many points they score on average.  
+    * **X-Axis (Stability):** How reliably they hit that average. High stability means low variance.
+    """)
+
+    desc_momentum = mo.md("""
+    **Momentum Profile**
+    * **Start Bias:** Does starting earlier help them win more VP?.  
+    * **Mid-Game Bias:** How many VPs do they gain from from a leading position after 2/3 of the race.
+    """)
+
+    desc_excitement = mo.md("""
+    **Excitement Profile**
+    * **Tightness:** How close the racers are together throughout the race (Right = Closer).  
+    * **Volatility:** How much the lead changes (Top = More Chaos).
+    """)
+
+    desc_engine = mo.md("""
+    **Engine Profile**
+    * **Y-Axis (Ability Sensitivity):** Correlation between using abilities and VP. High = Ability trigger counts decide how many VP are earned.
+    * **X-Axis (Dice Sensitivity):** Correlation between rolls and VP. High = Needs high (or low) rolls to get VP.
+    """)
+
+    global_ui = mo.vstack(
+        [
+            mo.md("### 📊 Global Averages"),
+            mo.ui.altair_chart(c_global_1),
+            mo.ui.altair_chart(c_global_2),
+            mo.md("### 📉 Global Distributions"),
+            mo.ui.altair_chart(c_dist_global),
+            mo.ui.altair_chart(c_dist_faceted),
+        ]
+    )
 
     left_charts_ui = mo.ui.tabs(
         {
@@ -3555,7 +3343,7 @@ def cell_show_aggregated_data(
         {
             "🏆 Overview": mo.vstack(
                 [
-                    mo.ui.table(df_overview, page_size=20),
+                    mo.ui.table(df_overview, page_size=50, selection=None),
                     mo.md("**Overview**: Summary stats."),
                 ]
             ),
@@ -3575,25 +3363,25 @@ def cell_show_aggregated_data(
             ),
             "🏃 Movement": mo.vstack(
                 [
-                    mo.ui.table(df_movement, page_size=20),
+                    mo.ui.table(df_movement, page_size=50, selection=None),
                     mo.md("**Movement**: Speed & Efficiency."),
                 ]
             ),
             "💎 VP Analysis": mo.vstack(
                 [
-                    mo.ui.table(df_vp, page_size=20),
+                    mo.ui.table(df_vp, page_size=50, selection=None),
                     mo.md("**VP Analysis**: Correlations."),
                 ]
             ),
             "⚡ Abilities": mo.vstack(
                 [
-                    mo.ui.table(df_abilities, page_size=20),
+                    mo.ui.table(df_abilities, page_size=50, selection=None),
                     mo.md("**Abilities**: Triggers & Control."),
                 ]
             ),
             "🔥 Dynamics": mo.vstack(
                 [
-                    mo.ui.table(df_dynamics, page_size=20),
+                    mo.ui.table(df_dynamics, page_size=50, selection=None),
                     mo.md("**Dynamics**: Chaos & Duration."),
                 ]
             ),
