@@ -2087,8 +2087,11 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                     pl.col("ability_self_target_count").fill_null(0),
                     pl.col("ability_trigger_count").fill_null(0),
                     pl.col("rolling_turns").fill_null(0),
+                    pl.col("sum_dice_rolled").fill_null(0),
                     pl.col("recovery_turns").fill_null(0),
                     pl.col("skipped_main_moves").fill_null(0),
+                    pl.col("skipped_self_main_move").fill_null(0),
+                    pl.col("skipped_other_main_move").fill_null(0),
                 ]
             )
             .with_columns(
@@ -2110,6 +2113,23 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 .alias("active_turns_pct")
             )
         )
+
+        # --- 0.5. CALCULATE SKIPPED TURN COSTS ---
+        # A. Raw Speed Per Active Turn (The "Potential" Speed)
+        # Sum of Dice + Positive Self-Movement (ignoring negative modifiers for "potential")
+        results_augmented = results_augmented.with_columns(
+            (
+                (pl.col("sum_dice_rolled") + pl.col("pos_self_ability_movement"))
+                / pl.col("active_turns_count").replace(0, 1)  # Avoid div/0
+            ).alias("raw_speed_per_active_turn")
+        )
+
+        # B. Global Average Active Speed (for estimating impact on others)
+        # We calculate this as the mean of the column we just created
+        global_avg_active_speed = (
+            results_augmented.select(pl.col("raw_speed_per_active_turn").mean()).item()
+            or 3.5
+        )  # Fallback to base expectation (3.5) if data is empty
 
         # 1. TRUTH
         global_win_rates = (
@@ -2309,7 +2329,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             )
         )
 
-        # C. ABILITIES BREAKDOWN
+        # C. ABILITIES BREAKDOWN (WITH SKIPS INTEGRATED)
         df_abilities_agg = (
             results_augmented.join(
                 stats_races.select(["config_hash", "race_global_turns"]),
@@ -2323,8 +2343,29 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                     pl.col("neg_self_ability_movement").sum().alias("neg_self"),
                     pl.col("pos_other_ability_movement").sum().alias("pos_other"),
                     pl.col("neg_other_ability_movement").sum().alias("neg_other"),
+                    # New: Sum the "Virtual Distance" lost to skips
+                    (
+                        pl.col("skipped_self_main_move")
+                        * pl.col("raw_speed_per_active_turn")
+                    )
+                    .sum()
+                    .alias("dist_lost_self_skip"),
+                    (pl.col("skipped_other_main_move") * global_avg_active_speed)
+                    .sum()
+                    .alias("dist_lost_other_skip"),
                     pl.col("turns_taken").sum().alias("total_racer_turns"),
                     pl.col("race_global_turns").sum().alias("total_race_turns_sum"),
+                ]
+            )
+            .with_columns(
+                [
+                    # Add virtual distance to the respective negative columns
+                    (pl.col("neg_self") + pl.col("dist_lost_self_skip")).alias(
+                        "total_neg_self"
+                    ),
+                    (pl.col("neg_other") + pl.col("dist_lost_other_skip")).alias(
+                        "total_neg_other"
+                    ),
                 ]
             )
             .with_columns(
@@ -2332,13 +2373,13 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                     (pl.col("pos_self") / pl.col("total_racer_turns")).alias(
                         "pos_self_norm"
                     ),
-                    (pl.col("neg_self") / pl.col("total_racer_turns")).alias(
+                    (pl.col("total_neg_self") / pl.col("total_racer_turns")).alias(
                         "neg_self_norm"
                     ),
                     (pl.col("pos_other") / pl.col("total_race_turns_sum")).alias(
                         "pos_other_norm"
                     ),
-                    (pl.col("neg_other") / pl.col("total_race_turns_sum")).alias(
+                    (pl.col("total_neg_other") / pl.col("total_race_turns_sum")).alias(
                         "neg_other_norm"
                     ),
                 ]
