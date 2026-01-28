@@ -133,10 +133,12 @@ class GameEngine:
         if racer.tripped:
             self.log_info(f"{racer.repr} recovers from Trip.")
             racer.tripped = False
+            racer.tripping_racers = []
             racer.main_move_consumed = True
             self.push_event(
                 TripRecoveryEvent(
                     target_racer_idx=cr,
+                    tripping_racers=racer.tripping_racers,
                     responsible_racer_idx=None,
                     source="System",
                 ),
@@ -426,12 +428,18 @@ class GameEngine:
                 if r.position == tile_idx and r.idx != except_racer_idx and r.active
             ]
 
-    def skip_main_move(self, racer_idx: int, source: Source) -> None:
+    def skip_main_move(
+        self,
+        *,
+        responsible_racer_idx: int,
+        source: Source,
+        skipped_racer_idx: int,
+    ) -> None:
         """
         Marks the racer's main move as consumed and emits a notification event.
         Does nothing if the move was already consumed.
         """
-        racer = self.get_racer(racer_idx)
+        racer = self.get_racer(skipped_racer_idx)
         if not racer.main_move_consumed:
             racer.main_move_consumed = True
             self.log_info(
@@ -439,8 +447,9 @@ class GameEngine:
             )
             self.push_event(
                 MainMoveSkippedEvent(
-                    responsible_racer_idx=racer_idx,
+                    responsible_racer_idx=responsible_racer_idx,
                     source=source,
+                    target_racer_idx=skipped_racer_idx,
                 ),
             )
 
