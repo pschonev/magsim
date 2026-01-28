@@ -1271,7 +1271,9 @@ def cell_setup_log(
             t_idx = sim_turn_counter["current"]
 
             actual_racer_idx = engine.state.current_racer_idx
-            pre_turn_serial = engine.state.roll_state.serial_id
+
+            # --- PREVIOUS BUG WAS HERE ---
+            # Removed: pre_turn_serial = engine.state.roll_state.serial_id
 
             scenario.run_turn()
 
@@ -1285,10 +1287,10 @@ def cell_setup_log(
             # Fix 1: Ensure snapshot points to the actor
             updates = {"current_racer": actual_racer_idx}
 
-            # Fix 2: "Red X" logic
-            # We check (t_idx > 1) because Turn 1 is the first roll.
-            # If a "Recovery" happens on Turn 2+, the serial won't change.
-            if t_idx > 1 and post_turn_serial == pre_turn_serial:
+            # Fix 2: "Red X" logic (CORRECTED)
+            # RollState resets to serial 0 at the start of every turn.
+            # If serial remains 0 at the end, it means no roll logic was executed (Recovery/Skip).
+            if t_idx > 0 and post_turn_serial == 0:
                 updates["last_roll"] = 0
 
             fixed_snap = dataclasses.replace(last_snap, **updates)
