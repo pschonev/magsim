@@ -1960,7 +1960,7 @@ def cell_filter_data(
     mo,
     pl,
 ):
-    # 1. Initialize Outputs with Default (Empty) Values
+    # 1. Initialize Outputs
     df_racer_results_f = df_racer_results.head(0)
     df_races_f = df_races_clean.head(0)
     _selected_boards = []
@@ -1969,7 +1969,7 @@ def cell_filter_data(
 
     _error_msg = None
 
-    # 2. Logic Block: Check if "Run Analysis" has been clicked
+    # 2. Logic Block
     if last_run_config() is None:
         mo.output.replace(
             mo.md(
@@ -1994,7 +1994,6 @@ def cell_filter_data(
 
         # 5. Apply Filters
         if _error_msg is None:
-            # A. Base Filter
             _base_filter_mask = (
                 pl.col("board").is_in(_selected_boards)
                 & pl.col("racer_count").is_in(_selected_counts)
@@ -2014,12 +2013,9 @@ def cell_filter_data(
                 else:
                     _base_filter_mask = _base_filter_mask & (~_has_all)
 
-            # Execute Filter on Metadata
-            # df_races_clean ALREADY has tightness/volatility scores!
             _races_bc = df_races_clean.filter(_base_filter_mask)
 
             # C. Roster Check
-            # Ensure the remaining races only contain racers from the selected pool
             _roster_ok = (
                 df_racer_results.join(
                     _races_bc.select("config_hash", "racer_count"),
@@ -2067,280 +2063,11 @@ def cell_filter_data(
             )
 
     # 7. Final Return
-    # Only returning races and results. No positions.
     return df_racer_results_f, df_races_f
 
 
 @app.cell
-def _(BG_COLOR, alt, np, pl):
-    def get_contrasting_stroke(hex_color):
-        if not hex_color or not hex_color.startswith("#"):
-            return "white"
-        hex_color = hex_color.lstrip("#")
-        try:
-            r, g, b = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-            return (
-                "black"
-                if ((0.299 * r + 0.587 * g + 0.114 * b) / 255) > 0.6
-                else "white"
-            )
-        except:
-            return "white"
-
-    def build_quadrant_chart(
-        stats_df,
-        racers,
-        colors,
-        x_col,
-        y_col,
-        title,
-        x_title,
-        y_title,
-        *,
-        use_rank_scale: bool,
-        reverse_x=False,
-        quad_labels=None,
-        extra_tooltips=None,
-    ):
-        PLOT_BG = "#232826"
-        racer_to_hex = dict(zip(racers, colors))
-        racer_to_stroke = {
-            r: get_contrasting_stroke(c) for r, c in racer_to_hex.items()
-        }
-
-        # 1. Prepare Data & Domains
-        if use_rank_scale:
-
-            def _apply_rank_transform(df, col):
-                series = df[col].drop_nulls()
-                if series.len() < 3:
-                    return df, col, [], []
-                vals = series.to_numpy()
-                sorted_vals = np.sort(vals)
-                sorted_ranks = np.linspace(0, 1, len(vals))
-                new_col = f"{col}_rank"
-
-                def get_rank_pos(x):
-                    return float(np.interp(x, sorted_vals, sorted_ranks))
-
-                transformed_df = df.with_columns(
-                    pl.col(col)
-                    .map_elements(get_rank_pos, return_dtype=pl.Float64)
-                    .alias(new_col)
-                )
-                ticks = np.unique(
-                    np.percentile(vals, [0, 20, 40, 60, 80, 100])
-                ).tolist()
-                vis_ticks = [
-                    float(np.interp(t, sorted_vals, sorted_ranks)) for t in ticks
-                ]
-                return transformed_df, new_col, ticks, vis_ticks
-
-            df_x, plot_x, ticks_x, vis_ticks_x = _apply_rank_transform(stats_df, x_col)
-            chart_df, plot_y, ticks_y, vis_ticks_y = _apply_rank_transform(df_x, y_col)
-
-            # Rank domains are always [0, 1] (plus padding)
-            dom_x = [-0.05, 1.05]
-            dom_y = [-0.05, 1.05]
-
-            # Custom Axis Labels for Rank Mode
-            axis_x = alt.Axis(
-                grid=True,
-                labelExpr=f"datum.value == {vis_ticks_x[0]} ? '{ticks_x[0]:.2f}' : "
-                + " ".join(
-                    [
-                        f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
-                        for vt, rt in zip(vis_ticks_x[1:], ticks_x[1:])
-                    ]
-                )
-                + " format(datum.value, '.2f')",
-            )
-            axis_y = alt.Axis(
-                grid=True,
-                labelExpr=f"datum.value == {vis_ticks_y[0]} ? '{ticks_y[0]:.2f}' : "
-                + " ".join(
-                    [
-                        f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
-                        for vt, rt in zip(vis_ticks_y[1:], ticks_y[1:])
-                    ]
-                )
-                + " format(datum.value, '.2f')",
-            )
-            mid_x, mid_y = 0.5, 0.5
-
-        else:
-            # Absolute Mode
-            plot_x, plot_y = x_col, y_col
-            chart_df = stats_df
-            vals_x, vals_y = (
-                stats_df[x_col].drop_nulls().to_list(),
-                stats_df[y_col].drop_nulls().to_list(),
-            )
-
-            if not vals_x:
-                return alt.Chart(stats_df).mark_text(text="No Data")
-
-            min_x_val, max_x_val = min(vals_x), max(vals_x)
-            min_y_val, max_y_val = min(vals_y), max(vals_y)
-
-            # Avoid singular matrix if all values are same
-            if min_x_val == max_x_val:
-                max_x_val += 0.01
-                min_x_val -= 0.01
-            if min_y_val == max_y_val:
-                max_y_val += 0.01
-                min_y_val -= 0.01
-
-            pad_x = (max_x_val - min_x_val) * 0.15
-            pad_y = (max_y_val - min_y_val) * 0.15
-
-            dom_x = [min_x_val - pad_x, max_x_val + pad_x]
-            dom_y = [min_y_val - pad_y, max_y_val + pad_y]
-
-            axis_x, axis_y = alt.Axis(grid=False), alt.Axis(grid=False)
-            mid_x, mid_y = (min_x_val + max_x_val) / 2, (min_y_val + max_y_val) / 2
-
-        # 2. Build Scales
-        scale_x = alt.Scale(domain=dom_x, reverse=reverse_x, zero=False, nice=False)
-        scale_y = alt.Scale(domain=dom_y, zero=False, nice=False)
-
-        # 3. Add Stroke Data
-        chart_df = chart_df.with_columns(
-            pl.col("racer_name")
-            .map_elements(
-                lambda n: racer_to_stroke.get(n, "white"), return_dtype=pl.String
-            )
-            .alias("txt_stroke")
-        )
-
-        # 4. Reference Lines
-        h_line = (
-            alt.Chart(pl.DataFrame({"y": [mid_y]}))
-            .mark_rule(strokeDash=[4, 4], color="#888")
-            .encode(y=alt.Y("y:Q", scale=scale_y))
-        )
-        v_line = (
-            alt.Chart(pl.DataFrame({"x": [mid_x]}))
-            .mark_rule(strokeDash=[4, 4], color="#888")
-            .encode(x=alt.X("x:Q", scale=scale_x))
-        )
-
-        # 5. Points & Labels
-        points = (
-            alt.Chart(chart_df)
-            .mark_circle(size=250, opacity=0.9)
-            .encode(
-                x=alt.X(f"{plot_x}:Q", title=x_title, scale=scale_x, axis=axis_x),
-                y=alt.Y(f"{plot_y}:Q", title=y_title, scale=scale_y, axis=axis_y),
-                color=alt.Color(
-                    "racer_name:N",
-                    scale=alt.Scale(domain=racers, range=colors),
-                    legend=None,
-                ),
-                tooltip=[
-                    "racer_name:N",
-                    alt.Tooltip(f"{x_col}:Q", format=".2f", title=x_title),
-                    alt.Tooltip(f"{y_col}:Q", format=".2f", title=y_title),
-                ]
-                + (extra_tooltips or []),
-            )
-        )
-
-        text_outline = points.mark_text(
-            align="center",
-            baseline="middle",
-            dy=-22,
-            dx=-22,
-            fontSize=15,
-            fontWeight=800,
-            stroke=PLOT_BG,
-            strokeWidth=3,
-            opacity=1,
-        ).encode(text="racer_name:N", color=alt.value(PLOT_BG))
-
-        text_fill = points.mark_text(
-            align="center",
-            baseline="middle",
-            dy=-22,
-            dx=-22,
-            fontSize=15,
-            fontWeight=800,
-        ).encode(
-            text="racer_name:N",
-            color=alt.Color(
-                "racer_name:N", scale=alt.Scale(domain=racers, range=colors)
-            ),
-        )
-
-        # 6. Quadrant Labels (Fixed Positioning)
-        label_layers = []
-        if quad_labels and len(quad_labels) == 4:
-            # Calculate positions based on the definitive domains we calculated earlier
-            x_min, x_max = dom_x
-            y_min, y_max = dom_y
-
-            # 5% padding from the edges
-            x_range = x_max - x_min
-            y_range = y_max - y_min
-
-            px = x_range * 0.05
-            py = y_range * 0.05
-
-            # Define coordinates (Left/Right, Top/Bottom)
-            # Note: If reverse_x is True, "Left" visually is x_max numerically
-            if reverse_x:
-                left_x = x_max - px
-                right_x = x_min + px
-            else:
-                left_x = x_min + px
-                right_x = x_max - px
-
-            top_y = y_max - py
-            bottom_y = y_min + py
-
-            # Labels: TL, TR, BL, BR
-            # quad_labels input order: [TL, TR, BL, BR]
-            labels_config = [
-                (left_x, top_y, quad_labels[0], "left", "top"),  # Top-Left
-                (right_x, top_y, quad_labels[1], "right", "top"),  # Top-Right
-                (left_x, bottom_y, quad_labels[2], "left", "bottom"),  # Bottom-Left
-                (right_x, bottom_y, quad_labels[3], "right", "bottom"),  # Bottom-Right
-            ]
-
-            text_props = {
-                "fontWeight": "bold",
-                "opacity": 0.6,
-                "fontSize": 14,
-                "color": "#e0e0e0",
-            }
-
-            def _lbl(x, y, t, align, baseline):
-                return (
-                    alt.Chart(pl.DataFrame({"x": [x], "y": [y], "t": [t]}))
-                    .mark_text(align=align, baseline=baseline, **text_props)
-                    .encode(
-                        x=alt.X("x:Q", scale=scale_x),
-                        y=alt.Y("y:Q", scale=scale_y),
-                        text="t:N",
-                    )
-                )
-
-            label_layers = [_lbl(*cfg) for cfg in labels_config]
-
-        layers = [points, text_outline, text_fill] + label_layers + [h_line, v_line]
-        xzoom = alt.selection_interval(bind="scales", encodings=["x"], zoom="wheel!")
-        return (
-            alt.layer(*layers)
-            .resolve_scale(x="shared", y="shared")
-            .add_params(xzoom)
-            .properties(width="container", height=800, background=BG_COLOR)
-        )
-    return (build_quadrant_chart,)
-
-
-@app.cell
 def _(df_racer_results_f, df_races_f, mo, pl):
-    # A. Check Data Load
     if df_races_f.height == 0:
         mo.stop(True)
 
@@ -2626,11 +2353,13 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             )
         )
 
-        # --- D. NEW: DISTRIBUTION DATA (PERCENTAGE NORMALIZED & LABELED) ---
+        # --- D. RAW DISTRIBUTION DATA (NO FILTERING HERE) ---
         race_vp_agg = results_augmented.group_by("config_hash").agg(
             pl.col("final_vp").sum().alias("total_race_vp")
         )
-        dist_base = stats_races.join(race_vp_agg, on="config_hash", how="inner").select(
+        dist_base_raw = stats_races.join(
+            race_vp_agg, on="config_hash", how="inner"
+        ).select(
             [
                 "config_hash",
                 "board",
@@ -2640,101 +2369,13 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             ]
         )
 
-        # Limits & Steps
-        n_bins = 10
-        turns_min = float(dist_base["race_global_turns"].min())
-        turns_max = float(dist_base["race_global_turns"].max())
-        vp_min = float(dist_base["total_race_vp"].min())
-        vp_max = float(dist_base["total_race_vp"].max())
-        turns_step = (turns_max - turns_min) / n_bins if turns_max > turns_min else 1.0
-        vp_step = (vp_max - vp_min) / n_bins if vp_max > vp_min else 1.0
-
-        # Binning & Labeling
-        def add_bins(df, col, min_v, step_v, prefix):
-            idx = (
-                ((pl.col(col) - min_v) / step_v)
-                .floor()
-                .cast(pl.Int64)
-                .clip(0, n_bins - 1)
-            )
-            start = (pl.lit(min_v) + idx * pl.lit(step_v)).round(0).cast(pl.Int64)
-            end = (start + pl.lit(step_v)).round(0).cast(pl.Int64)
-            label = start.cast(pl.Utf8) + pl.lit("-") + end.cast(pl.Utf8)
-            return [idx.alias(f"{prefix}_idx"), label.alias(f"{prefix}_label")]
-
-        dist_binned = dist_base.with_columns(
-            add_bins(dist_base, "race_global_turns", turns_min, turns_step, "turns")
-            + add_bins(dist_base, "total_race_vp", vp_min, vp_step, "vp")
-        )
-
-        def make_long_dist(df, group_cols):
-            # Compute a safe grouping list (at least one key)
-            if len(group_cols) == 0:
-                df = df.with_columns(pl.lit(1).alias("_grp"))
-                group_cols_eff = ["_grp"]
-            else:
-                group_cols_eff = group_cols
-
-            # Turns (Up)
-            t = (
-                df.group_by(group_cols_eff + ["turns_idx", "turns_label"])
-                .agg(pl.len().alias("count"))
-                .with_columns(
-                    (
-                        pl.col("count") / pl.col("count").sum().over(group_cols_eff)
-                    ).alias("pct"),
-                    pl.col("turns_idx").alias("bin_index"),
-                    pl.col("turns_label").alias("bin_label"),
-                    pl.lit("Game Length (Turns)").alias("series_type"),
-                    pl.lit(1).alias("direction"),
-                )
-            )
-
-            # VP (Down)
-            v = (
-                df.group_by(group_cols_eff + ["vp_idx", "vp_label"])
-                .agg(pl.len().alias("count"))
-                .with_columns(
-                    (
-                        pl.col("count") / pl.col("count").sum().over(group_cols_eff)
-                    ).alias("pct"),
-                    pl.col("vp_idx").alias("bin_index"),
-                    pl.col("vp_label").alias("bin_label"),
-                    pl.lit("Total VP").alias("series_type"),
-                    pl.lit(-1).alias("direction"),
-                )
-            )
-
-            # Columns to keep (drop the helper _grp if present)
-            base_cols = group_cols_eff + [
-                "bin_index",
-                "bin_label",
-                "series_type",
-                "pct",
-                "direction",
-            ]
-            out = pl.concat([t.select(base_cols), v.select(base_cols)])
-
-            if "_grp" in out.columns:
-                out = out.drop("_grp")
-
-            return out
-
-        # 1. Faceted Distribution
-        df_dist_faceted = make_long_dist(dist_binned, ["board", "racer_count"])
-
-        # 2. Global Distribution (One big chart)
-        # We dummy the group cols to reuse logic easily or just pass empty list
-        df_dist_global = make_long_dist(dist_binned, [])
-
         return {
             "stats": final_stats,
             "matchup_df": matchup_df,
             "results_raw": stats_results,
             "races_raw": stats_races,
             "abilities_df": df_abilities_agg,
-            "dist_faceted": df_dist_faceted,
-            "dist_global": df_dist_global,
+            "dist_raw": dist_base_raw,  # Just return raw data
         }
 
     with mo.status.spinner(
@@ -2744,6 +2385,540 @@ def _(df_racer_results_f, df_races_f, mo, pl):
 
     mo.output.replace(mo.md(f"✅ **{df_working.height}** races analyzed."))
     return (dashboard_data,)
+
+
+@app.cell
+def _(BG_COLOR, alt, np, pl):
+    def get_contrasting_stroke(hex_color):
+        if not hex_color or not hex_color.startswith("#"):
+            return "white"
+        hex_color = hex_color.lstrip("#")
+        try:
+            r, g, b = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+            return (
+                "black"
+                if ((0.299 * r + 0.587 * g + 0.114 * b) / 255) > 0.6
+                else "white"
+            )
+        except:
+            return "white"
+
+    def build_quadrant_chart(
+        stats_df,
+        racers,
+        colors,
+        x_col,
+        y_col,
+        title,
+        x_title,
+        y_title,
+        *,
+        use_rank_scale: bool,
+        reverse_x=False,
+        quad_labels=None,
+        extra_tooltips=None,
+    ):
+        PLOT_BG = "#232826"
+        racer_to_hex = dict(zip(racers, colors))
+        racer_to_stroke = {
+            r: get_contrasting_stroke(c) for r, c in racer_to_hex.items()
+        }
+
+        # 1. Prepare Data & Domains
+        if use_rank_scale:
+
+            def _apply_rank_transform(df, col):
+                series = df[col].drop_nulls()
+                if series.len() < 3:
+                    return df, col, [], []
+                vals = series.to_numpy()
+                sorted_vals = np.sort(vals)
+                sorted_ranks = np.linspace(0, 1, len(vals))
+                new_col = f"{col}_rank"
+
+                def get_rank_pos(x):
+                    return float(np.interp(x, sorted_vals, sorted_ranks))
+
+                transformed_df = df.with_columns(
+                    pl.col(col)
+                    .map_elements(get_rank_pos, return_dtype=pl.Float64)
+                    .alias(new_col)
+                )
+                ticks = np.unique(
+                    np.percentile(vals, [0, 20, 40, 60, 80, 100])
+                ).tolist()
+                vis_ticks = [
+                    float(np.interp(t, sorted_vals, sorted_ranks)) for t in ticks
+                ]
+                return transformed_df, new_col, ticks, vis_ticks
+
+            df_x, plot_x, ticks_x, vis_ticks_x = _apply_rank_transform(stats_df, x_col)
+            chart_df, plot_y, ticks_y, vis_ticks_y = _apply_rank_transform(df_x, y_col)
+
+            # Rank domains are always [0, 1] (plus padding)
+            dom_x = [-0.05, 1.05]
+            dom_y = [-0.05, 1.05]
+
+            # Custom Axis Labels for Rank Mode
+            axis_x = alt.Axis(
+                grid=True,
+                labelExpr=f"datum.value == {vis_ticks_x[0]} ? '{ticks_x[0]:.2f}' : "
+                + " ".join(
+                    [
+                        f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
+                        for vt, rt in zip(vis_ticks_x[1:], ticks_x[1:])
+                    ]
+                )
+                + " format(datum.value, '.2f')",
+            )
+            axis_y = alt.Axis(
+                grid=True,
+                labelExpr=f"datum.value == {vis_ticks_y[0]} ? '{ticks_y[0]:.2f}' : "
+                + " ".join(
+                    [
+                        f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
+                        for vt, rt in zip(vis_ticks_y[1:], ticks_y[1:])
+                    ]
+                )
+                + " format(datum.value, '.2f')",
+            )
+            mid_x, mid_y = 0.5, 0.5
+
+        else:
+            # Absolute Mode
+            plot_x, plot_y = x_col, y_col
+            chart_df = stats_df
+            vals_x, vals_y = (
+                stats_df[x_col].drop_nulls().to_list(),
+                stats_df[y_col].drop_nulls().to_list(),
+            )
+
+            if not vals_x:
+                return alt.Chart(stats_df).mark_text(text="No Data")
+
+            min_x_val, max_x_val = min(vals_x), max(vals_x)
+            min_y_val, max_y_val = min(vals_y), max(vals_y)
+
+            # Avoid singular matrix if all values are same
+            if min_x_val == max_x_val:
+                max_x_val += 0.01
+                min_x_val -= 0.01
+            if min_y_val == max_y_val:
+                max_y_val += 0.01
+                min_y_val -= 0.01
+
+            pad_x = (max_x_val - min_x_val) * 0.15
+            pad_y = (max_y_val - min_y_val) * 0.15
+
+            dom_x = [min_x_val - pad_x, max_x_val + pad_x]
+            dom_y = [min_y_val - pad_y, max_y_val + pad_y]
+
+            axis_x, axis_y = alt.Axis(grid=False), alt.Axis(grid=False)
+            mid_x, mid_y = (min_x_val + max_x_val) / 2, (min_y_val + max_y_val) / 2
+
+        # 2. Build Scales
+        scale_x = alt.Scale(domain=dom_x, reverse=reverse_x, zero=False, nice=False)
+        scale_y = alt.Scale(domain=dom_y, zero=False, nice=False)
+
+        # 3. Add Stroke Data
+        chart_df = chart_df.with_columns(
+            pl.col("racer_name")
+            .map_elements(
+                lambda n: racer_to_stroke.get(n, "white"), return_dtype=pl.String
+            )
+            .alias("txt_stroke")
+        )
+
+        # 4. Reference Lines
+        h_line = (
+            alt.Chart(pl.DataFrame({"y": [mid_y]}))
+            .mark_rule(strokeDash=[4, 4], color="#888")
+            .encode(y=alt.Y("y:Q", scale=scale_y))
+        )
+        v_line = (
+            alt.Chart(pl.DataFrame({"x": [mid_x]}))
+            .mark_rule(strokeDash=[4, 4], color="#888")
+            .encode(x=alt.X("x:Q", scale=scale_x))
+        )
+
+        # 5. Points & Labels
+        points = (
+            alt.Chart(chart_df)
+            .mark_circle(size=250, opacity=0.9)
+            .encode(
+                x=alt.X(f"{plot_x}:Q", title=x_title, scale=scale_x, axis=axis_x),
+                y=alt.Y(f"{plot_y}:Q", title=y_title, scale=scale_y, axis=axis_y),
+                color=alt.Color(
+                    "racer_name:N",
+                    scale=alt.Scale(domain=racers, range=colors),
+                    legend=None,
+                ),
+                tooltip=[
+                    "racer_name:N",
+                    alt.Tooltip(f"{x_col}:Q", format=".2f", title=x_title),
+                    alt.Tooltip(f"{y_col}:Q", format=".2f", title=y_title),
+                ]
+                + (extra_tooltips or []),
+            )
+        )
+
+        text_outline = points.mark_text(
+            align="center",
+            baseline="middle",
+            dy=-22,
+            dx=-22,
+            fontSize=15,
+            fontWeight=800,
+            stroke=PLOT_BG,
+            strokeWidth=3,
+            opacity=1,
+        ).encode(text="racer_name:N", color=alt.value(PLOT_BG))
+
+        text_fill = points.mark_text(
+            align="center",
+            baseline="middle",
+            dy=-22,
+            dx=-22,
+            fontSize=15,
+            fontWeight=800,
+        ).encode(
+            text="racer_name:N",
+            color=alt.Color(
+                "racer_name:N", scale=alt.Scale(domain=racers, range=colors)
+            ),
+        )
+
+        # 6. Quadrant Labels (Fixed Positioning)
+        label_layers = []
+        if quad_labels and len(quad_labels) == 4:
+            # Calculate positions based on the definitive domains we calculated earlier
+            x_min, x_max = dom_x
+            y_min, y_max = dom_y
+
+            # 5% padding from the edges
+            x_range = x_max - x_min
+            y_range = y_max - y_min
+
+            px = x_range * 0.05
+            py = y_range * 0.05
+
+            # Define coordinates (Left/Right, Top/Bottom)
+            # Note: If reverse_x is True, "Left" visually is x_max numerically
+            if reverse_x:
+                left_x = x_max - px
+                right_x = x_min + px
+            else:
+                left_x = x_min + px
+                right_x = x_max - px
+
+            top_y = y_max - py
+            bottom_y = y_min + py
+
+            # Labels: TL, TR, BL, BR
+            # quad_labels input order: [TL, TR, BL, BR]
+            labels_config = [
+                (left_x, top_y, quad_labels[0], "left", "top"),  # Top-Left
+                (right_x, top_y, quad_labels[1], "right", "top"),  # Top-Right
+                (left_x, bottom_y, quad_labels[2], "left", "bottom"),  # Bottom-Left
+                (right_x, bottom_y, quad_labels[3], "right", "bottom"),  # Bottom-Right
+            ]
+
+            text_props = {
+                "fontWeight": "bold",
+                "opacity": 0.6,
+                "fontSize": 14,
+                "color": "#e0e0e0",
+            }
+
+            def _lbl(x, y, t, align, baseline):
+                return (
+                    alt.Chart(pl.DataFrame({"x": [x], "y": [y], "t": [t]}))
+                    .mark_text(align=align, baseline=baseline, **text_props)
+                    .encode(
+                        x=alt.X("x:Q", scale=scale_x),
+                        y=alt.Y("y:Q", scale=scale_y),
+                        text="t:N",
+                    )
+                )
+
+            label_layers = [_lbl(*cfg) for cfg in labels_config]
+
+        layers = [points, text_outline, text_fill] + label_layers + [h_line, v_line]
+        xzoom = alt.selection_interval(bind="scales", encodings=["x"], zoom="wheel!")
+        return (
+            alt.layer(*layers)
+            .resolve_scale(x="shared", y="shared")
+            .add_params(xzoom)
+            .properties(width="container", height=800, background=BG_COLOR)
+        )
+    return (build_quadrant_chart,)
+
+
+@app.cell
+def _(BG_COLOR, alt, np, pl):
+    def get_contrasting_stroke(hex_color):
+        if not hex_color or not hex_color.startswith("#"):
+            return "white"
+        hex_color = hex_color.lstrip("#")
+        try:
+            r, g, b = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+            return (
+                "black"
+                if ((0.299 * r + 0.587 * g + 0.114 * b) / 255) > 0.6
+                else "white"
+            )
+        except:
+            return "white"
+
+    def build_quadrant_chart(
+        stats_df,
+        racers,
+        colors,
+        x_col,
+        y_col,
+        title,
+        x_title,
+        y_title,
+        *,
+        use_rank_scale: bool,
+        reverse_x=False,
+        quad_labels=None,
+        extra_tooltips=None,
+    ):
+        PLOT_BG = "#232826"
+        racer_to_hex = dict(zip(racers, colors))
+        racer_to_stroke = {
+            r: get_contrasting_stroke(c) for r, c in racer_to_hex.items()
+        }
+
+        # 1. Prepare Data & Domains
+        if use_rank_scale:
+
+            def _apply_rank_transform(df, col):
+                series = df[col].drop_nulls()
+                if series.len() < 3:
+                    return df, col, [], []
+                vals = series.to_numpy()
+                sorted_vals = np.sort(vals)
+                sorted_ranks = np.linspace(0, 1, len(vals))
+                new_col = f"{col}_rank"
+
+                def get_rank_pos(x):
+                    return float(np.interp(x, sorted_vals, sorted_ranks))
+
+                transformed_df = df.with_columns(
+                    pl.col(col)
+                    .map_elements(get_rank_pos, return_dtype=pl.Float64)
+                    .alias(new_col)
+                )
+                ticks = np.unique(
+                    np.percentile(vals, [0, 20, 40, 60, 80, 100])
+                ).tolist()
+                vis_ticks = [
+                    float(np.interp(t, sorted_vals, sorted_ranks)) for t in ticks
+                ]
+                return transformed_df, new_col, ticks, vis_ticks
+
+            df_x, plot_x, ticks_x, vis_ticks_x = _apply_rank_transform(stats_df, x_col)
+            chart_df, plot_y, ticks_y, vis_ticks_y = _apply_rank_transform(df_x, y_col)
+
+            # Rank domains are always [0, 1] (plus padding)
+            dom_x = [-0.05, 1.05]
+            dom_y = [-0.05, 1.05]
+
+            # Custom Axis Labels for Rank Mode
+            axis_x = alt.Axis(
+                grid=True,
+                labelExpr=f"datum.value == {vis_ticks_x[0]} ? '{ticks_x[0]:.2f}' : "
+                + " ".join(
+                    [
+                        f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
+                        for vt, rt in zip(vis_ticks_x[1:], ticks_x[1:])
+                    ]
+                )
+                + " format(datum.value, '.2f')",
+            )
+            axis_y = alt.Axis(
+                grid=True,
+                labelExpr=f"datum.value == {vis_ticks_y[0]} ? '{ticks_y[0]:.2f}' : "
+                + " ".join(
+                    [
+                        f"abs(datum.value - {vt}) < 0.001 ? '{rt:.2f}' :"
+                        for vt, rt in zip(vis_ticks_y[1:], ticks_y[1:])
+                    ]
+                )
+                + " format(datum.value, '.2f')",
+            )
+            mid_x, mid_y = 0.5, 0.5
+
+        else:
+            # Absolute Mode
+            plot_x, plot_y = x_col, y_col
+            chart_df = stats_df
+            vals_x, vals_y = (
+                stats_df[x_col].drop_nulls().to_list(),
+                stats_df[y_col].drop_nulls().to_list(),
+            )
+
+            if not vals_x:
+                return alt.Chart(stats_df).mark_text(text="No Data")
+
+            min_x_val, max_x_val = min(vals_x), max(vals_x)
+            min_y_val, max_y_val = min(vals_y), max(vals_y)
+
+            # Avoid singular matrix if all values are same
+            if min_x_val == max_x_val:
+                max_x_val += 0.01
+                min_x_val -= 0.01
+            if min_y_val == max_y_val:
+                max_y_val += 0.01
+                min_y_val -= 0.01
+
+            pad_x = (max_x_val - min_x_val) * 0.15
+            pad_y = (max_y_val - min_y_val) * 0.15
+
+            dom_x = [min_x_val - pad_x, max_x_val + pad_x]
+            dom_y = [min_y_val - pad_y, max_y_val + pad_y]
+
+            axis_x, axis_y = alt.Axis(grid=False), alt.Axis(grid=False)
+            mid_x, mid_y = (min_x_val + max_x_val) / 2, (min_y_val + max_y_val) / 2
+
+        # 2. Build Scales
+        scale_x = alt.Scale(domain=dom_x, reverse=reverse_x, zero=False, nice=False)
+        scale_y = alt.Scale(domain=dom_y, zero=False, nice=False)
+
+        # 3. Add Stroke Data
+        chart_df = chart_df.with_columns(
+            pl.col("racer_name")
+            .map_elements(
+                lambda n: racer_to_stroke.get(n, "white"), return_dtype=pl.String
+            )
+            .alias("txt_stroke")
+        )
+
+        # 4. Reference Lines
+        h_line = (
+            alt.Chart(pl.DataFrame({"y": [mid_y]}))
+            .mark_rule(strokeDash=[4, 4], color="#888")
+            .encode(y=alt.Y("y:Q", scale=scale_y))
+        )
+        v_line = (
+            alt.Chart(pl.DataFrame({"x": [mid_x]}))
+            .mark_rule(strokeDash=[4, 4], color="#888")
+            .encode(x=alt.X("x:Q", scale=scale_x))
+        )
+
+        # 5. Points & Labels
+        points = (
+            alt.Chart(chart_df)
+            .mark_circle(size=250, opacity=0.9)
+            .encode(
+                x=alt.X(f"{plot_x}:Q", title=x_title, scale=scale_x, axis=axis_x),
+                y=alt.Y(f"{plot_y}:Q", title=y_title, scale=scale_y, axis=axis_y),
+                color=alt.Color(
+                    "racer_name:N",
+                    scale=alt.Scale(domain=racers, range=colors),
+                    legend=None,
+                ),
+                tooltip=[
+                    "racer_name:N",
+                    alt.Tooltip(f"{x_col}:Q", format=".2f", title=x_title),
+                    alt.Tooltip(f"{y_col}:Q", format=".2f", title=y_title),
+                ]
+                + (extra_tooltips or []),
+            )
+        )
+
+        text_outline = points.mark_text(
+            align="center",
+            baseline="middle",
+            dy=-22,
+            dx=-22,
+            fontSize=15,
+            fontWeight=800,
+            stroke=PLOT_BG,
+            strokeWidth=3,
+            opacity=1,
+        ).encode(text="racer_name:N", color=alt.value(PLOT_BG))
+
+        text_fill = points.mark_text(
+            align="center",
+            baseline="middle",
+            dy=-22,
+            dx=-22,
+            fontSize=15,
+            fontWeight=800,
+        ).encode(
+            text="racer_name:N",
+            color=alt.Color(
+                "racer_name:N", scale=alt.Scale(domain=racers, range=colors)
+            ),
+        )
+
+        # 6. Quadrant Labels (Fixed Positioning)
+        label_layers = []
+        if quad_labels and len(quad_labels) == 4:
+            # Calculate positions based on the definitive domains we calculated earlier
+            x_min, x_max = dom_x
+            y_min, y_max = dom_y
+
+            # 5% padding from the edges
+            x_range = x_max - x_min
+            y_range = y_max - y_min
+
+            px = x_range * 0.05
+            py = y_range * 0.05
+
+            # Define coordinates (Left/Right, Top/Bottom)
+            # Note: If reverse_x is True, "Left" visually is x_max numerically
+            if reverse_x:
+                left_x = x_max - px
+                right_x = x_min + px
+            else:
+                left_x = x_min + px
+                right_x = x_max - px
+
+            top_y = y_max - py
+            bottom_y = y_min + py
+
+            # Labels: TL, TR, BL, BR
+            # quad_labels input order: [TL, TR, BL, BR]
+            labels_config = [
+                (left_x, top_y, quad_labels[0], "left", "top"),  # Top-Left
+                (right_x, top_y, quad_labels[1], "right", "top"),  # Top-Right
+                (left_x, bottom_y, quad_labels[2], "left", "bottom"),  # Bottom-Left
+                (right_x, bottom_y, quad_labels[3], "right", "bottom"),  # Bottom-Right
+            ]
+
+            text_props = {
+                "fontWeight": "bold",
+                "opacity": 0.6,
+                "fontSize": 14,
+                "color": "#e0e0e0",
+            }
+
+            def _lbl(x, y, t, align, baseline):
+                return (
+                    alt.Chart(pl.DataFrame({"x": [x], "y": [y], "t": [t]}))
+                    .mark_text(align=align, baseline=baseline, **text_props)
+                    .encode(
+                        x=alt.X("x:Q", scale=scale_x),
+                        y=alt.Y("y:Q", scale=scale_y),
+                        text="t:N",
+                    )
+                )
+
+            label_layers = [_lbl(*cfg) for cfg in labels_config]
+
+        layers = [points, text_outline, text_fill] + label_layers + [h_line, v_line]
+        xzoom = alt.selection_interval(bind="scales", encodings=["x"], zoom="wheel!")
+        return (
+            alt.layer(*layers)
+            .resolve_scale(x="shared", y="shared")
+            .add_params(xzoom)
+            .properties(width="container", height=800, background=BG_COLOR)
+        )
+    return (build_quadrant_chart,)
 
 
 @app.cell
@@ -2785,8 +2960,9 @@ def cell_show_aggregated_data(
     proc_results = dashboard_data["results_raw"]
     proc_races = dashboard_data["races_raw"]
     abilities_df = dashboard_data["abilities_df"]
-    df_dist_faceted = dashboard_data["dist_faceted"]
-    df_dist_global = dashboard_data["dist_global"]
+
+    # Raw dist data (unfiltered)
+    dist_raw = dashboard_data["dist_raw"]
 
     # --- 1. HELPERS ---
     r_list = stats["racer_name"].unique().to_list()
@@ -3052,77 +3228,172 @@ def cell_show_aggregated_data(
         )
     )
 
-    # --- 4.5 DISTRIBUTIONS (Global & Faceted) ---
-    dist_scale = alt.Scale(
-        domain=["Game Length (Turns)", "Total VP"],
-        range=["#42A5F5", "#EF5350"],
+    # --- 4.5 DISTRIBUTIONS (BINNING + FILTERING HERE) ---
+    # 1. Surgical Filtering for Visualization Only (2nd - 98th Percentile)
+    q_low, q_high = 0.02, 0.98
+    bounds = dist_raw.select(
+        [
+            pl.col("race_global_turns").quantile(q_low).alias("t_min"),
+            pl.col("race_global_turns").quantile(q_high).alias("t_max"),
+            pl.col("total_race_vp").quantile(q_low).alias("v_min"),
+            pl.col("total_race_vp").quantile(q_high).alias("v_max"),
+        ]
+    ).to_dicts()[0]
+
+    dist_viz = dist_raw.filter(
+        pl.col("race_global_turns").is_between(bounds["t_min"], bounds["t_max"])
+        & pl.col("total_race_vp").is_between(bounds["v_min"], bounds["v_max"])
     )
 
-    def build_dist_chart(data, w, h, title):
-        # NOTE: Do NOT pass `data` into alt.Chart() here.
-        # We pass it to the layer() at the end to support faceting.
-        base = (
-            alt.Chart()
-            .transform_calculate(pct_signed="datum.pct * datum.direction")
-            .mark_bar()
-            .encode(
-                x=alt.X(
-                    "bin_index:O",
-                    title="Bin Range (Low → High)",
-                    axis=alt.Axis(labelAngle=0),
+    # 2. Binning Logic (Moved from cell_filter_data)
+    n_bins = 20
+    turns_min = float(dist_viz["race_global_turns"].min())
+    turns_max = float(dist_viz["race_global_turns"].max())
+    vp_min = float(dist_viz["total_race_vp"].min())
+    vp_max = float(dist_viz["total_race_vp"].max())
+    turns_step = (turns_max - turns_min) / n_bins if turns_max > turns_min else 1.0
+    vp_step = (vp_max - vp_min) / n_bins if vp_max > vp_min else 1.0
+
+    def add_bins(df, col, min_v, step_v, prefix):
+        idx = (
+            ((pl.col(col) - min_v) / step_v).floor().cast(pl.Int64).clip(0, n_bins - 1)
+        )
+        start = (pl.lit(min_v) + idx * pl.lit(step_v)).round(0).cast(pl.Int64)
+        end = (start + pl.lit(step_v)).round(0).cast(pl.Int64)
+        label = start.cast(pl.Utf8) + pl.lit("-") + end.cast(pl.Utf8)
+        return [idx.alias(f"{prefix}_idx"), label.alias(f"{prefix}_label")]
+
+    dist_binned = dist_viz.with_columns(
+        add_bins(dist_viz, "race_global_turns", turns_min, turns_step, "turns")
+        + add_bins(dist_viz, "total_race_vp", vp_min, vp_step, "vp")
+    )
+
+    def make_long_dist(df, group_cols):
+        if len(group_cols) == 0:
+            df = df.with_columns(pl.lit(1).alias("_grp"))
+            group_cols_eff = ["_grp"]
+        else:
+            group_cols_eff = group_cols
+
+        t = (
+            df.group_by(group_cols_eff + ["turns_idx", "turns_label"])
+            .agg(pl.len().alias("count"))
+            .with_columns(
+                (pl.col("count") / pl.col("count").sum().over(group_cols_eff)).alias(
+                    "pct"
                 ),
-                y=alt.Y(
-                    "pct_signed:Q",
-                    title="Proportion %",
-                    axis=alt.Axis(format="%"),
-                ),
-                color=alt.Color(
-                    "series_type:N",
-                    title=None,
-                    scale=dist_scale,
-                ),
-                tooltip=[
-                    alt.Tooltip("series_type:N", title="Metric"),
-                    alt.Tooltip("bin_label:N", title="Range"),
-                    alt.Tooltip("pct:Q", title="Percent", format=".1%"),
-                ],
-            )
-            .properties(
-                width=w,
-                height=h,
-                title=title,
+                pl.col("turns_idx").alias("bin_index"),
+                pl.col("turns_label").alias("bin_label"),
+                pl.lit("Game Length (Turns)").alias("series_type"),
+                pl.lit(1).alias("direction"),
             )
         )
-
-        # Use alt.datum(0) to draw the rule without needing a separate DataFrame.
-        # This prevents the "Multiple data sources in faceted chart" error.
-        rule = (
-            alt.Chart().mark_rule(color="#FFFFFF", opacity=0.3).encode(y=alt.datum(0))
+        v = (
+            df.group_by(group_cols_eff + ["vp_idx", "vp_label"])
+            .agg(pl.len().alias("count"))
+            .with_columns(
+                (pl.col("count") / pl.col("count").sum().over(group_cols_eff)).alias(
+                    "pct"
+                ),
+                pl.col("vp_idx").alias("bin_index"),
+                pl.col("vp_label").alias("bin_label"),
+                pl.lit("Total VP").alias("series_type"),
+                pl.lit(-1).alias("direction"),
+            )
         )
+        base_cols = group_cols_eff + [
+            "bin_index",
+            "bin_label",
+            "series_type",
+            "pct",
+            "direction",
+        ]
+        out = pl.concat([t.select(base_cols), v.select(base_cols)])
+        if "_grp" in out.columns:
+            out = out.drop("_grp")
+        return out
 
-        # Data is attached to the LayerChart, which Facet can then partition.
-        return alt.layer(base, rule, data=data)
+    df_dist_global = make_long_dist(dist_binned, [])
+    df_dist_faceted = make_long_dist(dist_binned, ["board", "racer_count"])
 
-    # Global Chart (Big)
+    # 3. Chart Construction
+    color_turns = "#40B0A6"
+    color_vp = "#D81B60"
+
+    # Global Chart (VConcat)
+    df_turns = df_dist_global.filter(pl.col("direction") == 1)
+    df_vp = df_dist_global.filter(pl.col("direction") == -1)
+
+    c_dist_global_top = (
+        alt.Chart(df_turns)
+        .mark_bar(color=color_turns)
+        .encode(
+            x=alt.X(
+                "bin_label:N",
+                sort=alt.SortField("bin_index"),
+                axis=alt.Axis(orient="top", title="Game Length (Turns)", labelAngle=0),
+            ),
+            y=alt.Y("pct:Q", axis=alt.Axis(format="%", title=None)),
+            tooltip=["bin_label", alt.Tooltip("pct", format=".1%")],
+        )
+        .properties(width=600, height=120)
+    )
+
+    c_dist_global_bottom = (
+        alt.Chart(df_vp)
+        .mark_bar(color=color_vp)
+        .encode(
+            x=alt.X(
+                "bin_label:N",
+                sort=alt.SortField("bin_index"),
+                axis=alt.Axis(orient="bottom", title="Total VP", labelAngle=0),
+            ),
+            y=alt.Y(
+                "pct:Q",
+                scale=alt.Scale(reverse=True),
+                axis=alt.Axis(format="%", title=None),
+            ),
+            tooltip=["bin_label", alt.Tooltip("pct", format=".1%")],
+        )
+        .properties(width=600, height=120)
+    )
+
     c_dist_global = (
-        build_dist_chart(
-            df_dist_global,
-            w=600,
-            h=250,
-            title="Global Distribution: Game Length vs Total VP (All Games)",
+        alt.vconcat(c_dist_global_top, c_dist_global_bottom, spacing=0)
+        .properties(
+            title="Global Distribution: Game Length (Top) vs Total VP (Bottom)",
+            background="transparent",
         )
-        .properties(background="transparent")
         .configure_view(stroke=None)
     )
 
-    # Faceted Chart (by board & player count)
+    # Faceted Chart
+    scale_facet = alt.Scale(
+        domain=["Game Length (Turns)", "Total VP"], range=[color_turns, color_vp]
+    )
+
     c_dist_faceted = (
-        build_dist_chart(
-            df_dist_faceted,
-            w=140,
-            h=140,
-            title="",
+        alt.Chart(df_dist_faceted)
+        .transform_calculate(pct_signed="datum.pct * datum.direction")
+        .mark_bar()
+        .encode(
+            x=alt.X(
+                "bin_index:O",
+                title=None,
+                axis=alt.Axis(labels=False, ticks=False),
+            ),
+            y=alt.Y(
+                "pct_signed:Q", title=None, axis=alt.Axis(format="%", labels=False)
+            ),
+            color=alt.Color("series_type:N", scale=scale_facet, legend=None),
+            tooltip=["series_type", "bin_label", alt.Tooltip("pct", format=".1%")],
         )
+        .properties(width=140, height=140)
+    )
+
+    rule_facet = alt.Chart().mark_rule(color="#FFF", opacity=0.3).encode(y=alt.datum(0))
+    c_dist_faceted = (
+        alt.layer(c_dist_faceted, rule_facet, data=df_dist_faceted)
         .facet(
             row=alt.Row("board:N", title="Board"),
             column=alt.Column("racer_count:N", title="Player Count"),
@@ -3138,6 +3409,7 @@ def cell_show_aggregated_data(
             mo.ui.altair_chart(c_global_2),
             mo.md("### 📉 Global Distributions"),
             mo.ui.altair_chart(c_dist_global),
+            mo.md("### 🧩 Board & Player Distributions"),
             mo.ui.altair_chart(c_dist_faceted),
         ]
     )
