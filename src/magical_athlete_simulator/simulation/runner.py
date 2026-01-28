@@ -145,16 +145,6 @@ def run_single_simulation(
         metrics = aggregator.finalize_metrics(engine)
         positions = aggregator.finalize_positions()
 
-        # 1. RANK ASSIGNMENT (Critical)
-        metrics.sort(
-            key=lambda r: (
-                r.finish_position if r.finish_position is not None else 999,
-                -r.final_vp,
-            ),
-        )
-        for rank, r in enumerate(metrics, start=1):
-            r.rank = rank
-
         winner_name = metrics[0].racer_name if metrics else "N/A"
         runner_up = metrics[1].racer_name if len(metrics) > 1 else "None"
 
@@ -177,13 +167,13 @@ def run_single_simulation(
                     "config_hash": r.config_hash,
                     "racer_id": r.racer_id,
                     "turns_taken": r.turns_taken,
-                    "rank": r.rank,
+                    "finish_position": r.finish_position,
                 }
                 for r in metrics
             ]
         ).with_columns(
             pl.col("racer_id").cast(pl.Int64),
-            pl.col("rank").cast(pl.Int64),
+            pl.col("finish_position").cast(pl.Int64),
         )
 
         # 3. Compute Metrics

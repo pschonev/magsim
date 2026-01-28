@@ -98,9 +98,6 @@ class RacerResult(SQLModel, table=True):
     finish_position: int | None = None
     eliminated: bool = False
 
-    # Ranking
-    rank: int | None = None
-
     # Position relative to median at 66% of race duration
     midgame_relative_pos: float = 0.0
 

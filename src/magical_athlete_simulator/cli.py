@@ -147,21 +147,6 @@ class Args:
                             completed += 1
                             unsaved_changes += 1
 
-                            # --- Ranking Logic ---
-                            standings = sorted(
-                                result.metrics,
-                                key=lambda m: (m.final_vp, -m.turns_taken),
-                                reverse=True,
-                            )
-                            rank_map: dict[int, int] = {}
-                            if len(standings) > 0 and standings[0].final_vp > 0:
-                                rank_map[standings[0].racer_id] = 1
-                            if len(standings) > 1 and standings[1].final_vp > 0:
-                                rank_map[standings[1].racer_id] = 2
-
-                            for m in result.metrics:
-                                m.rank = rank_map.get(m.racer_id)
-
                             race_record = Race(
                                 config_hash=result.config_hash,
                                 config_encoded=game_config.encoded,
