@@ -2075,9 +2075,19 @@ def _(df_racer_results_f, df_races_f, mo, pl):
     df_racer_results_filtered = df_racer_results_f
 
     def _calculate_all_data():
-        # 0. PREP
+        # 0. PREP: Extract Duration Info First
+        race_time_info = df_working.select(
+            [
+                "config_hash",
+                "racer_count",
+                "turns_on_winning_round",
+                pl.col("total_turns").alias("race_global_turns"),
+            ]
+        )
+
         results_augmented = (
-            df_racer_results_filtered.with_columns(
+            df_racer_results_filtered.join(race_time_info, on="config_hash", how="left")
+            .with_columns(
                 [
                     pl.col("pos_self_ability_movement").fill_null(0),
                     pl.col("neg_self_ability_movement").fill_null(0),
@@ -2096,6 +2106,12 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             )
             .with_columns(
                 [
+                    # --- DURATION LOGIC ---
+                    pl.when(pl.col("finish_position") == 1)
+                    .then(pl.col("turns_on_winning_round") * pl.col("racer_count"))
+                    .otherwise(pl.col("race_global_turns"))
+                    .alias("effective_global_duration"),
+                    # ----------------------
                     (
                         pl.col("pos_self_ability_movement")
                         - pl.col("neg_self_ability_movement")
@@ -2108,15 +2124,14 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 ]
             )
             .with_columns(
-                (pl.col("active_turns_count") / pl.col("turns_taken"))
+                (pl.col("active_turns_count") / pl.col("turns_taken").replace(0, 1))
                 .fill_nan(0)
                 .alias("active_turns_pct")
             )
         )
 
         # --- 0.5. CALCULATE SKIPPED TURN COSTS ---
-        # A. Raw Speed Per Active Turn (The "Potential" Speed)
-        # Sum of Dice + Positive Self-Movement (ignoring negative modifiers for "potential")
+        # We calculate individual speeds to get the global average
         results_augmented = results_augmented.with_columns(
             (
                 (pl.col("sum_dice_rolled") + pl.col("pos_self_ability_movement"))
@@ -2124,12 +2139,11 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             ).alias("raw_speed_per_active_turn")
         )
 
-        # B. Global Average Active Speed (for estimating impact on others)
-        # We calculate this as the mean of the column we just created
+        # GLOBAL CONSTANT: Used for skip penalties to avoid circular logic
         global_avg_active_speed = (
             results_augmented.select(pl.col("raw_speed_per_active_turn").mean()).item()
             or 3.5
-        )  # Fallback to base expectation (3.5) if data is empty
+        )
 
         # 1. TRUTH
         global_win_rates = (
@@ -2162,16 +2176,6 @@ def _(df_racer_results_f, df_races_f, mo, pl):
         )
 
         # 3. RACE ENV
-        race_meta_stats = df_working.select(
-            [
-                "config_hash",
-                "tightness_score",
-                "volatility_score",
-                "total_turns",
-                "board",
-                "racer_count",
-            ]
-        ).rename({"total_turns": "race_global_turns"})
         race_agg_stats = stats_results.group_by("config_hash").agg(
             (pl.col("ability_trigger_count").sum() / pl.col("racer_id").count()).alias(
                 "race_avg_triggers"
@@ -2180,39 +2184,67 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 "race_avg_trip_rate"
             ),
         )
-        stats_races = race_meta_stats.join(
-            race_agg_stats, on="config_hash", how="left"
-        ).fill_null(0)
 
-        # 4. ENRICHMENT
-        stats_results = stats_results.join(
-            stats_races.select(["config_hash", "race_global_turns"]),
-            on="config_hash",
-            how="left",
+        stats_races = (
+            df_working.select(
+                [
+                    "config_hash",
+                    "tightness_score",
+                    "volatility_score",
+                    "board",
+                    "racer_count",
+                ]
+            )
+            .join(race_time_info, on=["config_hash", "racer_count"], how="left")
+            .join(race_agg_stats, on="config_hash", how="left")
+            .fill_null(0)
         )
+
+        # 4. ENRICHMENT (The Final Calculation)
+        # --- FIX: Use GLOBAL AVG for skip costs ---
         stats_results = stats_results.with_columns(
-            (pl.col("pos_self_ability_movement") / pl.col("total_turns_clean")).alias(
-                "norm_pos_self"
+            (pl.col("skipped_self_main_move") * pl.lit(global_avg_active_speed)).alias(
+                "cost_skip_self"
             ),
-            (pl.col("neg_self_ability_movement") / pl.col("total_turns_clean")).alias(
-                "norm_neg_self"
+            (pl.col("skipped_other_main_move") * pl.lit(global_avg_active_speed)).alias(
+                "cost_skip_other"
             ),
-            (pl.col("pos_other_ability_movement") / pl.col("race_global_turns")).alias(
-                "norm_pos_other"
-            ),
-            (pl.col("neg_other_ability_movement") / pl.col("race_global_turns")).alias(
-                "norm_neg_other"
-            ),
+        )
+
+        stats_results = stats_results.with_columns(
+            # A. Self Movement
             (
-                (pl.col("pos_self_ability_movement") / pl.col("total_turns_clean"))
+                pl.col("pos_self_ability_movement")
+                / pl.col("turns_taken").replace(0, None)
+            ).alias("norm_pos_self"),
+            (
+                (pl.col("neg_self_ability_movement") + pl.col("cost_skip_self"))
+                / pl.col("turns_taken").replace(0, None)
+            ).alias("norm_neg_self"),
+            # B. Other Movement
+            (
+                pl.col("pos_other_ability_movement")
+                / pl.col("effective_global_duration").replace(0, None)
+            ).alias("norm_pos_other"),
+            (
+                (pl.col("neg_other_ability_movement") + pl.col("cost_skip_other"))
+                / pl.col("effective_global_duration").replace(0, None)
+            ).alias("norm_neg_other"),
+            # Raw Speed Calc
+            (
+                (
+                    pl.col("pos_self_ability_movement")
+                    / pl.col("turns_taken").replace(0, None)
+                )
                 + 3.5
             ).alias("speed_raw_calc"),
         ).with_columns(
+            # Net Movement Calculation
             (
-                pl.col("norm_pos_self")
-                - pl.col("norm_neg_self")
-                - pl.col("norm_pos_other")
-                + pl.col("norm_neg_other")
+                pl.col("norm_pos_self").fill_null(0)
+                - pl.col("norm_neg_self").fill_null(0)
+                - pl.col("norm_pos_other").fill_null(0)
+                + pl.col("norm_neg_other").fill_null(0)
             ).alias("relative_speed_calc")
         )
 
@@ -2241,7 +2273,20 @@ def _(df_racer_results_f, df_races_f, mo, pl):
 
         # 6. BASE STATS
         base_stats = (
-            stats_results.join(stats_races, on="config_hash", how="left")
+            stats_results.join(
+                stats_races.select(
+                    [
+                        "config_hash",
+                        "tightness_score",
+                        "volatility_score",
+                        "race_avg_triggers",
+                        "race_avg_trip_rate",
+                        "race_global_turns",
+                    ]
+                ),
+                on="config_hash",
+                how="left",
+            )
             .group_by("racer_name")
             .agg(
                 pl.col("final_vp").mean().alias("mean_vp"),
@@ -2270,13 +2315,20 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 .mean()
                 .alias("own_turn_triggers_per_turn"),
             )
+            .fill_nan(0)
         )
 
         # 7. CORRELATIONS
+        stats_results_corr = stats_results.with_columns(
+            (pl.col("sum_dice_rolled") / pl.col("rolling_turns").replace(0, 1)).alias(
+                "avg_dice_val"
+            )
+        )
+
         corr_df = (
-            stats_results.group_by("racer_name")
+            stats_results_corr.group_by("racer_name")
             .agg(
-                pl.corr("sum_dice_rolled", "final_vp").abs().alias("dice_sensitivity"),
+                pl.corr("avg_dice_val", "final_vp").abs().alias("dice_sensitivity"),
                 pl.corr("net_self_movement", "final_vp").alias(
                     "ability_move_dependency"
                 ),
@@ -2304,6 +2356,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 pl.col("global_win_rate").fill_null(0),
                 pl.col("std_dev_val").fill_null(0).alias("std_vp_sigma"),
             )
+            .fill_nan(0)
         )
 
         # B. MATRICES
@@ -2329,68 +2382,21 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                     / pl.col("my_global_avg")
                 ).alias("percentage_shift"),
             )
+            .fill_nan(0)
         )
 
-        # C. ABILITIES BREAKDOWN (WITH SKIPS INTEGRATED)
+        # C. ABILITIES BREAKDOWN
         df_abilities_agg = (
-            results_augmented.join(
-                stats_races.select(["config_hash", "race_global_turns"]),
-                on="config_hash",
-                how="left",
-            )
-            .group_by("racer_name")
+            stats_results.group_by("racer_name")
             .agg(
                 [
-                    pl.col("pos_self_ability_movement").sum().alias("pos_self"),
-                    pl.col("neg_self_ability_movement").sum().alias("neg_self"),
-                    pl.col("pos_other_ability_movement").sum().alias("pos_other"),
-                    pl.col("neg_other_ability_movement").sum().alias("neg_other"),
-                    # Use global average for BOTH to standardize cost and fix Flip Flop circularity
-                    (pl.col("skipped_self_main_move") * global_avg_active_speed)
-                    .sum()
-                    .alias("dist_lost_self_skip"),
-                    (pl.col("skipped_other_main_move") * global_avg_active_speed)
-                    .sum()
-                    .alias("dist_lost_other_skip"),
-                    pl.col("turns_taken").sum().alias("total_racer_turns"),
-                    pl.col("race_global_turns").sum().alias("total_race_turns_sum"),
+                    pl.col("norm_pos_self").mean().alias("+ Self"),
+                    pl.col("norm_neg_self").mean().alias("- Self"),
+                    pl.col("norm_pos_other").mean().alias("+ Others"),
+                    pl.col("norm_neg_other").mean().alias("- Others"),
                 ]
             )
-            .with_columns(
-                [
-                    # Add virtual distance to the respective negative columns
-                    (pl.col("neg_self") + pl.col("dist_lost_self_skip")).alias(
-                        "total_neg_self"
-                    ),
-                    (pl.col("neg_other") + pl.col("dist_lost_other_skip")).alias(
-                        "total_neg_other"
-                    ),
-                ]
-            )
-            .with_columns(
-                [
-                    (pl.col("pos_self") / pl.col("total_racer_turns")).alias(
-                        "pos_self_norm"
-                    ),
-                    (pl.col("total_neg_self") / pl.col("total_racer_turns")).alias(
-                        "neg_self_norm"
-                    ),
-                    (pl.col("pos_other") / pl.col("total_race_turns_sum")).alias(
-                        "pos_other_norm"
-                    ),
-                    (pl.col("total_neg_other") / pl.col("total_race_turns_sum")).alias(
-                        "neg_other_norm"
-                    ),
-                ]
-            )
-            .rename(
-                {
-                    "pos_self_norm": "+ Self",
-                    "neg_self_norm": "- Self",
-                    "pos_other_norm": "+ Others",
-                    "neg_other_norm": "- Others",
-                }
-            )
+            .fill_nan(0)
         )
 
         # --- D. RAW DISTRIBUTION DATA (NO FILTERING HERE) ---
@@ -2415,7 +2421,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             "results_raw": stats_results,
             "races_raw": stats_races,
             "abilities_df": df_abilities_agg,
-            "dist_raw": dist_base_raw,  # Just return raw data
+            "dist_raw": dist_base_raw,
         }
 
     with mo.status.spinner(
@@ -2777,7 +2783,7 @@ def cell_show_aggregated_data(
     )
     global_min_edge = df_racer["left_edge"].min()
     global_max_val = df_long["magnitude_signed"].max()
-    domain_min = global_min_edge * 1.35 if global_min_edge < 0 else -1.0
+    domain_min = global_min_edge * 1.1 if global_min_edge < 0 else -1.0
     domain_max = global_max_val * 1.05
     y_axis_config = alt.Y("racer_name:N", sort=y_sort_order, axis=None)
 

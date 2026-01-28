@@ -33,6 +33,7 @@ class Race(SQLModel, table=True):
     execution_time_ms: float
     error_code: ErrorCode | None = Field(sa_type=String)
     total_turns: int
+    turns_on_winning_round: int | None = None
 
     # Created at
     created_at: datetime.datetime = Field(

@@ -38,6 +38,7 @@ class SimulationResult:
     execution_time_ms: float
     error_code: ErrorCode | None
     turn_count: int
+    turns_on_winning_round: int | None
     metrics: list[RacerResult]
     position_logs: PositionLogColumns
     tightness_score: float = 0.0
@@ -74,6 +75,7 @@ def run_single_simulation(
     aggregator.initialize_racers(engine)
 
     turn_counter = 0
+    winning_turn_count: int | None = None
 
     def on_event_processed(engine: GameEngine, event: GameEvent):
         aggregator.on_event(event=event, engine=engine)
@@ -97,6 +99,12 @@ def run_single_simulation(
             active_racer_idx=active_racer_idx,
         )
         turn_counter += 1
+
+        if winning_turn_count is None:
+            for r in engine.state.racers:
+                if r.finish_position == 1:
+                    winning_turn_count = turn_counter
+                    break
 
         if turn_counter >= max_turns:
             error_code = "MAX_TURNS_REACHED"
@@ -202,12 +210,16 @@ def run_single_simulation(
             f"🏁 Done in {execution_time_ms:.2f}ms | {turn_counter} turns | 1st: {winner_name}, 2nd: {runner_up}",
         )
 
+    if winning_turn_count is None and not metrics:
+        winning_turn_count = turn_counter
+
     return SimulationResult(
         config_hash=config_hash,
         timestamp=timestamp,
         execution_time_ms=execution_time_ms,
         error_code=error_code,
         turn_count=turn_counter,
+        turns_on_winning_round=winning_turn_count,
         metrics=metrics,
         position_logs=positions,
         tightness_score=race_tightness,

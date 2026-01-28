@@ -158,6 +158,7 @@ class Args:
                                 execution_time_ms=result.execution_time_ms,
                                 error_code=result.error_code,
                                 total_turns=result.turn_count,
+                                turns_on_winning_round=result.turns_on_winning_round,
                                 tightness_score=result.tightness_score,
                                 volatility_score=result.volatility_score,
                             )
