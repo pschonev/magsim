@@ -3102,12 +3102,16 @@ def cell_show_aggregated_data(
         return alt.layer(base, rule, data=data)
 
     # Global Chart (Big)
-    c_dist_global = build_dist_chart(
-        df_dist_global,
-        w=600,
-        h=250,
-        title="Global Distribution: Game Length vs Total VP (All Games)",
-    ).configure_view(stroke=None)
+    c_dist_global = (
+        build_dist_chart(
+            df_dist_global,
+            w=600,
+            h=250,
+            title="Global Distribution: Game Length vs Total VP (All Games)",
+        )
+        .properties(background="transparent")
+        .configure_view(stroke=None)
+    )
 
     # Faceted Chart (by board & player count)
     c_dist_faceted = (
@@ -3121,6 +3125,7 @@ def cell_show_aggregated_data(
             row=alt.Row("board:N", title="Board"),
             column=alt.Column("racer_count:N", title="Player Count"),
         )
+        .properties(background="transparent")
         .configure_view(stroke=None)
     )
 
@@ -3131,7 +3136,6 @@ def cell_show_aggregated_data(
             mo.ui.altair_chart(c_global_2),
             mo.md("### 📉 Global Distributions"),
             mo.ui.altair_chart(c_dist_global),
-            mo.md("### 🧩 Board & Player Distributions"),
             mo.ui.altair_chart(c_dist_faceted),
         ]
     )
