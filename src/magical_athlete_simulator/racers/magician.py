@@ -14,6 +14,7 @@ from magical_athlete_simulator.core.events import (
     AbilityTriggeredEventOrSkipped,
     GameEvent,
     RollModificationWindowEvent,
+    TurnStartEvent,
 )
 from magical_athlete_simulator.engine.roll import trigger_reroll
 
@@ -25,7 +26,13 @@ if TYPE_CHECKING:
 @dataclass
 class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
     name: AbilityName = "MagicalReroll"
-    triggers: tuple[type[GameEvent], ...] = (RollModificationWindowEvent,)
+    triggers: tuple[type[GameEvent], ...] = (
+        RollModificationWindowEvent,
+        TurnStartEvent,
+    )
+
+    # Local State
+    reroll_count: int = 0
 
     @override
     def execute(
@@ -35,15 +42,20 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, RollModificationWindowEvent):
+        # 1. Reset logic
+        if isinstance(event, TurnStartEvent):
+            if event.target_racer_idx == owner_idx:
+                self.reroll_count = 0
             return "skip_trigger"
 
-        me = engine.get_racer(owner_idx)
+        # 2. Reroll Logic
+        if not isinstance(event, RollModificationWindowEvent):
+            return "skip_trigger"
 
         # 1. Eligibility Check
         if event.target_racer_idx != owner_idx:
             return "skip_trigger"
-        if me.reroll_count >= 2:
+        if self.reroll_count >= 2:
             return "skip_trigger"
 
         should_reroll = agent.make_boolean_decision(
@@ -56,7 +68,12 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
         )
 
         if should_reroll:
-            me.reroll_count += 1
+            # Increment local state
+            self.reroll_count += 1
+
+            # Also update global state so telemetry/engine knows a reroll happened
+            engine.get_racer(owner_idx).reroll_count += 1
+
             engine.push_event(
                 AbilityTriggeredEvent(
                     owner_idx,

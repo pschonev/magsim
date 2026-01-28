@@ -122,7 +122,6 @@ class GameEngine:
 
         # reset roll state
         self.state.roll_state = RollState()
-        racer.reroll_count = 0
         racer.roll_override = None
         racer.can_reroll = True
         racer.main_move_consumed = False
@@ -219,7 +218,6 @@ class GameEngine:
                 r.active,
                 r.tripped,
                 r.main_move_consumed,
-                r.reroll_count,
                 frozenset(r.active_abilities.keys()),
             )
             for r in self.state.racers
