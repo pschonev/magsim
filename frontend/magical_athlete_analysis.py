@@ -3249,11 +3249,21 @@ def cell_show_aggregated_data(
             ).alias("env_label"),
         )
     )
+    env_sort_order = (
+        env_stats.select(["board", "racer_count", "env_label"])
+        .unique()
+        .sort(["board", "racer_count"])
+        .get_column("env_label")
+        .to_list()
+    )
     c_env = (
         alt.Chart(env_stats)
         .mark_rect()
         .encode(
-            x=alt.X("env_label:N", sort=env_stats["env_label"].unique().to_list()),
+            x=alt.X(
+                "env_label:N",
+                sort=env_sort_order,
+            ),
             y=alt.Y("racer_name:N"),
             color=alt.Color(
                 f"{('relative_shift' if use_pct else 'absolute_shift')}:Q",
