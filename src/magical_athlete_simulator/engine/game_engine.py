@@ -132,12 +132,13 @@ class GameEngine:
         if racer.tripped:
             self.log_info(f"{racer.repr} recovers from Trip.")
             racer.tripped = False
+            tripping_racers = racer.tripping_racers.copy()
             racer.tripping_racers = []
             racer.main_move_consumed = True
             self.push_event(
                 TripRecoveryEvent(
                     target_racer_idx=cr,
-                    tripping_racers=racer.tripping_racers,
+                    tripping_racers=tripping_racers,
                     responsible_racer_idx=None,
                     source="System",
                 ),

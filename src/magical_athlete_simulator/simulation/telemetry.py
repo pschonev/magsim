@@ -259,16 +259,17 @@ class MetricsAggregator:
                 stats_tripped_racer = self._get_result(event.target_racer_idx)
                 stats_tripped_racer.recovery_turns += 1
 
+                tripping_racers_count = len(event.tripping_racers)
                 for tripping_racer_idx in event.tripping_racers:
                     if tripping_racer_idx is not None:
                         stats_tripper = self._get_result(tripping_racer_idx)
                         if tripping_racer_idx == event.target_racer_idx:
-                            stats_tripper.skipped_self_main_move += len(
-                                event.tripping_racers,
+                            stats_tripper.skipped_self_main_move += (
+                                1 / tripping_racers_count
                             )
                         else:
-                            stats_tripper.skipped_other_main_move += len(
-                                event.tripping_racers,
+                            stats_tripper.skipped_other_main_move += (
+                                1 / tripping_racers_count
                             )
 
             # --- 6. SKIPS ---
