@@ -211,9 +211,7 @@ def cell_display_data(df_racer_results, df_races, mo, pl):
     HASH_COL = "config_hash"
 
     # 1. Get unique racers for column headers
-    unique_racers = sorted(
-        df_racer_results.get_column("racer_name").unique().to_list()
-    )
+    unique_racers = sorted(df_racer_results.get_column("racer_name").unique().to_list())
 
     # 2. FIX DATA TYPE: Decode JSON -> List (WASM Compatible)
     df_races_clean = df_races.with_columns(
@@ -281,23 +279,15 @@ def cell_visual_setup(math):
 
     BG_COLOR = "#181c1a"
 
-
     class RacerPalette(NamedTuple):
         primary: str
         secondary: str | None = None
         outline: str = "#000000"
 
-
     RACER_PALETTES = {
-        "HugeBaby": RacerPalette(
-            "#FFB7C5", "#FFFFFF", "#39FF14"
-        ),  # Pastel Pink (Baby)
-        "Scoocher": RacerPalette(
-            "#8B4513", "#FF0000", "#800080"
-        ),  # Brown (Snail/Dog?)
-        "Genius": RacerPalette(
-            "#FF0000", "#0000FF", "#FFFF00"
-        ),  # Bright Red (Shirt)
+        "HugeBaby": RacerPalette("#FFB7C5", "#FFFFFF", "#39FF14"),  # Pastel Pink (Baby)
+        "Scoocher": RacerPalette("#8B4513", "#FF0000", "#800080"),  # Brown (Snail/Dog?)
+        "Genius": RacerPalette("#FF0000", "#0000FF", "#FFFF00"),  # Bright Red (Shirt)
         "Banana": RacerPalette("#FFE135", "#000000", "#800080"),  # Standard Yellow
         "Skipper": RacerPalette(
             "#1A4099", "#FFD700", "#800080"
@@ -305,12 +295,8 @@ def cell_visual_setup(math):
         "PartyAnimal": RacerPalette(
             "#32CD32", "#FFFF00", "#FF00FF"
         ),  # Lime Green (Primary)
-        "Romantic": RacerPalette(
-            "#DA70D6", "#FFFF00", "#800080"
-        ),  # Orchid (Primary)
-        "Mastermind": RacerPalette(
-            "#800080", "#FFD700", "#008000"
-        ),  # Purple (Primary)
+        "Romantic": RacerPalette("#DA70D6", "#FFFF00", "#800080"),  # Orchid (Primary)
+        "Mastermind": RacerPalette("#800080", "#FFD700", "#008000"),  # Purple (Primary)
         "Copycat": RacerPalette(
             "#00BFFF", "#FFFFFF", "#FFA500"
         ),  # Deep Sky Blue (Cat?)
@@ -336,9 +322,7 @@ def cell_visual_setup(math):
         "LovableLoser": RacerPalette(
             "#008000", "#FF00FF", "#FFA500"
         ),  # Green & Magenta & Orange
-        "Coach": RacerPalette(
-            "#636829", "#DC143C", "#8A2BE2"
-        ),  # Muddy Lizard Green
+        "Coach": RacerPalette("#636829", "#DC143C", "#8A2BE2"),  # Muddy Lizard Green
         "Stickler": RacerPalette(
             "#C71585", "#FF69B4", "#0000FF"
         ),  # Medium Violet Red & Hot Pink & Blue
@@ -377,17 +361,14 @@ def cell_visual_setup(math):
         "move_neg_text": "#B71C1C",
     }
 
-
     # --- HELPER FUNCTIONS ---
     def get_racer_palette(name: str) -> RacerPalette:
         if name in RACER_PALETTES:
             return RACER_PALETTES[name]
         return FALLBACK_PALETTES[hash(name) % len(FALLBACK_PALETTES)]
 
-
     def get_racer_color(name: str) -> str:
         return get_racer_palette(name).primary
-
 
     def generate_racetrack_positions(
         num_spaces, start_x, start_y, straight_len, radius
@@ -439,7 +420,6 @@ def cell_visual_setup(math):
 
         return positions
 
-
     # Constants
     NUM_TILES = 31
     board_positions = generate_racetrack_positions(NUM_TILES, 120, 150, 350, 100)
@@ -486,7 +466,9 @@ def cell_vsialize_track(
         rw, rh = 50, 30
 
         # 1. Track Groups
-        track_group_start = f'<g transform="translate({trans_x}, {trans_y}) scale({scale_factor})">'
+        track_group_start = (
+            f'<g transform="translate({trans_x}, {trans_y}) scale({scale_factor})">'
+        )
 
         # 2. Track Spaces
         for i, (cx, cy, rot) in enumerate(positions_map):
@@ -631,9 +613,7 @@ def cell_vsialize_track(
                 stroke = pal.outline
 
                 svg_elements.append(f"<g>")
-                svg_elements.append(
-                    f"<title>{_html.escape(racer['tooltip'])}</title>"
-                )
+                svg_elements.append(f"<title>{_html.escape(racer['tooltip'])}</title>")
 
                 svg_elements.append(
                     f'<circle cx="{cx}" cy="{cy}" r="{MAIN_RADIUS}" fill="{pal.primary}" stroke="{stroke}" stroke-width="{OUTLINE_WIDTH}" />'
@@ -716,9 +696,7 @@ def cell_manage_state(mo):
 
     # Track the last seen selection for EACH table to prevent fighting/loops
     get_last_race_hash, set_last_race_hash = mo.state(None, allow_self_loops=True)
-    get_last_result_hash, set_last_result_hash = mo.state(
-        None, allow_self_loops=True
-    )
+    get_last_result_hash, set_last_result_hash = mo.state(None, allow_self_loops=True)
     return (
         get_board,
         get_debug_mode,
@@ -778,12 +756,10 @@ def cell_config_ui(
         on_click=lambda _: set_step_idx(0),
     )
 
-
     def manual_change(setter, value):
         setter(value)
         set_step_idx(0)
         return value
-
 
     scenario_seed = mo.ui.number(
         start=0,
@@ -820,7 +796,6 @@ def cell_config_ui(
         label="Paste Encoded Config", placeholder="eyJ...", full_width=True
     )
 
-
     def _on_load_click(_):
         """Parse encoded string using the existing class and update UI state."""
         val = encoded_config_input.value
@@ -843,11 +818,7 @@ def cell_config_ui(
         except Exception:
             pass
 
-
-    load_encoded_btn = mo.ui.button(
-        label="Load Configuration", on_click=_on_load_click
-    )
-
+    load_encoded_btn = mo.ui.button(label="Load Configuration", on_click=_on_load_click)
 
     # 2. Position Inputs & Logic
     def _make_pos_on_change(racer_name):
@@ -861,7 +832,6 @@ def cell_config_ui(
 
         return _on_change
 
-
     pos_widget_map = {
         ui_racer: mo.ui.number(
             start=0,
@@ -873,11 +843,9 @@ def cell_config_ui(
         for ui_racer in current_roster
     }
 
-
     # 3. Snapshot Logic
     def _snapshot_values(exclude=None):
         return {r: w.value for r, w in pos_widget_map.items() if r != exclude}
-
 
     # --- REORDERING LOGIC ---
     def move_racer(index, direction):
@@ -891,7 +859,6 @@ def cell_config_ui(
 
         return _move
 
-
     # 4. Action Buttons
     action_buttons = {}
     for i, ui_racer in enumerate(current_roster):
@@ -904,9 +871,7 @@ def cell_config_ui(
             ),
             disabled=(len(current_roster) <= 1),
         )
-        btn_up = mo.ui.button(
-            label="↑", on_click=move_racer(i, -1), disabled=(i == 0)
-        )
+        btn_up = mo.ui.button(label="↑", on_click=move_racer(i, -1), disabled=(i == 0))
         btn_down = mo.ui.button(
             label="↓",
             on_click=move_racer(i, 1),
@@ -923,7 +888,6 @@ def cell_config_ui(
         label="Add racer",
     )
 
-
     def _add_racer(v):
         r = get_racer_to_add()
         if r and r not in get_selected_racers():
@@ -935,7 +899,6 @@ def cell_config_ui(
             set_step_idx(0)
         return v
 
-
     add_button = mo.ui.button(label="Add", on_click=_add_racer)
 
     # 6. Layout Table
@@ -944,9 +907,7 @@ def cell_config_ui(
         w_pos = pos_widget_map[ui_racer]
         b_rem, b_up, b_down = action_buttons[ui_racer]
         move_grp = mo.hstack([b_up, b_down], justify="center", gap=0)
-        table_rows.append(
-            f"| {i + 1}. {ui_racer} | {w_pos} | {move_grp} | {b_rem} |"
-        )
+        table_rows.append(f"| {i + 1}. {ui_racer} | {w_pos} | {move_grp} | {b_rem} |")
 
     racer_table = mo.md(
         "| Racer | Start Pos | Order | Remove |\n"
@@ -1022,9 +983,7 @@ def cell_display_config(
                     mo.hstack([debug_mode_ui], justify="start", gap=2),
                     mo.md("### Racers"),
                     racer_table,
-                    mo.hstack(
-                        [add_racer_dropdown, add_button], justify="start", gap=1
-                    ),
+                    mo.hstack([add_racer_dropdown, add_button], justify="start", gap=1),
                 ]
             ).style({"overflow-x": "auto", "max-width": "100%"}),
             mo.vstack(
@@ -1074,10 +1033,7 @@ def cell_load_config(
         curr_race_row = races_table.value.row(0, named=True)
 
     curr_res_hash = None
-    if (
-        racer_results_table.value is not None
-        and racer_results_table.value.height > 0
-    ):
+    if racer_results_table.value is not None and racer_results_table.value.height > 0:
         curr_res_hash = racer_results_table.value.item(0, "config_hash")
 
     # 2. Get Last Known States
@@ -1156,7 +1112,6 @@ def cell_display_config_ui(
             gap=1,
         )
 
-
     results_tabs = mo.ui.tabs(
         {
             "Racer Results": mo.vstack([_header(), racer_results_table]),
@@ -1170,9 +1125,7 @@ def cell_display_config_ui(
                     mo.hstack(
                         [results_folder_browser, reload_data_btn], align="center"
                     ),
-                    mo.callout(
-                        mo.md(f"Current Status: {load_status}"), kind="neutral"
-                    ),
+                    mo.callout(mo.md(f"Current Status: {load_status}"), kind="neutral"),
                 ]
             ).style({"width": "100%", "min-height": "400px"}),
         }
@@ -1259,15 +1212,12 @@ def cell_setup_log(
         ],
         dice_rolls=dice_rolls,
         seed=None if dice_rolls else current_seed_val,
-        board=BOARD_DEFINITIONS.get(
-            current_board_val, BOARD_DEFINITIONS["standard"]
-        )(),
+        board=BOARD_DEFINITIONS.get(current_board_val, BOARD_DEFINITIONS["standard"])(),
     )
 
     step_history = []
     turn_map = {}
     SNAPSHOT_EVENTS = (MoveCmdEvent, WarpCmdEvent, TripCmdEvent)
-
 
     class RichLogSource:
         def __init__(self, console):
@@ -1280,7 +1230,6 @@ def cell_setup_log(
             return self._console.export_html(
                 clear=False, inline_styles=True, code_format="{code}"
             )
-
 
     policy = SnapshotPolicy(
         snapshot_event_types=SNAPSHOT_EVENTS,
@@ -1302,12 +1251,10 @@ def cell_setup_log(
     # Turn 0 is reserved for "Board Setup". Turn 1 is the first actual move.
     sim_turn_counter = {"current": 1}
 
-
     def on_event(engine, event):
         t_idx = sim_turn_counter["current"]
         snapshot_recorder.on_event(engine, event, turn_index=t_idx)
         metrics_aggregator.on_event(event, engine)
-
 
     if hasattr(scenario.engine, "on_event_processed"):
         scenario.engine.on_event_processed = on_event
@@ -1430,11 +1377,9 @@ def cell_simulation_navigation(
         disabled=(current_step_idx >= max_s),
     )
 
-
     def on_slider_change(v):
         if v in turn_map:
             set_step_idx(turn_map[v][0])
-
 
     nav_max_turn = max(turn_map.keys()) if turn_map else 0
     turn_slider = mo.ui.slider(
@@ -1472,9 +1417,7 @@ def cell_display_simulation_nav(
     turn_slider,
 ):
     # --- NAV LAYOUT ---
-    curr_step: Any | Literal[0] = (
-        current_data.global_step_index if current_data else 0
-    )
+    curr_step: Any | Literal[0] = current_data.global_step_index if current_data else 0
     tot_steps = len(step_history) if step_history else 0
 
     status_text = mo.md(
@@ -1655,7 +1598,6 @@ def cell_combo_filter_ui(
         label="Filter Type",
     )
 
-
     def add_combo_filter():
         if not combo_racer_select.value:
             return
@@ -1664,9 +1606,7 @@ def cell_combo_filter_ui(
         new_filter = {
             "racers": sorted(list(combo_racer_select.value)),
             "type": combo_type_select.value,
-            "id": str(len(current))
-            + "_"
-            + str(hash(str(combo_racer_select.value))),
+            "id": str(len(current)) + "_" + str(hash(str(combo_racer_select.value))),
         }
 
         # Prevent duplicates
@@ -1678,7 +1618,6 @@ def cell_combo_filter_ui(
                 return
 
         set_combo_filters(current + [new_filter])
-
 
     add_combo_btn = mo.ui.button(
         label="Add Combo Filter",
@@ -1703,14 +1642,12 @@ def cell_combo_filter_ui(
 def cell_combo_filter_display(get_combo_filters, mo, set_combo_filters):
     import functools
 
-
     # 1. Define Remove Handler
     def _remove_id(target_id):
         current = get_combo_filters()
         # Filter by ID (robust string comparison)
         new_list = [c for c in current if str(c["id"]) != str(target_id)]
         set_combo_filters(new_list)
-
 
     # 2. Render Buttons from State
     current_filters = get_combo_filters()
@@ -1838,10 +1775,7 @@ def cell_apply_all_filters(
         # Check if row has ALL these racers
         # Using list.contains for each racer and combining with AND
         has_all_racers = pl.all_horizontal(
-            [
-                pl.col("racer_names").list.contains(r_name)
-                for r_name in target_racers
-            ]
+            [pl.col("racer_names").list.contains(r_name) for r_name in target_racers]
         )
 
         if combo_item["type"] == "Must Include All":
@@ -1887,9 +1821,7 @@ def _(
     set_last_run_config,
 ):
     # 1. Prepare Options from RAW Data
-    all_racers = sorted(
-        df_racer_results.get_column("racer_name").unique().to_list()
-    )
+    all_racers = sorted(df_racer_results.get_column("racer_name").unique().to_list())
     all_boards = sorted(df_races.get_column("board").unique().to_list())
     all_counts = sorted(df_races.get_column("racer_count").unique().to_list())
 
@@ -1920,7 +1852,6 @@ def _(
     matchup_metric_toggle = mo.ui.switch(value=True, label="Show Percentage Shift")
     dynamic_zoom_toggle = mo.ui.switch(label="🔍 Rank-based view", value=False)
 
-
     # 4. Define "Run Analysis" Button with Callback
     def _submit_filters(_):
         set_last_run_config(
@@ -1931,7 +1862,6 @@ def _(
                 "combo_filters": get_combo_filters(),
             }
         )
-
 
     run_computation_btn = mo.ui.button(
         label="🚀 Run Analysis",
@@ -1974,8 +1904,7 @@ def cell_show_filters(
             ui_racers.value != run_cfg["racers"]
             or ui_boards.value != run_cfg["boards"]
             or ui_counts.value != run_cfg["counts"]
-            or _norm_combos(get_combo_filters())
-            != _norm_combos(run_cfg.get("combos"))
+            or _norm_combos(get_combo_filters()) != _norm_combos(run_cfg.get("combos"))
         )
 
         if is_stale:
@@ -2147,7 +2076,6 @@ def _(df_racer_results_f, df_races_f, mo, pl):
     df_working = df_races_f
     df_racer_results_filtered = df_racer_results_f
 
-
     def _calculate_all_data():
         # 0. PREP: Extract Duration Info First
         race_time_info = df_working.select(
@@ -2160,9 +2088,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
         )
 
         results_augmented = (
-            df_racer_results_filtered.join(
-                race_time_info, on="config_hash", how="left"
-            )
+            df_racer_results_filtered.join(race_time_info, on="config_hash", how="left")
             .with_columns(
                 [
                     pl.col("pos_self_ability_movement").fill_null(0),
@@ -2200,10 +2126,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 ]
             )
             .with_columns(
-                (
-                    pl.col("active_turns_count")
-                    / pl.col("turns_taken").replace(0, 1)
-                )
+                (pl.col("active_turns_count") / pl.col("turns_taken").replace(0, 1))
                 .fill_nan(0)
                 .alias("active_turns_pct")
             )
@@ -2220,9 +2143,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
 
         # GLOBAL CONSTANT: Used for skip penalties to avoid circular logic
         global_avg_active_speed = (
-            results_augmented.select(
-                pl.col("raw_speed_per_active_turn").mean()
-            ).item()
+            results_augmented.select(pl.col("raw_speed_per_active_turn").mean()).item()
             or 3.5
         )
 
@@ -2234,9 +2155,7 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 pl.len().alias("total_races"),
             )
             .with_columns(
-                (pl.col("total_wins") / pl.col("total_races")).alias(
-                    "global_win_rate"
-                )
+                (pl.col("total_wins") / pl.col("total_races")).alias("global_win_rate")
             )
         )
 
@@ -2260,9 +2179,9 @@ def _(df_racer_results_f, df_races_f, mo, pl):
 
         # 3. RACE ENV
         race_agg_stats = stats_results.group_by("config_hash").agg(
-            (
-                pl.col("ability_trigger_count").sum() / pl.col("racer_id").count()
-            ).alias("race_avg_triggers"),
+            (pl.col("ability_trigger_count").sum() / pl.col("racer_id").count()).alias(
+                "race_avg_triggers"
+            ),
             (pl.col("recovery_turns").sum() / pl.col("turns_taken").sum()).alias(
                 "race_avg_trip_rate"
             ),
@@ -2286,12 +2205,12 @@ def _(df_racer_results_f, df_races_f, mo, pl):
         # 4. ENRICHMENT (The Final Calculation)
         # --- FIX: Use GLOBAL AVG for skip costs ---
         stats_results = stats_results.with_columns(
-            (
-                pl.col("skipped_self_main_move") * pl.lit(global_avg_active_speed)
-            ).alias("cost_skip_self"),
-            (
-                pl.col("skipped_other_main_move") * pl.lit(global_avg_active_speed)
-            ).alias("cost_skip_other"),
+            (pl.col("skipped_self_main_move") * pl.lit(global_avg_active_speed)).alias(
+                "cost_skip_self"
+            ),
+            (pl.col("skipped_other_main_move") * pl.lit(global_avg_active_speed)).alias(
+                "cost_skip_other"
+            ),
         )
 
         stats_results = stats_results.with_columns(
@@ -2403,17 +2322,15 @@ def _(df_racer_results_f, df_races_f, mo, pl):
 
         # 7. CORRELATIONS
         stats_results_corr = stats_results.with_columns(
-            (
-                pl.col("sum_dice_rolled") / pl.col("rolling_turns").replace(0, 1)
-            ).alias("avg_dice_val")
+            (pl.col("sum_dice_rolled") / pl.col("rolling_turns").replace(0, 1)).alias(
+                "avg_dice_val"
+            )
         )
 
         corr_df = (
             stats_results_corr.group_by("racer_name")
             .agg(
-                pl.corr("avg_dice_val", "final_vp")
-                .abs()
-                .alias("dice_sensitivity"),
+                pl.corr("avg_dice_val", "final_vp").abs().alias("dice_sensitivity"),
                 pl.corr("net_self_movement", "final_vp").alias(
                     "ability_move_dependency"
                 ),
@@ -2509,7 +2426,6 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             "dist_raw": dist_base_raw,
         }
 
-
     with mo.status.spinner(
         title=f"Aggregating data for {df_working.height} races..."
     ) as _spinner:
@@ -2534,7 +2450,6 @@ def _(BG_COLOR, alt, np, pl):
             )
         except:
             return "white"
-
 
     def build_quadrant_chart(
         stats_df,
@@ -2585,12 +2500,8 @@ def _(BG_COLOR, alt, np, pl):
                 ]
                 return transformed_df, new_col, ticks, vis_ticks
 
-            df_x, plot_x, ticks_x, vis_ticks_x = _apply_rank_transform(
-                stats_df, x_col
-            )
-            chart_df, plot_y, ticks_y, vis_ticks_y = _apply_rank_transform(
-                df_x, y_col
-            )
+            df_x, plot_x, ticks_x, vis_ticks_x = _apply_rank_transform(stats_df, x_col)
+            chart_df, plot_y, ticks_y, vis_ticks_y = _apply_rank_transform(df_x, y_col)
 
             # Rank domains are always [0, 1] (plus padding)
             dom_x = [-0.05, 1.05]
@@ -2654,9 +2565,7 @@ def _(BG_COLOR, alt, np, pl):
             mid_x, mid_y = (min_x_val + max_x_val) / 2, (min_y_val + max_y_val) / 2
 
         # 2. Build Scales
-        scale_x = alt.Scale(
-            domain=dom_x, reverse=reverse_x, zero=False, nice=False
-        )
+        scale_x = alt.Scale(domain=dom_x, reverse=reverse_x, zero=False, nice=False)
         scale_y = alt.Scale(domain=dom_y, zero=False, nice=False)
 
         # 3. Add Stroke Data
@@ -2794,12 +2703,8 @@ def _(BG_COLOR, alt, np, pl):
 
             label_layers = [_lbl(*cfg) for cfg in labels_config]
 
-        layers = (
-            [points, text_outline, text_fill] + label_layers + [h_line, v_line]
-        )
-        xzoom = alt.selection_interval(
-            bind="scales", encodings=["x"], zoom="wheel!"
-        )
+        layers = [points, text_outline, text_fill] + label_layers + [h_line, v_line]
+        xzoom = alt.selection_interval(bind="scales", encodings=["x"], zoom="wheel!")
         return (
             alt.layer(*layers)
             .resolve_scale(x="shared", y="shared")
@@ -2905,9 +2810,7 @@ def cell_show_aggregated_data(
                 "magnitude_signed:Q",
                 title="Movement Impact (Normalized)",
                 scale=alt.Scale(domain=[domain_min, domain_max]),
-                axis=alt.Axis(
-                    grid=False, labelColor="#E0E0E0", titleColor="#E0E0E0"
-                ),
+                axis=alt.Axis(grid=False, labelColor="#E0E0E0", titleColor="#E0E0E0"),
             ),
             color=alt.Color(
                 "metric:N",
@@ -2933,9 +2836,7 @@ def cell_show_aggregated_data(
     )
     text_labels = (
         alt.Chart(df_racer)
-        .mark_text(
-            align="right", baseline="middle", dx=-8, fontSize=12, fontWeight=700
-        )
+        .mark_text(align="right", baseline="middle", dx=-8, fontSize=12, fontWeight=700)
         .encode(
             y=y_axis_config,
             x=alt.X("left_edge:Q"),
@@ -3078,9 +2979,7 @@ def cell_show_aggregated_data(
             x=alt.X("board:N", title="Board", axis=alt.Axis(labelAngle=0)),
             xOffset=alt.XOffset("racer_count:N"),
             y=alt.Y("val:Q", title=None),
-            color=alt.Color(
-                "racer_count:N", title="Players", scale=player_count_scale
-            ),
+            color=alt.Color("racer_count:N", title="Players", scale=player_count_scale),
             column=alt.Column("metric:N", title=None),
             tooltip=[
                 "board:N",
@@ -3091,7 +2990,9 @@ def cell_show_aggregated_data(
         )
         .resolve_scale(y="independent")
         .properties(
-            width=120, height=200, title="Race Metrics", background="transparent"
+            width=120,
+            height=200,
+            background="transparent",
         )
     )
     c_global_2 = (
@@ -3117,9 +3018,7 @@ def cell_show_aggregated_data(
             x=alt.X("board:N", title="Board", axis=alt.Axis(labelAngle=0)),
             xOffset=alt.XOffset("racer_count:N"),
             y=alt.Y("val:Q", title=None),
-            color=alt.Color(
-                "racer_count:N", title="Players", scale=player_count_scale
-            ),
+            color=alt.Color("racer_count:N", title="Players", scale=player_count_scale),
             column=alt.Column("metric:N", title=None),
             tooltip=[
                 "board:N",
@@ -3132,7 +3031,6 @@ def cell_show_aggregated_data(
         .properties(
             width=120,
             height=200,
-            title="Victory Correlations",
             background="transparent",
         )
     )
@@ -3161,25 +3059,19 @@ def cell_show_aggregated_data(
     turns_step = (turns_max - turns_min) / n_bins if turns_max > turns_min else 1.0
     vp_step = (vp_max - vp_min) / n_bins if vp_max > vp_min else 1.0
 
-
     def add_bins(df, col, min_v, step_v, prefix):
         idx = (
-            ((pl.col(col) - min_v) / step_v)
-            .floor()
-            .cast(pl.Int64)
-            .clip(0, n_bins - 1)
+            ((pl.col(col) - min_v) / step_v).floor().cast(pl.Int64).clip(0, n_bins - 1)
         )
         start = (pl.lit(min_v) + idx * pl.lit(step_v)).round(0).cast(pl.Int64)
         end = (start + pl.lit(step_v)).round(0).cast(pl.Int64)
         label = start.cast(pl.Utf8) + pl.lit("-") + end.cast(pl.Utf8)
         return [idx.alias(f"{prefix}_idx"), label.alias(f"{prefix}_label")]
 
-
     dist_binned = dist_viz.with_columns(
         add_bins(dist_viz, "race_global_turns", turns_min, turns_step, "turns")
         + add_bins(dist_viz, "total_race_vp", vp_min, vp_step, "vp")
     )
-
 
     def make_long_dist(df, group_cols):
         if len(group_cols) == 0:
@@ -3192,9 +3084,9 @@ def cell_show_aggregated_data(
             df.group_by(group_cols_eff + ["turns_idx", "turns_label"])
             .agg(pl.len().alias("count"))
             .with_columns(
-                (
-                    pl.col("count") / pl.col("count").sum().over(group_cols_eff)
-                ).alias("pct"),
+                (pl.col("count") / pl.col("count").sum().over(group_cols_eff)).alias(
+                    "pct"
+                ),
                 pl.col("turns_idx").alias("bin_index"),
                 pl.col("turns_label").alias("bin_label"),
                 pl.lit("Game Length (Turns)").alias("series_type"),
@@ -3205,9 +3097,9 @@ def cell_show_aggregated_data(
             df.group_by(group_cols_eff + ["vp_idx", "vp_label"])
             .agg(pl.len().alias("count"))
             .with_columns(
-                (
-                    pl.col("count") / pl.col("count").sum().over(group_cols_eff)
-                ).alias("pct"),
+                (pl.col("count") / pl.col("count").sum().over(group_cols_eff)).alias(
+                    "pct"
+                ),
                 pl.col("vp_idx").alias("bin_index"),
                 pl.col("vp_label").alias("bin_label"),
                 pl.lit("Total VP").alias("series_type"),
@@ -3225,7 +3117,6 @@ def cell_show_aggregated_data(
         if "_grp" in out.columns:
             out = out.drop("_grp")
         return out
-
 
     df_dist_global = make_long_dist(dist_binned, [])
     df_dist_faceted = make_long_dist(dist_binned, ["board", "racer_count"])
@@ -3315,9 +3206,7 @@ def cell_show_aggregated_data(
         .properties(width=300, height=200)
     )
 
-    rule_facet = (
-        alt.Chart().mark_rule(color="#FFF", opacity=0.3).encode(y=alt.datum(0))
-    )
+    rule_facet = alt.Chart().mark_rule(color="#FFF", opacity=0.3).encode(y=alt.datum(0))
     c_dist_faceted = (
         alt.layer(c_dist_faceted, rule_facet, data=df_dist_faceted)
         .facet(
@@ -3452,10 +3341,7 @@ def cell_show_aggregated_data(
 
     df_dynamics = master_df.select(
         pl.col("racer_name").alias("Racer"),
-        pl.col("avg_race_volatility")
-        .cast(pl.Float64)
-        .round(2)
-        .alias("Volatility"),
+        pl.col("avg_race_volatility").cast(pl.Float64).round(2).alias("Volatility"),
         pl.col("avg_race_tightness").cast(pl.Float64).round(2).alias("Tightness"),
         pl.col("avg_game_duration").round(1).alias("Avg Game Len"),
         pl.col("avg_env_triggers").round(1).alias("Race Trigs"),
@@ -3506,10 +3392,8 @@ def cell_show_aggregated_data(
 
     global_ui = mo.vstack(
         [
-            mo.md("### 📊 Global Averages"),
             mo.ui.altair_chart(c_global_1),
             mo.ui.altair_chart(c_global_2),
-            mo.md("### 📉 Global Distributions"),
             mo.ui.altair_chart(c_dist_global),
             mo.ui.altair_chart(c_dist_faceted),
         ]
