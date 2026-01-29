@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 from magical_athlete_simulator.core.abilities import Ability
+from magical_athlete_simulator.core.events import Phase, PostWarpEvent, WarpCmdEvent
 from magical_athlete_simulator.core.mixins import (
     LifecycleManagedMixin,
     MovementValidatorMixin,
@@ -44,6 +45,18 @@ class SticklerConstraint(RacerModifier, MovementValidatorMixin):
             engine.log_info(
                 f"Stickler Constraint: {engine.get_racer(racer_idx).repr} cannot finish unless landing exactly on {board_len}. Destination {end_tile} is invalid.",
             )
+            if engine.on_event_processed is not None:
+                engine.on_event_processed(
+                    engine,
+                    PostWarpEvent(
+                        target_racer_idx=racer_idx,
+                        responsible_racer_idx=self.owner_idx,
+                        source=self.name,
+                        phase=Phase.ROLL_WINDOW,
+                        start_tile=board_len,
+                        end_tile=start_tile,
+                    ),
+                )
             return False
         return True
 

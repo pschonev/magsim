@@ -58,6 +58,7 @@ class HugeBabyModifier(SpaceModifier, ApproachHookMixin):
                 source=self.name,
                 phase=Phase.SYSTEM,
                 target_racer_idx=moving_racer_idx,
+                movement_distance=-1,
             ),
         )
         # Redirect to the previous tile
@@ -173,7 +174,7 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
                     phase=event.phase,
                     warped_racer_idx=v.idx,
                     source=self.name,
-                    responsible_racer_idx=None,
+                    responsible_racer_idx=owner_idx,
                 )
                 engine.log_info(f"HugeBaby pushes {v.repr} to {target}")
 

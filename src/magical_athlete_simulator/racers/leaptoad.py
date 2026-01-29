@@ -71,7 +71,8 @@ class LeaptoadJumpModifier(RacerModifier, DestinationCalculatorMixin):
                         responsible_racer_idx=racer_idx,
                         source=self.name,
                         phase=move_cmd_event.phase,
-                        target_racer_idx=occupied[0].idx,
+                        target_racer_idx=racer_idx,
+                        movement_distance=1,
                     ),
                 )
 

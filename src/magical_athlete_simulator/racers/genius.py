@@ -13,6 +13,7 @@ from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     AbilityTriggeredEventOrSkipped,
     GameEvent,
+    MainMoveSkippedEvent,
     RollModificationWindowEvent,
     TurnStartEvent,
 )
@@ -86,6 +87,21 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
 
             # Set the override.
             engine.state.next_turn_override = owner_idx
+
+            if engine.on_event_processed is not None:
+                for skipped_racer_idx in [
+                    r.idx
+                    for r in engine.state.racers
+                    if r.active and r.idx != owner_idx
+                ]:
+                    engine.on_event_processed(
+                        engine,
+                        MainMoveSkippedEvent(
+                            target_racer_idx=skipped_racer_idx,
+                            source=self.name,
+                            responsible_racer_idx=owner_idx,
+                        ),
+                    )
 
             # predicting = using the power
             # https://boardgamegeek.com/thread/3595157/article/46761348#46761348

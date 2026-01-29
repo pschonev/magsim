@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, override
+from turtle import position
+from typing import TYPE_CHECKING, Self, override
 
 from magical_athlete_simulator.core.abilities import Ability
+from magical_athlete_simulator.core.agent import (
+    SelectionDecisionContext,
+    SelectionDecisionMixin,
+)
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     GameEvent,
@@ -13,6 +18,7 @@ from magical_athlete_simulator.core.events import (
 )
 from magical_athlete_simulator.core.mixins import DestinationCalculatorMixin
 from magical_athlete_simulator.core.modifiers import RacerModifier
+from magical_athlete_simulator.core.state import RacerState
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     remove_racer_modifier,
@@ -58,7 +64,7 @@ class SuckerfishTargetModifier(RacerModifier, DestinationCalculatorMixin):
 
 
 @dataclass
-class SuckerfishRide(Ability):
+class SuckerfishRide(Ability, SelectionDecisionMixin[RacerState]):
     name: AbilityName = "SuckerfishRide"
     triggers: tuple[type[GameEvent], ...] = (PostMoveEvent,)
 
@@ -117,3 +123,20 @@ class SuckerfishRide(Ability):
         )
 
         return "skip_trigger"
+
+    @override
+    def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, RacerState],
+    ) -> RacerState | None:
+        candidates: list[RacerState] = [
+            c
+            for c in ctx.options
+            if (c.position == engine.get_racer(ctx.source_racer_idx).position)
+            and c.active
+        ]
+        if not candidates:
+            return None
+
+        return candidates[0]

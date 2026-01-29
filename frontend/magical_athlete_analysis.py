@@ -2203,51 +2203,65 @@ def _(df_racer_results_f, df_races_f, mo, pl):
         )
 
         # 4. ENRICHMENT (The Final Calculation)
-        # --- FIX: Use GLOBAL AVG for skip costs ---
-        stats_results = stats_results.with_columns(
-            (pl.col("skipped_self_main_move") * pl.lit(global_avg_active_speed)).alias(
-                "cost_skip_self"
-            ),
-            (pl.col("skipped_other_main_move") * pl.lit(global_avg_active_speed)).alias(
-                "cost_skip_other"
-            ),
-        )
-
-        stats_results = stats_results.with_columns(
-            # A. Self Movement
-            (
-                pl.col("pos_self_ability_movement")
-                / pl.col("turns_taken").replace(0, None)
-            ).alias("norm_pos_self"),
-            (
-                (pl.col("neg_self_ability_movement") + pl.col("cost_skip_self"))
-                / pl.col("turns_taken").replace(0, None)
-            ).alias("norm_neg_self"),
-            # B. Other Movement
-            (
-                pl.col("pos_other_ability_movement")
-                / pl.col("effective_global_duration").replace(0, None)
-            ).alias("norm_pos_other"),
-            (
-                (pl.col("neg_other_ability_movement") + pl.col("cost_skip_other"))
-                / pl.col("effective_global_duration").replace(0, None)
-            ).alias("norm_neg_other"),
-            # Raw Speed Calc
-            (
+        # We integrate the Inchworm correction directly into the cost assignment
+        stats_results = (
+            stats_results.with_columns(
+                [
+                    # A. Calculate Costs (including Special Mechanics)
+                    (
+                        pl.col("skipped_self_main_move")
+                        * pl.lit(global_avg_active_speed)
+                    ).alias("cost_skip_self"),
+                    pl.when(pl.col("racer_name") == "Inchworm")
+                    .then(
+                        pl.col("skipped_other_main_move")
+                        * (pl.lit(global_avg_active_speed) - 2.5)
+                    )
+                    .otherwise(
+                        pl.col("skipped_other_main_move")
+                        * pl.lit(global_avg_active_speed)
+                    )
+                    .alias("cost_skip_other"),
+                ]
+            )
+            .with_columns(
+                [
+                    # B. Normalization (using the costs calculated above)
+                    (
+                        pl.col("pos_self_ability_movement")
+                        / pl.col("turns_taken").replace(0, None)
+                    ).alias("norm_pos_self"),
+                    (
+                        (pl.col("neg_self_ability_movement") + pl.col("cost_skip_self"))
+                        / pl.col("turns_taken").replace(0, None)
+                    ).alias("norm_neg_self"),
+                    (
+                        pl.col("pos_other_ability_movement")
+                        / pl.col("effective_global_duration").replace(0, None)
+                    ).alias("norm_pos_other"),
+                    (
+                        (
+                            pl.col("neg_other_ability_movement")
+                            + pl.col("cost_skip_other")
+                        )
+                        / pl.col("effective_global_duration").replace(0, None)
+                    ).alias("norm_neg_other"),
+                    (
+                        pl.col("pos_self_ability_movement")
+                        / pl.col("turns_taken").replace(0, None)
+                        + 3.5
+                    ).alias("speed_raw_calc"),
+                ]
+            )
+            .with_columns(
+                # C. Net Movement
                 (
-                    pl.col("pos_self_ability_movement")
-                    / pl.col("turns_taken").replace(0, None)
-                )
-                + 3.5
-            ).alias("speed_raw_calc"),
-        ).with_columns(
-            # Net Movement Calculation
-            (
-                pl.col("norm_pos_self").fill_null(0)
-                - pl.col("norm_neg_self").fill_null(0)
-                - pl.col("norm_pos_other").fill_null(0)
-                + pl.col("norm_neg_other").fill_null(0)
-            ).alias("relative_speed_calc")
+                    pl.col("norm_pos_self").fill_null(0)
+                    - pl.col("norm_neg_self").fill_null(0)
+                    - pl.col("norm_pos_other").fill_null(0)
+                    + pl.col("norm_neg_other").fill_null(0)
+                ).alias("relative_speed_calc")
+            )
         )
 
         # 5. CONSISTENCY

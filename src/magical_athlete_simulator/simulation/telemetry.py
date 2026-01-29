@@ -254,6 +254,13 @@ class MetricsAggregator:
                 if event.responsible_racer_idx == engine.state.current_racer_idx:
                     stats.ability_own_turn_count += 1
 
+                if event.target_racer_idx is not None:
+                    self._record_movement_bucket(
+                        responsible_idx=event.responsible_racer_idx,
+                        target_idx=event.target_racer_idx,
+                        delta=event.movement_distance,
+                    )
+
             # --- 5. RECOVERY ---
             case TripRecoveryEvent():
                 stats_tripped_racer = self._get_result(event.target_racer_idx)

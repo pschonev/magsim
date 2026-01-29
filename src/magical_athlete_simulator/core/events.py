@@ -226,6 +226,7 @@ class AbilityTriggeredEvent(GameEvent):
     responsible_racer_idx: int
     source: AbilityName | ModifierName
     target_racer_idx: int | None
+    movement_distance: int = 0
 
     @classmethod
     def from_event(cls, event: GameEvent) -> Self:
