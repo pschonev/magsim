@@ -2486,13 +2486,20 @@ def _(df_racer_results_f, df_races_f, mo, pl):
             "dist_raw": dist_base_raw,
         }
 
+    chart_height_slider = mo.ui.slider(
+        start=400,
+        stop=1200,
+        value=900,
+        step=50,
+    )
+
     with mo.status.spinner(
         title=f"Aggregating data for {df_working.height} races..."
     ) as _spinner:
         dashboard_data = _calculate_all_data()
 
     mo.output.replace(mo.md(f"✅ **{df_working.height}** races analyzed."))
-    return (dashboard_data,)
+    return chart_height_slider, dashboard_data
 
 
 @app.cell
@@ -2788,12 +2795,13 @@ def cell_prepare_aggregated_data(alt):
 
 
 @app.cell
-def cell_show_aggregated_data(
+def _(
     BAR_CHART_COLORS,
     BG_COLOR,
     METRIC_ORDER,
     alt,
     build_quadrant_chart,
+    chart_height_slider,
     dashboard_data,
     df_races_f,
     dynamic_zoom_toggle,
@@ -2823,7 +2831,7 @@ def cell_show_aggregated_data(
 
     # --- CONSTANTS ---
     # Reducing fixed height to fit smaller screens better
-    CHART_HEIGHT = 600
+    CHART_HEIGHT = chart_height_slider.value
 
     # --- 2. ABILITY SHIFT CHART ---
     df_racer = abilities_df.with_columns(
@@ -3408,11 +3416,31 @@ def cell_show_aggregated_data(
     )
 
     # --- 7. UI COMPOSITION ---
-    desc_ability = mo.md("""**Ability Speed Analysis**...""")  # Truncated for brevity
-    desc_consist = mo.md("""**Consistency Profile**...""")
-    desc_momentum = mo.md("""**Momentum Profile**...""")
-    desc_excitement = mo.md("""**Excitement Profile**...""")
-    desc_engine = mo.md("""**Engine Profile**...""")
+    desc_ability = mo.md("""
+    * **Left Side (Beneficial):** `+Self` (Speed Boosts) and `-Others` (Pushing others/Tripping).  
+    * **Right Side (Cost/Altruism):** `-Self` (Investments/Cooldowns) and `+Others` (Helping).  
+    * **Sorting:** Racers are ordered by Net Benefit (Total Good - Total Cost).
+    """)
+
+    desc_consist = mo.md("""
+    * **Y-Axis (Avg VP):** How many points they score on average.  
+    * **X-Axis (Stability):** How reliably they hit that average. High stability means low variance.
+    """)
+
+    desc_momentum = mo.md("""
+    * **Start Bias:** Does starting earlier help them win more VP?.  
+    * **Mid-Game Bias:** How many VPs do they gain from from a leading position after 2/3 of the race.
+    """)
+
+    desc_excitement = mo.md("""
+    * **Tightness:** How close the racers are together throughout the race (Right = Closer).  
+    * **Volatility:** How much the lead changes (Top = More Chaos).
+    """)
+
+    desc_engine = mo.md("""
+    * **Y-Axis (Ability Sensitivity):** Correlation between using abilities and VP. High = Ability trigger counts decide how many VP are earned.
+    * **X-Axis (Dice Sensitivity):** Correlation between rolls and VP. High = Needs high (or low) rolls to get VP.
+    """)
 
     global_ui = mo.vstack(
         [
@@ -3423,20 +3451,37 @@ def cell_show_aggregated_data(
         ]
     )
 
+    chart_height_slider_ui = mo.hstack(
+        [
+            chart_height_slider,
+            mo.md("chart height (px)"),
+        ],
+        justify="start",
+    )
+    chart_config_ui = mo.hstack(
+        [dynamic_zoom_toggle, chart_height_slider_ui],
+        gap=12,
+    )
     left_charts_ui = mo.ui.tabs(
         {
             "🎯 Consistency": mo.vstack(
-                [dynamic_zoom_toggle, c_consist.interactive(), desc_consist]
+                [
+                    c_consist.interactive(),
+                    chart_config_ui,
+                    desc_consist,
+                ]
             ),
-            "⚡ Ability Speed": mo.vstack([final_ability_chart, desc_ability]),
+            "⚡ Ability Speed": mo.vstack(
+                [final_ability_chart, chart_height_slider_ui, desc_ability]
+            ),
             "🌊 Momentum": mo.vstack(
-                [dynamic_zoom_toggle, c_momentum.interactive(), desc_momentum]
+                [c_momentum.interactive(), chart_config_ui, desc_momentum]
             ),
             "🔥 Excitement": mo.vstack(
-                [dynamic_zoom_toggle, c_excitement.interactive(), desc_excitement]
+                [c_excitement.interactive(), chart_config_ui, desc_excitement]
             ),
             "⚙️ Engine": mo.vstack(
-                [dynamic_zoom_toggle, c_engine.interactive(), desc_engine]
+                [c_engine.interactive(), chart_config_ui, desc_engine]
             ),
             "🌍 Global": global_ui,
         }
@@ -3495,10 +3540,10 @@ def cell_show_aggregated_data(
 
     # Left Column: Charts
     left_style = {
-        "flex": "1 1 950px",
+        "flex": "1 1 1100px",
         "min-width": "0",
         "overflow-x": "auto",
-        "max-width": "800px",  # Constrains width to keep charts square-ish
+        "max-width": "1100px",  # Constrains width to keep charts square-ish
         "width": "100%",
         "margin": "0 auto",  # Centers the column
     }
