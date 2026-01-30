@@ -433,243 +433,6 @@ def cell_visual_setup(math):
 
 
 @app.cell
-def cell_vsialize_track(
-    BOARD_THEME,
-    MoveDeltaTile,
-    StepSnapshot,
-    TripTile,
-    VictoryPointTile,
-    get_racer_palette,
-    math,
-):
-    # --- RENDERER (RAW / UNPATCHED) ---
-    def render_game_track(turn_data: StepSnapshot, positions_map, board=None):
-        import html as _html
-
-        # --- VISUALIZATION CONSTANTS ---
-        MAIN_RADIUS = 9.0
-        SECONDARY_RADIUS = 8.0
-        OUTLINE_WIDTH = 1.5
-        SECONDARY_WIDTH = 1.5
-        TEXT_STROKE_WIDTH = "4px"
-
-        if not turn_data:
-            return "<p>No Data</p>"
-
-        svg_elements = []
-
-        # Dimensions & Scaling
-        W, H = 1000, 600
-        scale_factor = 1.45
-        trans_x = 75
-        trans_y = -60
-        rw, rh = 50, 30
-
-        # 1. Track Groups
-        track_group_start = (
-            f'<g transform="translate({trans_x}, {trans_y}) scale({scale_factor})">'
-        )
-
-        # 2. Track Spaces
-        for i, (cx, cy, rot) in enumerate(positions_map):
-            transform = f"rotate({rot}, {cx}, {cy})"
-
-            # --- 1. DEFAULT STYLES ---
-            is_start = i == 0
-            is_end = i == len(positions_map) - 1
-
-            if (i // 2) % 2 == 0:
-                fill_color = BOARD_THEME["tile_1"]
-            else:
-                fill_color = BOARD_THEME["tile_2"]
-
-            stroke_color = BOARD_THEME["stroke_default"]
-            stroke_width = "2"
-
-            text_content = str(i)
-            text_fill = BOARD_THEME["text_default"]
-            font_weight = "bold"
-            font_size = "10"
-
-            # --- 2. SPECIAL TILE LOGIC ---
-            if board:
-                mods = board.static_features.get(i, [])
-                for mod in mods:
-                    if isinstance(mod, VictoryPointTile):
-                        fill_color = BOARD_THEME["vp_fill"]
-                        text_content = "VP"
-                        text_fill = BOARD_THEME["vp_text"]
-                    elif isinstance(mod, TripTile):
-                        fill_color = BOARD_THEME["trip_fill"]
-                        text_content = "T"
-                        text_fill = BOARD_THEME["trip_text"]
-                        font_size = "16"
-                    elif isinstance(mod, MoveDeltaTile):
-                        d = mod.delta
-                        if d > 0:
-                            fill_color = BOARD_THEME["move_pos_fill"]
-                            text_content = f"+{d}"
-                            text_fill = BOARD_THEME["move_pos_text"]
-                        elif d < 0:
-                            fill_color = BOARD_THEME["move_neg_fill"]
-                            text_content = f"{d}"
-                            text_fill = BOARD_THEME["move_neg_text"]
-
-            # --- 3. START / END OVERRIDES ---
-            if is_start:
-                stroke_color = BOARD_THEME["start_stroke"]
-                stroke_width = "4"
-                if text_content == str(i):
-                    text_content = "S"
-                    text_fill = BOARD_THEME["start_text"]
-            elif is_end:
-                stroke_color = BOARD_THEME["goal_stroke"]
-                stroke_width = "4"
-                if text_content == str(i):
-                    text_content = "G"
-                    text_fill = BOARD_THEME["goal_text"]
-
-            svg_elements.append(
-                f'<rect x="{cx - rw / 2:.1f}" y="{cy - rh / 2:.1f}" width="{rw}" height="{rh}" '
-                f'fill="{fill_color}" stroke="{stroke_color}" stroke-width="{stroke_width}" '
-                f'transform="{transform}" rx="4" />'
-            )
-
-            svg_elements.append(
-                f'<text x="{cx:.1f}" y="{cy:.1f}" dy="4" font-family="sans-serif" '
-                f'font-size="{font_size}" font-weight="{font_weight}" '
-                f'text-anchor="middle" fill="{text_fill}" transform="{transform}">{text_content}</text>'
-            )
-
-        # 3. Racers
-        occupancy = {}
-        for idx, pos in enumerate(turn_data.positions):
-            draw_pos = min(pos, len(positions_map) - 1)
-            name = turn_data.names[idx]
-            palette = get_racer_palette(name)
-
-            mods = turn_data.modifiers
-            abils = turn_data.abilities
-            mod_str = str(mods[idx]) if idx < len(mods) else "[]"
-            abil_str = str(abils[idx]) if idx < len(abils) else "[]"
-            tooltip_text = f"{name} (ID: {idx})\nVP: {turn_data.vp[idx]}\nTripped: {turn_data.tripped[idx]}\nAbils: {abil_str}\nMods: {mod_str}"
-
-            occupancy.setdefault(draw_pos, []).append(
-                {
-                    "name": name,
-                    "palette": palette,
-                    "is_current": (idx == turn_data.current_racer),
-                    "tripped": turn_data.tripped[idx],
-                    "tooltip": tooltip_text,
-                }
-            )
-
-        # Render Racers
-        for space_idx, racers_here in occupancy.items():
-            bx, by, brot = positions_map[space_idx]
-            count = len(racers_here)
-
-            if count == 1:
-                offsets = [(0, 0)]
-            elif count == 2:
-                offsets = [(-15, 0), (15, 0)]
-            elif count == 3:
-                offsets = [(-15, -8), (15, -8), (0, 8)]
-            else:
-                offsets = [(-15, -8), (15, -8), (-15, 8), (15, 8)]
-
-            for i, racer in enumerate(racers_here):
-                if i >= len(offsets):
-                    break
-                ox, oy = offsets[i]
-
-                rad = math.radians(brot)
-                cx = bx + (ox * math.cos(rad) - oy * math.sin(rad))
-                cy = by + (ox * math.sin(rad) + oy * math.cos(rad))
-
-                vis_dx = cx - bx
-                vis_dy = cy - by
-                text_anchor = "middle"
-                dy_text = 24
-                tx = cx
-                ty = cy
-
-                if count > 1:
-                    if abs(vis_dy) > abs(vis_dx):
-                        if vis_dy < 0:
-                            dy_text = -14
-                        else:
-                            dy_text = 24
-                    else:
-                        dy_text = 5
-                        if vis_dx < 0:
-                            text_anchor = "end"
-                            tx = cx - 14
-                        else:
-                            text_anchor = "start"
-                            tx = cx + 14
-
-                pal = racer["palette"]
-                stroke = pal.outline
-
-                svg_elements.append(f"<g>")
-                svg_elements.append(f"<title>{_html.escape(racer['tooltip'])}</title>")
-
-                svg_elements.append(
-                    f'<circle cx="{cx}" cy="{cy}" r="{MAIN_RADIUS}" fill="{pal.primary}" stroke="{stroke}" stroke-width="{OUTLINE_WIDTH}" />'
-                )
-
-                if pal.secondary:
-                    svg_elements.append(
-                        f'<circle cx="{cx}" cy="{cy}" r="{SECONDARY_RADIUS}" fill="none" stroke="{pal.secondary}" stroke-width="{SECONDARY_WIDTH}" />'
-                    )
-
-                svg_elements.append(
-                    f'<text x="{tx}" y="{ty}" dy="{dy_text}" font-family="sans-serif" font-size="13" '
-                    f'font-weight="900" text-anchor="{text_anchor}" fill="{pal.primary}" '
-                    f'style="paint-order: stroke; stroke: #000; stroke-width: {TEXT_STROKE_WIDTH};">'
-                    f"{_html.escape(racer['name'])}</text>"
-                )
-
-                if racer["tripped"]:
-                    svg_elements.append(
-                        f'<text x="{cx}" y="{cy}" dy="5" fill="#ff0000" font-weight="bold" font-size="14" text-anchor="middle">X</text>'
-                    )
-                svg_elements.append(f"</g>")
-
-        svg_elements.append("</g>")
-
-        # 4. Center Display (No Box)
-        center_x = (100 + 500) / 2 * scale_factor + trans_x
-        center_y = (350 - 100) * scale_factor + trans_y
-
-        active_idx = turn_data.current_racer
-        active_name = turn_data.names[active_idx]
-        active_pal = get_racer_palette(active_name)
-        roll: int | None = turn_data.last_roll
-
-        # Active Racer Name (Floating)
-        svg_elements.append(
-            f'<text x="{center_x}" y="{center_y - 15}" font-size="28" font-weight="bold" text-anchor="middle" fill="{active_pal.primary}" style="paint-order: stroke; stroke: {active_pal.outline}; stroke-width: 2px; filter: drop-shadow(0px 0px 2px black);">{_html.escape(active_name)}</text>'
-        )
-
-        if roll:
-            svg_elements.append(
-                f'<text x="{center_x}" y="{center_y + 35}" font-size="40" font-weight="bold" text-anchor="middle" fill="#eee" >🎲 {roll}</text>'
-            )
-        elif turn_data.turn_index > 0:
-            svg_elements.append(
-                f'<text x="{center_x}" y="{center_y + 35}" font-size="60" font-weight="bold" text-anchor="middle" fill="#ff0000" >X</text>'
-            )
-
-        return f"""<svg width="{W}" height="{H}" style="background:{BOARD_THEME["background"]};"> 
-                {track_group_start}
-                {"".join(svg_elements)}
-            </svg>"""
-    return (render_game_track,)
-
-
-@app.cell
 def cell_manage_state(mo):
     # --- PERSISTENCE STATE ---
     # We only use this to remember values when the UI refreshes (Add/Remove).
@@ -950,7 +713,7 @@ def cell_share_widget(board_selector, current_roster, mo, scenario_seed):
 
 
 @app.cell
-def cell_display_config(
+def _(
     add_button,
     add_racer_dropdown,
     board_selector,
@@ -966,42 +729,60 @@ def cell_display_config(
     share_widget,
     use_scripted_dice_ui,
 ):
-    # --- CONFIG DISPLAY ---
-    mo.hstack(
+    # --- 1. Left Column (Fixed/Narrower) ---
+    # We apply the style directly to this vstack
+    left_col = mo.vstack(
         [
-            mo.vstack(
+            mo.md("## Configure"),
+            mo.hstack(
+                [scenario_seed, board_selector, reset_button],
+                justify="start",
+                align="center",
+            ),
+            mo.vstack([use_scripted_dice_ui, dice_input]),
+            mo.hstack([debug_mode_ui], justify="start"),
+            mo.md("### Racers"),
+            racer_table,
+            mo.hstack([add_racer_dropdown, add_button], justify="start"),
+        ]
+    ).style(
+        {
+            "flex": "1 1 400px",  # Base width 400px
+            "max-width": "400px",  # Cap width so it doesn't stretch on wide screens
+            "min-width": "300px",  # Minimum before it feels too squashed
+        }
+    )
+
+    # --- 2. Right Column (Greedy) ---
+    # We apply the greedy flex style here
+    right_col = mo.vstack(
+        [
+            results_tabs,
+            mo.hstack(
                 [
-                    mo.md("## Configure"),
-                    mo.hstack(
-                        [scenario_seed, board_selector, reset_button],
-                        justify="start",
-                        gap=2,
-                    ),
-                    mo.vstack(
-                        [use_scripted_dice_ui, dice_input],
-                    ),
-                    mo.hstack([debug_mode_ui], justify="start", gap=2),
-                    mo.md("### Racers"),
-                    racer_table,
-                    mo.hstack([add_racer_dropdown, add_button], justify="start", gap=1),
-                ]
-            ).style({"overflow-x": "auto", "max-width": "100%"}),
-            mo.vstack(
-                [
-                    results_tabs,
-                    mo.hstack(
-                        [
-                            mo.md("Enter encoded config: "),
-                            encoded_config_input,
-                            load_encoded_btn,
-                            mo.md("Copy encoded config: "),
-                            share_widget,
-                        ],
-                        justify="start",
-                    ),
-                ]
-            ).style({"overflow-x": "auto", "max-width": "100%"}),
-        ],
+                    mo.md("Enter encoded config: "),
+                    encoded_config_input,
+                    load_encoded_btn,
+                    mo.md("Copy encoded config: "),
+                    share_widget,
+                ],
+                justify="start",
+            ),
+        ]
+    ).style(
+        {
+            "flex": "999 1 500px",  # Massive grow factor (999) eats all remaining space
+            "min-width": "0",  # Critical for scrolling tables
+            "overflow-x": "auto",  # Allow internal scrolling
+        }
+    )
+
+    # --- 3. Native Composition ---
+    mo.hstack(
+        [left_col, right_col],
+        wrap=True,  # Native wrapping support
+        align="start",  # Aligns tops of columns
+        gap=2,  # 2rem gap
     )
     return
 
@@ -1524,13 +1305,266 @@ def cell_show_simulation_section(
         track_svg = mo.Html(
             render_game_track(current_data, board_positions, board=board_instance)
         )
+        _left_col = mo.vstack([track_svg, nav_ui], align="center").style(
+            {
+                "flex": "1 1 800px",
+                "min-width": "0",
+            }
+        )
+        _right_col = log_ui.style({"flex": "1 1 650px", "min-width": "650"})
+
         layout = mo.hstack(
-            [mo.vstack([nav_ui, track_svg], align="center"), log_ui],
-            gap=2,
+            [_left_col, _right_col],
             align="start",
+            wrap=True,
         )
     layout
     return
+
+
+@app.cell
+def cell_vsialize_track(
+    BOARD_THEME,
+    MoveDeltaTile,
+    StepSnapshot,
+    TripTile,
+    VictoryPointTile,
+    get_racer_palette,
+    math,
+):
+    def render_game_track(turn_data: StepSnapshot, positions_map, board=None):
+        import html as _html
+
+        # --- VISUALIZATION CONSTANTS ---
+        MAIN_RADIUS = 9.0
+        SECONDARY_RADIUS = 8.0
+        OUTLINE_WIDTH = 1.5
+        SECONDARY_WIDTH = 1.5
+        TEXT_STROKE_WIDTH = "4px"
+
+        if not turn_data:
+            return "<p>No Data</p>"
+
+        svg_elements = []
+
+        # --- 1. CANVAS CONFIGURATION (PATCHED) ---
+        # We define the "logical" size of the drawing area.
+        # The viewBox will map these internal units to whatever size the screen allows.
+        LOGICAL_W, LOGICAL_H = 950, 400
+
+        # Transformation adjustments to center the track in the new tighter box
+        scale_factor = 1.45
+        trans_x = 40
+        trans_y = -160
+        rw, rh = 50, 30
+
+        # 1. Track Groups
+        track_group_start = (
+            f'<g transform="translate({trans_x}, {trans_y}) scale({scale_factor})">'
+        )
+
+        # 2. Track Spaces
+        for i, (cx, cy, rot) in enumerate(positions_map):
+            transform = f"rotate({rot}, {cx}, {cy})"
+
+            # --- 1. DEFAULT STYLES ---
+            is_start = i == 0
+            is_end = i == len(positions_map) - 1
+
+            if (i // 2) % 2 == 0:
+                fill_color = BOARD_THEME["tile_1"]
+            else:
+                fill_color = BOARD_THEME["tile_2"]
+
+            stroke_color = BOARD_THEME["stroke_default"]
+            stroke_width = "2"
+
+            text_content = str(i)
+            text_fill = BOARD_THEME["text_default"]
+            font_weight = "bold"
+            font_size = "10"
+
+            # --- 2. SPECIAL TILE LOGIC ---
+            if board:
+                mods = board.static_features.get(i, [])
+                for mod in mods:
+                    if isinstance(mod, VictoryPointTile):
+                        fill_color = BOARD_THEME["vp_fill"]
+                        text_content = "VP"
+                        text_fill = BOARD_THEME["vp_text"]
+                    elif isinstance(mod, TripTile):
+                        fill_color = BOARD_THEME["trip_fill"]
+                        text_content = "T"
+                        text_fill = BOARD_THEME["trip_text"]
+                        font_size = "16"
+                    elif isinstance(mod, MoveDeltaTile):
+                        d = mod.delta
+                        if d > 0:
+                            fill_color = BOARD_THEME["move_pos_fill"]
+                            text_content = f"+{d}"
+                            text_fill = BOARD_THEME["move_pos_text"]
+                        elif d < 0:
+                            fill_color = BOARD_THEME["move_neg_fill"]
+                            text_content = f"{d}"
+                            text_fill = BOARD_THEME["move_neg_text"]
+
+            # --- 3. START / END OVERRIDES ---
+            if is_start:
+                stroke_color = BOARD_THEME["start_stroke"]
+                stroke_width = "4"
+                if text_content == str(i):
+                    text_content = "S"
+                    text_fill = BOARD_THEME["start_text"]
+            elif is_end:
+                stroke_color = BOARD_THEME["goal_stroke"]
+                stroke_width = "4"
+                if text_content == str(i):
+                    text_content = "G"
+                    text_fill = BOARD_THEME["goal_text"]
+
+            svg_elements.append(
+                f'<rect x="{cx - rw / 2:.1f}" y="{cy - rh / 2:.1f}" width="{rw}" height="{rh}" '
+                f'fill="{fill_color}" stroke="{stroke_color}" stroke-width="{stroke_width}" '
+                f'transform="{transform}" rx="4" />'
+            )
+
+            svg_elements.append(
+                f'<text x="{cx:.1f}" y="{cy:.1f}" dy="4" font-family="sans-serif" '
+                f'font-size="{font_size}" font-weight="{font_weight}" '
+                f'text-anchor="middle" fill="{text_fill}" transform="{transform}">{text_content}</text>'
+            )
+
+        # 3. Racers
+        occupancy = {}
+        for idx, pos in enumerate(turn_data.positions):
+            draw_pos = min(pos, len(positions_map) - 1)
+            name = turn_data.names[idx]
+            palette = get_racer_palette(name)
+
+            mods = turn_data.modifiers
+            abils = turn_data.abilities
+            mod_str = str(mods[idx]) if idx < len(mods) else "[]"
+            abil_str = str(abils[idx]) if idx < len(abils) else "[]"
+            tooltip_text = f"{name} (ID: {idx})\nVP: {turn_data.vp[idx]}\nTripped: {turn_data.tripped[idx]}\nAbils: {abil_str}\nMods: {mod_str}"
+
+            occupancy.setdefault(draw_pos, []).append(
+                {
+                    "name": name,
+                    "palette": palette,
+                    "is_current": (idx == turn_data.current_racer),
+                    "tripped": turn_data.tripped[idx],
+                    "tooltip": tooltip_text,
+                }
+            )
+
+        # Render Racers
+        for space_idx, racers_here in occupancy.items():
+            bx, by, brot = positions_map[space_idx]
+            count = len(racers_here)
+
+            if count == 1:
+                offsets = [(0, 0)]
+            elif count == 2:
+                offsets = [(-15, 0), (15, 0)]
+            elif count == 3:
+                offsets = [(-15, -8), (15, -8), (0, 8)]
+            else:
+                offsets = [(-15, -8), (15, -8), (-15, 8), (15, 8)]
+
+            for i, racer in enumerate(racers_here):
+                if i >= len(offsets):
+                    break
+                ox, oy = offsets[i]
+
+                rad = math.radians(brot)
+                cx = bx + (ox * math.cos(rad) - oy * math.sin(rad))
+                cy = by + (ox * math.sin(rad) + oy * math.cos(rad))
+
+                vis_dx = cx - bx
+                vis_dy = cy - by
+                text_anchor = "middle"
+                dy_text = 24
+                tx = cx
+                ty = cy
+
+                if count > 1:
+                    if abs(vis_dy) > abs(vis_dx):
+                        if vis_dy < 0:
+                            dy_text = -14
+                        else:
+                            dy_text = 24
+                    else:
+                        dy_text = 5
+                        if vis_dx < 0:
+                            text_anchor = "end"
+                            tx = cx - 14
+                        else:
+                            text_anchor = "start"
+                            tx = cx + 14
+
+                pal = racer["palette"]
+                stroke = pal.outline
+
+                svg_elements.append(f"<g>")
+                svg_elements.append(f"<title>{_html.escape(racer['tooltip'])}</title>")
+
+                svg_elements.append(
+                    f'<circle cx="{cx}" cy="{cy}" r="{MAIN_RADIUS}" fill="{pal.primary}" stroke="{stroke}" stroke-width="{OUTLINE_WIDTH}" />'
+                )
+
+                if pal.secondary:
+                    svg_elements.append(
+                        f'<circle cx="{cx}" cy="{cy}" r="{SECONDARY_RADIUS}" fill="none" stroke="{pal.secondary}" stroke-width="{SECONDARY_WIDTH}" />'
+                    )
+
+                svg_elements.append(
+                    f'<text x="{tx}" y="{ty}" dy="{dy_text}" font-family="sans-serif" font-size="13" '
+                    f'font-weight="900" text-anchor="{text_anchor}" fill="{pal.primary}" '
+                    f'style="paint-order: stroke; stroke: #000; stroke-width: {TEXT_STROKE_WIDTH};">'
+                    f"{_html.escape(racer['name'])}</text>"
+                )
+
+                if racer["tripped"]:
+                    svg_elements.append(
+                        f'<text x="{cx}" y="{cy}" dy="5" fill="#ff0000" font-weight="bold" font-size="14" text-anchor="middle">X</text>'
+                    )
+                svg_elements.append(f"</g>")
+
+        svg_elements.append("</g>")
+
+        # 4. Center Display
+        # Adjust center calculation for new LOGICAL dimensions if necessary,
+        # but since trans_x/scale_factor handle the track, we keep this relative to the track group
+        center_x = (100 + 500) / 2 * scale_factor + trans_x
+        center_y = (350 - 100) * scale_factor + trans_y
+
+        active_idx = turn_data.current_racer
+        active_name = turn_data.names[active_idx]
+        active_pal = get_racer_palette(active_name)
+        roll: int | None = turn_data.last_roll
+
+        # Active Racer Name
+        svg_elements.append(
+            f'<text x="{center_x}" y="{center_y - 15}" font-size="28" font-weight="bold" text-anchor="middle" fill="{active_pal.primary}" style="paint-order: stroke; stroke: {active_pal.outline}; stroke-width: 2px; filter: drop-shadow(0px 0px 2px black);">{_html.escape(active_name)}</text>'
+        )
+
+        if roll:
+            svg_elements.append(
+                f'<text x="{center_x}" y="{center_y + 35}" font-size="40" font-weight="bold" text-anchor="middle" fill="#eee" >🎲 {roll}</text>'
+            )
+        elif turn_data.turn_index > 0:
+            svg_elements.append(
+                f'<text x="{center_x}" y="{center_y + 35}" font-size="60" font-weight="bold" text-anchor="middle" fill="#ff0000" >X</text>'
+            )
+
+        # --- RETURN SVG (PATCHED) ---
+        # Using viewBox allows the SVG to scale.
+        # width="100%" means it fills the container. height="auto" maintains aspect ratio.
+        return f"""<svg viewBox="0 0 {LOGICAL_W} {LOGICAL_H}" width="100%" height="auto" preserveAspectRatio="xMidYMid meet" style="background:{BOARD_THEME["background"]}; max-width: 100%;"> 
+                {track_group_start}
+                {"".join(svg_elements)}
+            </svg>"""
+    return (render_game_track,)
 
 
 @app.cell
@@ -2228,27 +2262,39 @@ def _(df_racer_results_f, df_races_f, mo, pl):
                 [
                     # B. Normalization (using the costs calculated above)
                     (
-                        pl.col("pos_self_ability_movement")
-                        / pl.col("turns_taken").replace(0, None)
+                        pl.col("pos_self_ability_movement")  # +Self
+                        / pl.col("total_turns_clean").replace(0, None)
                     ).alias("norm_pos_self"),
                     (
-                        (pl.col("neg_self_ability_movement") + pl.col("cost_skip_self"))
-                        / pl.col("turns_taken").replace(0, None)
+                        (
+                            pl.col("neg_self_ability_movement")  # -Self
+                            + pl.col("cost_skip_self")
+                        )
+                        / pl.col("total_turns_clean").replace(0, None)
                     ).alias("norm_neg_self"),
                     (
-                        pl.col("pos_other_ability_movement")
-                        / pl.col("effective_global_duration").replace(0, None)
+                        pl.col("pos_other_ability_movement")  # +Other
+                        / (
+                            pl.col("effective_global_duration")
+                            - pl.col("total_turns_clean")
+                        ).replace(0, None)
                     ).alias("norm_pos_other"),
                     (
                         (
-                            pl.col("neg_other_ability_movement")
+                            pl.col("neg_other_ability_movement")  # -Other
                             + pl.col("cost_skip_other")
                         )
-                        / pl.col("effective_global_duration").replace(0, None)
+                        / (
+                            pl.col("effective_global_duration")
+                            - pl.col("total_turns_clean")
+                        ).replace(0, None)
                     ).alias("norm_neg_other"),
                     (
-                        pl.col("pos_self_ability_movement")
-                        / pl.col("turns_taken").replace(0, None)
+                        (
+                            pl.col("pos_self_ability_movement")
+                            - pl.col("neg_self_ability_movement")
+                        )
+                        / pl.col("total_turns_clean").replace(0, None)
                         + 3.5
                     ).alias("speed_raw_calc"),
                 ]
@@ -2874,7 +2920,7 @@ def cell_show_aggregated_data(
         .properties(
             width="container",
             height=800,
-            title=alt.TitleParams("Racer Ability Shift Profile", color="#E0E0E0"),
+            title=alt.TitleParams("Racer Ability Speed Profile", color="#E0E0E0"),
             background="transparent",
         )
     )
@@ -3374,7 +3420,7 @@ def cell_show_aggregated_data(
     # --- 7. UI COMPOSITION WITH RESTORED DESCRIPTIONS ---
 
     desc_ability = mo.md("""
-    **Ability Shift Analysis**
+    **Ability Speed Analysis**
     * **Left Side (Beneficial):** `+Self` (Speed Boosts) and `-Others` (Pushing others/Tripping).  
     * **Right Side (Cost/Altruism):** `-Self` (Investments/Cooldowns) and `+Others` (Helping).  
     * **Sorting:** Racers are ordered by Net Benefit (Total Good - Total Cost).
@@ -3418,7 +3464,7 @@ def cell_show_aggregated_data(
             "🎯 Consistency": mo.vstack(
                 [dynamic_zoom_toggle, c_consist.interactive(), desc_consist]
             ),
-            "⚡ Ability Shift": mo.vstack([final_ability_chart, desc_ability]),
+            "⚡ Ability Speed": mo.vstack([final_ability_chart, desc_ability]),
             "🌊 Momentum": mo.vstack(
                 [dynamic_zoom_toggle, c_momentum.interactive(), desc_momentum]
             ),
@@ -3481,8 +3527,35 @@ def cell_show_aggregated_data(
         }
     )
 
-    final_output = mo.md(
-        f"""<div style="display: flex; flex-wrap: wrap; gap: 2rem; width: 100%; min-height: 550px;"><div style="flex: 1 1 450px; min-width: 0; display: flex; justify-content: center; align-items: start;"><div style="width: 100%; display:flex; flex-direction:column; gap: 1rem;">{left_charts_ui}</div></div><div style="flex: 1 1 400px; min-width: 0; overflow-x: auto;">{right_ui}</div></div>"""
+    # --- 8. FINAL LAYOUT ---
+
+    # STYLE: Left Column (Charts)
+    # "flex": "1 1 950px"
+    #   - Grow (1): Fill available space.
+    #   - Basis (950px): Attempt to be 950px wide.
+    #     Result: If screen width < 1900px (950+950), this column wraps.
+    left_style = {
+        "flex": "1 1 950px",
+        "min-width": "0",  # Allow shrinking on mobile
+        "max-width": "950px",  # <--- THE FIX
+        "overflow-x": "auto",  # Scroll if content forces it
+    }
+
+    # STYLE: Right Column (Tables)
+    # You can change '950px' here to a different value (e.g. '600px')
+    # if you want the tables to stay side-by-side on smaller screens
+    # while the charts wrap earlier.
+    right_style = {
+        "flex": "1 1 950px",
+        "min-width": "0",
+        "overflow-x": "auto",
+    }
+
+    final_output = mo.hstack(
+        [left_charts_ui.style(left_style), right_ui.style(right_style)],
+        wrap=True,
+        gap=2,
+        align="start",
     )
     final_output
     return
