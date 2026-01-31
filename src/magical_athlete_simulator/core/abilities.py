@@ -11,7 +11,7 @@ from magical_athlete_simulator.core.events import (
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
     from magical_athlete_simulator.core.events import GameEvent
-    from magical_athlete_simulator.core.types import AbilityName
+    from magical_athlete_simulator.core.types import AbilityName, D6VAlues
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -23,6 +23,7 @@ class Ability:
 
     name: AbilityName
     triggers: tuple[type[GameEvent], ...] = ()
+    preferred_dice: D6VAlues = frozenset([4, 5, 6])
 
     def register(self, engine: GameEngine, owner_idx: int):
         """Subscribes this ability to the engine events defined in `triggers`."""

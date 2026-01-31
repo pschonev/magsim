@@ -14,7 +14,7 @@ from magical_athlete_simulator.core.events import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
-    from magical_athlete_simulator.core.types import AbilityName
+    from magical_athlete_simulator.core.types import AbilityName, D6VAlues
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 class AbilitySkipper(Ability):
     name: AbilityName = "SkipperTurn"
     triggers: tuple[type[GameEvent], ...] = (RollResultEvent,)
+    preferred_dice: D6VAlues = frozenset([1, 5, 6])
 
     @override
     def execute(
