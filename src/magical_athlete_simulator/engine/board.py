@@ -125,6 +125,8 @@ class Board:
             for mod in self.get_modifiers_at(tile)
             if isinstance(mod, LandingHookMixin)
         ):
+            if not engine.get_racer(racer_idx).active:
+                return
             current_pos = engine.get_racer_pos(racer_idx)
             if current_pos != tile:
                 break

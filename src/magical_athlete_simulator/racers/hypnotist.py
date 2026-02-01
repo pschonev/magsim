@@ -10,13 +10,12 @@ from magical_athlete_simulator.core.agent import (
     SelectionInteractive,
 )
 from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEventOrSkipped,
     GameEvent,
-    Phase,
     TurnStartEvent,
-    WarpData,
 )
 from magical_athlete_simulator.core.state import RacerState
-from magical_athlete_simulator.engine.movement import push_simultaneous_warp
+from magical_athlete_simulator.engine.movement import push_warp
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
@@ -25,8 +24,8 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
-    name: AbilityName = "FlipFlopSwap"
+class HypnotistTrance(Ability, SelectionDecisionMixin[RacerState]):
+    name: AbilityName = "HypnotistWarp"
     triggers: tuple[type[GameEvent], ...] = (TurnStartEvent,)
 
     @override
@@ -36,16 +35,16 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
         owner_idx: int,
         engine: GameEngine,
         agent: Agent,
-    ):
-        if not isinstance(event, TurnStartEvent):
+    ) -> AbilityTriggeredEventOrSkipped:
+        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner_idx:
             return "skip_trigger"
 
-        # Only on Flip Flop's own turn
-        if event.target_racer_idx != owner_idx:
-            return "skip_trigger"
+        me = engine.get_racer(owner_idx)
+        valid_targets = [
+            r for r in engine.state.racers if r.active and r.idx != owner_idx
+        ]
 
-        ff = engine.get_racer(owner_idx)
-        if not ff.active:
+        if not valid_targets:
             return "skip_trigger"
 
         target = agent.make_selection_decision(
@@ -57,39 +56,23 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
                 source=self,
                 game_state=engine.state,
                 source_racer_idx=owner_idx,
-                options=engine.state.racers,
+                options=valid_targets,
             ),
         )
 
         if target is None:
+            engine.log_info(f"{me.repr} decided not to use {self.name}.")
             return "skip_trigger"
 
-        ff_pos = ff.position
-        target_pos = target.position
-
-        push_simultaneous_warp(
+        engine.log_info(f"{me.repr} decided to warp {target.repr} to their space.")
+        push_warp(
             engine,
-            warps=[
-                WarpData(
-                    warping_racer_idx=owner_idx,
-                    target_tile=target_pos,
-                ),  # Flip Flop -> Target's old pos
-                WarpData(
-                    warping_racer_idx=target.idx,
-                    target_tile=ff_pos,
-                ),  # Target -> Flip Flop's old pos
-            ],
-            phase=Phase.PRE_MAIN,
+            target=me.position,
+            warped_racer_idx=target.idx,
+            phase=event.phase,
             source=self.name,
             responsible_racer_idx=owner_idx,
             emit_ability_triggered="after_resolution",
-        )
-
-        # FlipFlop skips main move when using his ability
-        engine.skip_main_move(
-            responsible_racer_idx=owner_idx,
-            source=self.name,
-            skipped_racer_idx=owner_idx,
         )
 
         return "skip_trigger"
@@ -100,18 +83,12 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, RacerState],
     ) -> RacerState | None:
-        # pick someone at least 6 ahead (strictly greater position)
-        candidates: list[RacerState] = [
-            c
-            for c in ctx.options
-            if (c.active and c.position - engine.get_racer_pos(ctx.source_racer_idx))
-            >= 6
-        ]
-        if not candidates:
+        # Sort by position descending
+        sorted_targets = sorted(ctx.options, key=lambda r: r.position, reverse=True)
+        me = engine.get_racer(ctx.source_racer_idx)
+        # check if the target is ahead of Hypnotist
+        if sorted_targets[0].position > me.position:
+            return sorted_targets[0]
+        else:
+            engine.log_info(f"{me.repr} is in the lead and won't use {self.name}.")
             return None
-
-        # Choose the one furthest ahead
-        return max(
-            candidates,
-            key=lambda r: r.position,
-        )

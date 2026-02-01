@@ -22,12 +22,14 @@ if TYPE_CHECKING:
 
 if __name__ == "__main__":
     # 1. Parse CLI Arguments
-    parser = argparse.ArgumentParser(description="Run a single Magical Athlete game simulation.")
+    parser = argparse.ArgumentParser(
+        description="Run a single Magical Athlete game simulation.",
+    )
     parser.add_argument(
-        "--config", 
-        "-c", 
-        type=str, 
-        help="Base64 encoded configuration string (overrides manual defaults)"
+        "--config",
+        "-c",
+        type=str,
+        help="Base64 encoded configuration string (overrides manual defaults)",
     )
     args = parser.parse_args()
 
@@ -35,8 +37,10 @@ if __name__ == "__main__":
     if args.config:
         try:
             config = GameConfiguration.from_encoded(args.config)
-            print(f"Loaded config: {config.racers} on {config.board} (Seed: {config.seed})")
-            
+            print(
+                f"Loaded config: {config.racers} on {config.board} (Seed: {config.seed})",
+            )
+
             roster = list(config.racers)
             board_name = config.board
             seed = config.seed
@@ -46,11 +50,13 @@ if __name__ == "__main__":
     else:
         # Default / Manual Fallback
         roster: list[RacerName] = [
-            "Romantic",
-            "Banana",
+            "Cheerleader",
             "Centaur",
             "Magician",
             "Scoocher",
+            "Hypnotist",
+            "Mouth",
+            "ThirdWheel",
         ]
         board_name = "wild_wilds"
         seed = 9
@@ -59,7 +65,7 @@ if __name__ == "__main__":
     # 3. Initialize Game
     racers = [RacerState(i, n) for i, n in enumerate(roster)]
     engine_id = next(ENGINE_ID_COUNTER)
-    
+
     eng = GameEngine(
         GameState(
             racers=racers,

@@ -215,7 +215,7 @@ class GameEngine:
         """Generates a hash of the physical board state."""
         racer_states = tuple(
             (
-                r.position,
+                r.raw_position,
                 r.active,
                 r.tripped,
                 r.main_move_consumed,
@@ -419,12 +419,12 @@ class GameEngine:
         except_racer_idx: int | None = None,
     ) -> list[RacerState]:
         if except_racer_idx is None:
-            return [r for r in self.state.racers if r.position == tile_idx and r.active]
+            return [r for r in self.state.racers if r.active and r.position == tile_idx]
         else:
             return [
                 r
                 for r in self.state.racers
-                if r.position == tile_idx and r.idx != except_racer_idx and r.active
+                if r.active and r.position == tile_idx and r.idx != except_racer_idx
             ]
 
     def skip_main_move(

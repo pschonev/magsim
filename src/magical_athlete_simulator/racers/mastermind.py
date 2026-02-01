@@ -59,7 +59,7 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
                         source=self,
                         game_state=engine.state,
                         source_racer_idx=owner_idx,
-                        options=engine.state.racers,
+                        options=[r for r in engine.state.racers if r.active],
                     ),
                 )
 
@@ -105,7 +105,7 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
                     f"{owner.repr}'s prediction was correct! {winner.repr} won!",
                 )
 
-                if not owner.finished:
+                if owner.active:
                     # send to telemetry directly if prediction correct
                     if engine.on_event_processed:
                         engine.on_event_processed(

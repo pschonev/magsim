@@ -36,7 +36,7 @@ class RacerState:
     name: RacerName
 
     # game state
-    position: int = 0
+    raw_position: int | None = 0
     victory_points: int = 0
     tripped: bool = False
     tripping_racers: list[int | None] = field(default_factory=list)
@@ -54,6 +54,17 @@ class RacerState:
     # abilities and modifiers
     modifiers: list[RacerModifier] = field(default_factory=list)
     active_abilities: dict[AbilityName, Ability] = field(default_factory=dict)
+
+    @property
+    def position(self) -> int:
+        if self.raw_position is None:
+            msg = f"Unexpected access to position of {self.repr} who is already eliminated ({self.eliminated=} | {self.raw_position})."
+            raise ValueError(msg)
+        return self.raw_position
+
+    @position.setter
+    def position(self, value: int) -> None:
+        self.raw_position = value
 
     @property
     def repr(self) -> str:
@@ -92,7 +103,7 @@ class GameState:
         racer_data = tuple(
             (
                 r.idx,
-                r.position,
+                r.raw_position,
                 r.tripped,
                 r.finish_position,
                 r.eliminated,

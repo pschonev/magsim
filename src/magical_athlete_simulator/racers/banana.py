@@ -38,7 +38,7 @@ class AbilityBananaTrip(Ability):
             return "skip_trigger"
 
         victim = engine.get_racer(event.passing_racer_idx)
-        if victim.finished:
+        if not victim.active:
             return "skip_trigger"
 
         engine.log_info(f"{self.name}: Queuing TripCmd for {victim.repr}.")

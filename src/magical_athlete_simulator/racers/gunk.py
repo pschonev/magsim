@@ -65,7 +65,7 @@ class AbilitySlime(Ability, LifecycleManagedMixin):
     def on_gain(self, engine: GameEngine, owner_idx: int) -> None:
         # Apply debuff to ALL other active racers
         for r in engine.state.racers:
-            if r.idx != owner_idx and not r.finished:
+            if r.idx != owner_idx and r.active:
                 add_racer_modifier(engine, r.idx, ModifierSlime(owner_idx=owner_idx))
 
     @override

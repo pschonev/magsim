@@ -68,7 +68,11 @@ class CoachAura(Ability, LifecycleManagedMixin):
 
         # Remove from everyone first (to handle position changes)
         for racer in engine.state.racers:
-            if racer.idx != coach_idx and racer.position != coach.position:
+            if (
+                racer.active
+                and racer.idx != coach_idx
+                and racer.position != coach.position
+            ):
                 mod = next(
                     (m for m in racer.modifiers if isinstance(m, CoachBoost)),
                     None,

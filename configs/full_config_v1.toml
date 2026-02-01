@@ -4,12 +4,14 @@ include_racers = [
     "Banana",
     "Blimp",
     "Centaur",
+    "Cheerleader",
     "Coach",
     "Copycat",
     "FlipFlop",
     "Genius",
     "Gunk",
     "Hare",
+    "Hypnotist",
     "HugeBaby",
     "Inchworm",
     "Lackey",
@@ -18,6 +20,7 @@ include_racers = [
     "LovableLoser",
     "Magician",
     "Mastermind",
+    "Mouth",
     "PartyAnimal",
     "Romantic",
     "Scoocher",
@@ -25,6 +28,7 @@ include_racers = [
     "Skipper",
     "Stickler",
     "Suckerfish",
+    "ThirdWheel",
 ]
 exclude_racers = []
 
@@ -34,7 +38,7 @@ boards = ["standard", "wild_wilds"]
 
 # Execution limits
 runs_per_combination = 1
-max_total_runs = 1_000
+max_total_runs = 10_000
 max_turns_per_race = 300
 
 # --- Filters ---

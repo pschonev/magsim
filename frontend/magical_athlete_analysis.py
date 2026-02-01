@@ -1437,6 +1437,8 @@ def cell_vsialize_track(
         # 3. Racers
         occupancy = {}
         for idx, pos in enumerate(turn_data.positions):
+            if pos is None:
+                continue
             draw_pos = min(pos, len(positions_map) - 1)
             name = turn_data.names[idx]
             palette = get_racer_palette(name)

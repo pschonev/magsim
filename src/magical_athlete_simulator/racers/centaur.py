@@ -37,7 +37,7 @@ class AbilityTrample(Ability):
             return "skip_trigger"
 
         victim = engine.get_racer(event.passed_racer_idx)
-        if victim.finished:
+        if not victim.active:
             return "skip_trigger"
 
         engine.log_info(f"{self.name}: Centaur passed {victim.repr}. Queuing -2 move.")

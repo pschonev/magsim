@@ -58,7 +58,7 @@ class BabaYagaTrip(Ability):
         # She trips them ONLY if they landed on her tile.
         else:
             mover = engine.get_racer(event.target_racer_idx)
-            if mover.position == baba.position:
+            if mover.active and mover.position == baba.position:
                 push_trip(
                     engine,
                     phase=event.phase,

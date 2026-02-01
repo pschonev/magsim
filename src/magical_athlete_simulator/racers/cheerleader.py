@@ -42,7 +42,7 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
         # Identify Last Place Racers
         min_pos = min(r.position for r in engine.state.racers if r.active)
         last_place_indices = [
-            r.idx for r in engine.state.racers if r.position == min_pos
+            r.idx for r in engine.state.racers if r.active and r.position == min_pos
         ]
 
         # Decision
@@ -58,6 +58,10 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
         if not should_cheer:
             return "skip_trigger"
 
+        engine.log_info(
+            f"{engine.get_racer(owner_idx).repr} cheers for {' and'.join([engine.get_racer(idx).repr for idx in last_place_indices])} in last place!",
+        )
+
         # Apply Effects
         # 1. Move all last place racers forward 2
         simultaneous_moves = [
@@ -70,6 +74,7 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
             phase=event.phase,
             source=self.name,
             responsible_racer_idx=owner_idx,
+            emit_ability_triggered="never",
         )
 
         # 2. Cheerleader moves forward 1
@@ -80,6 +85,7 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
             phase=event.phase,
             source=self.name,
             responsible_racer_idx=owner_idx,
+            emit_ability_triggered="never",
         )
 
         return AbilityTriggeredEvent(

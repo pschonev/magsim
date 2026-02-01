@@ -19,10 +19,12 @@ def log_final_standings(engine: GameEngine):
     ):
         if racer.finish_position:
             status = f"Rank {racer.finish_position}"
-        else:
+        elif racer.eliminated:
             status = "Eliminated"
+        else:
+            status = ""
         engine.log_info(
-            f"Result: {racer.repr} pos={racer.position} vp={racer.victory_points} {status}",
+            f"Result: {racer.repr} pos={racer.raw_position} vp={racer.victory_points} {status}",
         )
 
 
@@ -32,7 +34,7 @@ def check_finish(engine: GameEngine, racer: RacerState) -> bool:
     If so, triggers the standard finish flow.
     """
     # If already finished, do nothing (prevent double counting)
-    if racer.finished:
+    if not racer.active:
         return False
 
     # Standard rule: Position >= Board Length
@@ -55,8 +57,7 @@ def mark_finished(
     """
     if rank is None:
         # Default behavior: Append to next available spot
-        finished_count = sum(1 for r in engine.state.racers if r.finished)
-        rank = finished_count + 1
+        rank = sum(1 for r in engine.state.racers if r.finished) + 1
 
     # Update State
     old_rank = racer.finish_position

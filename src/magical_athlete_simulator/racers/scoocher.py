@@ -41,7 +41,7 @@ class AbilityScoochStep(Ability):
 
         # Correct code
         me = engine.get_racer(owner_idx)  # <--- Get MY state
-        if me.finished:
+        if not me.active:
             return "skip_trigger"
 
         source_racer = engine.get_racer(owner_idx)

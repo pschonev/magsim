@@ -44,7 +44,7 @@ class StepSnapshot:
     global_step_index: int
     turn_index: int
     event_name: str
-    positions: list[int]
+    positions: list[int | None]
     tripped: list[bool]
     vp: list[int]
     last_roll: int | None
@@ -99,7 +99,7 @@ class SnapshotRecorder:
             global_step_index=len(self.step_history),
             turn_index=turn_index,
             event_name=event_name,
-            positions=[r.position for r in engine.state.racers],
+            positions=[r.raw_position for r in engine.state.racers],
             tripped=[r.tripped for r in engine.state.racers],
             vp=[r.victory_points for r in engine.state.racers],
             last_roll=engine.state.roll_state.dice_value,

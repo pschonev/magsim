@@ -161,9 +161,7 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
             victims = [
                 r
                 for r in engine.state.racers
-                if r.position == event.end_tile
-                and r.idx != owner_idx
-                and not r.finished
+                if r.active and r.position == event.end_tile and r.idx != owner_idx
             ]
 
             for v in victims:
