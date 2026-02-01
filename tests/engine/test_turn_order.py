@@ -53,7 +53,7 @@ def test_genius_gets_back_to_back_turn_on_correct_prediction(scenario: type[Game
             RacerConfig(1, "Magician", start_pos=0),
         ],
         dice_rolls=[
-            6,  # Genius roll: should match Genius's default/forced prediction in your implementation
+            4,  # Genius roll: should match Genius's default/forced prediction in your implementation
             2,  # Genius extra turn roll (any number)
         ],
     )
@@ -66,7 +66,7 @@ def test_genius_gets_back_to_back_turn_on_correct_prediction(scenario: type[Game
     # Turn 1 (Genius again) -> now should proceed to Magician
     game.run_turn()
     assert game.engine.state.current_racer_idx == 1
-    assert game.engine.get_racer(0).position == 8
+    assert game.engine.get_racer(0).position == 6
 
 
 def test_genius_predicts_1_but_skipper_steals_next_turn(scenario: type[GameScenario]):

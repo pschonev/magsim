@@ -10,7 +10,7 @@ from magical_athlete_simulator.engine.movement import push_warp
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
-    from magical_athlete_simulator.core.types import AbilityName, D6VAlues
+    from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 class SisyphusCurse(Ability, SetupPhaseMixin):
     name: AbilityName = "SisyphusCurse"
     triggers: tuple[type[GameEvent], ...] = (RollResultEvent,)
-    preferred_dice: D6VAlues = frozenset([1, 2, 3, 4, 5])
+    preferred_dice: D6VAlueSet = frozenset([1, 2, 3, 4, 5])
 
     @override
     def on_setup(self, engine: GameEngine, owner_idx: int) -> None:

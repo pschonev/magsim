@@ -13,7 +13,7 @@ from magical_athlete_simulator.core.events import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
-    from magical_athlete_simulator.core.types import AbilityName, D6VAlues
+    from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 class LovableLoserBonus(Ability):
     name: AbilityName = "LovableLoserBonus"
     triggers: tuple[type[GameEvent], ...] = (TurnStartEvent,)
-    preferred_dice: D6VAlues = frozenset([1, 2, 3])
+    preferred_dice: D6VAlueSet = frozenset([1, 2, 3])
 
     @override
     def execute(

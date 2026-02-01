@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
@@ -17,7 +17,7 @@ from magical_athlete_simulator.core.mixins import RollModificationMixin
 from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.types import Source
+    from magical_athlete_simulator.core.types import D6Values, Source
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -65,7 +65,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
 
         racer.roll_override = None  # Consume it
     else:
-        base = engine.rng.randint(1, 6)
+        base = cast("D6Values", engine.rng.randint(1, 6))
         engine.state.roll_state.dice_value = base
         engine.state.roll_state.can_reroll = True
 

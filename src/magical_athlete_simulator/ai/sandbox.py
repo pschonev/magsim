@@ -10,7 +10,7 @@ class SandboxEngine:
         self.engine: GameEngine = engine
 
     @classmethod
-    def from_engine(cls, src: GameEngine) -> "SandboxEngine":  # noqa: UP037
+    def from_engine(cls, src: GameEngine) -> "SandboxEngine":
         state_copy = copy.deepcopy(src.state)
         queue_copy = copy.deepcopy(src.state.queue)
 

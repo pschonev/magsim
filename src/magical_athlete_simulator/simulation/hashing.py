@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import base64
-from functools import cached_property
 import hashlib
 import json
 from dataclasses import dataclass
+from functools import cached_property
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

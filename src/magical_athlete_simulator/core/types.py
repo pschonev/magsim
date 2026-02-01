@@ -110,5 +110,5 @@ ErrorCode = Literal[
     "MINOR_LOOP_DETECTED",
     "MAX_TURNS_REACHED",
 ]
-
-D6VAlues = frozenset[Literal[1, 2, 3, 4, 5, 6]]
+D6Values = Literal[1, 2, 3, 4, 5, 6]
+D6VAlueSet = frozenset[D6Values]

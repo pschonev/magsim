@@ -53,9 +53,7 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
             return "skip_trigger"
 
         # 1. Eligibility Check
-        if event.target_racer_idx != owner_idx:
-            return "skip_trigger"
-        if self.reroll_count >= 2:
+        if event.target_racer_idx != owner_idx or self.reroll_count >= 2:
             return "skip_trigger"
 
         should_reroll = agent.make_boolean_decision(

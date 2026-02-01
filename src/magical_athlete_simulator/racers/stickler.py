@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 from magical_athlete_simulator.core.abilities import Ability
-from magical_athlete_simulator.core.events import Phase, PostWarpEvent, WarpCmdEvent
+from magical_athlete_simulator.core.events import Phase, PostWarpEvent
 from magical_athlete_simulator.core.mixins import (
     LifecycleManagedMixin,
     MovementValidatorMixin,

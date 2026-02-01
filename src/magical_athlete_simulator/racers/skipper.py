@@ -14,7 +14,7 @@ from magical_athlete_simulator.core.events import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
-    from magical_athlete_simulator.core.types import AbilityName, D6VAlues
+    from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 class AbilitySkipper(Ability):
     name: AbilityName = "SkipperTurn"
     triggers: tuple[type[GameEvent], ...] = (RollResultEvent,)
-    preferred_dice: D6VAlues = frozenset([1, 5, 6])
+    preferred_dice: D6VAlueSet = frozenset([1, 5, 6])
 
     @override
     def execute(
@@ -43,7 +43,9 @@ class AbilitySkipper(Ability):
             engine.state.next_turn_override = owner_idx
 
             def _is_between_current_and_skipper(
-                current_idx: int, skipper_idx: int, target_idx: int
+                current_idx: int,
+                skipper_idx: int,
+                target_idx: int,
             ) -> bool:
                 # Normal Case: Start < End
                 if current_idx < skipper_idx:
@@ -57,7 +59,9 @@ class AbilitySkipper(Ability):
                 for i in engine.state.racers
                 if i.active
                 and _is_between_current_and_skipper(
-                    engine.state.current_racer_idx, owner_idx, i.idx
+                    engine.state.current_racer_idx,
+                    owner_idx,
+                    i.idx,
                 )
             ]:
                 if engine.on_event_processed is not None:

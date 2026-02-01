@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from magical_athlete_simulator.core.abilities import Ability
     from magical_athlete_simulator.core.events import ScheduledEvent
     from magical_athlete_simulator.core.modifiers import RacerModifier
-    from magical_athlete_simulator.core.types import AbilityName, RacerName
+    from magical_athlete_simulator.core.types import AbilityName, D6Values, RacerName
     from magical_athlete_simulator.engine.board import Board
 
 TimingMode = Literal["FLAT", "DFS", "BFS"]
@@ -24,7 +24,7 @@ class GameRules:
 @dataclass(slots=True)
 class RollState:
     serial_id: int = 0
-    dice_value: int | None = None
+    dice_value: D6Values | None = None
     base_value: int = 0
     final_value: int = 0
     can_reroll: bool = True

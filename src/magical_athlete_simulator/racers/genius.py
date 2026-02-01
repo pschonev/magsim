@@ -20,7 +20,7 @@ from magical_athlete_simulator.core.events import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
-    from magical_athlete_simulator.core.types import AbilityName, D6VAlues
+    from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -31,7 +31,7 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
         TurnStartEvent,
         RollModificationWindowEvent,
     )
-    preferred_dice: D6VAlues = frozenset([4, 5, 6])
+    preferred_dice: D6VAlueSet = frozenset([4, 5, 6])
 
     # Persistent State
     prediction: int | None = None

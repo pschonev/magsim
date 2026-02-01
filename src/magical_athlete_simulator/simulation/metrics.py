@@ -31,7 +31,7 @@ def prepare_position_data(df_pos_wide: pl.DataFrame) -> pl.DataFrame:
             value_name="position",
         )
         .with_columns(
-            pl.col("racer_slot").str.extract(r"(\d+)").cast(pl.Int64).alias("racer_id")
+            pl.col("racer_slot").str.extract(r"(\d+)").cast(pl.Int64).alias("racer_id"),
         )
         .filter(pl.col("position").is_not_null())
         .select(["config_hash", "turn_index", "racer_id", "position"])
@@ -59,7 +59,7 @@ def compute_race_metrics(
     # Metric: Average Absolute Deviation from the mean position of the pack per turn.
     # -------------------------------------------------------------------------
     turn_means = df_positions.group_by(["config_hash", "turn_index"]).agg(
-        pl.col("position").mean().alias("turn_mean_pos")
+        pl.col("position").mean().alias("turn_mean_pos"),
     )
 
     tightness = (
@@ -80,7 +80,7 @@ def compute_race_metrics(
             pl.col("position")
             .rank(method="dense", descending=True)
             .over(["config_hash", "turn_index"])
-            .alias("rank_now")
+            .alias("rank_now"),
         )
         .sort(["config_hash", "racer_id", "turn_index"])
         # Compare with previous turn's rank for the same racer
@@ -88,7 +88,7 @@ def compute_race_metrics(
             pl.col("rank_now")
             .shift(1)
             .over(["config_hash", "racer_id"])
-            .alias("rank_prev")
+            .alias("rank_prev"),
         )
         # Filter out turn 0 (no previous rank)
         .filter(pl.col("rank_prev").is_not_null())
@@ -96,7 +96,7 @@ def compute_race_metrics(
         .with_columns(
             (pl.col("rank_now") != pl.col("rank_prev"))
             .cast(pl.Int8)
-            .alias("rank_changed")
+            .alias("rank_changed"),
         )
         .group_by("config_hash")
         .agg(pl.col("rank_changed").mean().alias("volatility_score"))
@@ -114,23 +114,23 @@ def compute_race_metrics(
 
     # Calculate target turn index (66% of winner's time)
     snapshot_targets = winner_turns.with_columns(
-        (pl.col("winner_turns") * 0.66).floor().cast(pl.Int64).alias("snapshot_turn")
+        (pl.col("winner_turns") * 0.66).floor().cast(pl.Int64).alias("snapshot_turn"),
     )
 
     # Filter positions to just that one turn per race
     df_snapshot = df_positions.join(snapshot_targets, on="config_hash").filter(
-        pl.col("turn_index") == pl.col("snapshot_turn")
+        pl.col("turn_index") == pl.col("snapshot_turn"),
     )
 
     # Calculate Median at that snapshot
     snapshot_medians = df_snapshot.group_by("config_hash").agg(
-        pl.col("position").median().alias("median_pos")
+        pl.col("position").median().alias("median_pos"),
     )
 
     midgame_metrics = (
         df_snapshot.join(snapshot_medians, on="config_hash")
         .with_columns(
-            (pl.col("position") - pl.col("median_pos")).alias("midgame_relative_pos")
+            (pl.col("position") - pl.col("median_pos")).alias("midgame_relative_pos"),
         )
         .select(["config_hash", "racer_id", "midgame_relative_pos"])
     )
@@ -139,7 +139,9 @@ def compute_race_metrics(
     # Final Merge for Race Metrics
     # -------------------------------------------------------------------------
     df_race_metrics = tightness.join(
-        volatility, on="config_hash", how="outer"
+        volatility,
+        on="config_hash",
+        how="outer",
     ).fill_null(0.0)
 
     return df_race_metrics, midgame_metrics

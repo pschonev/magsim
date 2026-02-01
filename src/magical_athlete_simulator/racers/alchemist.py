@@ -18,7 +18,7 @@ from magical_athlete_simulator.core.events import (
 from magical_athlete_simulator.engine.roll import report_base_value_change  # NEW Import
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.types import AbilityName, D6VAlues
+    from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 class AlchemistAlchemyAbility(Ability, BooleanDecisionMixin):
     name: AbilityName = "AlchemistAlchemy"
     triggers: tuple[type[GameEvent], ...] = (RollModificationWindowEvent,)
-    preferred_dice: D6VAlues = frozenset([1, 2, 4, 5, 6])
+    preferred_dice: D6VAlueSet = frozenset([1, 2, 4, 5, 6])
 
     @override
     def execute(

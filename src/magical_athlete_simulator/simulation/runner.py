@@ -178,7 +178,7 @@ def run_single_simulation(
                     "finish_position": r.finish_position,
                 }
                 for r in metrics
-            ]
+            ],
         ).with_columns(
             pl.col("racer_id").cast(pl.Int64),
             pl.col("finish_position").cast(pl.Int64),

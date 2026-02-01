@@ -43,24 +43,27 @@ class Board:
         if modifier not in modifiers:
             modifiers.append(modifier)
             engine.log_info(
-                f"BOARD: Registered {modifier.name} (owner={modifier.owner_idx}) at tile {tile}"
+                f"BOARD: Registered {modifier.name} (owner={modifier.owner_idx}) at tile {tile}",
             )
 
     def unregister_modifier(
-        self, tile: int, modifier: SpaceModifier, engine: GameEngine
+        self,
+        tile: int,
+        modifier: SpaceModifier,
+        engine: GameEngine,
     ) -> None:
         modifiers = self.dynamic_modifiers.get(tile)
 
         # eq=True makes "in" work even for new instances
         if not modifiers or modifier not in modifiers:
             engine.log_warning(
-                f"BOARD: Failed to unregister {modifier.name} from {tile} - not found."
+                f"BOARD: Failed to unregister {modifier.name} from {tile} - not found.",
             )
             return
 
         modifiers.remove(modifier)
         engine.log_info(
-            f"BOARD: Unregistered {modifier.name} (owner={modifier.owner_idx}) from tile {tile}"
+            f"BOARD: Unregistered {modifier.name} (owner={modifier.owner_idx}) from tile {tile}",
         )
 
         if not modifiers:
