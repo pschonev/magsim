@@ -237,12 +237,12 @@ class MetricsAggregator:
                     stats.sum_dice_rolled += event.dice_value
                     stats.rolling_turns += 1
 
-                for owner_idx, delta in event.modifier_breakdown:
+                for roll_modifier in event.modifier_breakdown:
                     # Treat dice modification as movement
                     self._record_movement_bucket(
-                        responsible_idx=owner_idx,
+                        responsible_idx=roll_modifier.rolling_racer_idx,
                         target_idx=event.target_racer_idx,
-                        delta=delta,
+                        delta=roll_modifier.delta,
                     )
 
             # --- 4. ABILITY TRIGGERS ---

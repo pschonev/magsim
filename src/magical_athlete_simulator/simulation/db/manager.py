@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import atexit
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
 from sqlmodel import SQLModel, create_engine
@@ -50,8 +50,8 @@ class SimulationDatabase:
         self._init_db()
 
         # Buffers
-        self._race_buffer: list[dict] = []
-        self._result_buffer: list[dict] = []
+        self._race_buffer: list[dict[str, Any]] = []
+        self._result_buffer: list[dict[str, Any]] = []
         self._position_buffer_cols: PositionLogColumns = {
             "config_hash": [],
             "turn_index": [],

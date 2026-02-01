@@ -6,6 +6,7 @@ from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     EventTriggerMode,
     MoveCmdEvent,
+    MoveData,
     PassingEvent,
     Phase,
     PostMoveEvent,
@@ -17,6 +18,7 @@ from magical_athlete_simulator.core.events import (
     SimultaneousWarpCmdEvent,
     TripCmdEvent,
     WarpCmdEvent,
+    WarpData,
 )
 from magical_athlete_simulator.core.mixins import (
     DestinationCalculatorMixin,
@@ -230,17 +232,17 @@ def handle_simultaneous_move_cmd(engine: GameEngine, evt: SimultaneousMoveCmdEve
 
     planned: list[PlannedMove] = []
 
-    for racer_idx, distance in evt.moves:
-        if distance == 0:
+    for move in evt.moves:
+        if move.distance == 0:
             continue
-        racer = engine.get_racer(racer_idx)
+        racer = engine.get_racer(move.moving_racer_idx)
         if not racer.active:
             continue
 
         # Create transient event FIRST
         sub_evt = MoveCmdEvent(
-            target_racer_idx=racer_idx,
-            distance=distance,
+            target_racer_idx=move.moving_racer_idx,
+            distance=move.distance,
             source=evt.source,
             phase=evt.phase,
             emit_ability_triggered="never",
@@ -392,20 +394,20 @@ def handle_simultaneous_warp_cmd(engine: GameEngine, evt: SimultaneousWarpCmdEve
     # We create temporary "single" WarpCmdEvents to reuse your existing helpers easily.
     planned_warps: list[tuple[WarpCmdEvent, int, int]] = []
 
-    for racer_idx, target_tile in evt.warps:
-        racer = engine.get_racer(racer_idx)
+    for warp in evt.warps:
+        racer = engine.get_racer(warp.warping_racer_idx)
         if not racer.active:
             continue
 
         start = racer.position
-        if start == target_tile:
+        if start == warp.target_tile:
             continue
 
         # Create a transient single event to pass to helpers/hooks
         # (This avoids duplicating logic for PreWarpEvent creation etc.)
         single_warp_evt = WarpCmdEvent(
-            target_racer_idx=racer_idx,
-            target_tile=target_tile,
+            target_racer_idx=warp.warping_racer_idx,
+            target_tile=warp.target_tile,
             source=evt.source,
             phase=evt.phase,
             emit_ability_triggered="never",  # We handle the batch trigger separately
@@ -415,9 +417,9 @@ def handle_simultaneous_warp_cmd(engine: GameEngine, evt: SimultaneousWarpCmdEve
         # 1. Departure hook (PreWarpEvent)
         engine.publish_to_subscribers(
             PreWarpEvent(
-                target_racer_idx=racer_idx,
+                target_racer_idx=warp.warping_racer_idx,
                 start_tile=start,
-                target_tile=target_tile,
+                target_tile=warp.target_tile,
                 source=evt.source,
                 phase=evt.phase,
                 responsible_racer_idx=evt.responsible_racer_idx,
@@ -519,7 +521,7 @@ def push_move(
 
 def push_simultaneous_move(
     engine: GameEngine,
-    moves: Sequence[tuple[int, int]],
+    moves: Sequence[MoveData],
     phase: Phase,
     *,
     source: Source,
@@ -561,7 +563,7 @@ def push_warp(
 
 def push_simultaneous_warp(
     engine: GameEngine,
-    warps: list[tuple[int, int]],  # List of (racer_idx, target_tile)
+    warps: list[WarpData],  # List of (racer_idx, target_tile)
     phase: Phase,
     *,
     source: Source,

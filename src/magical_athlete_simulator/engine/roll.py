@@ -10,6 +10,7 @@ from magical_athlete_simulator.core.events import (
     PerformMainRollEvent,
     Phase,
     ResolveMainMoveEvent,
+    RollData,
     RollModificationWindowEvent,
     RollResultEvent,
 )
@@ -77,7 +78,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
     roll_event_triggered_events: list[AbilityTriggeredEvent] = []
 
     # NEW: Capture Breakdown
-    modifier_breakdown: list[tuple[int, int]] = []
+    modifier_breakdown: list[RollData] = []
 
     for mod in engine.get_racer(event.target_racer_idx).modifiers:
         if isinstance(mod, RollModificationMixin):
@@ -96,7 +97,9 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
             delta = val_after - val_before
 
             if delta != 0 and mod.owner_idx is not None:
-                modifier_breakdown.append((mod.owner_idx, delta))
+                modifier_breakdown.append(
+                    RollData(rolling_racer_idx=mod.owner_idx, delta=delta),
+                )
 
     final = query.final_value
     engine.state.roll_state.final_value = final

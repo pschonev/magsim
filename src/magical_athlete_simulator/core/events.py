@@ -112,12 +112,18 @@ class BaseValueModificationEvent(GameEvent):
 
 
 @dataclass(frozen=True, kw_only=True)
+class RollData:
+    rolling_racer_idx: int
+    delta: int
+
+
+@dataclass(frozen=True, kw_only=True)
 class ResolveMainMoveEvent(GameEvent, HasTargetRacer):
     roll_serial: int
     phase: Phase = Phase.MAIN_ACT
     roll_event_triggered_events: list[AbilityTriggeredEvent]
     # NEW: Attribution for +/- modifiers (e.g. Hare +2)
-    modifier_breakdown: list[tuple[int, int]] = field(default_factory=list)
+    modifier_breakdown: list[RollData] = field(default_factory=list)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -130,7 +136,7 @@ class RollResultEvent(GameEvent, HasTargetRacer):
     base_value: int
     final_value: int
     phase: Phase = Phase.MAIN_ACT
-    modifier_breakdown: list[tuple[int, int]] = field(default_factory=list)
+    modifier_breakdown: list[RollData] = field(default_factory=list)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -162,12 +168,18 @@ class MoveCmdEvent(GameEvent, EmitsAbilityTriggeredEvent, HasTargetRacer):
 
 
 @dataclass(frozen=True, kw_only=True)
+class MoveData:
+    moving_racer_idx: int
+    distance: int
+
+
+@dataclass(frozen=True, kw_only=True)
 class SimultaneousMoveCmdEvent(GameEvent, EmitsAbilityTriggeredEvent):
     """
     Atomically moves multiple racers.
     """
 
-    moves: Sequence[tuple[int, int]]
+    moves: Sequence[MoveData]
     emit_ability_triggered: EventTriggerMode = "never"
 
 
@@ -178,8 +190,14 @@ class WarpCmdEvent(GameEvent, EmitsAbilityTriggeredEvent, HasTargetRacer):
 
 
 @dataclass(frozen=True, kw_only=True)
+class WarpData:
+    warping_racer_idx: int
+    target_tile: int
+
+
+@dataclass(frozen=True, kw_only=True)
 class SimultaneousWarpCmdEvent(GameEvent, EmitsAbilityTriggeredEvent):
-    warps: Sequence[tuple[int, int]]  # (racer_idx, target_tile)
+    warps: Sequence[WarpData]  # (racer_idx, target_tile)
     emit_ability_triggered: EventTriggerMode = "never"
 
 

@@ -9,7 +9,12 @@ from magical_athlete_simulator.core.agent import (
     SelectionDecisionMixin,
     SelectionInteractive,
 )
-from magical_athlete_simulator.core.events import GameEvent, Phase, TurnStartEvent
+from magical_athlete_simulator.core.events import (
+    GameEvent,
+    Phase,
+    TurnStartEvent,
+    WarpData,
+)
 from magical_athlete_simulator.core.state import RacerState
 from magical_athlete_simulator.engine.movement import push_simultaneous_warp
 
@@ -65,8 +70,14 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
         push_simultaneous_warp(
             engine,
             warps=[
-                (owner_idx, target_pos),  # Flip Flop -> Target's old pos
-                (target.idx, ff_pos),  # Target -> Flip Flop's old pos
+                WarpData(
+                    warping_racer_idx=owner_idx,
+                    target_tile=target_pos,
+                ),  # Flip Flop -> Target's old pos
+                WarpData(
+                    warping_racer_idx=target.idx,
+                    target_tile=ff_pos,
+                ),  # Target -> Flip Flop's old pos
             ],
             phase=Phase.PRE_MAIN,
             source=self.name,

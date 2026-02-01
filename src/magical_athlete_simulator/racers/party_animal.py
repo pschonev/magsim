@@ -7,6 +7,7 @@ from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     GameEvent,
+    MoveData,
     MoveDistanceQuery,
     Phase,
     TurnStartEvent,
@@ -55,13 +56,13 @@ class PartyAnimalPull(Ability):
         if not pa.active:
             return "skip_trigger"
 
-        moves_to_make: list[tuple[int, int]] = []
+        moves_to_make: list[MoveData] = []
         for r in engine.state.racers:
             if r.idx == owner_idx or (not r.active) or (r.position == pa.position):
                 continue
 
             direction = 1 if r.position < pa.position else -1
-            moves_to_make.append((r.idx, direction))
+            moves_to_make.append(MoveData(moving_racer_idx=r.idx, distance=direction))
 
         if moves_to_make:
             push_simultaneous_move(
