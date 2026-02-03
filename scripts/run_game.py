@@ -31,6 +31,12 @@ if __name__ == "__main__":
         type=str,
         help="Base64 encoded configuration string (overrides manual defaults)",
     )
+    parser.add_argument(
+        "--seed",
+        "-s",
+        type=int,
+        help="Seed for RNG",
+    )
     args = parser.parse_args()
 
     # 2. Determine Settings (CLI vs Default)
@@ -55,11 +61,11 @@ if __name__ == "__main__":
             "Magician",
             "Scoocher",
             "Hypnotist",
-            "Mouth",
+            "Egg",
             "ThirdWheel",
         ]
         board_name = "wild_wilds"
-        seed = 9
+        seed = args.seed
         print(f"Using default config: {roster} on {board_name} (Seed: {seed})")
 
     # 3. Initialize Game

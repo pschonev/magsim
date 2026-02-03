@@ -3,6 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from magical_athlete_simulator.core.agent import Agent
+
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import (
         AbilityTriggeredEvent,
@@ -98,5 +100,5 @@ class SetupPhaseMixin(ABC):
     """Mixin for abilities that trigger logic once at the very beginning of the game."""
 
     @abstractmethod
-    def on_setup(self, engine: GameEngine, owner_idx: int) -> None:
+    def on_setup(self, engine: GameEngine, owner_idx: int, agent: Agent) -> None:
         pass

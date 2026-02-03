@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 RacerName = Literal[
@@ -112,3 +113,11 @@ ErrorCode = Literal[
 ]
 D6Values = Literal[1, 2, 3, 4, 5, 6]
 D6VAlueSet = frozenset[D6Values]
+
+
+@dataclass
+class RacerStat:
+    racer_name: RacerName
+    speed: float = 0.0
+    winrate: float = 0.0
+    avg_vp: float = 0.0

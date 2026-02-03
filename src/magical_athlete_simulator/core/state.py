@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+from magical_athlete_simulator.core.registry import RACER_ABILITIES
+
 if TYPE_CHECKING:
+    import random
     from magical_athlete_simulator.core.abilities import Ability
     from magical_athlete_simulator.core.events import ScheduledEvent
     from magical_athlete_simulator.core.modifiers import RacerModifier
@@ -97,6 +100,41 @@ class GameState:
     serial: int = 0
     race_over: bool = False
     history: set[int] = field(default_factory=set)
+    _drawn_racers: set[RacerName] = field(default_factory=set)
+    _removed_racers: set[RacerName] = field(default_factory=set)
+
+    @property
+    def unavailable_racers(self) -> frozenset[RacerName]:
+        """Unavailable = active + drawn + removed"""
+        return (
+            frozenset(r.name for r in self.racers)
+            .union(
+                self._drawn_racers,
+            )
+            .union(self._removed_racers)
+        )
+
+    @property
+    def available_racers(self) -> frozenset[RacerName]:
+        """Available = every racer - unavailable racers"""
+        return frozenset(RACER_ABILITIES.keys()).difference(self.unavailable_racers)
+
+    def draw_racers(self, k: int, *, rng: random.Random) -> frozenset[RacerName]:
+        """Draw k racers that are available"""
+        drawn_racers = rng.sample(
+            sorted(self.available_racers),  # sort for pseudo RNG
+            k=k,
+        )
+        self._drawn_racers = self._drawn_racers.union(set(drawn_racers))
+        return frozenset(drawn_racers)
+
+    def remove_racers(self, racers_to_remove: list[RacerName]) -> None:
+        """Remove racers from the game (e.g. by picking them via ability)"""
+        self._removed_racers = self._removed_racers.union(set(racers_to_remove))
+
+    def shuffle(self) -> None:
+        """Shuffle deck of drawn racers back to pile"""
+        self._drawn_racers = set()
 
     def get_state_hash(self) -> int:
         """Hash entire game state including racers, board, and semantic queue content."""

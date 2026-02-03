@@ -21,7 +21,7 @@ class SisyphusCurse(Ability, SetupPhaseMixin):
     preferred_dice: D6VAlueSet = frozenset([1, 2, 3, 4, 5])
 
     @override
-    def on_setup(self, engine: GameEngine, owner_idx: int) -> None:
+    def on_setup(self, engine: GameEngine, owner_idx: int, agent: Agent) -> None:
         racer = engine.get_racer(owner_idx)
         racer.victory_points += 4
         engine.log_info(

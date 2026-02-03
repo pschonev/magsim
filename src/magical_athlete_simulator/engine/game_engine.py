@@ -34,6 +34,7 @@ from magical_athlete_simulator.core.mixins import (
 )
 from magical_athlete_simulator.core.registry import RACER_ABILITIES
 from magical_athlete_simulator.core.state import RollState
+from magical_athlete_simulator.core.types import RacerName, RacerStat
 from magical_athlete_simulator.engine.logging import ContextFilter
 from magical_athlete_simulator.engine.loop_detection import LoopDetector
 from magical_athlete_simulator.engine.movement import (
@@ -48,7 +49,7 @@ from magical_athlete_simulator.engine.roll import (
     handle_perform_main_roll,
     resolve_main_move,
 )
-from magical_athlete_simulator.racers import get_ability_classes
+from magical_athlete_simulator.racers import get_ability_classes, get_all_racer_stats
 
 if TYPE_CHECKING:
     import random
@@ -102,9 +103,20 @@ class GameEngine:
 
             _ = self.agents.setdefault(racer.idx, SmartAgent())
 
-            for ability in racer.active_abilities.values():
-                if isinstance(ability, SetupPhaseMixin):
-                    ability.on_setup(self, racer.idx)
+            processed_abilities: set[AbilityName] = set()
+
+            while True:
+                new_keys = set(racer.active_abilities.keys()) - processed_abilities
+
+                if not new_keys:
+                    break
+
+                for key in new_keys:
+                    ability = racer.active_abilities[key]
+                    processed_abilities.add(ability.name)
+
+                    if isinstance(ability, SetupPhaseMixin):
+                        ability.on_setup(self, racer.idx, self.agents[racer.idx])
 
     # --- Main Loop ---
     def run_race(self):
@@ -451,6 +463,17 @@ class GameEngine:
                     target_racer_idx=skipped_racer_idx,
                 ),
             )
+
+    def draw_racers(self, k: int) -> tuple[RacerStat, ...]:
+        if k > len(self.state.available_racers):
+            self.state.shuffle()  # shuffle cards back in pile
+
+        drawn_racers = self.state.draw_racers(k, rng=self.rng)
+        return tuple(
+            stat
+            for _, stat in get_all_racer_stats(self.log_error).items()
+            if stat.racer_name in drawn_racers
+        )
 
     # -- Logging --
     def _log(self, level: int, msg: str, *args: Any, **kwargs: Any) -> None:
