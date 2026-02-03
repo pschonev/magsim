@@ -49,13 +49,16 @@ class AbilityScoochStep(Ability):
         # Logging context
         source_racer: RacerState = engine.get_racer(event.responsible_racer_idx)
 
-        target_msg = ""
-        if isinstance(event, HasTargetRacer):
-            target_msg = f" on {event.target_racer_idx}"
+        target_msg = (
+            ""
+            if event.target_racer_idx is None
+            or event.target_racer_idx == event.responsible_racer_idx
+            else f" on {engine.get_racer(event.target_racer_idx).repr}"
+        )
 
-        cause_msg = f"Saw {source_racer.repr} use {event.source}{target_msg}"
-
-        engine.log_info(f"{owner_idx}:{self.name}: {cause_msg} -> Queue Moving 1")
+        engine.log_info(
+            f"{me.repr} saw {source_racer.repr} use {event.source}{target_msg} -> Queue Moving 1",
+        )
         push_move(
             engine,
             1,

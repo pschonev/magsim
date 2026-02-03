@@ -57,6 +57,9 @@ class AlchemistAlchemyAbility(Ability, BooleanDecisionMixin):
             engine.state.roll_state.final_value = 4
             engine.state.roll_state.can_reroll = False
 
+            engine.log_info(
+                f"{engine.get_racer(owner_idx).repr} used alchemy to convert a {old_val} to a 4!",
+            )
             report_base_value_change(
                 engine,
                 owner_idx,

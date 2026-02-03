@@ -59,7 +59,7 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
             return "skip_trigger"
 
         engine.log_info(
-            f"{engine.get_racer(owner_idx).repr} cheers for {' and'.join([engine.get_racer(idx).repr for idx in last_place_indices])} in last place!",
+            f"{engine.get_racer(owner_idx).repr} cheers for {' and '.join([engine.get_racer(idx).repr for idx in last_place_indices])} in last place!",
         )
 
         # Apply Effects
@@ -101,5 +101,4 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
-        # Default to True as it's almost always beneficial
         return True
