@@ -40,7 +40,7 @@ class AbilityTrample(Ability):
         if not victim.active:
             return "skip_trigger"
 
-        engine.log_info(f"{self.name}: Centaur passed {victim.repr}. Queuing -2 move.")
+        engine.log_debug(f"{self.name}: Centaur passed {victim.repr}. Queuing -2 move.")
         push_move(
             engine,
             -2,

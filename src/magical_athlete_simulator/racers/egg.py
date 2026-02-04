@@ -28,9 +28,6 @@ class EggCopyAbility(Ability, SetupPhaseMixin, SelectionDecisionMixin[RacerStat]
     name: AbilityName = "EggCopy"
     triggers: tuple[type[GameEvent], ...] = ()
 
-    # Persistent State
-    prediction: int | None = None
-
     @override
     def execute(
         self,
@@ -44,7 +41,9 @@ class EggCopyAbility(Ability, SetupPhaseMixin, SelectionDecisionMixin[RacerStat]
     @override
     def on_setup(self, engine: GameEngine, owner_idx: int, agent: Agent) -> None:
         racer_options = engine.draw_racers(k=3)
-        engine.log_info(f"Egg drew {', '.join(r.racer_name for r in racer_options)}.")
+        engine.log_info(
+            f"Egg drew {', '.join(f'{r.racer_name} ({r.avg_vp:.2f} ØVP)' for r in racer_options)}.",
+        )
 
         picked_racer = agent.make_selection_decision(
             engine,

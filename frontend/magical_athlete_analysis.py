@@ -68,6 +68,11 @@ async def cell_import():
         GameLogHighlighter,
         RichMarkupFormatter,
     )
+    from magical_athlete_simulator.core.palettes import (
+        get_racer_color,
+        get_racer_palette,
+        RACER_PALETTES,
+    )
     from magical_athlete_simulator.simulation.telemetry import StepSnapshot
 
     # Imports
@@ -94,6 +99,8 @@ async def cell_import():
         alt,
         dataclasses,
         get_args,
+        get_racer_color,
+        get_racer_palette,
         logging,
         math,
         mo,
@@ -275,67 +282,7 @@ def cell_display_data(df_racer_results, df_races, mo, pl):
 
 @app.cell
 def cell_visual_setup(math):
-    from typing import NamedTuple
-
     BG_COLOR = "#181c1a"
-
-    class RacerPalette(NamedTuple):
-        primary: str
-        secondary: str | None = None
-        outline: str = "#000000"
-
-    RACER_PALETTES = {
-        "HugeBaby": RacerPalette("#FFB7C5", "#FFFFFF", "#39FF14"),  # Pastel Pink (Baby)
-        "Scoocher": RacerPalette("#8B4513", "#FF0000", "#800080"),  # Brown (Snail/Dog?)
-        "Genius": RacerPalette("#FF0000", "#0000FF", "#FFFF00"),  # Bright Red (Shirt)
-        "Banana": RacerPalette("#FFE135", "#000000", "#800080"),  # Standard Yellow
-        "Skipper": RacerPalette(
-            "#1A4099", "#FFD700", "#800080"
-        ),  # Royal Blue (Primary)
-        "PartyAnimal": RacerPalette(
-            "#32CD32", "#FFFF00", "#FF00FF"
-        ),  # Lime Green (Primary)
-        "Romantic": RacerPalette("#DA70D6", "#FFFF00", "#800080"),  # Orchid (Primary)
-        "Mastermind": RacerPalette("#800080", "#FFD700", "#008000"),  # Purple (Primary)
-        "Copycat": RacerPalette(
-            "#00BFFF", "#FFFFFF", "#FFA500"
-        ),  # Deep Sky Blue (Cat?)
-        "Magician": RacerPalette(
-            "#5D3FD3", "#9370DB", "#FFA500"
-        ),  # Electric Indigo / Iris (Lighter than Midnight Blue)
-        "Gunk": RacerPalette("#556B2F", "#8B4513", "#FFA500"),  # Olive Drab
-        "Centaur": RacerPalette("#D2691E", "#8B4513", "#800080"),  # Chocolate
-        "FlipFlop": RacerPalette("#9370DB", "#FFFF00", "#FF0000"),  # Medium Purple
-        "Hare": RacerPalette("#87CEEB", None, "#FF8C00"),  # Sky Blue & Dark Orange
-        "Blimp": RacerPalette(
-            "#D3D3D3", "#4169E1", "#000000"
-        ),  # Light Grey & Royal Blue
-        "Suckerfish": RacerPalette(
-            "#808000", "#FF4500", "#1E90FF"
-        ),  # Olive (Muddy) & OrangeRed & Dodger Blue
-        "Leapfrog": RacerPalette(
-            "#1E90FF", "#32CD32", "#FF8C00"
-        ),  # Dodger Blue & Lime Green & Dark Orange
-        "Sisyphus": RacerPalette(
-            "#C0C0C0", "#FFFFFF", "#FFD700"
-        ),  # Silver & White & Gold
-        "LovableLoser": RacerPalette(
-            "#008000", "#FF00FF", "#FFA500"
-        ),  # Green & Magenta & Orange
-        "Coach": RacerPalette("#636829", "#DC143C", "#8A2BE2"),  # Muddy Lizard Green
-        "Stickler": RacerPalette(
-            "#C71585", "#FF69B4", "#0000FF"
-        ),  # Medium Violet Red & Hot Pink & Blue
-        "BabaYaga": RacerPalette(
-            "#4682B4", "#FFD700", "#FF0000"
-        ),  # Steel Blue & Gold & Red
-    }
-
-    FALLBACK_PALETTES = [
-        RacerPalette("#8A2BE2", None, "#000"),
-        RacerPalette("#5F9EA0", None, "#000"),
-        RacerPalette("#D2691E", None, "#000"),
-    ]
 
     # --- CONSTANTS: BOARD THEME ---
     BOARD_THEME = {
@@ -360,15 +307,6 @@ def cell_visual_setup(math):
         "move_neg_fill": "#EF9A9A",
         "move_neg_text": "#B71C1C",
     }
-
-    # --- HELPER FUNCTIONS ---
-    def get_racer_palette(name: str) -> RacerPalette:
-        if name in RACER_PALETTES:
-            return RACER_PALETTES[name]
-        return FALLBACK_PALETTES[hash(name) % len(FALLBACK_PALETTES)]
-
-    def get_racer_color(name: str) -> str:
-        return get_racer_palette(name).primary
 
     def generate_racetrack_positions(
         num_spaces, start_x, start_y, straight_len, radius
@@ -423,13 +361,7 @@ def cell_visual_setup(math):
     # Constants
     NUM_TILES = 31
     board_positions = generate_racetrack_positions(NUM_TILES, 120, 150, 350, 100)
-    return (
-        BG_COLOR,
-        BOARD_THEME,
-        board_positions,
-        get_racer_color,
-        get_racer_palette,
-    )
+    return BG_COLOR, BOARD_THEME, board_positions
 
 
 @app.cell
@@ -958,8 +890,13 @@ def cell_setup_log(
     get_dice_rolls_text()
 
     log_console = Console(
-        record=True, width=120, force_terminal=True, color_system="truecolor"
+        record=True,
+        width=120,
+        force_terminal=True,
+        color_system="truecolor",
+        legacy_windows=False,  # Better rendering
     )
+
     root_logger = logging.getLogger()
     for h in root_logger.handlers[:]:
         root_logger.removeHandler(h)
@@ -1247,7 +1184,7 @@ def cell_log_viewer(
             full_turn_log = step_history[end_of_turn_idx].log_html
 
             if is_active:
-                bg, border, opacity = "#000000", "#00FF00", "1.0"
+                bg, border, opacity = "#181818", "#00FF00", "1.0"
                 lines = full_turn_log.split("\n")
                 target_line = current_data.log_line_index
                 safe_idx = min(len(lines), target_line + 1)
@@ -1273,7 +1210,19 @@ def cell_log_viewer(
         log_ui = mo.vstack(
             [
                 mo.Html(
-                    f"""<div id="{container_id}" style="height:750px; overflow-y:auto; background:{BG_COLOR}; font-family:monospace;">{full_html}</div>"""
+                    f"""
+      <div id="{container_id}" style="
+    height: 750px;
+    overflow-y: auto;
+    background: {BG_COLOR};
+    font-family: Menlo, Monaco, 'Courier New', monospace;
+    font-size: 15px;
+    line-height: 1.3;
+    padding: 8px;
+      ">
+    {full_html}
+      </div>
+      """
                 ),
                 mo.iframe(scroll_script, width="0", height="0"),
             ]

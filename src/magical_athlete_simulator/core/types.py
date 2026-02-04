@@ -83,7 +83,7 @@ AbilityName = Literal[
     "TwinCopy",
 ]
 
-ModifierName = Literal[
+RacerModifierName = Literal[
     "BlimpModifier",
     "CoachBoost",
     "GunkSlimeModifier",
@@ -91,12 +91,15 @@ ModifierName = Literal[
     "HugeBabyBlocker",
     "LeaptoadJump",
     "MastermindPrediction",
-    "MoveDeltaTile",
     "PartySelfBoost",
     "RocketScientistLiftoff",
     "SisyphusStumble",
     "SticklerStrictFinish",
     "SuckerfishTarget",
+]
+
+BoardModifierName = Literal[
+    "MoveDeltaTile",
     "TripTile",
     "VictoryPointTile",
 ]
@@ -104,6 +107,7 @@ ModifierName = Literal[
 BoardName = Literal["standard", "wild_wilds"]
 
 SystemSource = Literal["Board", "System"]
+ModifierName = RacerModifierName | BoardModifierName
 Source = AbilityName | ModifierName | SystemSource
 
 ErrorCode = Literal[

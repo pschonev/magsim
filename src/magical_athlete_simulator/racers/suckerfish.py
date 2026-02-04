@@ -102,7 +102,7 @@ class SuckerfishRide(Ability, SelectionDecisionMixin[RacerState]):
             return "skip_trigger"
 
         engine.log_info(
-            f"Suckerfish rides the wake of {engine.get_racer(event.target_racer_idx).repr} to {target_tile}!",
+            f"{sucker.repr} rides the wake of {engine.get_racer(event.target_racer_idx).repr} to {target_tile}!",
         )
 
         # 1. Attach the target lock

@@ -41,7 +41,7 @@ class AbilityBananaTrip(Ability):
         if not victim.active:
             return "skip_trigger"
 
-        engine.log_info(f"{self.name}: Queuing TripCmd for {victim.repr}.")
+        engine.log_debug(f"{self.name}: Queuing TripCmd for {victim.repr}.")
         push_trip(
             engine,
             tripped_racer_idx=event.passing_racer_idx,
