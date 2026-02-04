@@ -4,8 +4,9 @@ import functools
 import importlib
 import json
 import pkgutil
+from importlib.resources import files
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.modifiers import RacerModifier
@@ -13,10 +14,13 @@ from magical_athlete_simulator.core.registry import RACER_ABILITIES
 from magical_athlete_simulator.core.types import RacerStat
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.types import AbilityName
-    from magical_athlete_simulator.engine.game_engine import GameEngine
+    from collections.abc import Callable
 
-STAT_FILE_PATH = Path(__file__).parent.parent / "results"
+    from magical_athlete_simulator.core.types import AbilityName
+
+INTERNAL_STATS_PATH = files("magical_athlete_simulator.data").joinpath(
+    "racer_stats.json",
+)
 
 
 def _import_modules() -> None:
@@ -39,12 +43,16 @@ def get_modifier_classes() -> dict[AbilityName | str, type[RacerModifier]]:
 @functools.cache
 def get_all_racer_stats(log_fn: Callable[[str], None] = print) -> dict[str, RacerStat]:
     try:
-        with STAT_FILE_PATH.open("r") as f:
-            data = json.load(f)
+        # We read the text content directly from the package resource
+        json_content = INTERNAL_STATS_PATH.read_text(encoding="utf-8")
+        data = json.loads(json_content)
+
+        # Convert list of dicts to Dict[Name, RacerStat]
         return {d["racer_name"]: RacerStat(**d) for d in data}
-    except Exception as e:
-        log_fn(f"Failed to load racer stats from {STAT_FILE_PATH} - {e}")
-        return {
-            racer_name: RacerStat(racer_name)
-            for racer_name, _ in RACER_ABILITIES.items()
-        }
+
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        log_fn(f"⚠️  Could not load internal racer stats: {e}")
+        log_fn("    Falling back to default (zero) stats.")
+
+        # Fallback: Create empty stats for every known racer
+        return {racer_name: RacerStat(racer_name) for racer_name in RACER_ABILITIES}

@@ -57,12 +57,12 @@ if __name__ == "__main__":
         # Default / Manual Fallback
         roster: list[RacerName] = [
             "Cheerleader",
-            "Centaur",
-            "Magician",
+            "FlipFlop",
+            "Gunk",
             "Scoocher",
             "Hypnotist",
             "Egg",
-            "ThirdWheel",
+            "Mouth",
         ]
         board_name = "wild_wilds"
         seed = args.seed

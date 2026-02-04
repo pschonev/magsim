@@ -165,6 +165,7 @@ class PassingEvent(GameEvent):
 class MoveCmdEvent(GameEvent, EmitsAbilityTriggeredEvent, HasTargetRacer):
     distance: int
     emit_ability_triggered: EventTriggerMode = "never"
+    is_main: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)

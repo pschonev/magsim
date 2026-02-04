@@ -11,7 +11,7 @@ def add_racer_modifier(engine: GameEngine, target_idx: int, modifier: RacerModif
     racer = engine.get_racer(target_idx)
     if modifier not in racer.modifiers:
         racer.modifiers.append(modifier)
-        engine.log_info(f"ENGINE: Added {modifier.name} to {racer.repr}")
+        engine.log_debug(f"ENGINE: Added {modifier.name} to {racer.repr}")
 
 
 def remove_racer_modifier(engine: GameEngine, target_idx: int, modifier: RacerModifier):
@@ -19,4 +19,4 @@ def remove_racer_modifier(engine: GameEngine, target_idx: int, modifier: RacerMo
     if modifier in racer.modifiers:
         racer.modifiers.remove(modifier)
 
-        engine.log_info(f"ENGINE: Removed {modifier.name} from {racer.repr}")
+        engine.log_debug(f"ENGINE: Removed {modifier.name} from {racer.repr}")

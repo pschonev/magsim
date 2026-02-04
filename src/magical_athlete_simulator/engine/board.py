@@ -180,7 +180,7 @@ class MoveDeltaTile(SpaceModifier, LandingHookMixin):
         racer: RacerState = engine.get_racer(
             racer_idx,
         )  # uses existing GameEngine API.[file:1]
-        engine.log_info(
+        engine.log_debug(
             f"{self.display_name}: Queuing {self.delta} move for {racer.repr}",
         )
         # New move is a separate event, not part of the original main move.[file:1]

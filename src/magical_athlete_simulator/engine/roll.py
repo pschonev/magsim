@@ -107,10 +107,10 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
     # Logging...
     if query.modifier_sources:
         parts = [f"{name}({delta:+d})" for name, delta in query.modifier_sources]
-        mods_str = ", ".join(parts)
+        mods_str = " + ".join(parts)
         total_delta = sum(delta for _, delta in query.modifier_sources)
         engine.log_info(
-            f"Dice Roll: {base} | Mods: {mods_str} ({total_delta:+d}) -> Result: {final}",
+            f"Dice Roll: {base} | Mods: {mods_str} = {total_delta:+d} -> Result: {final}",
         )
     else:
         engine.log_info(f"Dice Roll: {base} | Mods: 0 -> Result: {final}")
@@ -194,6 +194,7 @@ def handle_execute_main_move(engine: GameEngine, event: ExecuteMainMoveEvent) ->
             source=event.source,
             responsible_racer_idx=event.responsible_racer_idx,
             emit_ability_triggered="never",
+            is_main_move=True,
         )
 
 

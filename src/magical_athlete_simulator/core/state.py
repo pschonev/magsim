@@ -71,7 +71,7 @@ class RacerState:
 
     @property
     def repr(self) -> str:
-        return f"{self.idx}:{self.name}"
+        return f"{self.idx}•{self.name}"
 
     @property
     def abilities(self) -> set[AbilityName]:

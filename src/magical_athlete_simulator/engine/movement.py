@@ -126,7 +126,10 @@ def _process_passing_and_logs(
     end_tile: int,
 ):
     racer = engine.get_racer(evt.target_racer_idx)
-    engine.log_info(f"Move: {racer.repr} {start_tile}->{end_tile} ({evt.source})")
+    move_prefix = "MainMove" if evt.is_main else "Move"
+    engine.log_info(
+        f"{move_prefix}: {racer.repr} {start_tile}->{end_tile} ({evt.source})",
+    )
 
     if evt.distance != 0:
         step = 1 if evt.distance > 0 else -1
@@ -506,6 +509,7 @@ def push_move(
     source: Source,
     responsible_racer_idx: int | None,
     emit_ability_triggered: EventTriggerMode = "never",
+    is_main_move: bool = False,
 ):
     engine.push_event(
         MoveCmdEvent(
@@ -515,6 +519,7 @@ def push_move(
             phase=phase,
             emit_ability_triggered=emit_ability_triggered,
             responsible_racer_idx=responsible_racer_idx,
+            is_main=is_main_move,
         ),
     )
 

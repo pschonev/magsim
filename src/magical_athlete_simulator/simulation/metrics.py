@@ -145,3 +145,51 @@ def compute_race_metrics(
     ).fill_null(0.0)
 
     return df_race_metrics, midgame_metrics
+
+
+def calculate_aggregated_racer_stats(df_results: pl.DataFrame) -> pl.DataFrame:
+    """
+    Aggregates per-race results into global statistics for each racer.
+    Returns a Polars DataFrame ready for JSON export.
+    """
+    df_aug = (
+        df_results.with_columns(
+            [
+                pl.col("sum_dice_rolled").fill_null(0),
+                pl.col("pos_self_ability_movement").fill_null(0),
+                pl.col("turns_taken").fill_null(0),
+                pl.col("recovery_turns").fill_null(0),
+                pl.col("skipped_main_moves").fill_null(0),
+            ]
+        )
+        .with_columns(
+            [
+                # Calculate Active Turns
+                (
+                    pl.col("turns_taken")
+                    - pl.col("recovery_turns")
+                    - pl.col("skipped_main_moves")
+                ).alias("active_turns_count")
+            ]
+        )
+        .with_columns(
+            [
+                # Calculate Speed: (Dice + Ability) / Active Turns
+                (
+                    (pl.col("sum_dice_rolled") + pl.col("pos_self_ability_movement"))
+                    / pl.col("active_turns_count").replace(0, 1)  # Avoid div/0
+                ).alias("raw_speed_per_active_turn")
+            ]
+        )
+    )
+
+    return df_aug.group_by("racer_name").agg(
+        [
+            # Speed: Average of the per-race speeds
+            pl.col("raw_speed_per_active_turn").mean().round(3).alias("speed"),
+            (pl.col("finish_position").eq(1).sum() / pl.count())
+            .round(3)
+            .alias("winrate"),
+            pl.col("final_vp").mean().round(3).alias("avg_vp"),
+        ]
+    )

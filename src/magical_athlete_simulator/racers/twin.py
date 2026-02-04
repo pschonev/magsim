@@ -1,0 +1,100 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Self, override
+
+from magical_athlete_simulator.core.abilities import Ability
+from magical_athlete_simulator.core.agent import (
+    Agent,
+    SelectionDecisionContext,
+    SelectionDecisionMixin,
+    SelectionInteractive,
+)
+from magical_athlete_simulator.core.mixins import SetupPhaseMixin
+from magical_athlete_simulator.core.registry import RACER_ABILITIES
+from magical_athlete_simulator.core.types import RacerStat
+
+if TYPE_CHECKING:
+    from magical_athlete_simulator.core.events import (
+        AbilityTriggeredEventOrSkipped,
+        GameEvent,
+    )
+    from magical_athlete_simulator.core.types import AbilityName
+    from magical_athlete_simulator.engine.game_engine import GameEngine
+
+
+@dataclass
+class TwinCopyAbility(Ability, SetupPhaseMixin, SelectionDecisionMixin[RacerStat]):
+    name: AbilityName = "TwinCopy"
+    triggers: tuple[type[GameEvent], ...] = ()
+
+    @override
+    def execute(
+        self,
+        event: GameEvent,
+        owner_idx: int,
+        engine: GameEngine,
+        agent: Agent,
+    ) -> AbilityTriggeredEventOrSkipped:
+        return "skip_trigger"
+
+    @override
+    def on_setup(self, engine: GameEngine, owner_idx: int, agent: Agent) -> None:
+        draws = engine.draw_racers(k=15)
+
+        # simulate past races
+        winners: list[RacerStat] = []
+        for i, racers in enumerate([draws[0:5], draws[5:10], draws[10:15]]):
+            weights = [r.winrate for r in racers]
+            winner: RacerStat = engine.rng.choices(
+                population=racers,
+                k=1,
+                weights=weights if sum(weights) else None,
+            )[0]
+            participants = ", ".join(
+                [
+                    f"{r.racer_name} ({r.winrate * 100:.1f}% WR)"
+                    for r in racers
+                    if r.racer_name != winner.racer_name
+                ],
+            )
+            engine.log_info(
+                f"Race {i}: {winner.racer_name} ({winner.avg_vp:.2f} ØVP, {winner.winrate * 100:.1f}% WR) won the race against {participants}",
+            )
+            winners.append(winner)
+
+        picked_racer = agent.make_selection_decision(
+            engine,
+            ctx=SelectionDecisionContext[
+                SelectionInteractive[RacerStat],
+                RacerStat,
+            ](
+                source=self,
+                game_state=engine.state,
+                source_racer_idx=owner_idx,
+                options=winners,
+            ),
+        )
+        if picked_racer is None:
+            raise AssertionError(
+                "Twin should always have a target to pick.",
+            )
+
+        engine.log_info(f"Twin picked {picked_racer.racer_name}!")
+        engine.state.remove_racers([picked_racer.racer_name])
+
+        picked_racer_abilities = RACER_ABILITIES[picked_racer.racer_name]
+        engine.update_racer_abilities(
+            racer_idx=owner_idx,
+            new_abilities=engine.get_racer(owner_idx).abilities.union(
+                picked_racer_abilities,
+            ),
+        )
+
+    @override
+    def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, RacerStat],
+    ) -> RacerStat | None:
+        return max(ctx.options, key=lambda r: r.avg_vp)
