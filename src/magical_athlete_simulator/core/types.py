@@ -70,7 +70,7 @@ AbilityName = Literal[
     "MagicalReroll",
     "MastermindPredict",
     "MouthSwallow",
-    "PartyBoost",
+    "PartyBoostManager",
     "PartyPull",
     "RomanticMove",
     "RocketScientistLiftoffManager",

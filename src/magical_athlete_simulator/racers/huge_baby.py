@@ -54,6 +54,9 @@ class HugeBabyModifier(SpaceModifier, ApproachHookMixin):
             msg = f"Expected ID of {self.display_name} owner but got None"
             raise ValueError(msg)
 
+        engine.log_info(
+            f"{engine.get_racer(moving_racer_idx).repr} got blocked by {self.display_name}!",
+        )
         engine.push_event(
             AbilityTriggeredEvent(
                 self.owner_idx,
@@ -141,8 +144,10 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
                     event.end_tile,
                     except_racer_idx=owner.idx,
                 )
-
                 if victims:
+                    engine.log_info(
+                        f"{owner.repr} landed on {target} and pushes away {', '.join([v.repr for v in victims])} using {self.name}",
+                    )
                     warps = [
                         WarpData(warping_racer_idx=v.idx, target_tile=target)
                         for v in victims

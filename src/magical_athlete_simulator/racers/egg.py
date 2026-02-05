@@ -70,6 +70,7 @@ class EggCopyAbility(Ability, SetupPhaseMixin, SelectionDecisionMixin[RacerStat]
                 RacerStat,
             ](
                 source=self,
+                event=None,
                 game_state=engine.state,
                 source_racer_idx=owner.idx,
                 options=racer_options,

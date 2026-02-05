@@ -58,8 +58,10 @@ if __name__ == "__main__":
         roster: list[RacerName] = [
             "Copycat",
             "Centaur",
-            "Hypnotist",
+            "Skipper",
+            "FlipFlop",
             "Egg",
+            "PartyAnimal",
         ]
         board_name = "wild_wilds"
         seed = args.seed

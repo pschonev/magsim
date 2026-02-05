@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Protocol, Self, override, runtime_checkable
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from magical_athlete_simulator.core.events import GameEvent
     from magical_athlete_simulator.core.state import GameState
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 @dataclass
 class DecisionContext[T]:
     source: T
+    event: GameEvent | None
     game_state: GameState
     source_racer_idx: int
 

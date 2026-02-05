@@ -12,19 +12,21 @@ if TYPE_CHECKING:
 def log_final_standings(engine: GameEngine):
     if not engine.verbose:
         return
-    engine.log_info("=== FINAL STANDINGS ===")
+    engine.log_info(f"{'':>15}=== FINAL STANDINGS ===")
     for racer in sorted(
         engine.state.racers,
         key=lambda r: r.finish_position if r.finish_position else 999,
     ):
-        if racer.finish_position:
-            status = f"Rank {racer.finish_position}"
+        if racer.finish_position == 1:
+            status = f"Rank {racer.finish_position} 🏆"
+        elif racer.finish_position == 2:
+            status = f"Rank {racer.finish_position} 🥈"
         elif racer.eliminated:
-            status = "Eliminated"
+            status = "💀 Eliminated"
         else:
             status = ""
         engine.log_info(
-            f"Result: {racer.idx}•{racer.name} pos={racer.raw_position} vp={racer.victory_points} {status}",
+            f"{'':>1}{racer.idx}•{racer.name:<8} Pos: {racer.raw_position:<4} VP: {racer.victory_points:<4} {status}",
         )
 
 
@@ -111,7 +113,7 @@ def end_race(engine: GameEngine) -> None:
         return
 
     engine.state.race_over = True
-    engine.log_info("Race Ended.")
+    engine.log_info("Race ended! 🏁")
 
     engine.state.queue.clear()
     log_final_standings(engine)

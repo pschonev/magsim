@@ -12,6 +12,7 @@ from magical_athlete_simulator.core.agent import (
     Agent,
     SelectionDecisionContext,
     SelectionDecisionMixin,
+    SelectionInteractive,
 )
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
@@ -108,8 +109,12 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
         # 3. Ask the Agent which leader to copy
         target = agent.make_selection_decision(
             engine,
-            SelectionDecisionContext(
+            SelectionDecisionContext[
+                SelectionInteractive[RacerState],
+                RacerState,
+            ](
                 source=self,
+                event=event,
                 game_state=engine.state,
                 source_racer_idx=owner.idx,
                 options=valid_targets,

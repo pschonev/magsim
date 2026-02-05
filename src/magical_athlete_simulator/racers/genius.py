@@ -64,6 +64,7 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
                     int,
                 ](
                     source=self,
+                    event=event,
                     game_state=engine.state,
                     source_racer_idx=owner.idx,
                     options=list(range(1, 7)),
@@ -81,7 +82,7 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
         # 2. Check Phase (Roll Window)
         elif self.prediction is not None and event.current_roll_val == self.prediction:
             engine.log_info(
-                f"{self.name}: Prediction Correct! {owner.repr} gets an extra turn.",
+                f"{self.name}: Prediction correct! {owner.repr} gets an extra turn.",
             )
 
             # Set the override.

@@ -37,9 +37,6 @@ class AbilitySkipper(Ability):
             return "skip_trigger"
 
         if event.dice_value == 1:
-            engine.log_info(
-                f"{self.name}: A 1 was rolled! {owner.repr} steals the next turn!",
-            )
             engine.state.next_turn_override = owner.idx
 
             def _is_between_current_and_skipper(
@@ -54,7 +51,7 @@ class AbilitySkipper(Ability):
                 # Wrap Case: Start >= End (Handles Full Loop implicitly)
                 return target_idx > current_idx or target_idx < skipper_idx
 
-            for racer in [
+            skipped_racers = [
                 i
                 for i in engine.state.racers
                 if i.active
@@ -63,7 +60,11 @@ class AbilitySkipper(Ability):
                     owner.idx,
                     i.idx,
                 )
-            ]:
+            ]
+            engine.log_info(
+                f"{owner.repr} saw a 1 and steals the next turn using {self.name}! {', '.join(r.repr for r in skipped_racers)} are being skipped!",
+            )
+            for racer in skipped_racers:
                 if engine.on_event_processed is not None:
                     engine.on_event_processed(
                         engine,

@@ -67,6 +67,7 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
                 int,
             ](
                 source=self,
+                event=event,
                 game_state=engine.state,
                 source_racer_idx=owner.idx,
                 options=valid_positions,

@@ -37,6 +37,9 @@ class RomanticMove(Ability):
         racers_on_tile = engine.get_racers_at_position(event.end_tile)
 
         if len(racers_on_tile) == 2:
+            engine.log_info(
+                f"{owner.repr} got sentimental from seeing {', '.join([r.repr for r in racers_on_tile])} together and moves +2 from {self.name}",
+            )
             push_move(
                 engine,
                 distance=2,

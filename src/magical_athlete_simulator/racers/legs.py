@@ -39,7 +39,12 @@ class LegsMoveAbility(Ability, BooleanDecisionMixin):
         if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
             return "skip_trigger"
 
-        ctx = DecisionContext[BooleanInteractive](self, engine.state, owner.idx)
+        ctx = DecisionContext[BooleanInteractive](
+            source=self,
+            event=event,
+            game_state=engine.state,
+            source_racer_idx=owner.idx,
+        )
         if agent.make_boolean_decision(engine, ctx):
             engine.log_info(f"{owner.repr} decided to move 5 using {self.name}")
             owner.roll_override = (self.name, 5)

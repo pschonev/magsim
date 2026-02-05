@@ -47,35 +47,44 @@ class AlchemistAlchemyAbility(Ability, BooleanDecisionMixin):
         if dice_val is None or dice_val not in (1, 2):
             return "skip_trigger"
 
-        if agent.make_boolean_decision(
+        should_convert = agent.make_boolean_decision(
             engine,
-            DecisionContext(self, engine.state, owner.idx),
-        ):
-            old_val = engine.state.roll_state.base_value
+            DecisionContext(
+                source=self,
+                event=event,
+                game_state=engine.state,
+                source_racer_idx=owner.idx,
+            ),
+        )
 
-            engine.state.roll_state.base_value = 4
-            engine.state.roll_state.final_value = 4
-            owner.can_reroll = False
-
+        old_val = engine.state.roll_state.base_value
+        if not should_convert:
             engine.log_info(
-                f"{owner.repr} used alchemy to convert a {old_val} to a 4!",
+                f"{owner.repr} decided to keep his {old_val} and not use {self.name}.",
             )
-            report_base_value_change(
-                engine,
-                owner.idx,
-                old_value=old_val,
-                new_value=4,
-                source=self.name,
-            )
+            return "skip_trigger"
 
-            return AbilityTriggeredEvent(
-                responsible_racer_idx=owner.idx,
-                source=self.name,
-                phase=event.phase,
-                target_racer_idx=owner.idx,
-            )
+        engine.state.roll_state.base_value = 4
+        engine.state.roll_state.final_value = 4
+        owner.can_reroll = False
 
-        return "skip_trigger"
+        engine.log_info(
+            f"{owner.repr} used {self.name} to convert a {old_val} to a 4!",
+        )
+        report_base_value_change(
+            engine,
+            owner.idx,
+            old_value=old_val,
+            new_value=4,
+            source=self.name,
+        )
+
+        return AbilityTriggeredEvent(
+            responsible_racer_idx=owner.idx,
+            source=self.name,
+            phase=event.phase,
+            target_racer_idx=owner.idx,
+        )
 
     @override
     def get_auto_boolean_decision(

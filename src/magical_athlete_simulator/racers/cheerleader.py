@@ -49,12 +49,16 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
             engine,
             ctx=DecisionContext(
                 source=self,
+                event=event,
                 game_state=engine.state,
                 source_racer_idx=owner.idx,
             ),
         )
 
         if not should_cheer:
+            engine.log_info(
+                f"{owner.repr} decided not to cheer for {' and '.join([r.repr for r in last_place_racers])} in last place!",
+            )
             return "skip_trigger"
 
         engine.log_info(

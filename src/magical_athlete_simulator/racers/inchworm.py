@@ -39,6 +39,9 @@ class AbilityInchwormCreep(Ability):
             return "skip_trigger"
 
         if event.dice_value == 1:
+            engine.log_info(
+                f"{owner.repr} saw a 1 and steals the move of {engine.get_racer(event.target_racer_idx).repr} with {self.name}!"
+            )
             engine.skip_main_move(
                 responsible_racer_idx=owner.idx,
                 source=self.name,

@@ -62,26 +62,29 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
             engine,
             ctx=DecisionContext(
                 source=self,
+                event=event,
                 game_state=engine.state,
                 source_racer_idx=owner.idx,
             ),
         )
 
-        if should_reroll:
-            self.reroll_count += 1
-
-            engine.push_event(
-                AbilityTriggeredEvent(
-                    owner.idx,
-                    source=self.name,
-                    phase=event.phase,
-                    target_racer_idx=owner.idx,
-                ),
+        if not should_reroll:
+            engine.log_info(
+                f"{owner.repr} decided not to use {self.name} for a re-roll of his {engine.state.roll_state.dice_value}!",
             )
-            trigger_reroll(engine, owner.idx, "MagicalReroll")
-            # Return False to prevent generic emission, as we handled it via emit_ability_trigger
             return "skip_trigger"
 
+        self.reroll_count += 1
+        engine.push_event(
+            AbilityTriggeredEvent(
+                owner.idx,
+                source=self.name,
+                phase=event.phase,
+                target_racer_idx=owner.idx,
+            ),
+        )
+        trigger_reroll(engine, owner.idx, "MagicalReroll")
+        # ability trigger handled by trigger_reroll
         return "skip_trigger"
 
     @override

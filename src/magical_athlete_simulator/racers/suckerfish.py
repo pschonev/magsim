@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Self, override
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import (
+    BooleanDecisionMixin,
+    DecisionContext,
     SelectionDecisionContext,
     SelectionDecisionMixin,
 )
@@ -63,7 +65,7 @@ class SuckerfishTargetModifier(RacerModifier, DestinationCalculatorMixin):
 
 
 @dataclass
-class SuckerfishRide(Ability, SelectionDecisionMixin[RacerState]):
+class SuckerfishRide(Ability, BooleanDecisionMixin):
     name: AbilityName = "SuckerfishRide"
     triggers: tuple[type[GameEvent], ...] = (PostMoveEvent,)
 
@@ -108,18 +110,16 @@ class SuckerfishRide(Ability, SelectionDecisionMixin[RacerState]):
         return "skip_trigger"
 
     @override
-    def get_auto_selection_decision(
+    def get_auto_boolean_decision(
         self,
         engine: GameEngine,
-        ctx: SelectionDecisionContext[Self, RacerState],
-    ) -> RacerState | None:
-        candidates: list[RacerState] = [
-            c
-            for c in ctx.options
-            if (c.position == engine.get_racer(ctx.source_racer_idx).position)
-            and c.active
-        ]
-        if not candidates:
-            return None
+        ctx: DecisionContext[Self],
+    ) -> bool:
+        if not isinstance(ctx.event, PostMoveEvent):
+            raise TypeError("Expected PostMoveEvent for Suckerfish decision!")
 
-        return candidates[0]
+        owner = engine.get_racer(ctx.source_racer_idx)
+        moving_racer = engine.get_racer(ctx.event.target_racer_idx)
+
+        # check if moving forward
+        return moving_racer.active and moving_racer.position > owner.position

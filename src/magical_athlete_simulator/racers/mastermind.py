@@ -56,6 +56,7 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
                     RacerState,
                 ](
                     source=self,
+                    event=event,
                     game_state=engine.state,
                     source_racer_idx=owner.idx,
                     options=[r for r in engine.state.racers if r.active],

@@ -47,6 +47,7 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
                 RacerState,
             ](
                 source=self,
+                event=event,
                 game_state=engine.state,
                 source_racer_idx=owner.idx,
                 options=engine.state.racers,
@@ -56,7 +57,7 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
             engine.log_info(f"{owner.repr} decided not to use {self.name}.")
             return "skip_trigger"
 
-        engine.log_info(f"{owner.repr} decided use {self.name} on {target.repr}.")
+        engine.log_info(f"{owner.repr} decided to use {self.name} on {target.repr}.")
         push_simultaneous_warp(
             engine,
             warps=[

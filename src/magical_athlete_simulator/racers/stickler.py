@@ -42,7 +42,7 @@ class SticklerConstraint(RacerModifier, MovementValidatorMixin):
         board_len = engine.state.board.length
         if end_tile > board_len:
             engine.log_info(
-                f"Stickler Constraint: {engine.get_racer(racer_idx).repr} cannot finish unless landing exactly on {board_len}. Destination {end_tile} is invalid.",
+                f"{self.name}: {engine.get_racer(racer_idx).repr} tried to finish but overshot the goal by {end_tile - board_len}!",
             )
             if engine.on_event_processed is not None:
                 engine.on_event_processed(

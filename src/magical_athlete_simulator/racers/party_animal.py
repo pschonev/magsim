@@ -76,7 +76,7 @@ class ModifierPartySelfBoost(RacerModifier, RollModificationMixin):
 
 @dataclass
 class AbilityPartyBoost(Ability, LifecycleManagedMixin):
-    name: AbilityName = "PartyBoost"
+    name: AbilityName = "PartyBoostManager"
     triggers: tuple[type[GameEvent], ...] = ()
 
     @override
@@ -121,6 +121,9 @@ class PartyAnimalPull(Ability):
             moves_to_make.append(MoveData(moving_racer_idx=r.idx, distance=direction))
 
         if moves_to_make:
+            engine.log_info(
+                f"{owner.repr} pulls everyone towards him using {self.name}!",
+            )
             push_simultaneous_move(
                 engine,
                 moves=moves_to_make,
