@@ -102,7 +102,7 @@ class GameLogHighlighter(Highlighter):
         text.highlight_regex(r"\bMove\b", COLOR["move"])
         text.highlight_regex(r"\bMoving\b", COLOR["move"])
         text.highlight_regex(r"\bPushing\b", COLOR["warp"])
-        text.highlight_regex(r"\bMainMove\b", COLOR["main_move"])
+        text.highlight_regex(r"\bMain Move\b", COLOR["main_move"])
         text.highlight_regex(r"\bWarp\b", COLOR["warp"])
         text.highlight_regex(r"\bBOARD\b", COLOR["board"])
         text.highlight_regex(r"\bDice Roll\b", COLOR["dice_roll"])

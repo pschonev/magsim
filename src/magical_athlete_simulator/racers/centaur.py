@@ -37,7 +37,7 @@ class AbilityTrample(Ability):
         if not (victim := engine.get_racer(event.passed_racer_idx)).active:
             return "skip_trigger"
 
-        engine.log_debug(f"{owner.repr} kicked back {victim.repr} -2 with {self.name}!")
+        engine.log_info(f"{owner.repr} kicked back {victim.repr} -2 with {self.name}!")
         push_move(
             engine,
             -2,

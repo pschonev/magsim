@@ -37,7 +37,7 @@ class AbilityBananaTrip(Ability):
         if not (victim := engine.get_racer(event.passing_racer_idx)).active:
             return "skip_trigger"
 
-        engine.log_debug(f"{victim.repr} slipped on {self.name} by {owner.repr}")
+        engine.log_info(f"{victim.repr} slipped on {self.name} by {owner.repr}")
         push_trip(
             engine,
             tripped_racer_idx=victim.idx,

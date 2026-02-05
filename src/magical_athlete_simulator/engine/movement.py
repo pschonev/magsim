@@ -126,7 +126,7 @@ def _process_passing_and_logs(
     end_tile: int,
 ):
     racer = engine.get_racer(evt.target_racer_idx)
-    move_prefix = "MainMove" if evt.is_main else "Move"
+    move_prefix = "Main Move" if evt.is_main else "Move"
     engine.log_info(
         f"{move_prefix}: {racer.repr} {start_tile}->{end_tile} ({evt.source})",
     )

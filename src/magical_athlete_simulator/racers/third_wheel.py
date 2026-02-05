@@ -78,7 +78,7 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
             return "skip_trigger"
 
         engine.log_info(
-            f"{owner.repr} decided to join {' and'.join([r.repr for r in engine.get_racers_at_position(target_pos)])} at position {target_pos}!",
+            f"{owner.repr} decided to join {' and '.join([r.repr for r in engine.get_racers_at_position(target_pos)])} at position {target_pos}!",
         )
         push_warp(
             engine,

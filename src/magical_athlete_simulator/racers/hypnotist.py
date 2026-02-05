@@ -87,5 +87,5 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[RacerState]):
         if sorted_targets[0].position > me.position:
             return sorted_targets[0]
         else:
-            engine.log_debug(f"{me.repr} is in the lead and won't use {self.name}.")
+            engine.log_info(f"{me.repr} is in the lead and won't use {self.name}.")
             return None

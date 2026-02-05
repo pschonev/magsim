@@ -370,12 +370,20 @@ def cell_manage_state(mo):
     # --- PERSISTENCE STATE ---
     # We only use this to remember values when the UI refreshes (Add/Remove).
     get_selected_racers, set_selected_racers = mo.state(
-        ["Banana", "Centaur", "Magician", "Scoocher"], allow_self_loops=True
+        ["Magician", "PartyAnimal", "Egg", "ThirdWheel", "Leaptoad", "Hypnotist"],
+        allow_self_loops=True,
     )
     get_racer_to_add, set_racer_to_add = mo.state(None, allow_self_loops=True)
 
     get_saved_positions, set_saved_positions = mo.state(
-        {"Banana": 0, "Centaur": 0, "Magician": 0, "Scoocher": 0},
+        {
+            "Magician": 0,
+            "PartyAnimal": 0,
+            "Egg": 0,
+            "ThirdWheel": 0,
+            "Leaptoad": 0,
+            "Hypnotist": 0,
+        },
         allow_self_loops=True,
     )
 
@@ -1288,8 +1296,8 @@ def cell_vsialize_track(
         # --- VISUALIZATION CONSTANTS ---
         MAIN_RADIUS = 9.0
         SECONDARY_RADIUS = 8.0
-        OUTLINE_WIDTH = 1.5
-        SECONDARY_WIDTH = 1.5
+        OUTLINE_WIDTH = 1.7
+        SECONDARY_WIDTH = 2
         TEXT_STROKE_WIDTH = "4px"
 
         if not turn_data:
