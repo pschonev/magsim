@@ -13,6 +13,7 @@ from magical_athlete_simulator.core.events import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -27,31 +28,27 @@ class LovableLoserBonus(Ability):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner_idx:
+        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
             return "skip_trigger"
 
-        me = engine.get_racer(owner_idx)
-        others = [r for r in engine.state.racers if r.idx != owner_idx and r.active]
-
-        if not others:
-            return "skip_trigger"
+        others = [r for r in engine.state.racers if r.idx != owner.idx and r.active]
 
         # Check if strictly last (no ties)
         min_others = min(r.position for r in others)
-        if me.position < min_others:
-            me.victory_points += 1
+        if owner.position < min_others:
+            owner.victory_points += 1
             engine.log_info(
-                f"{me.repr} is sole last place! Gains +1 VP (Total: {me.victory_points}).",
+                f"{owner.repr} is sole last place! Gains +1 VP (Total: {owner.victory_points}).",
             )
             return AbilityTriggeredEvent(
-                responsible_racer_idx=owner_idx,
+                responsible_racer_idx=owner.idx,
                 source=self.name,
                 phase=event.phase,
-                target_racer_idx=owner_idx,
+                target_racer_idx=owner.idx,
             )
 
         return "skip_trigger"

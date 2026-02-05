@@ -45,8 +45,7 @@ class BlimpModifier(RacerModifier, RollModificationMixin):
             raise ValueError(msg)
 
         blimp_pos = engine.get_racer_pos(owner_idx)
-        board = engine.state.board
-        threshold = board.second_turn or board.length // 2
+        threshold = engine.state.board.second_turn or engine.state.board.length // 2
 
         if blimp_pos < threshold:
             delta = 3

@@ -54,7 +54,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
     if racer.roll_override is not None:
         source, base = racer.roll_override
         engine.state.roll_state.dice_value = None  # Not a dice roll
-        engine.state.roll_state.can_reroll = False
+        racer.can_reroll = False
 
         report_base_value_change(
             engine,
@@ -68,7 +68,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
     else:
         base = cast("D6Values", engine.rng.randint(1, 6))
         engine.state.roll_state.dice_value = base
-        engine.state.roll_state.can_reroll = True
+        racer.can_reroll = True
 
     engine.state.roll_state.base_value = base
 
@@ -104,7 +104,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
     final = query.final_value
     engine.state.roll_state.final_value = final
 
-    # Logging...
+    # Logging
     if query.modifier_sources:
         parts = [f"{name}({delta:+d})" for name, delta in query.modifier_sources]
         mods_str = " + ".join(parts)
@@ -203,7 +203,7 @@ def trigger_reroll(engine: GameEngine, source_idx: int, source: Source) -> None:
     Cancels the current roll resolution and schedules a new roll immediately.
     """
     engine.log_info(
-        f"RE-ROLL TRIGGERED by {engine.get_racer(source_idx).name} ({source})",
+        f"RE-ROLL TRIGGERED by {engine.get_racer(source_idx).repr} ({source})",
     )
     engine.state.roll_state.serial_id += 1
     engine.push_event(

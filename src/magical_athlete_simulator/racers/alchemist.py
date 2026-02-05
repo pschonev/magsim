@@ -18,6 +18,7 @@ from magical_athlete_simulator.core.events import (
 from magical_athlete_simulator.engine.roll import report_base_value_change  # NEW Import
 
 if TYPE_CHECKING:
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -32,14 +33,14 @@ class AlchemistAlchemyAbility(Ability, BooleanDecisionMixin):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, RollModificationWindowEvent):
-            return "skip_trigger"
-
-        if event.target_racer_idx != owner_idx:
+        if (
+            not isinstance(event, RollModificationWindowEvent)
+            or event.target_racer_idx != owner.idx
+        ):
             return "skip_trigger"
 
         dice_val = engine.state.roll_state.dice_value
@@ -48,31 +49,30 @@ class AlchemistAlchemyAbility(Ability, BooleanDecisionMixin):
 
         if agent.make_boolean_decision(
             engine,
-            DecisionContext(self, engine.state, owner_idx),
+            DecisionContext(self, engine.state, owner.idx),
         ):
-            # Capture old value for reporting
             old_val = engine.state.roll_state.base_value
 
             engine.state.roll_state.base_value = 4
             engine.state.roll_state.final_value = 4
-            engine.state.roll_state.can_reroll = False
+            owner.can_reroll = False
 
             engine.log_info(
-                f"{engine.get_racer(owner_idx).repr} used alchemy to convert a {old_val} to a 4!",
+                f"{owner.repr} used alchemy to convert a {old_val} to a 4!",
             )
             report_base_value_change(
                 engine,
-                owner_idx,
+                owner.idx,
                 old_value=old_val,
                 new_value=4,
                 source=self.name,
             )
 
             return AbilityTriggeredEvent(
-                responsible_racer_idx=owner_idx,
+                responsible_racer_idx=owner.idx,
                 source=self.name,
                 phase=event.phase,
-                target_racer_idx=owner_idx,
+                target_racer_idx=owner.idx,
             )
 
         return "skip_trigger"

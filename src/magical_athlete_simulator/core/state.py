@@ -7,6 +7,7 @@ from magical_athlete_simulator.core.registry import RACER_ABILITIES
 
 if TYPE_CHECKING:
     import random
+
     from magical_athlete_simulator.core.abilities import Ability
     from magical_athlete_simulator.core.events import ScheduledEvent
     from magical_athlete_simulator.core.modifiers import RacerModifier
@@ -30,7 +31,6 @@ class RollState:
     dice_value: D6Values | None = None
     base_value: int = 0
     final_value: int = 0
-    can_reroll: bool = True
 
 
 @dataclass(slots=True)
@@ -46,7 +46,6 @@ class RacerState:
 
     # rolls
     main_move_consumed: bool = False
-    reroll_count: int = 0
     roll_override: tuple[AbilityName, int] | None = None
     can_reroll: bool = True
 
@@ -71,7 +70,7 @@ class RacerState:
 
     @property
     def repr(self) -> str:
-        return f"{self.idx}•{self.name}"
+        return f"{self.position if self.position else ''}•{self.name}"
 
     @property
     def abilities(self) -> set[AbilityName]:

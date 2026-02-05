@@ -13,6 +13,7 @@ from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -26,28 +27,24 @@ class AbilityTrample(Ability):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, PassingEvent):
+        if not isinstance(event, PassingEvent) or event.passing_racer_idx != owner.idx:
             return "skip_trigger"
 
-        if event.passing_racer_idx != owner_idx:
+        if not (victim := engine.get_racer(event.passed_racer_idx)).active:
             return "skip_trigger"
 
-        victim = engine.get_racer(event.passed_racer_idx)
-        if not victim.active:
-            return "skip_trigger"
-
-        engine.log_debug(f"{self.name}: Centaur passed {victim.repr}. Queuing -2 move.")
+        engine.log_debug(f"{owner.repr} kicked back {victim.repr} -2 with {self.name}!")
         push_move(
             engine,
             -2,
             event.phase,
             moved_racer_idx=victim.idx,
             source=self.name,
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
             emit_ability_triggered="after_resolution",
         )
         return "skip_trigger"

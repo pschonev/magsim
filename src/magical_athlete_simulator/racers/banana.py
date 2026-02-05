@@ -13,6 +13,7 @@ from magical_athlete_simulator.engine.movement import push_trip
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -26,27 +27,22 @@ class AbilityBananaTrip(Ability):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, PassingEvent):
+        if not isinstance(event, PassingEvent) or event.passed_racer_idx != owner.idx:
             return "skip_trigger"
 
-        # check if passed racer has Banana ability
-        if event.passed_racer_idx != owner_idx:
+        if not (victim := engine.get_racer(event.passing_racer_idx)).active:
             return "skip_trigger"
 
-        victim = engine.get_racer(event.passing_racer_idx)
-        if not victim.active:
-            return "skip_trigger"
-
-        engine.log_debug(f"{self.name}: Queuing TripCmd for {victim.repr}.")
+        engine.log_debug(f"{victim.repr} slipped on {self.name} by {owner.repr}")
         push_trip(
             engine,
-            tripped_racer_idx=event.passing_racer_idx,
+            tripped_racer_idx=victim.idx,
             source=self.name,
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
             phase=event.phase,
         )
 

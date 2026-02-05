@@ -39,7 +39,7 @@ def test_scoocher_productive_loop_duplicate(scenario: type[GameScenario]):
 def test_scoocher_reacts_to_every_huge_baby_push(scenario: type[GameScenario]):
     """
     Scenario: Huge Baby moves onto a tile with two other racers.
-    Verify: Scoocher reacts to BOTH push events and moves twice.
+    Verify: Scoocher reacts to JUST ONE push events and moves once.
     """
     game = scenario(
         [
@@ -57,9 +57,9 @@ def test_scoocher_reacts_to_every_huge_baby_push(scenario: type[GameScenario]):
     assert game.get_racer(1).position == 7
     assert game.get_racer(2).position == 7
 
-    # Scoocher should have moved twice (20 -> 22).
-    assert game.get_racer(3).position == 22, (
-        f"Scoocher should be at 22 but is at {game.get_racer(3).position}"
+    # Scoocher should have moved twice (20 -> 21).
+    assert game.get_racer(3).position == 21, (
+        f"Scoocher should be at 21 but is at {game.get_racer(3).position}"
     )
 
 def test_stickler_and_romantic_feed_scoocher(scenario: type[GameScenario]):

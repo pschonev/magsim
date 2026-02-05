@@ -19,6 +19,7 @@ from magical_athlete_simulator.core.events import (
 from magical_athlete_simulator.engine.movement import push_move, push_simultaneous_move
 
 if TYPE_CHECKING:
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -32,18 +33,16 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner_idx:
+        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
             return "skip_trigger"
 
         # Identify Last Place Racers
         min_pos = min(r.position for r in engine.state.racers if r.active)
-        last_place_indices = [
-            r.idx for r in engine.state.racers if r.active and r.position == min_pos
-        ]
+        last_place_racers = engine.get_racers_at_position(min_pos)
 
         # Decision
         should_cheer = agent.make_boolean_decision(
@@ -51,7 +50,7 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
             ctx=DecisionContext(
                 source=self,
                 game_state=engine.state,
-                source_racer_idx=owner_idx,
+                source_racer_idx=owner.idx,
             ),
         )
 
@@ -59,40 +58,39 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
             return "skip_trigger"
 
         engine.log_info(
-            f"{engine.get_racer(owner_idx).repr} cheers for {' and '.join([engine.get_racer(idx).repr for idx in last_place_indices])} in last place!",
+            f"{owner.repr} cheers for {' and '.join([r.repr for r in last_place_racers])} in last place!",
         )
 
         # Apply Effects
         # 1. Move all last place racers forward 2
         simultaneous_moves = [
-            MoveData(moving_racer_idx=target_idx, distance=2)
-            for target_idx in last_place_indices
+            MoveData(moving_racer_idx=r.idx, distance=2) for r in last_place_racers
         ]
         push_simultaneous_move(
             engine,
             moves=simultaneous_moves,
             phase=event.phase,
             source=self.name,
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
             emit_ability_triggered="never",
         )
 
         # 2. Cheerleader moves forward 1
         push_move(
             engine,
-            moved_racer_idx=owner_idx,
+            moved_racer_idx=owner.idx,
             distance=1,
             phase=event.phase,
             source=self.name,
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
             emit_ability_triggered="never",
         )
 
         return AbilityTriggeredEvent(
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
             source=self.name,
             phase=event.phase,
-            target_racer_idx=owner_idx,
+            target_racer_idx=owner.idx,
         )
 
     @override

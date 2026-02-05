@@ -477,7 +477,7 @@ def handle_trip_cmd(engine: GameEngine, evt: TripCmdEvent):
 
     # Apply effect
     racer.tripped = True
-    engine.log_info(f"{evt.source}: {racer.repr} is now Tripped.")
+    engine.log_info(f"{evt.source}: {racer.repr} is now tripped.")
 
     if evt.emit_ability_triggered != "never":
         engine.push_event(

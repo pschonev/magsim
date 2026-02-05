@@ -32,20 +32,16 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[RacerState]):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner_idx:
+        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
             return "skip_trigger"
 
-        me = engine.get_racer(owner_idx)
         valid_targets = [
-            r for r in engine.state.racers if r.active and r.idx != owner_idx
+            r for r in engine.state.racers if r.active and r.idx != owner.idx
         ]
-
-        if not valid_targets:
-            return "skip_trigger"
 
         target = agent.make_selection_decision(
             engine,
@@ -55,23 +51,23 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[RacerState]):
             ](
                 source=self,
                 game_state=engine.state,
-                source_racer_idx=owner_idx,
+                source_racer_idx=owner.idx,
                 options=valid_targets,
             ),
         )
 
         if target is None:
-            engine.log_info(f"{me.repr} decided not to use {self.name}.")
+            engine.log_info(f"{owner.repr} decided not to use {self.name}.")
             return "skip_trigger"
 
-        engine.log_info(f"{me.repr} decided to warp {target.repr} to their space.")
+        engine.log_info(f"{owner.repr} decided to warp {target.repr} to their space!")
         push_warp(
             engine,
-            target=me.position,
+            target=owner.position,
             warped_racer_idx=target.idx,
             phase=event.phase,
             source=self.name,
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
             emit_ability_triggered="after_resolution",
         )
 
@@ -90,5 +86,5 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[RacerState]):
         if sorted_targets[0].position > me.position:
             return sorted_targets[0]
         else:
-            engine.log_info(f"{me.repr} is in the lead and won't use {self.name}.")
+            engine.log_debug(f"{me.repr} is in the lead and won't use {self.name}.")
             return None

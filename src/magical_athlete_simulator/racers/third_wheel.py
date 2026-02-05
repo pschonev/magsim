@@ -20,6 +20,7 @@ from magical_athlete_simulator.engine.movement import push_warp
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -37,11 +38,11 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner_idx:
+        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
             return "skip_trigger"
 
         # Find spaces with exactly 2 racers
@@ -49,12 +50,12 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
         pos_counts: defaultdict[int, int] = defaultdict(int)
         for r in engine.state.racers:
             if r.active:
-                pos_counts[r.position] = pos_counts[r.position] + 1
+                pos_counts[r.position] += 1
 
         valid_positions = [
             pos
             for pos, count in pos_counts.items()
-            if count == 2 and pos != engine.get_racer(owner_idx).position
+            if count == 2 and pos != engine.get_racer(owner.idx).position
         ]
         if not valid_positions:
             return "skip_trigger"
@@ -67,7 +68,7 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
             ](
                 source=self,
                 game_state=engine.state,
-                source_racer_idx=owner_idx,
+                source_racer_idx=owner.idx,
                 options=valid_positions,
             ),
         )
@@ -76,22 +77,22 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
             return "skip_trigger"
 
         engine.log_info(
-            f"{engine.get_racer(owner_idx).repr} decided to join {' and'.join([r.repr for r in engine.get_racers_at_position(target_pos)])} at position {target_pos}!",
+            f"{owner.repr} decided to join {' and'.join([r.repr for r in engine.get_racers_at_position(target_pos)])} at position {target_pos}!",
         )
         push_warp(
             engine,
-            warped_racer_idx=owner_idx,
+            warped_racer_idx=owner.idx,
             target=target_pos,
             phase=event.phase,
             source=self.name,
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
         )
 
         return AbilityTriggeredEvent(
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
             source=self.name,
             phase=event.phase,
-            target_racer_idx=owner_idx,
+            target_racer_idx=owner.idx,
         )
 
     @override

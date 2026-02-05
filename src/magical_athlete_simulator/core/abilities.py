@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
@@ -11,7 +11,8 @@ from magical_athlete_simulator.core.events import (
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
     from magical_athlete_simulator.core.events import GameEvent
-    from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
+    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet, RacerName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -39,14 +40,14 @@ class Ability:
         """The internal handler that wraps the user logic.
         It checks liveness, executes logic, and automatically emits the trigger event.
         """
-        # 1. Dead racers tell no tales (usually)
-        if not engine.state.racers[owner_idx].active:
+        # 1. Finished or eliminated racers don't use abilities
+        if not (owner := engine.get_racer(owner_idx)).active:
             return
 
         # 2. Execute
         ability_triggered_event = self.execute(
             event,
-            owner_idx,
+            owner,
             engine,
             engine.get_agent(owner_idx),
         )
@@ -58,12 +59,44 @@ class Ability:
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
         """Core logic. Returns True if the ability actually fired/affected game state,
         False if conditions weren't met (e.g. wrong target).
         """
-        _ = event, owner_idx, engine, agent
+        _ = event, owner, engine, agent
         return "skip_trigger"
+
+
+@runtime_checkable
+class CopyAbilityProtocol(Protocol):
+    copied_racer: RacerName | None
+
+
+def copied_racer_repr(
+    copying_ability: Ability,
+    copying_racer: RacerState,
+) -> str:
+    if (
+        not isinstance(copying_ability, CopyAbilityProtocol)
+        or copying_ability.copied_racer is None
+    ):
+        return "no racer"
+    # for the copying racer, check for every ability that copies (except for this ability)
+    # then add the racer names which they copied - "(RacerA, RacerB)"
+    copied_racers = ", ".join(
+        [
+            a.copied_racer
+            for a in copying_racer.active_abilities.values()
+            if a != copying_ability
+            and isinstance(a, CopyAbilityProtocol)
+            and a.copied_racer is not None
+        ],
+    )
+    return (
+        f"{copying_ability.copied_racer} ({copied_racers})"
+        if copied_racers
+        else copying_ability.copied_racer
+    )

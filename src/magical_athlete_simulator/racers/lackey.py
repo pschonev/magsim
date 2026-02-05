@@ -13,6 +13,7 @@ from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -26,26 +27,25 @@ class AbilityLackeyLoyalty(Ability):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
         if (
             not isinstance(event, RollResultEvent)
-            or owner_idx == event.target_racer_idx
+            or owner.idx
+            == event.target_racer_idx  # only triggers on other racers' turns
         ):
             return "skip_trigger"
 
-        # Check if someone (anyone) rolled a 6
         if event.dice_value == 6:
-            # Lackey moves 2 IMMEDIATELY (queued before the main move resolves)
             push_move(
                 engine,
                 distance=2,
                 phase=event.phase,
-                moved_racer_idx=owner_idx,
+                moved_racer_idx=owner.idx,
                 source=self.name,
-                responsible_racer_idx=owner_idx,
+                responsible_racer_idx=owner.idx,
                 emit_ability_triggered="after_resolution",
             )
 

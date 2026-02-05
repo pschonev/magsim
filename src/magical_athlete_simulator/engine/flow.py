@@ -24,7 +24,7 @@ def log_final_standings(engine: GameEngine):
         else:
             status = ""
         engine.log_info(
-            f"Result: {racer.repr} pos={racer.raw_position} vp={racer.victory_points} {status}",
+            f"Result: {racer.idx}•{racer.name} pos={racer.raw_position} vp={racer.victory_points} {status}",
         )
 
 

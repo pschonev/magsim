@@ -19,7 +19,8 @@ from magical_athlete_simulator.core.events import (
 from magical_athlete_simulator.engine.roll import trigger_reroll
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.types import AbilityName
+    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -33,18 +34,19 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
 
     # Local State
     reroll_count: int = 0
+    preferred_dice: D6VAlueSet = frozenset({4, 5, 6})
 
     @override
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
         # 1. Reset logic
         if isinstance(event, TurnStartEvent):
-            if event.target_racer_idx == owner_idx:
+            if event.target_racer_idx == owner.idx:
                 self.reroll_count = 0
             return "skip_trigger"
 
@@ -53,7 +55,7 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
             return "skip_trigger"
 
         # 1. Eligibility Check
-        if event.target_racer_idx != owner_idx or self.reroll_count >= 2:
+        if event.target_racer_idx != owner.idx or self.reroll_count >= 2:
             return "skip_trigger"
 
         should_reroll = agent.make_boolean_decision(
@@ -61,26 +63,22 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
             ctx=DecisionContext(
                 source=self,
                 game_state=engine.state,
-                source_racer_idx=owner_idx,
+                source_racer_idx=owner.idx,
             ),
         )
 
         if should_reroll:
-            # Increment local state
             self.reroll_count += 1
-
-            # Also update global state so telemetry/engine knows a reroll happened
-            engine.get_racer(owner_idx).reroll_count += 1
 
             engine.push_event(
                 AbilityTriggeredEvent(
-                    owner_idx,
+                    owner.idx,
                     source=self.name,
                     phase=event.phase,
-                    target_racer_idx=owner_idx,
+                    target_racer_idx=owner.idx,
                 ),
             )
-            trigger_reroll(engine, owner_idx, "MagicalReroll")
+            trigger_reroll(engine, owner.idx, "MagicalReroll")
             # Return False to prevent generic emission, as we handled it via emit_ability_trigger
             return "skip_trigger"
 
@@ -93,4 +91,4 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
         ctx: DecisionContext[Self],
     ) -> bool:
         dice_val = ctx.game_state.roll_state.dice_value
-        return dice_val is not None and dice_val <= 3
+        return dice_val is not None and dice_val not in self.preferred_dice

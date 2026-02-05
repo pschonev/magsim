@@ -13,10 +13,9 @@ from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
-
-# --- Inchworm Implementation ---
 
 
 @dataclass
@@ -28,31 +27,32 @@ class AbilityInchwormCreep(Ability):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
         if (
             not isinstance(event, RollResultEvent)
-            or owner_idx == event.target_racer_idx
+            or owner.idx
+            == event.target_racer_idx  # only triggers on other racers' turns
         ):
             return "skip_trigger"
 
         if event.dice_value == 1:
             engine.skip_main_move(
-                responsible_racer_idx=owner_idx,
+                responsible_racer_idx=owner.idx,
                 source=self.name,
                 skipped_racer_idx=event.target_racer_idx,
             )
 
-            # Inchworm moves 1 himself
+            # Inchworm moves 1
             push_move(
                 engine,
                 distance=1,
                 phase=event.phase,
-                moved_racer_idx=owner_idx,
+                moved_racer_idx=owner.idx,
                 source=self.name,
-                responsible_racer_idx=owner_idx,
+                responsible_racer_idx=owner.idx,
                 emit_ability_triggered="after_resolution",
             )
 

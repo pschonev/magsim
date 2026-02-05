@@ -33,19 +33,11 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ):
-        if not isinstance(event, TurnStartEvent):
-            return "skip_trigger"
-
-        # Only on Flip Flop's own turn
-        if event.target_racer_idx != owner_idx:
-            return "skip_trigger"
-
-        ff = engine.get_racer(owner_idx)
-        if not ff.active:
+        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
             return "skip_trigger"
 
         target = agent.make_selection_decision(
@@ -56,40 +48,38 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
             ](
                 source=self,
                 game_state=engine.state,
-                source_racer_idx=owner_idx,
+                source_racer_idx=owner.idx,
                 options=engine.state.racers,
             ),
         )
-
         if target is None:
+            engine.log_info(f"{owner.repr} decided not to use {self.name}.")
             return "skip_trigger"
 
-        ff_pos = ff.position
-        target_pos = target.position
-
+        engine.log_info(f"{owner.repr} decided use {self.name} on {target.repr}.")
         push_simultaneous_warp(
             engine,
             warps=[
                 WarpData(
-                    warping_racer_idx=owner_idx,
-                    target_tile=target_pos,
+                    warping_racer_idx=owner.idx,
+                    target_tile=target.position,
                 ),  # Flip Flop -> Target's old pos
                 WarpData(
                     warping_racer_idx=target.idx,
-                    target_tile=ff_pos,
+                    target_tile=owner.position,
                 ),  # Target -> Flip Flop's old pos
             ],
             phase=Phase.PRE_MAIN,
             source=self.name,
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
             emit_ability_triggered="after_resolution",
         )
 
-        # FlipFlop skips main move when using his ability
+        # FlipFlop skips main move when using ability
         engine.skip_main_move(
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
             source=self.name,
-            skipped_racer_idx=owner_idx,
+            skipped_racer_idx=owner.idx,
         )
 
         return "skip_trigger"

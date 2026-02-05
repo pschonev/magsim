@@ -8,7 +8,6 @@ from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     AbilityTriggeredEventOrSkipped,
     GameEvent,
-    HasTargetRacer,
 )
 from magical_athlete_simulator.engine.movement import push_move
 
@@ -28,25 +27,17 @@ class AbilityScoochStep(Ability):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, AbilityTriggeredEvent):
+        # trigger on everyone's abilities but not on Scoocher's
+        if (
+            not isinstance(event, AbilityTriggeredEvent)
+            or event.responsible_racer_idx == owner.idx
+        ):
             return "skip_trigger"
 
-        # Logic: Trigger on ANY ability, except my own
-        if event.responsible_racer_idx == owner_idx:
-            return "skip_trigger"
-
-        # Correct code
-        me = engine.get_racer(owner_idx)  # <--- Get MY state
-        if not me.active:
-            return "skip_trigger"
-
-        source_racer = engine.get_racer(owner_idx)
-
-        # Logging context
         source_racer: RacerState = engine.get_racer(event.responsible_racer_idx)
 
         target_msg = (
@@ -57,22 +48,15 @@ class AbilityScoochStep(Ability):
         )
 
         engine.log_info(
-            f"{me.repr} saw {source_racer.repr} use {event.source}{target_msg} -> Queue Moving 1",
+            f"{owner.repr} saw {source_racer.repr} use {event.source}{target_msg} -> Queue Moving 1",
         )
         push_move(
             engine,
             1,
             phase=event.phase,
-            moved_racer_idx=owner_idx,
+            moved_racer_idx=owner.idx,
             source=self.name,
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
             emit_ability_triggered="after_resolution",
         )
-
-        # Returns True, so ScoochStep will emit an AbilityTriggeredEvent.
-        # This is fine, because the NEXT ScoochStep check will see source_idx == owner_idx
-        # (assuming only one Scoocher exists).
-        # If two Scoochers exist, they WILL infinite loop off each other.
-        # That is actually consistent with the board game rules (infinite loop -> execute once -> stop).
-        # Our Engine loop detector handles the "Stop" part.
         return "skip_trigger"

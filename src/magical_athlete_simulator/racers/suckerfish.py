@@ -71,56 +71,40 @@ class SuckerfishRide(Ability, SelectionDecisionMixin[RacerState]):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ):
-        if not isinstance(event, PostMoveEvent):
+        # ignore Suckerfish' moves
+        if (
+            not isinstance(event, PostMoveEvent)
+            or event.target_racer_idx == owner.idx
+            or event.start_tile != owner.position
+        ):
             return "skip_trigger"
 
-        # Ignore my own moves
-        if event.target_racer_idx == owner_idx:
+        if (distance := event.end_tile - owner.position) == 0:
             return "skip_trigger"
-
-        sucker = engine.get_racer(owner_idx)
-
-        # "When a racer on my space moves"
-        # This implies they started on my space.
-        # But wait, they have ALREADY moved (PostMoveEvent).
-        # So we check event.start_tile against sucker.position.
-        if event.start_tile != sucker.position:
-            return "skip_trigger"
-
-        # Target is where they ended up
-        target_tile = event.end_tile
-
-        # Calculate distance to generate a proper Move event
-        distance = target_tile - sucker.position
-
-        # If distance is 0 (they didn't move?), do nothing.
-        if distance == 0:
-            return "skip_trigger"
-
         engine.log_info(
-            f"{sucker.repr} rides the wake of {engine.get_racer(event.target_racer_idx).repr} to {target_tile}!",
+            f"{owner.repr} rides the wake of {engine.get_racer(event.target_racer_idx).repr} to {event.end_tile}!",
         )
 
         # 1. Attach the target lock
-        mod = SuckerfishTargetModifier(owner_idx=owner_idx, target_tile=target_tile)
-        add_racer_modifier(engine, owner_idx, mod)
+        mod = SuckerfishTargetModifier(owner_idx=owner.idx, target_tile=event.end_tile)
+        add_racer_modifier(engine, owner.idx, mod)
 
         # 2. Push the move command
-        # We use REACTION phase so it happens after the current move resolves fully.
         push_move(
             engine,
-            moved_racer_idx=owner_idx,
+            moved_racer_idx=owner.idx,
             distance=distance,
             phase=Phase.REACTION,
             source=self.name,
-            responsible_racer_idx=owner_idx,
+            responsible_racer_idx=owner.idx,
             emit_ability_triggered="never",
         )
 
+        # triggers in modifier
         return "skip_trigger"
 
     @override

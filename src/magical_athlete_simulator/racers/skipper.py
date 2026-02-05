@@ -14,6 +14,7 @@ from magical_athlete_simulator.core.events import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -28,7 +29,7 @@ class AbilitySkipper(Ability):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
@@ -36,11 +37,10 @@ class AbilitySkipper(Ability):
             return "skip_trigger"
 
         if event.dice_value == 1:
-            me = engine.get_racer(owner_idx)
             engine.log_info(
-                f"{self.name}: A 1 was rolled! {me.repr} steals the next turn!",
+                f"{self.name}: A 1 was rolled! {owner.repr} steals the next turn!",
             )
-            engine.state.next_turn_override = owner_idx
+            engine.state.next_turn_override = owner.idx
 
             def _is_between_current_and_skipper(
                 current_idx: int,
@@ -60,7 +60,7 @@ class AbilitySkipper(Ability):
                 if i.active
                 and _is_between_current_and_skipper(
                     engine.state.current_racer_idx,
-                    owner_idx,
+                    owner.idx,
                     i.idx,
                 )
             ]:
@@ -70,15 +70,15 @@ class AbilitySkipper(Ability):
                         MainMoveSkippedEvent(
                             target_racer_idx=racer.idx,
                             source=self.name,
-                            responsible_racer_idx=owner_idx,
+                            responsible_racer_idx=owner.idx,
                         ),
                     )
 
             return AbilityTriggeredEvent(
-                responsible_racer_idx=owner_idx,
+                responsible_racer_idx=owner.idx,
                 source=self.name,
                 phase=event.phase,
-                target_racer_idx=owner_idx,
+                target_racer_idx=owner.idx,
             )
 
         return "skip_trigger"

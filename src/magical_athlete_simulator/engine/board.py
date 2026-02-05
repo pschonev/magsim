@@ -42,7 +42,7 @@ class Board:
         # Because eq=True, this prevents adding a second "identical" blocker
         if modifier not in modifiers:
             modifiers.append(modifier)
-            engine.log_info(
+            engine.log_debug(
                 f"BOARD: Registered {modifier.name} (owner={modifier.owner_idx}) at tile {tile}",
             )
 
@@ -62,7 +62,7 @@ class Board:
             return
 
         modifiers.remove(modifier)
-        engine.log_info(
+        engine.log_debug(
             f"BOARD: Unregistered {modifier.name} (owner={modifier.owner_idx}) from tile {tile}",
         )
 
@@ -214,7 +214,7 @@ class TripTile(SpaceModifier, LandingHookMixin):
         if racer.tripped:
             return
         racer.tripped = True
-        engine.log_info(f"{self.name}: {racer.repr} is now Tripped.")
+        engine.log_info(f"{self.name}: {racer.repr} is now tripped.")
 
 
 @dataclass

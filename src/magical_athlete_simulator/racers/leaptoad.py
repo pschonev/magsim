@@ -16,7 +16,6 @@ from magical_athlete_simulator.engine.abilities import (
 )
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.agent import Agent
     from magical_athlete_simulator.core.events import GameEvent
     from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
@@ -54,16 +53,18 @@ class LeaptoadJumpModifier(RacerModifier, DestinationCalculatorMixin):
             # If current tile is occupied by ACTIVE racers (excluding self), skip it
             # Note: We loop because multiple skips might happen in a row
             while True:
-                occupied = engine.get_racers_at_position(
+                occupying_racers = engine.get_racers_at_position(
                     current,
                     except_racer_idx=racer_idx,
                 )
-                if not occupied:
+                if not occupying_racers:
                     break
+
+                occupying_racers_repr = ", ".join(r.repr for r in occupying_racers)
                 # Tile is occupied, jump over it (effectively not counting this step)
                 # We do NOT decrement 'remaining' because this step was "free"
                 engine.log_info(
-                    f"{racer.repr} used {self.name} to jump over position {current}.",
+                    f"{racer.repr} used {self.name} to jump over position {current} (occupied by {occupying_racers_repr}).",
                 )
                 current += direction
                 ability_triggered_events.append(
@@ -85,16 +86,6 @@ class LeaptoadJumpModifier(RacerModifier, DestinationCalculatorMixin):
 class LeaptoadJump(Ability, LifecycleManagedMixin):
     name: AbilityName = "LeaptoadJumpManager"
     triggers: tuple[type[GameEvent], ...] = ()
-
-    @override
-    def execute(
-        self,
-        event: GameEvent,
-        owner_idx: int,
-        engine: GameEngine,
-        agent: Agent,
-    ):
-        return "skip_trigger"
 
     @override
     def on_gain(self, engine: GameEngine, owner_idx: int) -> None:

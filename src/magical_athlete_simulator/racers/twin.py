@@ -3,22 +3,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, override
 
-from magical_athlete_simulator.core.abilities import Ability
+from magical_athlete_simulator.core.abilities import Ability, copied_racer_repr
 from magical_athlete_simulator.core.agent import (
     Agent,
     SelectionDecisionContext,
     SelectionDecisionMixin,
     SelectionInteractive,
 )
+from magical_athlete_simulator.core.events import TurnStartEvent
 from magical_athlete_simulator.core.mixins import SetupPhaseMixin
 from magical_athlete_simulator.core.registry import RACER_ABILITIES
-from magical_athlete_simulator.core.types import RacerStat
+from magical_athlete_simulator.core.types import RacerName, RacerStat
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import (
         AbilityTriggeredEventOrSkipped,
         GameEvent,
     )
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -26,20 +28,33 @@ if TYPE_CHECKING:
 @dataclass
 class TwinCopyAbility(Ability, SetupPhaseMixin, SelectionDecisionMixin[RacerStat]):
     name: AbilityName = "TwinCopy"
-    triggers: tuple[type[GameEvent], ...] = ()
+    triggers: tuple[type[GameEvent], ...] = (TurnStartEvent,)
+
+    copied_racer: RacerName | None = None
+
+    def _copied_racer_repr(self, owner: RacerState) -> str:
+        return copied_racer_repr(self, owner)
 
     @override
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
+        if (
+            isinstance(event, TurnStartEvent)
+            and owner.idx == event.target_racer_idx
+            and self.copied_racer is not None
+        ):
+            engine.log_info(
+                f"{owner.repr} acts as {self._copied_racer_repr(owner)}.",
+            )
         return "skip_trigger"
 
     @override
-    def on_setup(self, engine: GameEngine, owner_idx: int, agent: Agent) -> None:
+    def on_setup(self, engine: GameEngine, owner: RacerState, agent: Agent) -> None:
         draws = engine.draw_racers(k=15)
 
         # simulate past races
@@ -71,7 +86,7 @@ class TwinCopyAbility(Ability, SetupPhaseMixin, SelectionDecisionMixin[RacerStat
             ](
                 source=self,
                 game_state=engine.state,
-                source_racer_idx=owner_idx,
+                source_racer_idx=owner.idx,
                 options=winners,
             ),
         )
@@ -80,13 +95,14 @@ class TwinCopyAbility(Ability, SetupPhaseMixin, SelectionDecisionMixin[RacerStat
                 "Twin should always have a target to pick.",
             )
 
-        engine.log_info(f"Twin picked {picked_racer.racer_name}!")
+        engine.log_info(f"{owner.repr} picked {picked_racer.racer_name}!")
+        self.copied_racer = picked_racer.racer_name
         engine.state.remove_racers([picked_racer.racer_name])
 
         picked_racer_abilities = RACER_ABILITIES[picked_racer.racer_name]
         engine.update_racer_abilities(
-            racer_idx=owner_idx,
-            new_abilities=engine.get_racer(owner_idx).abilities.union(
+            racer_idx=owner.idx,
+            new_abilities=owner.abilities.union(
                 picked_racer_abilities,
             ),
         )

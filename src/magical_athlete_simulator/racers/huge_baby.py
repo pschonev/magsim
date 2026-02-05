@@ -11,16 +11,18 @@ from magical_athlete_simulator.core.events import (
     Phase,
     PostMoveEvent,
     PostWarpEvent,
+    WarpData,
 )
 from magical_athlete_simulator.core.mixins import (
     ApproachHookMixin,
     LifecycleManagedMixin,
 )
 from magical_athlete_simulator.core.modifiers import SpaceModifier
-from magical_athlete_simulator.engine.movement import push_warp
+from magical_athlete_simulator.engine.movement import push_simultaneous_warp
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -73,118 +75,85 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
         PostWarpEvent,
     )
 
-    def _get_modifier(self, owner_idx: int) -> HugeBabyModifier:
-        return HugeBabyModifier(owner_idx=owner_idx)
-
     @override
     def on_gain(self, engine: GameEngine, owner_idx: int):
         racer = engine.get_racer(owner_idx)
         if racer.position > 0:
-            mod = HugeBabyModifier(owner_idx=owner_idx)
-            engine.state.board.register_modifier(racer.position, mod, engine)
+            modifier = HugeBabyModifier(owner_idx=owner_idx)
+            engine.state.board.register_modifier(racer.position, modifier, engine)
 
     @override
     def on_loss(self, engine: GameEngine, owner_idx: int):
-        # [FIX] "Search and Destroy"
-        # We scan for the blocker instead of assuming it is at racer.position.
-        # This handles cases where:
-        # A) We are at Tile 0 (No blocker exists) -> No Warning.
-        # B) We just moved, and the blocker is still at start_tile -> Finds and removes it.
-
         racer = engine.get_racer(owner_idx)
-        template = HugeBabyModifier(owner_idx=owner_idx)
+        modifier_template = HugeBabyModifier(owner_idx=owner_idx)
         board = engine.state.board
 
-        # 1. Optimization: Check current position first (Silent Check)
-        if template in board.dynamic_modifiers.get(racer.position, []):
-            board.unregister_modifier(racer.position, template, engine)
+        # 1. Optimization: Check current position first
+        if modifier_template in board.dynamic_modifiers.get(racer.position, []):
+            board.unregister_modifier(racer.position, modifier_template, engine)
             return
 
         # 2. Fallback: Scan the board
-        # This handles the "Overtake" race condition (blocker left behind at start_tile)
         for tile, modifiers in list(board.dynamic_modifiers.items()):
-            if template in modifiers:
-                board.unregister_modifier(tile, template, engine)
+            if modifier_template in modifiers:
+                board.unregister_modifier(tile, modifier_template, engine)
                 return
 
     @override
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        # --- ARRIVAL LOGIC ---
-        if isinstance(event, (PostMoveEvent, PostWarpEvent)):
-            if event.target_racer_idx != owner_idx:
-                return "skip_trigger"
-
-            # [FIXED ZOMBIE CHECK]
-            # Use safe removal to avoid warnings if on_loss() beat us to it.
-            racer = engine.get_racer(owner_idx)
-            if self.name not in racer.active_abilities:
-                if event.start_tile != 0:
-                    template = self._get_modifier(owner_idx)
-                    # Check existence before removing
-                    if template in engine.state.board.dynamic_modifiers.get(
-                        event.start_tile,
-                        [],
-                    ):
-                        engine.state.board.unregister_modifier(
-                            event.start_tile,
-                            template,
-                            engine,
-                        )
-                return "skip_trigger"
-
-            # 1. ATOMIC MOVE: Clean up the OLD tile
-            if event.start_tile != 0:
-                mod_to_remove = self._get_modifier(owner_idx)
-                # Here we WANT a warning if it's missing, because that would be a bug
-                # in normal operation (we expect to have a blocker).
-                engine.state.board.unregister_modifier(
-                    event.start_tile,
-                    mod_to_remove,
-                    engine,
-                )
-
-            if event.end_tile == 0:
-                return "skip_trigger"
-
-            # 2. Register at NEW tile
-            mod_to_add = self._get_modifier(owner_idx)
-            engine.state.board.register_modifier(event.end_tile, mod_to_add, engine)
-
-            # ... (Push logic continues below) ...
-            # 3. "Active Push": Eject any racers already on this tile
-            victims = [
-                r
-                for r in engine.state.racers
-                if r.active and r.position == event.end_tile and r.idx != owner_idx
-            ]
-
-            for v in victims:
-                target = max(0, event.end_tile - 1)
-                push_warp(
-                    engine,
-                    target,
-                    phase=event.phase,
-                    warped_racer_idx=v.idx,
-                    source=self.name,
-                    responsible_racer_idx=owner_idx,
-                )
-                engine.log_info(f"HugeBaby pushes {v.repr} to {target}")
-
-                engine.push_event(
-                    AbilityTriggeredEvent(
-                        owner_idx,
-                        self.name,
-                        event.phase,
-                        target_racer_idx=v.idx,
-                    ),
-                )
-
+        if (
+            not isinstance(event, (PostMoveEvent, PostWarpEvent))
+            or event.target_racer_idx != owner.idx
+        ):
             return "skip_trigger"
+
+        modifier_template = HugeBabyModifier(owner_idx=owner.idx)
+
+        # 1. CLEANUP OLD TILE
+        if (
+            event.start_tile != 0
+            and modifier_template
+            in engine.state.board.dynamic_modifiers.get(event.start_tile, [])
+        ):
+            engine.state.board.unregister_modifier(
+                event.start_tile,
+                modifier_template,
+                engine,
+            )
+
+        # 2. REGISTER NEW TILE
+        if event.end_tile != 0 and self.name in owner.active_abilities:
+            engine.state.board.register_modifier(
+                event.end_tile,
+                modifier_template,
+                engine,
+            )
+
+            # 3. PUSH VICTIMS (Only if we successfully placed the blocker)
+            if (target := max(0, event.end_tile - 1)) >= 0:
+                victims = engine.get_racers_at_position(
+                    event.end_tile,
+                    except_racer_idx=owner.idx,
+                )
+
+                if victims:
+                    warps = [
+                        WarpData(warping_racer_idx=v.idx, target_tile=target)
+                        for v in victims
+                    ]
+                    push_simultaneous_warp(
+                        engine,
+                        warps=warps,
+                        phase=Phase.PRE_MAIN,
+                        source=self.name,
+                        responsible_racer_idx=owner.idx,
+                        emit_ability_triggered="after_resolution",
+                    )
 
         return "skip_trigger"

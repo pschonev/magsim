@@ -18,6 +18,7 @@ from magical_athlete_simulator.core.events import (
 )
 
 if TYPE_CHECKING:
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -31,21 +32,22 @@ class LegsMoveAbility(Ability, BooleanDecisionMixin):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner_idx:
+        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
             return "skip_trigger"
 
-        ctx = DecisionContext[BooleanInteractive](self, engine.state, owner_idx)
+        ctx = DecisionContext[BooleanInteractive](self, engine.state, owner.idx)
         if agent.make_boolean_decision(engine, ctx):
-            engine.get_racer(owner_idx).roll_override = (self.name, 5)
+            engine.log_info(f"{owner.repr} decided to move 5 using {self.name}")
+            owner.roll_override = (self.name, 5)
             return AbilityTriggeredEvent(
-                responsible_racer_idx=owner_idx,
+                responsible_racer_idx=owner.idx,
                 source=self.name,
                 phase=event.phase,
-                target_racer_idx=owner_idx,
+                target_racer_idx=owner.idx,
             )
 
         return "skip_trigger"

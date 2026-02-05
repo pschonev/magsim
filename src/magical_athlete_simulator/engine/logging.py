@@ -92,7 +92,7 @@ class RichMarkupFormatter(logging.Formatter):
 
         # Apply the base grey color to the prefix.
         # The Highlighter will apply stronger colors on top of this.
-        return f"[{COLOR['prefix']}]{prefix}[/{COLOR['prefix']}]  {message}"
+        return f"[{COLOR['prefix']}]{prefix:<19}[/{COLOR['prefix']}]  {message}"
 
 
 class GameLogHighlighter(Highlighter):

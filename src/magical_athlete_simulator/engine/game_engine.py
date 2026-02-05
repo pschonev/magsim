@@ -116,7 +116,7 @@ class GameEngine:
                     processed_abilities.add(ability.name)
 
                     if isinstance(ability, SetupPhaseMixin):
-                        ability.on_setup(self, racer.idx, self.agents[racer.idx])
+                        ability.on_setup(self, racer, self.agents[racer.idx])
 
     # --- Main Loop ---
     def run_race(self):
@@ -138,7 +138,7 @@ class GameEngine:
         racer.can_reroll = True
         racer.main_move_consumed = False
 
-        self.log_context.start_turn_log(racer.repr)
+        self.log_context.start_turn_log(f"{racer.idx}•{racer.name}")
         self.log_info(f"=== START TURN: {racer.repr} ===")
 
         if racer.tripped:

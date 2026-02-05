@@ -20,6 +20,7 @@ from magical_athlete_simulator.core.events import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -40,19 +41,22 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
+        if (
+            not isinstance(event, (TurnStartEvent, RollModificationWindowEvent))
+            or event.target_racer_idx != owner.idx
+        ):
+            return "skip_trigger"
+
         # 1. Prediction Phase (Turn Start)
         if isinstance(event, TurnStartEvent):
-            if (
-                event.target_racer_idx != owner_idx
-                or engine.get_racer(owner_idx).main_move_consumed
-                or engine.state.current_racer_idx != owner_idx
-            ):
+            if owner.main_move_consumed or engine.state.current_racer_idx != owner.idx:
                 self.prediction = None
                 return "skip_trigger"
+
             self.prediction = agent.make_selection_decision(
                 engine,
                 ctx=SelectionDecisionContext[
@@ -61,46 +65,41 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
                 ](
                     source=self,
                     game_state=engine.state,
-                    source_racer_idx=owner_idx,
+                    source_racer_idx=owner.idx,
                     options=list(range(1, 7)),
                 ),
             )
 
-            engine.log_info(f"{self.name}: Predicts a roll of {self.prediction}.")
+            engine.log_info(f"{owner.repr} predicts a roll of {self.prediction}.")
             return AbilityTriggeredEvent(
-                responsible_racer_idx=owner_idx,
+                responsible_racer_idx=owner.idx,
                 source=self.name,
                 phase=event.phase,
-                target_racer_idx=owner_idx,
+                target_racer_idx=owner.idx,
             )
 
         # 2. Check Phase (Roll Window)
-        elif (
-            isinstance(event, RollModificationWindowEvent)
-            and event.target_racer_idx == owner_idx
-            and self.prediction is not None
-            and event.current_roll_val == self.prediction
-        ):
-            me = engine.get_racer(owner_idx)
+        elif self.prediction is not None and event.current_roll_val == self.prediction:
             engine.log_info(
-                f"{self.name}: Prediction Correct! {me.repr} gets an extra turn.",
+                f"{self.name}: Prediction Correct! {owner.repr} gets an extra turn.",
             )
 
             # Set the override.
-            engine.state.next_turn_override = owner_idx
+            engine.state.next_turn_override = owner.idx
 
+            # Track dice manipulation
             if engine.on_event_processed is not None:
                 for skipped_racer_idx in [
                     r.idx
                     for r in engine.state.racers
-                    if r.active and r.idx != owner_idx
+                    if r.active and r.idx != owner.idx
                 ]:
                     engine.on_event_processed(
                         engine,
                         MainMoveSkippedEvent(
                             target_racer_idx=skipped_racer_idx,
                             source=self.name,
-                            responsible_racer_idx=owner_idx,
+                            responsible_racer_idx=owner.idx,
                         ),
                     )
 

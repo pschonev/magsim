@@ -17,4 +17,3 @@ def test_alchemist_rolls_1_converts_to_4(scenario: type[GameScenario]):
     rs = game.engine.state.roll_state
     assert rs.dice_value == 1
     assert rs.base_value == 4
-    assert rs.can_reroll is False

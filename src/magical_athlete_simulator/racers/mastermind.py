@@ -31,63 +31,59 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
     triggers: tuple[type[GameEvent], ...] = (TurnStartEvent, RacerFinishedEvent)
 
     # Persistent State
-    prediction: int | None = None
+    prediction: RacerState | None = None
 
     @override
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
         # ---------------------------------------------------------------------
         # Trigger 1: Make Prediction (Start of Mastermind's first turn)
         # ---------------------------------------------------------------------
-        if isinstance(event, TurnStartEvent):
-            if (
-                event.target_racer_idx == owner_idx
-                and self.prediction is None
-                and engine.state.current_racer_idx == owner_idx
-            ):
-                target_racer = agent.make_selection_decision(
-                    engine,
-                    ctx=SelectionDecisionContext[
-                        SelectionInteractive[RacerState],
-                        RacerState,
-                    ](
-                        source=self,
-                        game_state=engine.state,
-                        source_racer_idx=owner_idx,
-                        options=[r for r in engine.state.racers if r.active],
-                    ),
+        if (
+            isinstance(event, TurnStartEvent)
+            and event.target_racer_idx == owner.idx
+            and self.prediction is None
+        ):
+            target_racer = agent.make_selection_decision(
+                engine,
+                ctx=SelectionDecisionContext[
+                    SelectionInteractive[RacerState],
+                    RacerState,
+                ](
+                    source=self,
+                    game_state=engine.state,
+                    source_racer_idx=owner.idx,
+                    options=[r for r in engine.state.racers if r.active],
+                ),
+            )
+
+            if target_racer is None:
+                raise AssertionError(
+                    "Mastermind should always have a target to pick, even if it's himself.",
                 )
 
-                if target_racer is None:
-                    raise AssertionError(
-                        "Mastermind should always have a target to pick, even if it's himself.",
-                    )
+            # Store State
+            self.prediction = target_racer
+            engine.log_info(
+                f"{owner.repr} predicts {target_racer.repr} will win the race!",
+            )
 
-                # Store State
-                self.prediction = target_racer.idx
-
-                owner = engine.get_racer(owner_idx)
-                engine.log_info(
-                    f"{owner.repr} predicts {target_racer.name} will win the race!",
-                )
-
-                return AbilityTriggeredEvent(
-                    responsible_racer_idx=owner_idx,
-                    source=self.name,
-                    phase=event.phase,
-                    target_racer_idx=target_racer.idx,
-                )
+            return AbilityTriggeredEvent(
+                responsible_racer_idx=owner.idx,
+                source=self.name,
+                phase=event.phase,
+                target_racer_idx=target_racer.idx,
+            )
 
         # ---------------------------------------------------------------------
         # Trigger 2: Check Victory (Someone finished)
         # ---------------------------------------------------------------------
         elif isinstance(event, RacerFinishedEvent):
-            owner: RacerState = engine.get_racer(owner_idx)
             if event.finishing_position != 1:
                 return "skip_trigger"
 
@@ -95,14 +91,14 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
                 engine.log_info(f"{owner.repr} did not predict anything!")
                 return "skip_trigger"
 
-            winner = engine.state.racers[self.prediction]
-
-            if event.target_racer_idx != self.prediction:
-                engine.log_info(f"{owner.repr} predicted wrong!")
+            if event.target_racer_idx != self.prediction.idx:
+                engine.log_info(
+                    f"{owner.repr} predicted wrong - {self.prediction.repr} did not win!",
+                )
                 return "skip_trigger"
             else:
                 engine.log_info(
-                    f"{owner.repr}'s prediction was correct! {winner.repr} won!",
+                    f"{owner.repr}'s prediction was correct! {self.prediction.repr} won!",
                 )
 
                 if owner.active:
@@ -111,10 +107,10 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
                         engine.on_event_processed(
                             engine,
                             AbilityTriggeredEvent(
-                                responsible_racer_idx=owner_idx,
+                                responsible_racer_idx=owner.idx,
                                 source=self.name,
                                 phase=event.phase,
-                                target_racer_idx=owner_idx,
+                                target_racer_idx=owner.idx,
                             ),
                         )
                     if engine.state.rules.hr_mastermind_steal_1st:

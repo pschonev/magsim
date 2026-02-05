@@ -16,7 +16,6 @@ from magical_athlete_simulator.engine.abilities import (
 )
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.agent import Agent
     from magical_athlete_simulator.core.events import GameEvent
     from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
@@ -65,16 +64,6 @@ class SticklerConstraint(RacerModifier, MovementValidatorMixin):
 class SticklerStrictFinish(Ability, LifecycleManagedMixin):
     name: AbilityName = "SticklerStrictFinishManager"
     triggers: tuple[type[GameEvent], ...] = ()  # No active event triggers
-
-    @override
-    def execute(
-        self,
-        event: GameEvent,
-        owner_idx: int,
-        engine: GameEngine,
-        agent: Agent,
-    ):
-        return "skip_trigger"
 
     @override
     def on_gain(self, engine: GameEngine, owner_idx: int) -> None:

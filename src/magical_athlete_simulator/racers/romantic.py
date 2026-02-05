@@ -13,6 +13,7 @@ from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -26,14 +27,11 @@ class RomanticMove(Ability):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ):
         if not isinstance(event, (PostMoveEvent, PostWarpEvent)):
-            return "skip_trigger"
-
-        if not engine.get_racer(owner_idx):
             return "skip_trigger"
 
         racers_on_tile = engine.get_racers_at_position(event.end_tile)
@@ -43,9 +41,9 @@ class RomanticMove(Ability):
                 engine,
                 distance=2,
                 phase=event.phase,
-                moved_racer_idx=owner_idx,
+                moved_racer_idx=owner.idx,
                 source=self.name,
-                responsible_racer_idx=owner_idx,
+                responsible_racer_idx=owner.idx,
                 emit_ability_triggered="after_resolution",
             )
 

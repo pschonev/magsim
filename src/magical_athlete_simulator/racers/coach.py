@@ -24,6 +24,7 @@ from magical_athlete_simulator.engine.abilities import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
+    from magical_athlete_simulator.core.state import RacerState
     from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -62,16 +63,14 @@ class CoachAura(Ability, LifecycleManagedMixin):
     name: AbilityName = "CoachAura"
     triggers: tuple[type[GameEvent], ...] = (PostMoveEvent, PostWarpEvent)
 
-    def _update_aura(self, engine: GameEngine, coach_idx: int) -> None:
+    def _update_aura(self, engine: GameEngine, owner: RacerState) -> None:
         """Apply/remove CoachBoost to ALL racers at coach's position."""
-        coach = engine.get_racer(coach_idx)
-
         # Remove from everyone first (to handle position changes)
         for racer in engine.state.racers:
             if (
                 racer.active
-                and racer.idx != coach_idx
-                and racer.position != coach.position
+                and racer.idx != owner.idx
+                and racer.position != owner.position
             ):
                 mod = next(
                     (m for m in racer.modifiers if isinstance(m, CoachBoost)),
@@ -81,12 +80,12 @@ class CoachAura(Ability, LifecycleManagedMixin):
                     remove_racer_modifier(engine, racer.idx, mod)
 
         # Apply to everyone now at coach_pos (including self)
-        for racer in engine.get_racers_at_position(coach.position):
-            add_racer_modifier(engine, racer.idx, CoachBoost(owner_idx=coach_idx))
+        for racer in engine.get_racers_at_position(owner.position):
+            add_racer_modifier(engine, racer.idx, CoachBoost(owner_idx=owner.idx))
 
     @override
     def on_gain(self, engine: GameEngine, owner_idx: int) -> None:
-        CoachAura._update_aura(self, engine, owner_idx)
+        CoachAura._update_aura(self, engine, engine.get_racer(owner_idx))
 
     @override
     def on_loss(self, engine: GameEngine, owner_idx: int) -> None:
@@ -100,7 +99,7 @@ class CoachAura(Ability, LifecycleManagedMixin):
     def execute(
         self,
         event: GameEvent,
-        owner_idx: int,
+        owner: RacerState,
         engine: GameEngine,
         agent: Agent,
     ):
@@ -111,9 +110,9 @@ class CoachAura(Ability, LifecycleManagedMixin):
         # or another racer landed on his space
         # or another racer moved away from his space
         if (
-            event.target_racer_idx == owner_idx
-            or (owner := engine.get_racer(owner_idx)).position == event.start_tile
+            event.target_racer_idx == owner.idx
+            or (owner := engine.get_racer(owner.idx)).position == event.start_tile
             or owner.position == event.end_tile
         ):
-            self._update_aura(engine, owner_idx)
+            self._update_aura(engine, owner)
         return "skip_trigger"
