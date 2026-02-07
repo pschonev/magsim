@@ -4,7 +4,7 @@ exclude_racers = []
 
 # Test configurations
 racer_counts = [5]
-boards = ["standard", "wild_wilds"]
+boards = ["Standard", "WildWilds"]
 
 # Execution limits
 runs_per_combination = 500

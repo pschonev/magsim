@@ -267,9 +267,9 @@ def build_wild_wilds() -> Board:
 BoardFactory = Callable[[], Board]
 
 BOARD_DEFINITIONS: dict[BoardName, BoardFactory] = {
-    "standard": lambda: Board(
+    "Standard": lambda: Board(
         length=30,
         static_features={},
     ),
-    "wild_wilds": build_wild_wilds,
+    "WildWilds": build_wild_wilds,
 }

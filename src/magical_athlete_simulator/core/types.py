@@ -12,14 +12,14 @@ RacerName = Literal[
     "Centaur",
     "Coach",
     "Copycat",
-    "Dicemonger",
-    "Duelist",
+    #    "Dicemonger",
+    #    "Duelist",
     "Egg",
     "FlipFlop",
     "Genius",
     "Gunk",
     "Hare",
-    "Heckler",
+    #    "Heckler",
     "HugeBaby",
     "Hypnotist",
     "Inchworm",
@@ -32,7 +32,7 @@ RacerName = Literal[
     "Mouth",
     "PartyAnimal",
     "Romantic",
-    "RocketScientist",
+    #    "RocketScientist",
     "Scoocher",
     "Sisyphus",
     "Skipper",
@@ -104,7 +104,7 @@ BoardModifierName = Literal[
     "VictoryPointTile",
 ]
 
-BoardName = Literal["standard", "wild_wilds"]
+BoardName = Literal["Standard", "WildWilds"]
 
 SystemSource = Literal["Board", "System"]
 ModifierName = RacerModifierName | BoardModifierName

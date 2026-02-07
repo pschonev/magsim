@@ -91,7 +91,7 @@ class GameScenario:
 
         # Initialize engine
         board = (
-            self.board if self.board is not None else BOARD_DEFINITIONS["standard"]()
+            self.board if self.board is not None else BOARD_DEFINITIONS["Standard"]()
         )
         rules = self.rules if self.rules is not None else GameRules()
 

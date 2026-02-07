@@ -7,7 +7,7 @@ import random
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from magical_athlete_simulator.simulation.hashing import GameConfiguration
+from magical_athlete_simulator.simulation.config import GameConfig
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -119,7 +119,7 @@ def generate_combinations(
     max_total_runs: int | None,
     filters: list[CombinationFilter] | None = None,
     seed_offset: int = 0,
-) -> Iterator[GameConfiguration]:
+) -> Iterator[GameConfig]:
     """
     Smart generator that guarantees unique combinations even in massive spaces
     by sampling indices instead of racers.
@@ -235,7 +235,7 @@ def generate_combinations(
             rng = random.Random(final_seed)
             rng.shuffle(selected_racers)
 
-            yield GameConfiguration(
+            yield GameConfig(
                 racers=tuple(selected_racers),
                 board=bucket.board,
                 seed=final_seed,

@@ -77,7 +77,6 @@ async def cell_import():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -396,7 +395,7 @@ def cell_manage_state(mo):
 
     # --- NEW STATES FOR CONFIG LOADING ---
     get_seed, set_seed = mo.state(42, allow_self_loops=True)
-    get_board, set_board = mo.state("standard", allow_self_loops=True)
+    get_board, set_board = mo.state("Standard", allow_self_loops=True)
 
     # Track the last seen selection for EACH table to prevent fighting/loops
     get_last_race_hash, set_last_race_hash = mo.state(None, allow_self_loops=True)
@@ -790,7 +789,7 @@ def cell_load_config(
             new_roster = []
 
         new_seed = int(target_config.get("seed", 42))
-        new_board = target_config.get("board", "standard")
+        new_board = target_config.get("board", "Standard")
 
         set_seed(new_seed)
         set_board(new_board)
@@ -939,7 +938,7 @@ def cell_setup_log(
         ],
         dice_rolls=dice_rolls,
         seed=None if dice_rolls else current_seed_val,
-        board=BOARD_DEFINITIONS.get(current_board_val, BOARD_DEFINITIONS["standard"])(),
+        board=BOARD_DEFINITIONS.get(current_board_val, BOARD_DEFINITIONS["Standard"])(),
     )
 
     step_history = []
@@ -1256,7 +1255,7 @@ def cell_show_simulation_section(
     else:
         factory = BOARD_DEFINITIONS.get(get_board())
         if not factory:
-            factory = BOARD_DEFINITIONS["standard"]
+            factory = BOARD_DEFINITIONS["Standard"]
         board_instance = factory()
 
         # 3. Render
@@ -1524,7 +1523,6 @@ def cell_vsialize_track(
                 {track_group_start}
                 {"".join(svg_elements)}
             </svg>"""
-
     return (render_game_track,)
 
 
@@ -2739,7 +2737,6 @@ def _(BG_COLOR, alt, np, pl):
             .add_params(xzoom)
             .properties(width="container", height=800, background=BG_COLOR)
         )
-
     return (build_quadrant_chart,)
 
 

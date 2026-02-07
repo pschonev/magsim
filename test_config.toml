@@ -1,0 +1,7 @@
+racers = ["Mouth", "Centaur", "Skipper"]
+board = "WildWilds"
+seed = 42
+
+[rules]
+timing_mode = "BFS"
+hr_mastermind_steal_1st = true

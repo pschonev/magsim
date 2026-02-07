@@ -36,14 +36,14 @@ exclude_racers = []
 
 # Test configurations
 racer_counts = [4, 5, 6]
-boards = ["standard", "wild_wilds"]
+boards = ["Standard", "WildWilds"]
 
 # Execution limits
 runs_per_combination = 1
-max_total_runs = 20_000
+max_total_runs = 200
 max_turns_per_race = 300
 
 # --- Filters ---
 [[filters]]
 racers = ["Copycat", "Scoocher"]
-boards = ["standard"]
+boards = ["Standard"]
