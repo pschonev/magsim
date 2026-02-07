@@ -60,11 +60,10 @@ class LeaptoadJumpModifier(RacerModifier, DestinationCalculatorMixin):
                 if not occupying_racers:
                     break
 
-                occupying_racers_repr = ", ".join(r.repr for r in occupying_racers)
                 # Tile is occupied, jump over it (effectively not counting this step)
                 # We do NOT decrement 'remaining' because this step was "free"
                 engine.log_info(
-                    f"{racer.repr} used {self.name} to jump over position {current} (occupied by {occupying_racers_repr}).",
+                    f"{racer.repr} used {self.name} to jump over {', '.join(r.repr for r in occupying_racers)}.",
                 )
                 current += direction
                 ability_triggered_events.append(
