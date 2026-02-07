@@ -70,7 +70,7 @@ class RacerState:
 
     @property
     def repr(self) -> str:
-        return f"{self.position if self.position else ''}•{self.name}"
+        return f"{self.raw_position if self.raw_position else ''}•{self.name}"
 
     @property
     def abilities(self) -> set[AbilityName]:
