@@ -116,7 +116,7 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
                         )
                     if engine.state.rules.hr_mastermind_steal_1st:
                         # house rule lets Mastermind steal 1st place instead
-                        engine.log_info("Mastermind steals 1st place!")
+                        engine.log_info(f"{owner.repr} steals 1st place!")
                         mark_finished(
                             engine,
                             racer=engine.get_racer(event.target_racer_idx),
@@ -125,7 +125,7 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
                         mark_finished(engine, owner, 1)
                     else:
                         # If Mastermind hasn't finished yet, they take 2nd place immediately.
-                        engine.log_info("Mastermind claims 2nd place immediately!")
+                        engine.log_info(f"{owner.repr} claims 2nd place immediately!")
                         mark_finished(engine, owner, 2)
 
         return "skip_trigger"
