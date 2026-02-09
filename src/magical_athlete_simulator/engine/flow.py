@@ -101,9 +101,31 @@ def mark_finished(
 
 
 def check_race_over_condition(engine: GameEngine) -> None:
-    """Standard check: If 2+ racers finished, end race."""
+    """Standard check: If 2+ racers finished, end race.
+    Also handles 'Sole Survivor' rule: if only 1 active racer remains,
+    they auto-finish.
+    """
+    # 1. Standard Condition
     count = sum(1 for r in engine.state.racers if r.finished)
     if count >= 2:
+        end_race(engine)
+        return
+
+    # 2. Sole Survivor Condition (Fix for Mouth/Elimination bugs)
+    active_racers = [r for r in engine.state.racers if r.active]
+
+    # If only 1 racer is active, they auto-finish at the next rank.
+    if len(active_racers) == 1:
+        survivor = active_racers[0]
+        next_rank = count + 1
+        engine.log_info(
+            f"Last survivor {survivor.repr} auto-finishes at Rank {next_rank}"
+        )
+        mark_finished(engine, survivor, rank=next_rank)
+        return
+
+    # If 0 active racers (everyone finished or eliminated), force end.
+    if len(active_racers) == 0:
         end_race(engine)
 
 
