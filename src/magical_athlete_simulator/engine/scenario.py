@@ -20,6 +20,7 @@ from magical_athlete_simulator.engine.board import BOARD_DEFINITIONS, Board
 from magical_athlete_simulator.engine.game_engine import GameEngine
 
 if TYPE_CHECKING:
+    from magical_athlete_simulator.core.agent import Agent
     from magical_athlete_simulator.core.types import AbilityName, RacerName
 
 
@@ -31,6 +32,7 @@ class RacerConfig:
     name: RacerName
     abilities: set[AbilityName] | None = None
     start_pos: int = 0
+    agent: Agent | None = None
 
     def __post_init__(self):
         if self.abilities is None:
@@ -51,9 +53,6 @@ class RacerConfig:
 class GameScenario:
     """
     A reusable harness for creating controlled game scenarios.
-
-    Useful for both testing and visual debugging in the frontend.
-    Allows scripting dice rolls and custom starting positions.
     """
 
     racers_config: list[RacerConfig]
@@ -69,11 +68,14 @@ class GameScenario:
 
     def __post_init__(self):
         racers: list[RacerState] = []
+        agents: dict[int, Agent] = {}
 
         # Setup racers from config
         for cfg in self.racers_config:
             r = RacerState(cfg.idx, cfg.name, raw_position=cfg.start_pos)
             racers.append(r)
+            if cfg.agent:
+                agents[cfg.idx] = cfg.agent
 
         # Choose RNG strategy
         if self.dice_rolls is not None:
@@ -81,11 +83,9 @@ class GameScenario:
             self.mock_rng.randint.side_effect = itertools.cycle(self.dice_rolls)
             rng = self.mock_rng
         elif self.seed is not None:
-            # Use seeded random for reproducible but natural randomness
             rng = random.Random(self.seed)
             self.mock_rng = None
         else:
-            # Use truly random RNG
             rng = random.Random()
             self.mock_rng = None
 
@@ -106,26 +106,24 @@ class GameScenario:
                 engine_level=0,
                 parent_engine_id=None,
             ),
+            agents=agents,
         )
 
     def set_dice_rolls(self, rolls: list[int]):
         if self.mock_rng is None:
-            msg = "Cannot set dice rolls when using a real Random instance. Create scenario with dice_rolls parameter instead."
+            msg = "Cannot set dice rolls when using a real Random instance."
             raise ValueError(msg)
         self.mock_rng.randint.side_effect = itertools.cycle(rolls)
 
     def run_turn(self):
-        """Run one turn and advance to the next racer."""
         self.engine.run_turn()
-        self.engine._advance_turn()  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        self.engine._advance_turn()  # noqa: SLF001
 
     def run_turns(self, n: int):
-        """Run n consecutive turns."""
         for _ in range(n):
             if self.engine.state.race_over:
                 break
             self.run_turn()
 
     def get_racer(self, idx: int) -> RacerState:
-        """Get racer state by index."""
         return self.engine.get_racer(idx)

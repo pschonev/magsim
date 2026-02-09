@@ -33,10 +33,22 @@ class BooleanInteractive(Protocol):
         ctx: DecisionContext[Self],
     ) -> bool: ...
 
+    def get_baseline_boolean_decision(
+        self,
+        engine: GameEngine,
+        ctx: DecisionContext[Self],
+    ) -> bool: ...
+
 
 @runtime_checkable
 class SelectionInteractive[R](Protocol):
     def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, R],
+    ) -> R | None: ...
+
+    def get_baseline_selection_decision(
         self,
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, R],
@@ -51,7 +63,17 @@ class BooleanDecisionMixin(BooleanInteractive, ABC):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
+        """The 'Smart' logic used by SmartAgent."""
         raise NotImplementedError
+
+    def get_baseline_boolean_decision(
+        self,
+        engine: GameEngine,
+        ctx: DecisionContext[Self],
+    ) -> bool:
+        """The 'Baseline' logic used by BaselineAgent. Defaults to True."""
+        _ = engine, ctx
+        return True
 
 
 class SelectionDecisionMixin[R](SelectionInteractive[R], ABC):
@@ -62,10 +84,23 @@ class SelectionDecisionMixin[R](SelectionInteractive[R], ABC):
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, R],
     ) -> R | None:
+        """The 'Smart' logic used by SmartAgent."""
         raise NotImplementedError
+
+    def get_baseline_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, R],
+    ) -> R | None:
+        """The 'Baseline' logic used by BaselineAgent. Defaults to first option."""
+        if not ctx.options:
+            return None
+        return ctx.options[0]
 
 
 class Agent:
+    """Base Agent class."""
+
     def make_boolean_decision(
         self,
         engine: GameEngine,

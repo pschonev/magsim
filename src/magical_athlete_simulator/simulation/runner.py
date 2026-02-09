@@ -25,8 +25,8 @@ if TYPE_CHECKING:
     from magical_athlete_simulator.core.events import GameEvent
     from magical_athlete_simulator.core.types import ErrorCode
     from magical_athlete_simulator.engine.game_engine import GameEngine
+    from magical_athlete_simulator.simulation.config import GameConfig
     from magical_athlete_simulator.simulation.db.models import RacerResult
-    from magical_athlete_simulator.simulation.hashing import GameConfiguration
 
 
 @dataclass(slots=True)
@@ -46,7 +46,7 @@ class SimulationResult:
 
 
 def run_single_simulation(
-    config: GameConfiguration,
+    config: GameConfig,
     max_turns: int,
 ) -> SimulationResult:
     # --- START LOGGING ---
