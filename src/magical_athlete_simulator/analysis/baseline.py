@@ -60,8 +60,20 @@ class ExperimentResult:
         return self.winrate_treatment - self.winrate_control
 
     @property
+    def winrate_pct_change(self) -> float:
+        if self.winrate_control == 0:
+            return 0.0
+        return (self.winrate_treatment - self.winrate_control) / self.winrate_control
+
+    @property
     def vp_delta(self) -> float:
         return self.vp_treatment - self.vp_control
+
+    @property
+    def vp_pct_change(self) -> float:
+        if self.vp_control == 0:
+            return 0.0
+        return (self.vp_treatment - self.vp_control) / self.vp_control
 
     @property
     def speed_control(self) -> float:
@@ -85,6 +97,12 @@ class ExperimentResult:
     def speed_delta(self) -> float:
         """Treatment speed - Control speed."""
         return self.speed_treatment - self.speed_control
+
+    @property
+    def speed_pct_change(self) -> float:
+        if self.speed_control == 0:
+            return 0.0
+        return (self.speed_treatment - self.speed_control) / self.speed_control
 
 
 def run_ai_comparison(
