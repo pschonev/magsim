@@ -24,6 +24,7 @@ from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 from magical_athlete_simulator.simulation.config import GameConfig, PartialGameConfig
 
 logger = logging.getLogger(__name__)
+DEFAULT_RACER_COUNT = 5
 
 
 def _print_config(config: GameConfig) -> None:
@@ -84,7 +85,7 @@ class GameCommand:
     number: Annotated[
         int | None,
         cappa.Arg(short="-n", long="--number", help="Target number of racers."),
-    ] = 5
+    ] = None
     board: Annotated[
         BoardName | None,
         cappa.Arg(
@@ -172,10 +173,21 @@ class GameCommand:
             final_rules.update(parse_house_rules(self.house_rules))
 
         # 4. Logic: Fill Racers
-        target_count = self.number or (len(final_racers) if final_racers else 5)
+        if self.number is not None:
+            # User explicitly requested a specific size (e.g. `game -n 8`)
+            target_count = self.number
+        elif self.encoding or self.config_file:
+            # We loaded a specific config. Trust it entirely.
+            # If the config has 3 racers, we run 3. We do NOT autofill.
+            target_count = len(final_racers)
+        else:
+            # No config loaded, no number specified.
+            # This is the "lazy user" case
+            # Default to the standard game size.
+            target_count = DEFAULT_RACER_COUNT
 
         if len(final_racers) < target_count:
-            available = list(set(get_args(RacerName)) - set(final_racers))
+            available = sorted(set(get_args(RacerName)) - set(final_racers))
             needed = target_count - len(final_racers)
 
             # Use seed-based RNG for consistent filling if seed is fixed
