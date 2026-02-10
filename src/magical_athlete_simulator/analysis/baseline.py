@@ -1,10 +1,11 @@
 """
-Logic for running comparative experiments (AI baselines and House Rules).
+Logic for running comparative experiments (AI baselines, House Rules, Racer Impact).
 """
 
 from __future__ import annotations
 
 import logging
+import random
 import time
 import uuid
 from collections import defaultdict
@@ -29,6 +30,34 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class RacerStats:
+    """Accumulator for racer performance statistics during experiments."""
+
+    games_played_control: int = 0
+    games_played_treatment: int = 0
+    wins_control: int = 0
+    wins_treatment: int = 0
+    total_vp_control: int = 0
+    total_vp_treatment: int = 0
+    max_vp_control: int = 0
+    max_vp_treatment: int = 0
+
+    def update_control(self, is_winner: bool, vp: int) -> None:
+        self.games_played_control += 1
+        if is_winner:
+            self.wins_control += 1
+        self.total_vp_control += vp
+        self.max_vp_control = max(self.max_vp_control, vp)
+
+    def update_treatment(self, is_winner: bool, vp: int) -> None:
+        self.games_played_treatment += 1
+        if is_winner:
+            self.wins_treatment += 1
+        self.total_vp_treatment += vp
+        self.max_vp_treatment = max(self.max_vp_treatment, vp)
+
+
 @dataclass(frozen=True)
 class SimulationResult:
     """Structured result of a single simulation run."""
@@ -51,6 +80,8 @@ class ExperimentResult:
     # VP
     vp_control: float
     vp_treatment: float
+    max_vp_control: int
+    max_vp_treatment: int
 
     # Timing
     elapsed_control: float
@@ -125,10 +156,7 @@ def run_ai_comparison(
         seed_offset=seed_offset,
     )
 
-    wins_control = 0
-    wins_treatment = 0
-    vp_control = 0.0
-    vp_treatment = 0.0
+    stats = RacerStats()
     time_control = 0.0
     time_treatment = 0.0
 
@@ -142,29 +170,37 @@ def run_ai_comparison(
             if target_racer not in config.racers:
                 continue
 
+            tqdm.write(f"[Sim {games_processed + 1}] {config.repr}")
+
             target_idx = config.racers.index(target_racer)
 
+            # Control Run
             t0 = time.perf_counter()
             res_c = _run_config_with_setup(
-                config, {target_idx: BaselineAgent()}, GameRules()
+                config,
+                {target_idx: BaselineAgent()},
+                GameRules(),
             )
             t1 = time.perf_counter()
             time_control += t1 - t0
+            stats.update_control(
+                is_winner=(res_c.winner_idx == target_idx),
+                vp=res_c.vp_scores[target_idx],
+            )
 
-            if res_c.winner_idx == target_idx:
-                wins_control += 1
-            vp_control += res_c.vp_scores[target_idx]
-
+            # Treatment Run
             t2 = time.perf_counter()
             res_t = _run_config_with_setup(
-                config, {target_idx: SmartAgent()}, GameRules()
+                config,
+                {target_idx: SmartAgent()},
+                GameRules(),
             )
             t3 = time.perf_counter()
             time_treatment += t3 - t2
-
-            if res_t.winner_idx == target_idx:
-                wins_treatment += 1
-            vp_treatment += res_t.vp_scores[target_idx]
+            stats.update_treatment(
+                is_winner=(res_t.winner_idx == target_idx),
+                vp=res_t.vp_scores[target_idx],
+            )
 
             games_processed += 1
             pbar.update(1)
@@ -174,10 +210,16 @@ def run_ai_comparison(
         timestamp=datetime.now(UTC),
         racer=target_racer,
         games_played=games_processed,
-        winrate_control=wins_control / games_processed if games_processed else 0,
-        winrate_treatment=wins_treatment / games_processed if games_processed else 0,
-        vp_control=vp_control / games_processed if games_processed else 0,
-        vp_treatment=vp_treatment / games_processed if games_processed else 0,
+        winrate_control=stats.wins_control / games_processed if games_processed else 0,
+        winrate_treatment=stats.wins_treatment / games_processed
+        if games_processed
+        else 0,
+        vp_control=stats.total_vp_control / games_processed if games_processed else 0,
+        vp_treatment=stats.total_vp_treatment / games_processed
+        if games_processed
+        else 0,
+        max_vp_control=stats.max_vp_control,
+        max_vp_treatment=stats.max_vp_treatment,
         elapsed_control=time_control,
         elapsed_treatment=time_treatment,
     )
@@ -203,9 +245,8 @@ def run_rule_comparison(
         seed_offset=seed_offset,
     )
 
-    stats = defaultdict(
-        lambda: {"games": 0, "wins_c": 0, "vp_c": 0, "wins_t": 0, "vp_t": 0}
-    )
+    # Use a dictionary of typed objects instead of nested dicts
+    racer_stats: dict[RacerName, RacerStats] = defaultdict(RacerStats)
     time_c_total = 0.0
     time_t_total = 0.0
 
@@ -218,6 +259,8 @@ def run_rule_comparison(
 
     with tqdm(total=n_games, desc=f"Testing {rule_key}={rule_value}") as pbar:
         for config in gen:
+            tqdm.write(f"[Sim {games_processed + 1}] {config.repr}")
+
             t0 = time.perf_counter()
             res_c = _run_config_with_setup(config, {}, rules_c)
             t1 = time.perf_counter()
@@ -229,21 +272,24 @@ def run_rule_comparison(
             time_t_total += t3 - t2
 
             for idx, r_name in enumerate(config.racers):
-                s = stats[r_name]
-                s["games"] += 1
-                if res_c.winner_idx == idx:
-                    s["wins_c"] += 1
-                s["vp_c"] += res_c.vp_scores[idx]
-                if res_t.winner_idx == idx:
-                    s["wins_t"] += 1
-                s["vp_t"] += res_t.vp_scores[idx]
+                stats = racer_stats[r_name]
+
+                # Control Update
+                stats.update_control(
+                    is_winner=(res_c.winner_idx == idx),
+                    vp=res_c.vp_scores[idx],
+                )
+
+                # Treatment Update
+                stats.update_treatment(
+                    is_winner=(res_t.winner_idx == idx),
+                    vp=res_t.vp_scores[idx],
+                )
 
             games_processed += 1
             pbar.update(1)
 
-    results = []
-    # Distribute total time proportionally to games played for per-racer "speed" stat
-    # (Speed = games/sec, so we estimate time spent per racer instance)
+    results: list[ExperimentResult] = []
     if games_processed > 0:
         avg_time_c = time_c_total / games_processed
         avg_time_t = time_t_total / games_processed
@@ -251,12 +297,10 @@ def run_rule_comparison(
         avg_time_c = 0.0
         avg_time_t = 0.0
 
-    for r_name, s in stats.items():
-        n = s["games"]
-        if n < 20:
-            continue  # Filter here or in CLI? Better to return all valid data, let CLI filter display.
-        # Wait, user req: "log... every racer that was tested for at least 20 games"
-        # So we filter BEFORE returning.
+    for r_name, stats in racer_stats.items():
+        n = stats.games_played_control  # Or treatment, they are equal here
+        if n == 0:
+            continue
 
         results.append(
             ExperimentResult(
@@ -264,23 +308,155 @@ def run_rule_comparison(
                 timestamp=timestamp,
                 racer=r_name,
                 games_played=n,
-                winrate_control=s["wins_c"] / n,
-                winrate_treatment=s["wins_t"] / n,
-                vp_control=s["vp_c"] / n,
-                vp_treatment=s["vp_t"] / n,
+                winrate_control=stats.wins_control / n,
+                winrate_treatment=stats.wins_treatment / n,
+                vp_control=stats.total_vp_control / n,
+                vp_treatment=stats.total_vp_treatment / n,
+                max_vp_control=stats.max_vp_control,
+                max_vp_treatment=stats.max_vp_treatment,
                 elapsed_control=avg_time_c * n,
                 elapsed_treatment=avg_time_t * n,
+            ),
+        )
+
+    return results
+
+
+def run_racer_impact_comparison(
+    target_racer: RacerName,
+    n_games: int = 1000,
+    seed_offset: int = 0,
+) -> list[ExperimentResult]:
+    """
+    Measure the impact of a specific racer on the rest of the field.
+    """
+    all_racers = list(get_args(RacerName))
+    all_boards = list(get_args(BoardName))
+    racer_pool = set(all_racers)
+
+    gen = generate_combinations(
+        eligible_racers=all_racers,
+        racer_counts=[4, 5, 6],
+        boards=all_boards,
+        runs_per_combination=1,
+        max_total_runs=n_games * 10,
+        seed_offset=seed_offset,
+    )
+
+    racer_stats: dict[RacerName, RacerStats] = defaultdict(RacerStats)
+    time_c_total = 0.0
+    time_t_total = 0.0
+
+    run_id = str(uuid.uuid4())[:8]
+    timestamp = datetime.now(UTC)
+
+    games_processed = 0
+    rng = random.Random(seed_offset)
+
+    with tqdm(total=n_games, desc=f"Impact of {target_racer}") as pbar:
+        for config in gen:
+            if games_processed >= n_games:
+                break
+
+            if target_racer not in config.racers:
+                continue
+
+            # 1. Setup Treatment (With Target)
+            tqdm.write(f"[Sim {games_processed + 1} Treatment] {config.repr}")
+
+            t2 = time.perf_counter()
+            res_t = _run_config_with_setup(config, {}, GameRules())
+            t3 = time.perf_counter()
+            time_t_total += t3 - t2
+
+            for idx, r_name in enumerate(config.racers):
+                racer_stats[r_name].update_treatment(
+                    is_winner=(res_t.winner_idx == idx),
+                    vp=res_t.vp_scores[idx],
+                )
+
+            # 2. Setup Control (Without Target)
+            current_set = set(config.racers)
+            available = list(racer_pool - current_set)
+            if not available:
+                continue
+
+            replacement = rng.choice(available)
+            target_idx = config.racers.index(target_racer)
+            new_roster = list(config.racers)
+            new_roster[target_idx] = replacement
+
+            config_c = config.__class__(
+                racers=tuple(new_roster),
+                board=config.board,
+                seed=config.seed,
+                rules=config.rules,
             )
+
+            tqdm.write(f"[Sim {games_processed + 1} Control] {config_c.repr}")
+
+            t0 = time.perf_counter()
+            res_c = _run_config_with_setup(config_c, {}, GameRules())
+            t1 = time.perf_counter()
+            time_c_total += t1 - t0
+
+            for idx, r_name in enumerate(config_c.racers):
+                racer_stats[r_name].update_control(
+                    is_winner=(res_c.winner_idx == idx),
+                    vp=res_c.vp_scores[idx],
+                )
+
+            games_processed += 1
+            pbar.update(1)
+
+    results: list[ExperimentResult] = []
+    avg_time_c = time_c_total / games_processed if games_processed else 0
+    avg_time_t = time_t_total / games_processed if games_processed else 0
+
+    for r_name, stats in racer_stats.items():
+        # In impact analysis, 'games_played' differs for control vs treatment for specific racers
+        gc = stats.games_played_control
+        gt = stats.games_played_treatment
+
+        # Filter noise
+        if gc < 5 and gt < 5:
+            continue
+
+        wc = stats.wins_control / gc if gc > 0 else 0.0
+        wt = stats.wins_treatment / gt if gt > 0 else 0.0
+        vc = stats.total_vp_control / gc if gc > 0 else 0.0
+        vt = stats.total_vp_treatment / gt if gt > 0 else 0.0
+
+        # Use whichever side had presence for "games_played" count in summary
+        n = gt if gt > 0 else gc
+
+        results.append(
+            ExperimentResult(
+                run_id=run_id,
+                timestamp=timestamp,
+                racer=r_name,
+                games_played=n,
+                winrate_control=wc,
+                winrate_treatment=wt,
+                vp_control=vc,
+                vp_treatment=vt,
+                max_vp_control=stats.max_vp_control,
+                max_vp_treatment=stats.max_vp_treatment,
+                elapsed_control=avg_time_c * gc,
+                elapsed_treatment=avg_time_t * gt,
+            ),
         )
 
     return results
 
 
 def _run_config_with_setup(
-    config: GameConfig, agent_overrides: dict[int, Agent], rules: GameRules
+    config: GameConfig,
+    agent_overrides: dict[int, Agent],
+    rules: GameRules,
 ) -> SimulationResult:
-    """Unified runner."""
-    r_configs = []
+    """Unified internal runner."""
+    r_configs: list[RacerConfig] = []
     for i, name in enumerate(config.racers):
         agent = agent_overrides.get(i)
         r_configs.append(RacerConfig(idx=i, name=name, agent=agent))
