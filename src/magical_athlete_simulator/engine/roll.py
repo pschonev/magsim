@@ -179,7 +179,7 @@ def handle_execute_main_move(engine: GameEngine, event: ExecuteMainMoveEvent) ->
     racer = engine.get_racer(event.target_racer_idx)
 
     if racer.main_move_consumed:
-        engine.log_info(
+        engine.log_debug(
             f"Skipping execution: {racer.repr} main move was consumed/cancelled.",
         )
         return
