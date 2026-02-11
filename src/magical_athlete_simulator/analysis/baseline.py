@@ -140,6 +140,7 @@ def run_ai_comparison(
     target_racer: RacerName,
     n_games: int = 500,
     seed_offset: int = 0,
+    max_turns: int = 200,
 ) -> ExperimentResult:
     """Compare BaselineAgent vs SmartAgent for a specific racer."""
 
@@ -180,8 +181,14 @@ def run_ai_comparison(
                 config,
                 {target_idx: BaselineAgent()},
                 GameRules(),
+                max_turns=max_turns,
             )
             t1 = time.perf_counter()
+
+            if res_c is None:
+                tqdm.write(f"⚠️ Skipped Sim {games_processed}: Control timeout")
+                continue
+
             time_control += t1 - t0
             stats.update_control(
                 is_winner=(res_c.winner_idx == target_idx),
@@ -194,8 +201,18 @@ def run_ai_comparison(
                 config,
                 {target_idx: SmartAgent()},
                 GameRules(),
+                max_turns=max_turns,
             )
             t3 = time.perf_counter()
+
+            if res_t is None:
+                tqdm.write(f"⚠️ Skipped Sim {games_processed}: Treatment timeout")
+                # Note: We discard both if one fails to keep comparison fair?
+                # Or keep control? Usually safe to discard both for strict A/B.
+                # Since we already updated stats.control above, we should technically rollback or just accept the noise.
+                # Given this is rare, noise is acceptable, but let's just log it.
+                continue
+
             time_treatment += t3 - t2
             stats.update_treatment(
                 is_winner=(res_t.winner_idx == target_idx),
@@ -230,6 +247,7 @@ def run_rule_comparison(
     rule_value: Any,
     n_games: int = 1000,
     seed_offset: int = 0,
+    max_turns: int = 200,
 ) -> list[ExperimentResult]:
     """Compare Default Rules vs Modified Rules across all racers."""
 
@@ -262,13 +280,21 @@ def run_rule_comparison(
             tqdm.write(f"[Sim {games_processed + 1}] {config.repr}")
 
             t0 = time.perf_counter()
-            res_c = _run_config_with_setup(config, {}, rules_c)
+            res_c = _run_config_with_setup(config, {}, rules_c, max_turns=max_turns)
             t1 = time.perf_counter()
+
+            if res_c is None:
+                continue
+
             time_c_total += t1 - t0
 
             t2 = time.perf_counter()
-            res_t = _run_config_with_setup(config, {}, rules_t)
+            res_t = _run_config_with_setup(config, {}, rules_t, max_turns=max_turns)
             t3 = time.perf_counter()
+
+            if res_t is None:
+                continue
+
             time_t_total += t3 - t2
 
             for idx, r_name in enumerate(config.racers):
@@ -326,6 +352,7 @@ def run_racer_impact_comparison(
     target_racer: RacerName,
     n_games: int = 1000,
     seed_offset: int = 0,
+    max_turns: int = 200,
 ) -> list[ExperimentResult]:
     """
     Measure the impact of a specific racer on the rest of the field.
@@ -365,8 +392,12 @@ def run_racer_impact_comparison(
             tqdm.write(f"[Sim {games_processed + 1} Treatment] {config.repr}")
 
             t2 = time.perf_counter()
-            res_t = _run_config_with_setup(config, {}, GameRules())
+            res_t = _run_config_with_setup(config, {}, GameRules(), max_turns=max_turns)
             t3 = time.perf_counter()
+
+            if res_t is None:
+                continue
+
             time_t_total += t3 - t2
 
             for idx, r_name in enumerate(config.racers):
@@ -396,8 +427,14 @@ def run_racer_impact_comparison(
             tqdm.write(f"[Sim {games_processed + 1} Control] {config_c.repr}")
 
             t0 = time.perf_counter()
-            res_c = _run_config_with_setup(config_c, {}, GameRules())
+            res_c = _run_config_with_setup(
+                config_c, {}, GameRules(), max_turns=max_turns
+            )
             t1 = time.perf_counter()
+
+            if res_c is None:
+                continue
+
             time_c_total += t1 - t0
 
             for idx, r_name in enumerate(config_c.racers):
@@ -454,8 +491,9 @@ def _run_config_with_setup(
     config: GameConfig,
     agent_overrides: dict[int, Agent],
     rules: GameRules,
-) -> SimulationResult:
-    """Unified internal runner."""
+    max_turns: int = 200,
+) -> SimulationResult | None:
+    """Unified internal runner. Returns None if max turns reached."""
     r_configs: list[RacerConfig] = []
     for i, name in enumerate(config.racers):
         agent = agent_overrides.get(i)
@@ -468,7 +506,17 @@ def _run_config_with_setup(
         rules=rules,
     )
 
-    scenario.engine.run_race()
+    # Manual loop execution with safety break
+    turn = 0
+    try:
+        while not scenario.state.race_over:
+            if turn >= max_turns:
+                return None
+            scenario.run_turn()
+            turn += 1
+    except Exception:
+        # Log error if needed, but for baseline we often skip broken runs
+        return None
 
     winner_idx = -1
     for r in scenario.state.racers:

@@ -100,17 +100,23 @@ class CompareRuleCommand:
         results.sort(key=lambda x: x.vp_pct_change, reverse=True)
 
         print(f"\n--- Impact of {key}={val} (Sorted by VP Impact) ---\n")
-        # Added Max VP column
-        header = f"{'Racer':<15} | {'N':<4} | {'VP Base':<7} | {'VP New':<7} | {'VP Delta':<8} | {'Max VP':<6}"
+        header = (
+            f"{'Racer':<15} | {'N':<4} | "
+            f"{'Win Base':<8} | {'Win New':<8} | {'Win Δ':<8} | {'Win Rel':<8} | "
+            f"{'VP Base':<7} | {'VP New':<7} | {'VP Δ':<6} | {'VP Rel':<7}"
+        )
         print(header)
         print("-" * len(header))
 
         for res in results:
             if res.games_played < 20:
                 continue
-            max_v = max(res.max_vp_control, res.max_vp_treatment)
+
+            # Updated row formatting to match the new header
             print(
-                f"{res.racer:<15} | {res.games_played:<4} | {res.vp_control:<7.1f} | {res.vp_treatment:<7.1f} | {res.vp_delta:<+8.1f} | {max_v:<6}",
+                f"{res.racer:<15} | {res.games_played:<4} | "
+                f"{res.winrate_control:<8.1%} | {res.winrate_treatment:<8.1%} | {res.winrate_delta:<+8.1%} | {res.winrate_pct_change:<+8.1%} | "
+                f"{res.vp_control:<7.1f} | {res.vp_treatment:<7.1f} | {res.vp_delta:<+6.1f} | {res.vp_pct_change:<+7.1%}"
             )
 
         _save_results(
