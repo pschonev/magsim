@@ -16,6 +16,7 @@ from magical_athlete_simulator.core.events import (
     MoveCmdEvent,
     PassingEvent,
     PerformMainRollEvent,
+    PreTurnStartEvent,
     RacerFinishedEvent,
     ResolveMainMoveEvent,
     RollModificationWindowEvent,
@@ -25,6 +26,7 @@ from magical_athlete_simulator.core.events import (
     SimultaneousWarpCmdEvent,
     TripCmdEvent,
     TripRecoveryEvent,
+    TurnEndEvent,
     TurnStartEvent,
     WarpCmdEvent,
 )
@@ -34,7 +36,6 @@ from magical_athlete_simulator.core.mixins import (
 )
 from magical_athlete_simulator.core.registry import RACER_ABILITIES
 from magical_athlete_simulator.core.state import RollState
-from magical_athlete_simulator.core.types import RacerName, RacerStat
 from magical_athlete_simulator.engine.logging import ContextFilter
 from magical_athlete_simulator.engine.loop_detection import LoopDetector
 from magical_athlete_simulator.engine.movement import (
@@ -60,7 +61,12 @@ if TYPE_CHECKING:
         LogContext,
         RacerState,
     )
-    from magical_athlete_simulator.core.types import AbilityName, ErrorCode, Source
+    from magical_athlete_simulator.core.types import (
+        AbilityName,
+        ErrorCode,
+        RacerStat,
+        Source,
+    )
 
 AbilityCallback = Callable[[GameEvent, int, "GameEngine"], None]
 
@@ -141,6 +147,14 @@ class GameEngine:
         self.log_context.start_turn_log(f"{racer.idx}•{racer.name}")
         self.log_info(f"=== START TURN: {racer.repr} ===")
 
+        # --- Pre-Turn Recording (for Heckler) ---
+        self.push_event(
+            PreTurnStartEvent(
+                responsible_racer_idx=None,
+                source="System",
+            ),
+        )
+
         if racer.tripped:
             self.log_info(f"{racer.repr} recovers from Trip.")
             racer.tripped = False
@@ -178,7 +192,24 @@ class GameEngine:
                 ),
             )
 
-        while self.state.queue and not self.state.race_over:
+        turn_end_triggered = False
+        while not self.state.race_over:
+            if not self.state.queue:
+                # If done with normal events, inject TurnEndEvent ONCE
+                if not turn_end_triggered:
+                    self.push_event(
+                        TurnEndEvent(
+                            responsible_racer_idx=None,
+                            source="System",
+                        ),
+                    )
+                    turn_end_triggered = True
+                    continue  # Restart loop to process TurnEndEvent
+
+                # If already triggered and still empty, we are truly done
+                break
+            # -------------------------------
+
             # Prepare hashes for checks
             current_board_hash = self._calculate_board_hash()
             current_system_hash = self.state.get_state_hash()
@@ -381,12 +412,14 @@ class GameEngine:
     def _handle_event(self, event: GameEvent):
         match event:
             case (
-                TurnStartEvent()
+                AbilityTriggeredEvent()
+                | PreTurnStartEvent()
+                | TurnStartEvent()
+                | TurnEndEvent()
                 | PassingEvent()
-                | AbilityTriggeredEvent()
                 | RollModificationWindowEvent()
-                | RacerFinishedEvent()
                 | RollResultEvent()
+                | RacerFinishedEvent()
             ):
                 self.publish_to_subscribers(event)
             case TripCmdEvent():

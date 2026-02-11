@@ -19,7 +19,7 @@ RacerName = Literal[
     "Genius",
     "Gunk",
     "Hare",
-    #    "Heckler",
+    "Heckler",
     "HugeBaby",
     "Hypnotist",
     "Inchworm",

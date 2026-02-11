@@ -58,6 +58,27 @@ class RacerFinishedEvent(GameEvent, HasTargetRacer):
     finishing_position: int  # 1st, 2nd, etc.
 
 
+@dataclass(frozen=True)
+class PreTurnStartEvent(GameEvent):
+    """
+    Fired immediately before the turn officially begins.
+    Strictly for 'Observer' abilities (like Heckler) to record state.
+    Abilities triggering on this SHOULD NOT modify the board state.
+    """
+
+    phase: Phase = Phase.SYSTEM
+
+
+@dataclass(frozen=True)
+class TurnEndEvent(GameEvent):
+    """
+    Fired after the queue is empty, signaling the conclusion of a racer's turn.
+    Used for cleanup or 'End of Turn' abilities.
+    """
+
+    phase: Phase = Phase.SYSTEM
+
+
 @dataclass(frozen=True, kw_only=True)
 class TurnStartEvent(GameEvent, HasTargetRacer):
     phase: Phase = Phase.SYSTEM
