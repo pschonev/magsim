@@ -94,7 +94,7 @@ def mark_finished(
         )
 
     # Strip abilities
-    engine.update_racer_abilities(racer.idx, set())
+    engine.clear_all_abilities(racer.idx)
 
     # Auto-check for race end
     check_race_over_condition(engine)
@@ -119,7 +119,7 @@ def check_race_over_condition(engine: GameEngine) -> None:
         survivor = active_racers[0]
         next_rank = count + 1
         engine.log_info(
-            f"Last survivor {survivor.repr} auto-finishes at Rank {next_rank}"
+            f"Last survivor {survivor.repr} auto-finishes at Rank {next_rank}",
         )
         mark_finished(engine, survivor, rank=next_rank)
         return

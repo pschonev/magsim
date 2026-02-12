@@ -20,6 +20,8 @@ from magical_athlete_simulator.core.events import (
     GameEvent,
     PostMoveEvent,
     PostWarpEvent,
+    RacerEliminatedEvent,
+    RacerFinishedEvent,
     TurnStartEvent,
 )
 from magical_athlete_simulator.core.state import RacerState
@@ -36,6 +38,8 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
         TurnStartEvent,
         PostMoveEvent,
         PostWarpEvent,
+        RacerFinishedEvent,
+        RacerEliminatedEvent,
     )
 
     current_copied_racer: RacerState | Literal["start_of_game"] | None = "start_of_game"
@@ -43,13 +47,14 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
     @property
     def _current_copied_racer_repr(self) -> str:
         if not isinstance(self.current_copied_racer, RacerState):
-            raise TypeError("Unexpected type for self.current_copied_racer")
+            msg = f"Unexpected type for self.current_copied_racer {type(self.current_copied_racer)}"
+            raise TypeError(msg)
 
         # first check if the copied racer has a copy ability
         try:
             deep_copying_ability = next(
                 a
-                for a in self.current_copied_racer.active_abilities.values()
+                for a in self.current_copied_racer.active_abilities
                 if isinstance(a, CopyAbilityProtocol)
             )
         except StopIteration:
@@ -66,7 +71,16 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, (TurnStartEvent, PostWarpEvent, PostMoveEvent)):
+        if not isinstance(
+            event,
+            (
+                TurnStartEvent,
+                PostWarpEvent,
+                PostMoveEvent,
+                RacerFinishedEvent,
+                RacerEliminatedEvent,
+            ),
+        ):
             return "skip_trigger"
 
         # Only for logging at start of own turn
@@ -77,7 +91,7 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
                 )
             elif self.current_copied_racer == "start_of_game":
                 pass
-            else:
+            elif self.current_copied_racer.active:
                 engine.log_info(
                     f"{owner.repr} currently copies the behaviour of {self._current_copied_racer_repr}.",
                 )
@@ -96,7 +110,7 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
                 # We are already in the correct state. Do nothing.
                 return "skip_trigger"
 
-            engine.update_racer_abilities(owner.idx, new_abilities={self.name})
+            engine.replace_core_abilities(owner.idx, [self])
             engine.log_info(
                 f"{owner.repr} is in the sole lead and loses {self._current_copied_racer_repr} ability.",
             )
@@ -139,9 +153,13 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
         )
 
         # 4. Perform the Update
-        new_abilities = set(target.abilities)
-        new_abilities.add(self.name)
-        engine.update_racer_abilities(owner.idx, new_abilities)
+        # Get fresh instances for the target
+        new_core = engine.instantiate_racer_abilities(target.name)
+        # Add Self (Copycat ability)
+        new_core.append(self)
+
+        # Update
+        engine.replace_core_abilities(owner.idx, new_core)
 
         return AbilityTriggeredEvent(
             responsible_racer_idx=owner.idx,

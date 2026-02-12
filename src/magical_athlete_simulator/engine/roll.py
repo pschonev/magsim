@@ -77,7 +77,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
     # Apply ALL modifiers attached to this racer
     roll_event_triggered_events: list[AbilityTriggeredEvent] = []
 
-    # NEW: Capture Breakdown
+    # Capture Breakdown
     modifier_breakdown: list[RollData] = []
 
     for mod in engine.get_racer(event.target_racer_idx).modifiers:

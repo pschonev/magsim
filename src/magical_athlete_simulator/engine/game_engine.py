@@ -17,6 +17,7 @@ from magical_athlete_simulator.core.events import (
     PassingEvent,
     PerformMainRollEvent,
     PreTurnStartEvent,
+    RacerEliminatedEvent,
     RacerFinishedEvent,
     ResolveMainMoveEvent,
     RollModificationWindowEvent,
@@ -31,10 +32,13 @@ from magical_athlete_simulator.core.events import (
     WarpCmdEvent,
 )
 from magical_athlete_simulator.core.mixins import (
+    ExternalAbilityMixin,
     LifecycleManagedMixin,
     SetupPhaseMixin,
 )
-from magical_athlete_simulator.core.registry import RACER_ABILITIES
+from magical_athlete_simulator.core.registry import (
+    RACER_ABILITIES,
+)
 from magical_athlete_simulator.core.state import RollState
 from magical_athlete_simulator.engine.logging import ContextFilter
 from magical_athlete_simulator.engine.loop_detection import LoopDetector
@@ -55,6 +59,7 @@ from magical_athlete_simulator.racers import get_ability_classes, get_all_racer_
 if TYPE_CHECKING:
     import random
 
+    from magical_athlete_simulator.core.abilities import Ability
     from magical_athlete_simulator.core.agent import Agent
     from magical_athlete_simulator.core.state import (
         GameState,
@@ -62,8 +67,8 @@ if TYPE_CHECKING:
         RacerState,
     )
     from magical_athlete_simulator.core.types import (
-        AbilityName,
         ErrorCode,
+        RacerName,
         RacerStat,
         Source,
     )
@@ -104,25 +109,36 @@ class GameEngine:
             self._logger.addFilter(ContextFilter(self))
 
         for racer in self.state.racers:
-            initial = RACER_ABILITIES.get(racer.name, set())
-            self.update_racer_abilities(racer.idx, initial)
+            # 1. Initial Identity (e.g. "Egg", "Copycat")
+            initial_core = self.instantiate_racer_abilities(racer.name)
+            self.replace_core_abilities(racer.idx, initial_core)
 
             _ = self.agents.setdefault(racer.idx, SmartAgent())
 
-            processed_abilities: set[AbilityName] = set()
+            # 2. Dynamic Setup Phase Handling
+            # Use a set of OBJECT IDs to track processed instances (since instances are mutable/unhashable)
+            processed_ids: set[int] = set()
 
             while True:
-                new_keys = set(racer.active_abilities.keys()) - processed_abilities
+                # Find abilities we haven't processed yet
+                # We iterate the current live list from the racer state
+                new_abilities = [
+                    ab for ab in racer.active_abilities if id(ab) not in processed_ids
+                ]
 
-                if not new_keys:
+                if not new_abilities:
                     break
 
-                for key in new_keys:
-                    ability = racer.active_abilities[key]
-                    processed_abilities.add(ability.name)
+                for ability in new_abilities:
+                    processed_ids.add(id(ability))
 
+                    # If this ability has setup logic (e.g. Egg picking a card), run it
                     if isinstance(ability, SetupPhaseMixin):
                         ability.on_setup(self, racer, self.agents[racer.idx])
+
+                        # Crucially: on_setup might call replace_core_abilities,
+                        # adding NEW abilities to racer.active_abilities.
+                        # The 'while True' loop will catch them on the next pass.
 
     # --- Main Loop ---
     def run_race(self):
@@ -255,14 +271,13 @@ class GameEngine:
             self._handle_event(sched.event)
 
     def _calculate_board_hash(self) -> int:
-        """Generates a hash of the physical board state."""
         racer_states = tuple(
             (
                 r.raw_position,
                 r.active,
                 r.tripped,
                 r.main_move_consumed,
-                frozenset(r.active_abilities.keys()),
+                tuple(sorted(a.name for a in r.active_abilities)),
             )
             for r in self.state.racers
         )
@@ -353,7 +368,7 @@ class GameEngine:
     def _rebuild_subscribers(self):
         self.subscribers.clear()
         for racer in self.state.racers:
-            for ability in racer.active_abilities.values():
+            for ability in racer.active_abilities:
                 ability.register(self, racer.idx)
 
     def subscribe(
@@ -366,37 +381,66 @@ class GameEngine:
             self.subscribers[event_type] = []
         self.subscribers[event_type].append(Subscriber(callback, owner_idx))
 
-    def update_racer_abilities(self, racer_idx: int, new_abilities: set[AbilityName]):
+    def _update_abilities(self, racer_idx: int, desired_list: list[Ability]) -> None:
+        """
+        Low-level reconciler. Makes racer.active_abilities (list[Ability]) match desired_list.
+        Handles Lifecycle hooks and Subscription updates.
+        """
         racer = self.get_racer(racer_idx)
-        current_instances = racer.active_abilities
-        old_names = set(current_instances.keys())
+        current_list = (
+            racer.active_abilities.copy()
+        )  # Make a copy to avoid stale references
 
-        removed = old_names - new_abilities
-        added = new_abilities - old_names
+        to_keep: list[Ability] = []
+        to_add = list(desired_list)
+        to_remove: list[Ability] = []
 
-        for name in removed:
-            instance = current_instances.pop(name)
-            if isinstance(instance, LifecycleManagedMixin):
-                instance.on_loss(self, racer_idx)
+        # Diff Logic
+        for current_ab in current_list:
+            found = False
+            for i, desired_ab in enumerate(to_add):
+                if current_ab.matches_identity(desired_ab):
+                    to_keep.append(
+                        current_ab
+                    )  # Keep existing instance (preserves state)
+                    to_add.pop(i)  # Consume this requirement
+                    found = True
+                    break
+            if not found:
+                to_remove.append(current_ab)
 
+        # CRITICAL: Commit the new state BEFORE calling lifecycle hooks
+        # This ensures nested _update_abilities calls see the correct state
+        final_list = to_keep + to_add
+        racer.active_abilities = final_list
+
+        # 1. Process Removal (AFTER committing state)
+        for ab in to_remove:
+            if isinstance(ab, LifecycleManagedMixin):
+                ab.on_loss(self, racer_idx)
+
+            # Unsubscribe Logic
             for event_type in self.subscribers:
                 self.subscribers[event_type] = [
                     sub
                     for sub in self.subscribers[event_type]
                     if not (
                         sub.owner_idx == racer_idx
-                        and getattr(sub.callback, "__self__", None) == instance
+                        and getattr(sub.callback, "__self__", None) == ab
                     )
                 ]
 
-        for name in added:
-            ability_cls = get_ability_classes().get(name)
-            if ability_cls:
-                instance = ability_cls(name=name)
-                instance.register(self, racer_idx)
-                current_instances[name] = instance
-                if isinstance(instance, LifecycleManagedMixin):
-                    instance.on_gain(self, racer_idx)
+        # 2. Process Addition (AFTER committing state)
+        for ab in to_add:
+            ab.register(self, racer_idx)
+            if isinstance(ab, LifecycleManagedMixin):
+                ab.on_gain(self, racer_idx)
+                # Note: on_gain may call grant_ability, which calls _update_abilities again
+                # But that's fine because we already committed the state above
+
+        # 3. Subscriber Safety Net
+        if to_remove or to_add:
+            self._rebuild_subscribers()
 
     def publish_to_subscribers(self, event: GameEvent):
         if type(event) not in self.subscribers:
@@ -420,6 +464,7 @@ class GameEngine:
                 | RollModificationWindowEvent()
                 | RollResultEvent()
                 | RacerFinishedEvent()
+                | RacerEliminatedEvent()
             ):
                 self.publish_to_subscribers(event)
             case TripCmdEvent():
@@ -507,6 +552,67 @@ class GameEngine:
             for _, stat in get_all_racer_stats(self.log_error).items()
             if stat.racer_name in drawn_racers
         )
+
+    # -- Abilities --
+
+    def instantiate_racer_abilities(self, racer_name: RacerName) -> list[Ability]:
+        """
+        Factory that creates fresh instances of a racer's default abilities.
+        """
+
+        ability_names = RACER_ABILITIES.get(racer_name, set())
+        instances: list[Ability] = []
+        classes = get_ability_classes()
+
+        for name in ability_names:
+            cls = classes.get(name)
+            if cls:
+                instances.append(cls(name=name))
+
+        return instances
+
+    def replace_core_abilities(
+        self,
+        racer_idx: int,
+        new_core_instances: list[Ability],
+    ) -> None:
+        """
+        Updates the racer's Intrinsic (Identity) abilities.
+        Preserves any ability that inherits from ExternalAbilityMixin.
+        """
+        racer = self.get_racer(racer_idx)
+
+        # 1. Keep the buffs (The ones that opt-in to being External)
+        external_abilities = [
+            ab for ab in racer.active_abilities if isinstance(ab, ExternalAbilityMixin)
+        ]
+
+        # 2. Combine with new identity
+        final_list = external_abilities + new_core_instances
+
+        # 3. Reconcile
+        self._update_abilities(racer_idx, final_list)
+
+    def grant_ability(self, target_idx: int, ability_instance: Ability) -> None:
+        """Adds an external ability instance."""
+        racer = self.get_racer(target_idx)
+        new_list = [*racer.active_abilities, ability_instance]
+        self._update_abilities(target_idx, new_list)
+
+    def revoke_ability(self, target_idx: int, ability_instance: Ability) -> None:
+        """Removes a specific external ability instance."""
+        racer = self.get_racer(target_idx)
+        # Filter out THIS specific instance using matches_identity
+        new_list = [
+            ab
+            for ab in racer.active_abilities
+            if not ab.matches_identity(ability_instance)
+        ]
+        self._update_abilities(target_idx, new_list)
+
+    def clear_all_abilities(self, racer_idx: int) -> None:
+        """Removes ALL abilities."""
+        self._update_abilities(racer_idx, [])
 
     # -- Logging --
     def _log(self, level: int, msg: str, *args: Any, **kwargs: Any) -> None:

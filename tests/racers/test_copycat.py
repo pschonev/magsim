@@ -1,6 +1,6 @@
 from typing import cast
-from magical_athlete_simulator.racers.mastermind import AbilityMastermindPredict
 from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magical_athlete_simulator.racers.copycat import AbilityCopyLead
 
 
 def test_copycat_basic_ability_gain(scenario: type[GameScenario]):
@@ -91,23 +91,38 @@ def test_copycat_ability_loss_and_modifier_cleanup(scenario: type[GameScenario])
 def test_copycat_copies_nothing_when_leading(scenario: type[GameScenario]):
     """
     Scenario: Copycat is in the lead.
-    Verify: It does not copy anyone and keeps its existing abilities.
+    Verify: It reverts to base Copycat ability (losing previous copy).
     """
     game = scenario(
         [
             RacerConfig(0, "Copycat", start_pos=10),
             RacerConfig(1, "Centaur", start_pos=5),
+            RacerConfig(2, "Gunk", start_pos=11),
         ],
         dice_rolls=[4],
     )
-    # Manually give Copycat an ability to start with
-    game.engine.update_racer_abilities(0, {"GunkSlime"})
-
-    game.run_turn()  # Copycat's turn
-
-    # Verify abilities have not changed to Centaur's
+    
+    initial_copycat_identity = game.engine.instantiate_racer_abilities("Copycat") # [CopycatAbility]
+    previous_copy = game.engine.instantiate_racer_abilities("Gunk") # [GunkSlime]
+    
+    # Combine them (Copycat + Gunk)
+    game.engine.replace_core_abilities(0, initial_copycat_identity + previous_copy)
+    next(a for a in game.get_racer(0).active_abilities if isinstance(a, AbilityCopyLead)).current_copied_racer = game.engine.get_racer(2)
+    # Verify initial state
     assert "GunkSlime" in game.get_racer(0).abilities
-    assert "CentaurTrample" not in game.get_racer(0).abilities
+
+    # 2. Run Turn
+    game.run_turn()  # Copycat's turn. He is leading.
+
+    # 3. Verify Logic
+    # Copycat logic says: "If leading, lose copied abilities."
+    # So GunkSlime should be GONE. Only CopycatAbility remains.
+    
+    current_abilities = game.get_racer(0).abilities
+    assert "CopyLead" in current_abilities # Base ability
+    assert "GunkSlime" not in current_abilities   # Lost because leading
+    assert "CentaurTrample" not in current_abilities # Not copied
+
 
 
 def test_copycat_copies_party_pull_and_triggers_scoocher(scenario: type[GameScenario]):

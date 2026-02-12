@@ -1,3 +1,4 @@
+from conftest import scenario
 from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 
@@ -56,7 +57,7 @@ def test_inchworm_ignores_own_one_roll(scenario: type[GameScenario]):
     assert inchworm.position == 0
 
 
-def test_inchworm_and_skipper_on_one_skip_to_skipper():
+def test_inchworm_and_skipper_on_one_skip_to_skipper(scenario: type[GameScenario]):
     """
     Scenario (turn order by idx):
       0: Centaur (roller)
@@ -75,7 +76,7 @@ def test_inchworm_and_skipper_on_one_skip_to_skipper():
     Expect after Turn 1:
       - Turn order resumes normally to idx 0 (Centaur).
     """
-    game = GameScenario(
+    game = scenario(
         racers_config=[
             RacerConfig(0, "Centaur"),
             RacerConfig(1, "Inchworm"),

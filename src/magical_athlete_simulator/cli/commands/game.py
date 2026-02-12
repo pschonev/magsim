@@ -48,7 +48,7 @@ def run_console_game(config: GameConfig, max_turns: int = 200) -> None:
     logger.log(logging.INFO, "-" * 20)
 
     # 1. Setup Rules
-    rules = GameRules(timing_mode="DFS")
+    rules = GameRules()
     for k, v in config.rules.items():
         if hasattr(rules, k):
             setattr(rules, k, v)

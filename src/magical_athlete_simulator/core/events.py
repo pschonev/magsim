@@ -53,9 +53,19 @@ class HasTargetRacer:
     target_racer_idx: int
 
 
+# -- Finish and Elimination --
+
+
 @dataclass(frozen=True)
 class RacerFinishedEvent(GameEvent, HasTargetRacer):
     finishing_position: int  # 1st, 2nd, etc.
+
+
+@dataclass(frozen=True)
+class RacerEliminatedEvent(GameEvent, HasTargetRacer): ...
+
+
+# -- Turns --
 
 
 @dataclass(frozen=True)
@@ -69,6 +79,11 @@ class PreTurnStartEvent(GameEvent):
     phase: Phase = Phase.SYSTEM
 
 
+@dataclass(frozen=True, kw_only=True)
+class TurnStartEvent(GameEvent, HasTargetRacer):
+    phase: Phase = Phase.SYSTEM
+
+
 @dataclass(frozen=True)
 class TurnEndEvent(GameEvent):
     """
@@ -79,9 +94,7 @@ class TurnEndEvent(GameEvent):
     phase: Phase = Phase.SYSTEM
 
 
-@dataclass(frozen=True, kw_only=True)
-class TurnStartEvent(GameEvent, HasTargetRacer):
-    phase: Phase = Phase.SYSTEM
+# -- Roll and Modify --
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -102,17 +115,37 @@ class RollModificationWindowEvent(GameEvent, HasTargetRacer):
 
 
 @dataclass(frozen=True, kw_only=True)
-class ExecuteMainMoveEvent(GameEvent, HasTargetRacer):
+class RollResultEvent(GameEvent, HasTargetRacer):
     """
-    The physical act of moving the racer based on the roll result.
-    Scheduled AFTER RollResultEvent to allow abilities (Inchworm) to cancel the move.
+    Fired exactly once per valid main roll, containing the final locked-in values.
     """
 
-    roll_serial: int
-    phase: Phase = Phase.MOVE_EXEC
-    roll_event_triggered_events: list[AbilityTriggeredEvent] = field(
-        default_factory=list,
-    )
+    dice_value: int | None
+    base_value: int
+    final_value: int
+    phase: Phase = Phase.MAIN_ACT
+    modifier_breakdown: list[RollData] = field(default_factory=list)
+
+
+@dataclass(frozen=True, kw_only=True)
+class RollData:
+    rolling_racer_idx: int
+    delta: int
+
+
+# -- Main Move Modification --
+
+
+@dataclass(frozen=True)
+class MoveDistanceQuery:
+    racer_idx: int
+    base_amount: int
+    modifiers: list[int] = field(default_factory=list)
+    modifier_sources: list[tuple[str, int]] = field(default_factory=list)
+
+    @property
+    def final_value(self) -> int:
+        return max(0, self.base_amount + sum(self.modifiers))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -132,32 +165,7 @@ class BaseValueModificationEvent(GameEvent):
         return self.new_value - self.old_value
 
 
-@dataclass(frozen=True, kw_only=True)
-class RollData:
-    rolling_racer_idx: int
-    delta: int
-
-
-@dataclass(frozen=True, kw_only=True)
-class ResolveMainMoveEvent(GameEvent, HasTargetRacer):
-    roll_serial: int
-    phase: Phase = Phase.MAIN_ACT
-    roll_event_triggered_events: list[AbilityTriggeredEvent]
-    # NEW: Attribution for +/- modifiers (e.g. Hare +2)
-    modifier_breakdown: list[RollData] = field(default_factory=list)
-
-
-@dataclass(frozen=True, kw_only=True)
-class RollResultEvent(GameEvent, HasTargetRacer):
-    """
-    Fired exactly once per valid main roll, containing the final locked-in values.
-    """
-
-    dice_value: int | None
-    base_value: int
-    final_value: int
-    phase: Phase = Phase.MAIN_ACT
-    modifier_breakdown: list[RollData] = field(default_factory=list)
+# -- Main Move --
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -167,19 +175,40 @@ class MainMoveSkippedEvent(GameEvent, HasTargetRacer):
 
 
 @dataclass(frozen=True, kw_only=True)
-class PassingEvent(GameEvent):
-    responsible_racer_idx: Annotated[int, "The ID of the racer that is passing"]
-    target_racer_idx: Annotated[int, "The ID of the racer that is being passed."]
-    tile_idx: int
-    phase: Phase
+class ExecuteMainMoveEvent(GameEvent, HasTargetRacer):
+    """
+    The physical act of moving the racer based on the roll result.
+    Scheduled AFTER RollResultEvent to allow abilities (Inchworm) to cancel the move.
+    """
 
-    @property
-    def passing_racer_idx(self) -> int:
-        return self.responsible_racer_idx
+    roll_serial: int
+    phase: Phase = Phase.MOVE_EXEC
+    roll_event_triggered_events: list[AbilityTriggeredEvent] = field(
+        default_factory=list,
+    )
 
-    @property
-    def passed_racer_idx(self) -> int:
-        return self.target_racer_idx
+
+@dataclass(frozen=True, kw_only=True)
+class ResolveMainMoveEvent(GameEvent, HasTargetRacer):
+    roll_serial: int
+    phase: Phase = Phase.MAIN_ACT
+    roll_event_triggered_events: list[AbilityTriggeredEvent]
+    modifier_breakdown: list[RollData] = field(default_factory=list)
+
+
+# -- Movement --
+
+
+@dataclass(frozen=True)
+class PreMoveEvent(GameEvent, HasTargetRacer):
+    start_tile: int
+    distance: int
+
+
+@dataclass(frozen=True)
+class PreWarpEvent(GameEvent, HasTargetRacer):
+    start_tile: int
+    target_tile: int
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -224,6 +253,37 @@ class SimultaneousWarpCmdEvent(GameEvent, EmitsAbilityTriggeredEvent):
 
 
 @dataclass(frozen=True)
+class PostMoveEvent(GameEvent, HasTargetRacer):
+    start_tile: int
+    end_tile: int
+
+
+@dataclass(frozen=True)
+class PostWarpEvent(GameEvent, HasTargetRacer):
+    start_tile: int
+    end_tile: int
+
+
+# -- Passing and Tripping --
+
+
+@dataclass(frozen=True, kw_only=True)
+class PassingEvent(GameEvent):
+    responsible_racer_idx: Annotated[int, "The ID of the racer that is passing"]
+    target_racer_idx: Annotated[int, "The ID of the racer that is being passed."]
+    tile_idx: int
+    phase: Phase
+
+    @property
+    def passing_racer_idx(self) -> int:
+        return self.responsible_racer_idx
+
+    @property
+    def passed_racer_idx(self) -> int:
+        return self.target_racer_idx
+
+
+@dataclass(frozen=True)
 class TripCmdEvent(GameEvent, EmitsAbilityTriggeredEvent, HasTargetRacer): ...
 
 
@@ -237,28 +297,7 @@ class TripRecoveryEvent(GameEvent, HasTargetRacer):
     phase: Phase = Phase.PRE_MAIN
 
 
-@dataclass(frozen=True)
-class PreMoveEvent(GameEvent, HasTargetRacer):
-    start_tile: int
-    distance: int
-
-
-@dataclass(frozen=True)
-class PreWarpEvent(GameEvent, HasTargetRacer):
-    start_tile: int
-    target_tile: int
-
-
-@dataclass(frozen=True)
-class PostMoveEvent(GameEvent, HasTargetRacer):
-    start_tile: int
-    end_tile: int
-
-
-@dataclass(frozen=True)
-class PostWarpEvent(GameEvent, HasTargetRacer):
-    start_tile: int
-    end_tile: int
+# -- Ability Trigger --
 
 
 @dataclass(frozen=True)
@@ -289,16 +328,9 @@ class AbilityTriggeredEvent(GameEvent):
         )
 
 
-@dataclass(frozen=True)
-class MoveDistanceQuery:
-    racer_idx: int
-    base_amount: int
-    modifiers: list[int] = field(default_factory=list)
-    modifier_sources: list[tuple[str, int]] = field(default_factory=list)
+AbilityTriggeredEventOrSkipped = Literal["skip_trigger"] | AbilityTriggeredEvent
 
-    @property
-    def final_value(self) -> int:
-        return max(0, self.base_amount + sum(self.modifiers))
+# -- Event Queue --
 
 
 @dataclass(order=False)
@@ -330,6 +362,3 @@ class ScheduledEvent:
     def __lt__(self, other: Self) -> bool:
         # Extremely fast comparison of pre-calculated tuples
         return self.sort_key < other.sort_key
-
-
-AbilityTriggeredEventOrSkipped = Literal["skip_trigger"] | AbilityTriggeredEvent

@@ -131,7 +131,7 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
             )
 
         # 2. REGISTER NEW TILE
-        if event.end_tile != 0 and self.name in owner.active_abilities:
+        if event.end_tile != 0 and self in owner.active_abilities:
             engine.state.board.register_modifier(
                 event.end_tile,
                 modifier_template,
