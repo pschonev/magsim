@@ -12,6 +12,7 @@ def test_lackey_boosts_on_opponent_six(scenario: type[GameScenario]):
         [
             RacerConfig(0, "Centaur", start_pos=29),
             RacerConfig(1, "Lackey", start_pos=29),
+            RacerConfig(2, "Banana", start_pos=13),
         ],
         dice_rolls=[6],  # Lackey rolls 2, Centaur rolls 6
     )
@@ -21,10 +22,10 @@ def test_lackey_boosts_on_opponent_six(scenario: type[GameScenario]):
     centaur = game.get_racer(0)
     lackey = game.get_racer(1)
     
-    assert lackey.position == 31, f"Lackey should be at 4, got {lackey.position}"
+    assert lackey.position == 31, f"Lackey should be at 31, got {lackey.position}"
     assert lackey.finish_position == 1
     
-    assert centaur.position == 35, f"Centaur should be at 16, got {centaur.position}"
+    assert centaur.position == 35, f"Centaur should be at 35, got {centaur.position}"
     assert centaur.finish_position == 2
 
 

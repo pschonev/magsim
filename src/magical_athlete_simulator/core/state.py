@@ -55,7 +55,7 @@ class RacerState:
 
     # abilities and modifiers
     modifiers: list[RacerModifier] = field(default_factory=list)
-    active_abilities: dict[AbilityName, Ability] = field(default_factory=dict)
+    active_abilities: list[Ability] = field(default_factory=list)
 
     @property
     def position(self) -> int:
@@ -75,7 +75,7 @@ class RacerState:
     @property
     def abilities(self) -> set[AbilityName]:
         """Derive from active instances."""
-        return set(self.active_abilities.keys())
+        return {a.name for a in self.active_abilities}
 
     @property
     def finished(self) -> bool:

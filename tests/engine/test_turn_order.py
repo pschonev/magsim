@@ -88,7 +88,7 @@ def test_genius_predicts_1_but_skipper_steals_next_turn(scenario: type[GameScena
 
     # Force Genius's prediction to 1 for this test (so we can hit the interaction deterministically).
     # Adjust the ability key/name here if your project uses a different AbilityName string.
-    genius_ability = cast(AbilityGenius, game.engine.state.racers[0].active_abilities["GeniusPrediction"])
+    genius_ability = cast(AbilityGenius, next(a for a in game.engine.state.racers[0].active_abilities if a.name=="GeniusPrediction"))
     genius_ability.prediction = 1
 
     # Turn 0: Genius rolls 1 -> Genius would "earn" extra turn, but Skipper steals it -> next is Skipper.

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, override
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.events import (
+    AbilityTriggeredEventOrSkipped,
     GameEvent,
     PostMoveEvent,
     PostWarpEvent,
@@ -30,7 +31,7 @@ class BabaYagaTrip(Ability):
         owner: RacerState,
         engine: GameEngine,
         agent: Agent,
-    ):
+    ) -> AbilityTriggeredEventOrSkipped:
         if not isinstance(event, (PostMoveEvent, PostWarpEvent)):
             return "skip_trigger"
 
@@ -40,9 +41,10 @@ class BabaYagaTrip(Ability):
                 tile_idx=owner.position,
                 except_racer_idx=owner.idx,
             )
-            engine.log_info(
-                f"{owner.repr} moved onto {owner.position} and trips everyone with {self.name}!",
-            )
+            if actual_victims := [v for v in victims if not v.tripped]:
+                engine.log_info(
+                    f"{owner.repr} moved onto {owner.position} and trips {', '.join([v.repr for v in actual_victims])} with {self.name}!",
+                )
             for victim in victims:
                 push_trip(
                     engine,
@@ -56,10 +58,10 @@ class BabaYagaTrip(Ability):
         # CASE 2: Someone else moved onto Baba Yaga
         else:
             mover = engine.get_racer(event.target_racer_idx)
-            engine.log_info(
-                f"{mover.repr} stepped onto {owner.repr} and trips due to {self.name}!",
-            )
             if mover.active and mover.position == owner.position:
+                engine.log_info(
+                    f"{mover.repr} stepped onto {owner.repr} and trips due to {self.name}!",
+                )
                 push_trip(
                     engine,
                     phase=event.phase,

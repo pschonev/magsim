@@ -47,16 +47,8 @@ class SandboxEngine:
         eng.subscribers.clear()
 
         for racer in eng.state.racers:
-            idx = racer.idx
-
-            # Use whatever is the source of truth in your refactor:
-            # - if you still store names: racer.abilities
-            # - if you store instances: set(racer.active_abilities.keys())
-            current_names = set(racer.abilities)
-
-            # Force a full teardown + rebuild
-            eng.update_racer_abilities(idx, set())
-            eng.update_racer_abilities(idx, current_names)
+            for ability in racer.active_abilities:
+                ability.register(eng, racer.idx)
 
     def run_turn_for(self, racer_idx: int) -> TurnOutcome:
         """Simulate exactly one turn for `racer_idx` inside this sandbox.

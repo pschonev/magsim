@@ -10,6 +10,8 @@ from magical_athlete_simulator.core.events import (
     GameEvent,
     PostMoveEvent,
     PostWarpEvent,
+    RacerEliminatedEvent,
+    RacerFinishedEvent,
 )
 from magical_athlete_simulator.engine.flow import mark_finished
 
@@ -49,11 +51,19 @@ class MouthDevour(Ability):
         victim = others_on_space[0]
         victim.eliminated = True
         # strip racer of all their abilities
-        engine.update_racer_abilities(victim.idx, set())
+        engine.clear_all_abilities(victim.idx)
         victim.raw_position = None
 
         engine.log_info(
             f"{owner.repr} ATE {victim.repr}!!!",
+        )
+        engine.push_event(
+            RacerEliminatedEvent(
+                target_racer_idx=victim.idx,
+                responsible_racer_idx=owner.idx,
+                source=self.name,
+                phase=event.phase,
+            ),
         )
 
         # Check for sudden game end (if only 1 racer left)

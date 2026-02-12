@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -102,3 +103,13 @@ class SetupPhaseMixin(ABC):
     @abstractmethod
     def on_setup(self, engine: GameEngine, owner: RacerState, agent: Agent) -> None:
         pass
+
+
+@dataclass
+class ExternalAbilityMixin:
+    """
+    Mixin for abilities granted by another racer (buffs/debuffs).
+    These are NOT part of a racer's identity and are preserved during identity swaps.
+    """
+
+    source_racer_idx: int

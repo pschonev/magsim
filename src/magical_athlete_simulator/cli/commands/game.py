@@ -1,3 +1,5 @@
+"""CLI command for running a single game."""
+
 from __future__ import annotations
 
 import logging
@@ -33,16 +35,20 @@ def _print_config(config: GameConfig) -> None:
         logger.log(logging.INFO, f"House Rules: {config.rules}")
 
 
-def run_console_game(config: GameConfig) -> None:
+def run_console_game(config: GameConfig, max_turns: int = 200) -> None:
     """
     Execute the game and print results to stdout.
+
+    Args:
+        config: The game configuration.
+        max_turns: Maximum number of turns allowed before abandoning the race.
     """
     # We use print here intentionally for the CLI user output, distinct from internal logging
     _print_config(config)
     logger.log(logging.INFO, "-" * 20)
 
     # 1. Setup Rules
-    rules = GameRules(timing_mode="DFS")
+    rules = GameRules()
     for k, v in config.rules.items():
         if hasattr(rules, k):
             setattr(rules, k, v)
@@ -59,8 +65,19 @@ def run_console_game(config: GameConfig) -> None:
         seed=config.seed,
     )
 
-    # 3. Run
-    scenario.engine.run_race()
+    # 3. Run with Safety Limit
+    turn = 0
+    try:
+        while not scenario.state.race_over:
+            if turn >= max_turns:
+                logger.error(f"Race abandoned: Exceeded {max_turns} turns.")
+                return
+
+            scenario.run_turn()
+            turn += 1
+    except Exception as e:
+        logger.error(f"Game Error: {e}")
+        raise
 
     logger.log(logging.INFO, "-" * 20)
     _print_config(config)
@@ -118,6 +135,14 @@ class GameCommand:
             help="House rules as key=value.",
         ),
     ] = None
+
+    max_turns: Annotated[
+        int,
+        cappa.Arg(
+            long="--max-turns",
+            help="Max turns before stopping (prevents infinite loops).",
+        ),
+    ] = 200
 
     def __call__(self):
         # Default State
@@ -178,12 +203,9 @@ class GameCommand:
             target_count = self.number
         elif self.encoding or self.config_file:
             # We loaded a specific config. Trust it entirely.
-            # If the config has 3 racers, we run 3. We do NOT autofill.
             target_count = len(final_racers)
         else:
-            # No config loaded, no number specified.
-            # This is the "lazy user" case
-            # Default to the standard game size.
+            # No config loaded, no number specified. Default to standard.
             target_count = DEFAULT_RACER_COUNT
 
         if len(final_racers) < target_count:
@@ -211,4 +233,4 @@ class GameCommand:
             rules=final_rules,
         )
 
-        run_console_game(config)
+        run_console_game(config, max_turns=self.max_turns)

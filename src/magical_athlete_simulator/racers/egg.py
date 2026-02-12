@@ -15,7 +15,6 @@ from magical_athlete_simulator.core.agent import (
 )
 from magical_athlete_simulator.core.events import TurnStartEvent
 from magical_athlete_simulator.core.mixins import SetupPhaseMixin
-from magical_athlete_simulator.core.registry import RACER_ABILITIES
 from magical_athlete_simulator.core.types import RacerName, RacerStat
 
 if TYPE_CHECKING:
@@ -85,13 +84,12 @@ class EggCopyAbility(Ability, SetupPhaseMixin, SelectionDecisionMixin[RacerStat]
         engine.log_info(f"{owner.repr} picked {picked_racer.racer_name}!")
         engine.state.remove_racers([picked_racer.racer_name])
 
-        picked_racer_abilities = RACER_ABILITIES[picked_racer.racer_name]
-        engine.update_racer_abilities(
-            racer_idx=owner.idx,
-            new_abilities=owner.abilities.union(
-                picked_racer_abilities,
-            ),
-        )
+        # Instantiate fresh abilities
+        new_core = engine.instantiate_racer_abilities(picked_racer.racer_name)
+        # Keep Egg ability
+        new_core.append(self)
+
+        engine.replace_core_abilities(owner.idx, new_core)
 
     @override
     def get_auto_selection_decision(

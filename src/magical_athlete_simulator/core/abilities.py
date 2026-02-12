@@ -7,6 +7,7 @@ from magical_athlete_simulator.core.events import (
     AbilityTriggeredEvent,
     AbilityTriggeredEventOrSkipped,
 )
+from magical_athlete_simulator.core.mixins import ExternalAbilityMixin
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
@@ -69,6 +70,25 @@ class Ability:
         _ = event, owner, engine, agent
         return "skip_trigger"
 
+    def matches_identity(self, other: Ability) -> bool:
+        """
+        Checks if two instances represent the same logical ability
+        for the purpose of engine updates.
+
+        Ignores mutable state (counters, flags).
+        Respects ExternalAbilityMixin source tracking.
+        """
+        # 1. Strict Class and Name Equality
+        if type(self) is not type(other) or self.name != other.name:
+            return False
+
+        # 2. External Ability Identity Check
+        if isinstance(self, ExternalAbilityMixin):
+            # We know 'other' is also ExternalAbilityMixin because types matched above
+            return self.source_racer_idx == getattr(other, "source_racer_idx", -999)
+
+        return True
+
 
 @runtime_checkable
 class CopyAbilityProtocol(Protocol):
@@ -89,7 +109,7 @@ def copied_racer_repr(
     copied_racers = ", ".join(
         [
             a.copied_racer
-            for a in copying_racer.active_abilities.values()
+            for a in copying_racer.active_abilities
             if a != copying_ability
             and isinstance(a, CopyAbilityProtocol)
             and a.copied_racer is not None
