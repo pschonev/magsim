@@ -5,7 +5,7 @@ Orchestration logic for recomputing metrics on historical data.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 from tqdm import tqdm
@@ -16,6 +16,9 @@ from magical_athlete_simulator.simulation.metrics import (
     compute_race_metrics,
     prepare_position_data,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,8 @@ def recompute_aggregates(data_dir: Path) -> None:
     p_races = data_dir / "races.parquet"
 
     if not (p_pos.exists() and p_res.exists() and p_races.exists()):
-        raise FileNotFoundError(f"Missing parquet files in {data_dir}")
+        msg = f"Missing parquet files in {data_dir}"
+        raise FileNotFoundError(msg)
 
     tqdm.write("⏳ Loading data...")
     try:
@@ -40,7 +44,8 @@ def recompute_aggregates(data_dir: Path) -> None:
         df_results = pl.read_parquet(p_res)
         df_races = pl.read_parquet(p_races)
     except Exception as e:
-        raise RuntimeError(f"Error reading parquet files: {e}") from e
+        msg = f"Error reading parquet files: {e}"
+        raise RuntimeError(msg) from e
 
     tqdm.write(f"   Positions: {df_pos_wide.height} rows")
     tqdm.write(f"   Results:   {df_results.height} rows")
@@ -60,7 +65,9 @@ def recompute_aggregates(data_dir: Path) -> None:
     df_races = df_races.drop(new_race_cols, strict=False)
 
     df_races_updated = df_races.join(
-        df_race_stats, on="config_hash", how="left"
+        df_race_stats,
+        on="config_hash",
+        how="left",
     ).fill_null(0.0)
 
     # 2. Update Racer Results
@@ -70,7 +77,9 @@ def recompute_aggregates(data_dir: Path) -> None:
     df_results = df_results.drop(new_result_cols, strict=False)
 
     df_results_updated = df_results.join(
-        df_racer_stats, on=["config_hash", "racer_id"], how="left"
+        df_racer_stats,
+        on=["config_hash", "racer_id"],
+        how="left",
     )
 
     if "midgame_relative_pos" in df_results_updated.columns:
@@ -91,7 +100,8 @@ def generate_racer_stats(data_dir: Path, output_file: Path | None = None) -> Non
     """
     p_res = data_dir / "racer_results.parquet"
     if not p_res.exists():
-        raise FileNotFoundError(f"Missing racer_results.parquet in {data_dir}")
+        msg = f"Missing racer_results.parquet in {data_dir}"
+        raise FileNotFoundError(msg)
 
     if output_file is None:
         output_file = data_dir / "racer_stats.json"

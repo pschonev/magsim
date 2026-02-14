@@ -29,7 +29,8 @@ class AggregateCommand:
         try:
             recompute_aggregates(self.folder)
         except Exception as e:
-            raise cappa.Exit(f"Aggregation failed: {e}", code=1)
+            msg = f"Aggregation failed: {e}"
+            raise cappa.Exit(msg, code=1) from e
 
 
 @cappa.command(name="stats", help="Generate racer_stats.json from database.")
@@ -49,7 +50,8 @@ class StatsCommand:
         try:
             generate_racer_stats(self.folder)
         except Exception as e:
-            raise cappa.Exit(f"Stats generation failed: {e}", code=1)
+            msg = f"Stats generation failed: {e}"
+            raise cappa.Exit(msg, code=1) from e
 
 
 @cappa.command(name="recompute", help="Data analysis tools.")

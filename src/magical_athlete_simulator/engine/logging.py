@@ -35,7 +35,7 @@ BOARD_MODIFIER_PATTERN = re.compile(
 )
 
 # Regex to capture the prefix (numbers/dots/separators) AND the name
-# Captures: "0.1:Banana" or "1•Banana" or "0:Banana"
+# Captures: "0.1:Banana" or "1•Banana" or "0:Banana"  # noqa: ERA001
 # Group 1 (prefix): "0.1:" or "1•"
 # Group 2 (name): "Banana"
 RACER_COMPOSITE_PATTERN = re.compile(

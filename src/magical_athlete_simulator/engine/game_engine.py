@@ -142,7 +142,7 @@ class GameEngine:
     def run_race(self):
         while self.state.race_active:
             self.run_turn()
-            self._advance_turn()
+            self.advance_turn()
 
     def run_turn(self):
         # 1. Reset detector for the new turn
@@ -281,7 +281,7 @@ class GameEngine:
         )
         return hash((self.state.current_racer_idx, racer_states))
 
-    def _advance_turn(self):
+    def advance_turn(self):
         if not self.state.race_active:
             return
 
@@ -399,7 +399,7 @@ class GameEngine:
             for i, desired_ab in enumerate(to_add):
                 if current_ab.matches_identity(desired_ab):
                     to_keep.append(
-                        current_ab
+                        current_ab,
                     )  # Keep existing instance (preserves state)
                     to_add.pop(i)  # Consume this requirement
                     found = True

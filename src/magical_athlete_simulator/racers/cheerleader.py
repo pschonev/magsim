@@ -99,7 +99,9 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
 
     @override
     def get_baseline_boolean_decision(
-        self, engine: GameEngine, ctx: DecisionContext[Self]
+        self,
+        engine: GameEngine,
+        ctx: DecisionContext[Self],
     ) -> bool:
         return True
 

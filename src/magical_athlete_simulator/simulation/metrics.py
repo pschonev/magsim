@@ -160,7 +160,7 @@ def calculate_aggregated_racer_stats(df_results: pl.DataFrame) -> pl.DataFrame:
                 pl.col("turns_taken").fill_null(0),
                 pl.col("recovery_turns").fill_null(0),
                 pl.col("skipped_main_moves").fill_null(0),
-            ]
+            ],
         )
         .with_columns(
             [
@@ -169,8 +169,8 @@ def calculate_aggregated_racer_stats(df_results: pl.DataFrame) -> pl.DataFrame:
                     pl.col("turns_taken")
                     - pl.col("recovery_turns")
                     - pl.col("skipped_main_moves")
-                ).alias("active_turns_count")
-            ]
+                ).alias("active_turns_count"),
+            ],
         )
         .with_columns(
             [
@@ -178,8 +178,8 @@ def calculate_aggregated_racer_stats(df_results: pl.DataFrame) -> pl.DataFrame:
                 (
                     (pl.col("sum_dice_rolled") + pl.col("pos_self_ability_movement"))
                     / pl.col("active_turns_count").replace(0, 1)  # Avoid div/0
-                ).alias("raw_speed_per_active_turn")
-            ]
+                ).alias("raw_speed_per_active_turn"),
+            ],
         )
     )
 
@@ -191,5 +191,5 @@ def calculate_aggregated_racer_stats(df_results: pl.DataFrame) -> pl.DataFrame:
             .round(3)
             .alias("winrate"),
             pl.col("final_vp").mean().round(3).alias("avg_vp"),
-        ]
+        ],
     )

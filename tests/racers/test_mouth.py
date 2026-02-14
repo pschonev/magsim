@@ -1,4 +1,3 @@
-import pytest
 from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 

@@ -43,14 +43,14 @@ class RacerStats:
     max_vp_control: int = 0
     max_vp_treatment: int = 0
 
-    def update_control(self, is_winner: bool, vp: int) -> None:
+    def update_control(self, *, is_winner: bool, vp: int) -> None:
         self.games_played_control += 1
         if is_winner:
             self.wins_control += 1
         self.total_vp_control += vp
         self.max_vp_control = max(self.max_vp_control, vp)
 
-    def update_treatment(self, is_winner: bool, vp: int) -> None:
+    def update_treatment(self, *, is_winner: bool, vp: int) -> None:
         self.games_played_treatment += 1
         if is_winner:
             self.wins_treatment += 1
@@ -428,7 +428,10 @@ def run_racer_impact_comparison(
 
             t0 = time.perf_counter()
             res_c = _run_config_with_setup(
-                config_c, {}, GameRules(), max_turns=max_turns
+                config_c,
+                {},
+                GameRules(),
+                max_turns=max_turns,
             )
             t1 = time.perf_counter()
 
@@ -514,7 +517,7 @@ def _run_config_with_setup(
                 return None
             scenario.run_turn()
             turn += 1
-    except Exception:
+    except Exception:  # noqa: BLE001
         # Log error if needed, but for baseline we often skip broken runs
         return None
 

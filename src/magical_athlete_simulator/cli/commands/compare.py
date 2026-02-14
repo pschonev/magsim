@@ -14,12 +14,16 @@ from magical_athlete_simulator.analysis.baseline import (
     run_racer_impact_comparison,
     run_rule_comparison,
 )
-from magical_athlete_simulator.core.types import RacerName
+from magical_athlete_simulator.core.types import RacerName  # noqa: TC001
 
 RESULTS_DIR = Path("results")
 AI_STATS_FILE = RESULTS_DIR / "ai_comparison_history.parquet"
 RULE_STATS_FILE = RESULTS_DIR / "rule_comparison_history.parquet"
 RACER_IMPACT_FILE = RESULTS_DIR / "racer_impact_history.parquet"
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler())
+logger.propagate = False
 
 
 @cappa.command(name="ai", help="Compare AI performance (Smart vs Baseline).")
@@ -33,7 +37,7 @@ class CompareAICommand:
     ] = None
 
     def __call__(self):
-        print(f"Running comparison for {self.racer} (N={self.number})...")
+        logger.info(f"Running comparison for {self.racer} (N={self.number})...")
         logging.getLogger("magical_athlete").setLevel(logging.CRITICAL)
 
         result = run_ai_comparison(self.racer, self.number)
@@ -46,10 +50,10 @@ class CompareAICommand:
             f"{'Max VP (Debug)':<20} | {result.max_vp_control:<15} | {result.max_vp_treatment:<15} | {'-':<10} | {'-':<10}",
             f"{'Speed (gms/s)':<20} | {result.speed_control:<15.1f} | {result.speed_treatment:<15.1f} | {result.speed_delta:<+10.1f} | {result.speed_pct_change:<+10.1%}",
         ]
-        print("\n" + "\n".join([sep, header, sep] + rows + [sep]) + "\n")
+        logger.info("\n" + "\n".join([sep, header, sep, *rows, sep]) + "\n")  # noqa: G003
 
         if self.output:
-            with open(self.output, "w") as f:
+            with Path(self.output).open("w") as f:
                 f.write(f"# AI Comparison: {self.racer}\n\n")
                 f.write("| Metric | Baseline | Smart | Delta | Change |\n")
                 f.write("| --- | --- | --- | --- | --- |\n")
@@ -63,7 +67,7 @@ class CompareAICommand:
                     f"| Max VP | {result.max_vp_control} | {result.max_vp_treatment} | - | - |\n",
                 )
                 f.write(f"\n*Run ID: {result.run_id}*")
-            print(f"Report saved to {self.output}")
+            logger.info(f"Report saved to {self.output}")
 
         _save_results(AI_STATS_FILE, [result], {})
 
@@ -93,30 +97,30 @@ class CompareRuleCommand:
             )
         )
 
-        print(f"Testing Rule Shift: {key}={val} (N={self.number})...")
+        logger.info(f"Testing Rule Shift: {key}={val} (N={self.number})...")
         logging.getLogger("magical_athlete").setLevel(logging.CRITICAL)
 
         results = run_rule_comparison(key, val, self.number)
         results.sort(key=lambda x: x.vp_pct_change, reverse=True)
 
-        print(f"\n--- Impact of {key}={val} (Sorted by VP Impact) ---\n")
+        logger.info(f"\n--- Impact of {key}={val} (Sorted by VP Impact) ---\n")
         header = (
             f"{'Racer':<15} | {'N':<4} | "
             f"{'Win Base':<8} | {'Win New':<8} | {'Win Δ':<8} | {'Win Rel':<8} | "
             f"{'VP Base':<7} | {'VP New':<7} | {'VP Δ':<6} | {'VP Rel':<7}"
         )
-        print(header)
-        print("-" * len(header))
+        logger.info(header)
+        logger.info("-" * len(header))
 
         for res in results:
             if res.games_played < 20:
                 continue
 
             # Updated row formatting to match the new header
-            print(
+            logger.info(
                 f"{res.racer:<15} | {res.games_played:<4} | "
                 f"{res.winrate_control:<8.1%} | {res.winrate_treatment:<8.1%} | {res.winrate_delta:<+8.1%} | {res.winrate_pct_change:<+8.1%} | "
-                f"{res.vp_control:<7.1f} | {res.vp_treatment:<7.1f} | {res.vp_delta:<+6.1f} | {res.vp_pct_change:<+7.1%}"
+                f"{res.vp_control:<7.1f} | {res.vp_treatment:<7.1f} | {res.vp_delta:<+6.1f} | {res.vp_pct_change:<+7.1%}",
             )
 
         _save_results(
@@ -137,7 +141,7 @@ class CompareRacerCommand:
     ] = None
 
     def __call__(self):
-        print(f"Analyzing Impact of {self.racer} (N={self.number})...")
+        logger.info(f"Analyzing Impact of {self.racer} (N={self.number})...")
         logging.getLogger("magical_athlete").setLevel(logging.CRITICAL)
 
         results = run_racer_impact_comparison(self.racer, self.number)
@@ -146,23 +150,23 @@ class CompareRacerCommand:
         target_res = next((r for r in results if r.racer == self.racer), None)
         opponents.sort(key=lambda x: x.vp_pct_change, reverse=True)
 
-        print(f"\n--- Target Statistics: {self.racer} ---")
+        logger.info(f"\n--- Target Statistics: {self.racer} ---")
         if target_res:
-            print(f"Win Rate: {target_res.winrate_treatment:.1%}")
-            print(f"Avg VP:   {target_res.vp_treatment:.1f}")
-            print(f"Max VP:   {target_res.max_vp_treatment}")
+            logger.info(f"Win Rate: {target_res.winrate_treatment:.1%}")
+            logger.info(f"Avg VP:   {target_res.vp_treatment:.1f}")
+            logger.info(f"Max VP:   {target_res.max_vp_treatment}")
 
-        print("\n--- Impact on Opponents (Sorted by Relative VP Change) ---\n")
+        logger.info("\n--- Impact on Opponents (Sorted by Relative VP Change) ---\n")
         header = f"{'Racer':<15} | {'N':<4} | {'Win% w/o':<8} | {'Win% w/':<8} | {'Win% Rel':<8} | {'VP w/o':<6} | {'VP w/':<6} | {'VP Rel':<7} | {'Max VP':<3}"
         sep = "-" * len(header)
-        print(header)
-        print(sep)
+        logger.info(header)
+        logger.info(sep)
 
         for res in opponents:
             if res.games_played < 20:
                 continue
             max_v = max(res.max_vp_control, res.max_vp_treatment)
-            print(
+            logger.info(
                 f"{res.racer:<15} | {res.games_played:<4} | {res.winrate_control:<8.1%} | {res.winrate_treatment:<8.1%} | {res.winrate_pct_change:<+8.1%} | {res.vp_control:<6.1f} | {res.vp_treatment:<6.1f} | {res.vp_pct_change:<+7.1%} | {max_v:<3}",
             )
 
@@ -202,13 +206,13 @@ def _save_results(path: Path, results: list[ExperimentResult], extras: dict):
         try:
             existing = pl.read_parquet(path)
             pl.concat([existing, new_df], how="diagonal").write_parquet(path)
-            print(f"✅ Data appended to {path}")
-        except Exception:
+            logger.info(f"✅ Data appended to {path}")
+        except Exception:  # noqa: BLE001
             new_df.write_parquet(path)
-            print(f"✅ Data saved to {path} (overwrite/reset)")
+            logger.info(f"✅ Data saved to {path} (overwrite/reset)")
     else:
         new_df.write_parquet(path)
-        print(f"✅ Data saved to {path}")
+        logger.info(f"✅ Data saved to {path}")
 
 
 @cappa.command(name="compare", help="Run comparative experiments.")

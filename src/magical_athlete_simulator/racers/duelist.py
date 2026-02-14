@@ -10,7 +10,6 @@ from magical_athlete_simulator.core.agent import (
     SelectionInteractive,
 )
 from magical_athlete_simulator.core.events import (
-    AbilityTriggeredEvent,
     AbilityTriggeredEventOrSkipped,
     GameEvent,
     Phase,

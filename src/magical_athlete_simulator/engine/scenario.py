@@ -117,7 +117,7 @@ class GameScenario:
 
     def run_turn(self):
         self.engine.run_turn()
-        self.engine._advance_turn()  # noqa: SLF001
+        self.engine.advance_turn()
 
     def run_turns(self, n: int):
         for _ in range(n):

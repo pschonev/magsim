@@ -11,7 +11,6 @@ from magical_athlete_simulator.core.events import (
     PostMoveEvent,
     PostWarpEvent,
     RacerEliminatedEvent,
-    RacerFinishedEvent,
 )
 from magical_athlete_simulator.engine.flow import mark_finished
 

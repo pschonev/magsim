@@ -75,8 +75,8 @@ def run_console_game(config: GameConfig, max_turns: int = 200) -> None:
 
             scenario.run_turn()
             turn += 1
-    except Exception as e:
-        logger.error(f"Game Error: {e}")
+    except Exception:
+        logger.exception("Game Error")
         raise
 
     logger.log(logging.INFO, "-" * 20)
@@ -154,7 +154,8 @@ class GameCommand:
         # 1. Load File (Middle Priority)
         if self.config_file:
             if not self.config_file.exists():
-                raise cappa.Exit(f"Config file not found: {self.config_file}", code=1)
+                msg = f"Config file not found: {self.config_file}"
+                raise cappa.Exit(msg, code=1)
             try:
                 with Path.open(self.config_file, "rb") as f:
                     # Use PartialGameConfig here!

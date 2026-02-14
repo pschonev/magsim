@@ -93,7 +93,7 @@ class SimulationDatabase:
             if count == 0:
                 self.import_existing_parquet()
 
-        except Exception:
+        except Exception:  # noqa: BLE001
             # If explicit check fails, try importing anyway (safe fallback)
             self.import_existing_parquet()
 

@@ -105,7 +105,7 @@ class BatchCommand:
             sim_config = SimulationConfig.from_toml(str(self.config))
         except Exception as e:
             msg = f"Invalid config file: {e}"
-            raise cappa.Exit(msg, code=1)
+            raise cappa.Exit(msg, code=1) from e
 
         # Resolve Runtime Values
         runs_per_combo = (

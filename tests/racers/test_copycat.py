@@ -1,4 +1,3 @@
-from typing import cast
 from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 from magical_athlete_simulator.racers.copycat import AbilityCopyLead
 

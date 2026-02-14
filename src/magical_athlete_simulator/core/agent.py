@@ -87,6 +87,7 @@ class SelectionDecisionMixin[R](SelectionInteractive[R], ABC):
         """The 'Smart' logic used by SmartAgent."""
         raise NotImplementedError
 
+    @override
     def get_baseline_selection_decision(
         self,
         engine: GameEngine,
