@@ -6,7 +6,7 @@ def test_full_race_6_racers_finishes_correctly(scenario: type[GameScenario]):
     """
     Scenario: A full 6-racer race using a variety of racers.
     Verify: 
-    1. The race completes and is flagged as 'race_over'.
+    1. The race completes and is flagged as no longer 'race_active'.
     2. At least two racers finish the race.
     3. Finished racers are correctly marked as inactive and have a finishing position.
     4. Finishing positions are assigned correctly (1st, 2nd, etc.).
@@ -23,7 +23,7 @@ def test_full_race_6_racers_finishes_correctly(scenario: type[GameScenario]):
     # Use an infinite cycle of dice rolls to ensure the race can complete.
     infinite_dice = itertools.cycle([4, 5, 6, 3, 2, 4])
     game = scenario(racers, dice_rolls=list(itertools.islice(infinite_dice, 100))) 
-    game.engine.rng.randint.side_effect = infinite_dice   # pyright: ignore[reportAttributeAccessIssue]
+    game.engine.rng.randint.side_effect = infinite_dice
 
     # Run the entire race to completion
     game.engine.run_race()
@@ -31,7 +31,7 @@ def test_full_race_6_racers_finishes_correctly(scenario: type[GameScenario]):
     state = game.engine.state
     
     # 1. Verify the race is over
-    assert state.race_over is True, "The 'race_over' flag should be set to True."
+    assert state.race_active is False, "The 'race_active' flag should be set to False."
     
     # 2. Verify finishers
     finished_racers = [r for r in state.racers if r.finished]

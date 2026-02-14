@@ -97,7 +97,6 @@ class DicemongerRerollAction(Ability, BooleanDecisionMixin, ExternalAbilityMixin
         trigger_reroll(engine, owner.idx, self.name)
 
         # Dicemonger Profit Logic (+1 Move)
-        # "Whenever ANOTHER racer rerolls this way..."
         if owner.idx != self.source_racer_idx:
             engine.log_info(f"{source_racer.repr} profits +1 from {self.name}.")
             push_move(
@@ -107,7 +106,7 @@ class DicemongerRerollAction(Ability, BooleanDecisionMixin, ExternalAbilityMixin
                 moved_racer_idx=self.source_racer_idx,
                 source=self.name,
                 responsible_racer_idx=self.source_racer_idx,
-                emit_ability_triggered="immediately",
+                emit_ability_triggered="after_resolution",
             )
 
         return AbilityTriggeredEvent(

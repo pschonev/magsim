@@ -97,7 +97,7 @@ class GameState:
 
     queue: list[ScheduledEvent] = field(default_factory=list)
     serial: int = 0
-    race_over: bool = False
+    race_active: bool = False
     history: set[int] = field(default_factory=set)
     _drawn_racers: set[RacerName] = field(default_factory=set)
     _removed_racers: set[RacerName] = field(default_factory=set)

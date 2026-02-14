@@ -77,6 +77,7 @@ async def cell_import():
 
     # Imports
     from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -992,7 +993,7 @@ def cell_setup_log(
     snapshot_recorder.capture(engine, "InitialState", turn_index=0)
 
     with mo.status.spinner(title="Simulating..."):
-        while not engine.state.race_over:
+        while engine.state.race_active:
             log_console.export_html(clear=True)
             t_idx = sim_turn_counter["current"]
 
@@ -1523,6 +1524,7 @@ def cell_vsialize_track(
                 {track_group_start}
                 {"".join(svg_elements)}
             </svg>"""
+
     return (render_game_track,)
 
 
@@ -2737,6 +2739,7 @@ def _(BG_COLOR, alt, np, pl):
             .add_params(xzoom)
             .properties(width="container", height=800, background=BG_COLOR)
         )
+
     return (build_quadrant_chart,)
 
 

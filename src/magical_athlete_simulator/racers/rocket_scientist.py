@@ -48,7 +48,7 @@ class RocketScientistAbility(Ability, BooleanDecisionMixin):
 
         # Execute Boost and double dice
         engine.log_info(
-            f"{owner.repr} fires the rocket boosters and doubles the {dice_value} using {self.name}!",
+            f"{owner.repr} fires the rocket boosters and doubles the {dice_value} using {self.name} - new total is {engine.state.roll_state.final_value + dice_value}!",
         )
         old_base = engine.state.roll_state.base_value
         engine.state.roll_state.base_value += dice_value

@@ -90,7 +90,7 @@ def run_single_simulation(
 
     error_code: ErrorCode | None = None
 
-    while not engine.state.race_over:
+    while engine.state.race_active:
         active_racer_idx = engine.state.current_racer_idx
         scenario.run_turn()
         aggregator.on_turn_end(

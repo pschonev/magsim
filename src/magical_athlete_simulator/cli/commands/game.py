@@ -68,7 +68,7 @@ def run_console_game(config: GameConfig, max_turns: int = 200) -> None:
     # 3. Run with Safety Limit
     turn = 0
     try:
-        while not scenario.state.race_over:
+        while scenario.state.race_active:
             if turn >= max_turns:
                 logger.error(f"Race abandoned: Exceeded {max_turns} turns.")
                 return

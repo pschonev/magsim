@@ -131,10 +131,10 @@ def check_race_over_condition(engine: GameEngine) -> None:
 
 def end_race(engine: GameEngine) -> None:
     """Forces the race to end immediately."""
-    if engine.state.race_over:
+    if not engine.state.race_active:
         return
 
-    engine.state.race_over = True
+    engine.state.race_active = False
     engine.log_info("Race ended! 🏁")
 
     engine.state.queue.clear()

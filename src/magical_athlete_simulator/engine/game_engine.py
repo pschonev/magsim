@@ -135,14 +135,12 @@ class GameEngine:
                     # If this ability has setup logic (e.g. Egg picking a card), run it
                     if isinstance(ability, SetupPhaseMixin):
                         ability.on_setup(self, racer, self.agents[racer.idx])
-
-                        # Crucially: on_setup might call replace_core_abilities,
-                        # adding NEW abilities to racer.active_abilities.
-                        # The 'while True' loop will catch them on the next pass.
+        # finally, start the race
+        self.state.race_active = True
 
     # --- Main Loop ---
     def run_race(self):
-        while not self.state.race_over:
+        while self.state.race_active:
             self.run_turn()
             self._advance_turn()
 
@@ -209,7 +207,7 @@ class GameEngine:
             )
 
         turn_end_triggered = False
-        while not self.state.race_over:
+        while self.state.race_active:
             if not self.state.queue:
                 # If done with normal events, inject TurnEndEvent ONCE
                 if not turn_end_triggered:
@@ -284,7 +282,7 @@ class GameEngine:
         return hash((self.state.current_racer_idx, racer_states))
 
     def _advance_turn(self):
-        if self.state.race_over:
+        if not self.state.race_active:
             return
 
         if self.state.next_turn_override is not None:
@@ -304,7 +302,7 @@ class GameEngine:
         while not self.state.racers[next_idx].active:
             next_idx = (next_idx + 1) % n
             if next_idx == start_search:
-                self.state.race_over = True
+                self.state.race_active = False
                 return
 
         if next_idx < curr:

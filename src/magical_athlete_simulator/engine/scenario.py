@@ -121,7 +121,7 @@ class GameScenario:
 
     def run_turns(self, n: int):
         for _ in range(n):
-            if self.engine.state.race_over:
+            if not self.engine.state.race_active:
                 break
             self.run_turn()
 

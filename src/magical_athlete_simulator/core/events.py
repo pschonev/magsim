@@ -340,6 +340,7 @@ class ScheduledEvent:
     serial: int
     event: GameEvent
     mode: TimingMode = "FLAT"
+    locked_abilities: set[AbilityName] = field(default_factory=set)
 
     @cached_property
     def sort_key(self):

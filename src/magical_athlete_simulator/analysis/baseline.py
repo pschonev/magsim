@@ -509,7 +509,7 @@ def _run_config_with_setup(
     # Manual loop execution with safety break
     turn = 0
     try:
-        while not scenario.state.race_over:
+        while scenario.state.race_active:
             if turn >= max_turns:
                 return None
             scenario.run_turn()

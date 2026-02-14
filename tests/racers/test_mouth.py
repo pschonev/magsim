@@ -59,10 +59,10 @@ def test_mouth_eats_last_opponent_race_over_and_winner_scored(scenario: type[Gam
     banana = game.get_racer(1)
 
     assert banana.eliminated is True
-    assert game.state.race_over is True  # race_over flag lives on GameState [code_file:17]
+    assert game.state.race_active is False 
     assert mouth.finished is True
     assert mouth.finish_position == 1
-    assert mouth.victory_points == 4  # default winner_vp=(4,2) [code_file:17]
+    assert mouth.victory_points == 4
 
 def test_hare_hubris_skip_still_works_after_mouth_elimination(scenario: type[GameScenario]):
     """
