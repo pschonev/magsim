@@ -4,7 +4,6 @@
 #     "altair==6.0.0",
 #     "marimo>=0.19.0",
 #     "polars==1.36.1",
-#     "sqlmodel==0.0.31",
 #     "numpy>=2.4.1"
 # ]
 # [tool.marimo.display]

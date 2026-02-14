@@ -17,7 +17,6 @@ cli = [
     "cappa>=0.31.0",
     "duckdb-engine>=0.17.0",
     "msgspec>=0.20.0",
-    "sqlmodel>=0.0.31",
     "tqdm>=4.67.1",
     "pyarrow>=22.0.0",
 ]
@@ -26,7 +25,6 @@ frontend = [
     "marimo==0.18.4",
     "altair==6.0.0",
     "polars==1.36.1",
-    "sqlmodel==0.0.31",
     "numpy>=2.4.1",
 ]
 
