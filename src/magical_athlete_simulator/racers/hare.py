@@ -15,6 +15,7 @@ from magical_athlete_simulator.core.mixins import (
     RollModificationMixin,
 )
 from magical_athlete_simulator.core.modifiers import RacerModifier
+from magical_athlete_simulator.core.state import is_active
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     remove_racer_modifier,
@@ -72,11 +73,17 @@ class HareHubris(Ability, LifecycleManagedMixin):
         engine: GameEngine,
         agent: Agent,
     ):
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
+        if (
+            not isinstance(event, TurnStartEvent)
+            or event.target_racer_idx != owner.idx
+            or not is_active(owner)
+        ):
             return "skip_trigger"
 
         max_others = max(
-            r.position for r in engine.state.racers if r.active and r.idx != owner.idx
+            r.position
+            for r in engine.state.racers
+            if is_active(r) and r.idx != owner.idx
         )
         if owner.position > max_others:
             engine.skip_main_move(

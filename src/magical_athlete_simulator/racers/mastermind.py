@@ -17,7 +17,7 @@ from magical_athlete_simulator.core.events import (
     RacerFinishedEvent,
     TurnStartEvent,
 )
-from magical_athlete_simulator.core.state import RacerState
+from magical_athlete_simulator.core.state import ActiveRacerState, RacerState, is_active
 from magical_athlete_simulator.engine.flow import mark_finished
 
 if TYPE_CHECKING:
@@ -26,12 +26,12 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
+class AbilityMastermindPredict(Ability, SelectionDecisionMixin[ActiveRacerState]):
     name: AbilityName = "MastermindPredict"
     triggers: tuple[type[GameEvent], ...] = (TurnStartEvent, RacerFinishedEvent)
 
     # Persistent State
-    prediction: RacerState | None = None
+    prediction: ActiveRacerState | None = None
 
     @override
     def execute(
@@ -52,14 +52,14 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
             target_racer = agent.make_selection_decision(
                 engine,
                 ctx=SelectionDecisionContext[
-                    SelectionInteractive[RacerState],
-                    RacerState,
+                    SelectionInteractive[ActiveRacerState],
+                    ActiveRacerState,
                 ](
                     source=self,
                     event=event,
                     game_state=engine.state,
                     source_racer_idx=owner.idx,
-                    options=[r for r in engine.state.racers if r.active],
+                    options=[r for r in engine.state.racers if is_active(r)],
                 ),
             )
 
@@ -134,14 +134,16 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[RacerState]):
     def get_auto_selection_decision(
         self,
         engine: GameEngine,
-        ctx: SelectionDecisionContext[Self, RacerState],
-    ) -> RacerState | None:
+        ctx: SelectionDecisionContext[Self, ActiveRacerState],
+    ) -> ActiveRacerState | None:
         """
         AI Logic: Predict the racer with the best early-game stats or position.
         """
         candidates = [r for r in ctx.options if r.idx != ctx.source_racer_idx]
         if not candidates:
-            return engine.get_racer(ctx.source_racer_idx)
+            if (owner := engine.get_active_racer(ctx.source_racer_idx)) is None:
+                raise ValueError("Someone in this race has to be active")
+            return owner
         # Sort by position (descending)
         candidates.sort(key=lambda r: r.position, reverse=True)
         return candidates[0]

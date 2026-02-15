@@ -12,6 +12,7 @@ from magical_athlete_simulator.core.events import (
     PostWarpEvent,
     RacerEliminatedEvent,
 )
+from magical_athlete_simulator.core.state import is_active
 from magical_athlete_simulator.engine.flow import mark_finished
 
 if TYPE_CHECKING:
@@ -37,6 +38,7 @@ class MouthDevour(Ability):
         if (
             not isinstance(event, (PostWarpEvent, PostMoveEvent))
             or event.target_racer_idx != owner.idx
+            or not is_active(owner)
         ):
             return "skip_trigger"
 
@@ -51,7 +53,7 @@ class MouthDevour(Ability):
         victim.eliminated = True
         # strip racer of all their abilities
         engine.clear_all_abilities(victim.idx)
-        victim.raw_position = None
+        victim.position = None
 
         engine.log_info(
             f"{owner.repr} ATE {victim.repr}!!!",

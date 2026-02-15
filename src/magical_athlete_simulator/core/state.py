@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Protocol, TypeGuard, runtime_checkable
 
 from magical_athlete_simulator.core.registry import RACER_ABILITIES
 
@@ -33,13 +33,42 @@ class RollState:
     final_value: int = 0
 
 
+@runtime_checkable
+class ActiveRacerState(Protocol):
+    idx: int
+    name: RacerName
+
+    # NARROWED: Must be int
+    position: int
+
+    victory_points: int
+    tripped: bool
+    tripping_racers: list[int | None]
+    main_move_consumed: bool
+    roll_override: tuple[AbilityName, int] | None
+    can_reroll: bool
+    finish_position: int | None
+    eliminated: bool
+    modifiers: list[RacerModifier]
+    active_abilities: list[Ability]
+
+    @property
+    def repr(self) -> str: ...
+    @property
+    def abilities(self) -> set[AbilityName]: ...
+    @property
+    def finished(self) -> bool: ...
+    @property
+    def active(self) -> bool: ...
+
+
 @dataclass(slots=True)
 class RacerState:
     idx: int
     name: RacerName
 
     # game state
-    raw_position: int | None = 0
+    position: int | None = 0
     victory_points: int = 0
     tripped: bool = False
     tripping_racers: list[int | None] = field(default_factory=list)
@@ -58,19 +87,8 @@ class RacerState:
     active_abilities: list[Ability] = field(default_factory=list)
 
     @property
-    def position(self) -> int:
-        if self.raw_position is None:
-            msg = f"Unexpected access to position of {self.repr} who is already eliminated ({self.eliminated=} | {self.raw_position})."
-            raise ValueError(msg)
-        return self.raw_position
-
-    @position.setter
-    def position(self, value: int) -> None:
-        self.raw_position = value
-
-    @property
     def repr(self) -> str:
-        return f"{self.raw_position if self.raw_position else ''}•{self.name}"
+        return f"{self.position if self.position else ''}•{self.name}"
 
     @property
     def abilities(self) -> set[AbilityName]:
@@ -83,7 +101,19 @@ class RacerState:
 
     @property
     def active(self) -> bool:
-        return not self.finished and not self.eliminated
+        return not self.finished and not self.eliminated and self.position is not None
+
+
+def is_active(racer_state: RacerState) -> TypeGuard[ActiveRacerState]:
+    """
+    Runtime check that guarantees position is not None.
+    Use this in 'if' conditions to narrow the type.
+    """
+    return (
+        racer_state.position is not None
+        and not racer_state.eliminated
+        and not racer_state.finished
+    )
 
 
 @dataclass(slots=True)
@@ -140,7 +170,7 @@ class GameState:
         racer_data = tuple(
             (
                 r.idx,
-                r.raw_position,
+                r.position,
                 r.tripped,
                 r.finish_position,
                 r.eliminated,

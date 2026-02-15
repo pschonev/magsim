@@ -17,6 +17,7 @@ from magical_athlete_simulator.core.events import (
 )
 from magical_athlete_simulator.core.mixins import DestinationCalculatorMixin
 from magical_athlete_simulator.core.modifiers import RacerModifier
+from magical_athlete_simulator.core.state import is_active
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     remove_racer_modifier,
@@ -80,6 +81,7 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
             not isinstance(event, PostMoveEvent)
             or event.target_racer_idx == owner.idx
             or event.start_tile != owner.position
+            or not is_active(owner)
         ):
             return "skip_trigger"
 
@@ -116,8 +118,10 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         if not isinstance(ctx.event, PostMoveEvent):
             raise TypeError("Expected PostMoveEvent for Suckerfish decision!")
 
-        owner = engine.get_racer(ctx.source_racer_idx)
-        moving_racer = engine.get_racer(ctx.event.target_racer_idx)
+        if (owner := engine.get_active_racer(ctx.source_racer_idx)) is None or (
+            moving_racer := engine.get_active_racer(ctx.event.target_racer_idx)
+        ) is None:
+            return False
 
         # check if moving forward
         return moving_racer.active and moving_racer.position > owner.position

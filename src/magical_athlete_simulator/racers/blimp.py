@@ -37,17 +37,16 @@ class BlimpModifier(RacerModifier, RollModificationMixin):
         engine: GameEngine,
         rolling_racer_idx: int,
     ) -> list[AbilityTriggeredEvent]:
-        if rolling_racer_idx != owner_idx:
+        if (
+            rolling_racer_idx != owner_idx
+            or owner_idx is None
+            or (owner := engine.get_active_racer(owner_idx)) is None
+        ):
             return []
 
-        if owner_idx is None:
-            msg = f"owner_idx should never be None for {self.name}"
-            raise ValueError(msg)
-
-        blimp_pos = engine.get_racer_pos(owner_idx)
         threshold = engine.state.board.second_turn or engine.state.board.length // 2
 
-        if blimp_pos < threshold:
+        if owner.position < threshold:
             delta = 3
             source = "BlimpSpeed"
         else:

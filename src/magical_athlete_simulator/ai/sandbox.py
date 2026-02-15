@@ -1,6 +1,6 @@
 import copy
 
-from magical_athlete_simulator.core.state import LogContext, TurnOutcome
+from magical_athlete_simulator.core.state import LogContext, TurnOutcome, is_active
 from magical_athlete_simulator.engine import ENGINE_ID_COUNTER
 from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -62,14 +62,14 @@ class SandboxEngine:
 
         # Snapshot BEFORE
         before_vp = [r.victory_points for r in eng.state.racers]
-        before_pos = [r.position for r in eng.state.racers]
+        before_pos = [r.position for r in eng.state.racers if is_active(r)]
 
         # Run exactly one turn using the engine's normal logic
         eng.run_turn()
 
         # Snapshot AFTER
         after_vp = [r.victory_points for r in eng.state.racers]
-        after_pos = [r.position for r in eng.state.racers]
+        after_pos = [r.position for r in eng.state.racers if is_active(r)]
         tripped = [r.tripped for r in eng.state.racers]
 
         # If you track eliminated explicitly, keep it; otherwise default to False.

@@ -10,6 +10,7 @@ from magical_athlete_simulator.core.events import (
     GameEvent,
     TurnStartEvent,
 )
+from magical_athlete_simulator.core.state import is_active
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
@@ -32,10 +33,14 @@ class LovableLoserBonus(Ability):
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
+        if (
+            not isinstance(event, TurnStartEvent)
+            or event.target_racer_idx != owner.idx
+            or not is_active(owner)
+        ):
             return "skip_trigger"
 
-        others = [r for r in engine.state.racers if r.idx != owner.idx and r.active]
+        others = engine.get_active_racers(except_racer_idx=owner.idx)
 
         # Check if strictly last (no ties)
         min_others = min(r.position for r in others)

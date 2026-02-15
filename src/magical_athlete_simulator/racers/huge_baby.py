@@ -80,14 +80,16 @@ class HugeBabyPush(Ability, LifecycleManagedMixin):
 
     @override
     def on_gain(self, engine: GameEngine, owner_idx: int):
-        racer = engine.get_racer(owner_idx)
+        if (racer := engine.get_active_racer(owner_idx)) is None:
+            return
         if racer.position > 0:
             modifier = HugeBabyModifier(owner_idx=owner_idx)
             engine.state.board.register_modifier(racer.position, modifier, engine)
 
     @override
     def on_loss(self, engine: GameEngine, owner_idx: int):
-        racer = engine.get_racer(owner_idx)
+        if (racer := engine.get_active_racer(owner_idx)) is None:
+            return
         modifier_template = HugeBabyModifier(owner_idx=owner_idx)
         board = engine.state.board
 

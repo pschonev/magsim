@@ -38,10 +38,13 @@ class HecklerHeckleAbility(Ability):
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, (PreTurnStartEvent, TurnEndEvent)):
+        if (
+            active_racer := engine.get_active_racer(engine.state.current_racer_idx)
+        ) is None:
             return "skip_trigger"
 
-        active_racer = engine.get_racer(engine.state.current_racer_idx)
+        if not isinstance(event, (PreTurnStartEvent, TurnEndEvent)):
+            return "skip_trigger"
 
         if isinstance(event, PreTurnStartEvent):
             HecklerHeckleAbility._turn_start_positions[active_racer.idx] = (
@@ -50,8 +53,6 @@ class HecklerHeckleAbility(Ability):
             return "skip_trigger"
 
         else:  # TurnEndEvent
-            active_racer = engine.get_racer(engine.state.current_racer_idx)
-
             start_pos = HecklerHeckleAbility._turn_start_positions.get(active_racer.idx)
             if start_pos is None or not active_racer.active:
                 return "skip_trigger"

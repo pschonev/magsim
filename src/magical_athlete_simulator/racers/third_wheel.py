@@ -16,6 +16,7 @@ from magical_athlete_simulator.core.events import (
     GameEvent,
     TurnStartEvent,
 )
+from magical_athlete_simulator.core.state import is_active
 from magical_athlete_simulator.engine.movement import push_warp
 
 if TYPE_CHECKING:
@@ -49,7 +50,7 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
         # Group racers by position
         pos_counts: defaultdict[int, int] = defaultdict(int)
         for r in engine.state.racers:
-            if r.active:
+            if is_active(r):
                 pos_counts[r.position] += 1
 
         valid_positions = [
@@ -103,10 +104,8 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
         ctx: SelectionDecisionContext[Self, int],
     ) -> int | None:
         # only consider positions that are ahead
-        if not [
-            pos
-            for pos in ctx.options
-            if pos > engine.get_racer(ctx.source_racer_idx).position
-        ]:
+        if (owner := engine.get_active_racer(ctx.source_racer_idx)) is None:
+            return None
+        if not [pos for pos in ctx.options if pos > owner.position]:
             return None
         return max(ctx.options)

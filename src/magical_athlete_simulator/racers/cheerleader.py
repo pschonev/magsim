@@ -16,6 +16,7 @@ from magical_athlete_simulator.core.events import (
     MoveData,
     TurnStartEvent,
 )
+from magical_athlete_simulator.core.state import is_active
 from magical_athlete_simulator.engine.movement import push_move, push_simultaneous_move
 
 if TYPE_CHECKING:
@@ -41,7 +42,7 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
             return "skip_trigger"
 
         # Identify Last Place Racers
-        min_pos = min(r.position for r in engine.state.racers if r.active)
+        min_pos = min(r.position for r in engine.state.racers if is_active(r))
         last_place_racers = engine.get_racers_at_position(min_pos)
 
         # Decision

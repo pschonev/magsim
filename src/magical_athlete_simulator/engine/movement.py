@@ -24,6 +24,7 @@ from magical_athlete_simulator.core.mixins import (
     DestinationCalculatorMixin,
     MovementValidatorMixin,
 )
+from magical_athlete_simulator.core.state import is_active
 from magical_athlete_simulator.engine.flow import check_finish
 
 if TYPE_CHECKING:
@@ -34,10 +35,12 @@ if TYPE_CHECKING:
 
 
 def _publish_pre_move(engine: GameEngine, evt: MoveCmdEvent):
+    if (racer := engine.get_active_racer(evt.target_racer_idx)) is None:
+        return
     engine.publish_to_subscribers(
         PreMoveEvent(
             target_racer_idx=evt.target_racer_idx,
-            start_tile=engine.get_racer(evt.target_racer_idx).position,
+            start_tile=racer.position,
             distance=evt.distance,
             source=evt.source,
             phase=evt.phase,
@@ -50,7 +53,8 @@ def _resolve_move_path(
     engine: GameEngine,
     evt: MoveCmdEvent,
 ) -> tuple[int, list[AbilityTriggeredEvent]]:
-    racer = engine.get_racer(evt.target_racer_idx)
+    if (racer := engine.get_active_racer(evt.target_racer_idx)) is None:
+        raise ValueError("Cannot resolve move path for inactive racer")
     start = racer.position
 
     # --- 1. CALCULATE PHYSICS DESTINATION (Leaptoad) ---
@@ -189,8 +193,10 @@ def _finalize_committed_move(
 
 
 def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
-    racer = engine.get_racer(evt.target_racer_idx)
-    if not racer.active or evt.distance == 0:
+    if (
+        not is_active(racer := engine.get_racer(evt.target_racer_idx))
+        or evt.distance == 0
+    ):
         return
 
     start = racer.position
@@ -239,7 +245,7 @@ def handle_simultaneous_move_cmd(engine: GameEngine, evt: SimultaneousMoveCmdEve
         if move.distance == 0:
             continue
         racer = engine.get_racer(move.moving_racer_idx)
-        if not racer.active:
+        if not is_active(racer):
             continue
 
         # Create transient event FIRST
@@ -348,7 +354,7 @@ def _finalize_committed_warp(
 
 def handle_warp_cmd(engine: GameEngine, evt: WarpCmdEvent):
     racer = engine.get_racer(evt.target_racer_idx)
-    if not racer.active:
+    if not is_active(racer):
         return
 
     start = racer.position
@@ -399,7 +405,7 @@ def handle_simultaneous_warp_cmd(engine: GameEngine, evt: SimultaneousWarpCmdEve
 
     for warp in evt.warps:
         racer = engine.get_racer(warp.warping_racer_idx)
-        if not racer.active:
+        if not is_active(racer):
             continue
 
         start = racer.position

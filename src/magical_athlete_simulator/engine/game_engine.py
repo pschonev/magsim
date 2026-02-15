@@ -39,7 +39,7 @@ from magical_athlete_simulator.core.mixins import (
 from magical_athlete_simulator.core.registry import (
     RACER_ABILITIES,
 )
-from magical_athlete_simulator.core.state import RollState
+from magical_athlete_simulator.core.state import ActiveRacerState, RollState, is_active
 from magical_athlete_simulator.engine.logging import ContextFilter
 from magical_athlete_simulator.engine.loop_detection import LoopDetector
 from magical_athlete_simulator.engine.movement import (
@@ -271,7 +271,7 @@ class GameEngine:
     def _calculate_board_hash(self) -> int:
         racer_states = tuple(
             (
-                r.raw_position,
+                r.position,
                 r.active,
                 r.tripped,
                 r.main_move_consumed,
@@ -498,8 +498,26 @@ class GameEngine:
     def get_racer(self, idx: int) -> RacerState:
         return self.state.racers[idx]
 
-    def get_racer_pos(self, idx: int) -> int:
-        return self.state.racers[idx].position
+    def get_active_racer(self, idx: int) -> ActiveRacerState | None:
+        if is_active(racer := self.get_racer(idx)):
+            return racer
+        self.log_error(
+            f"Attempted to get position of {racer.repr} but they were already eliminated.",
+        )
+        return None
+
+    def get_active_racers(
+        self,
+        except_racer_idx: int | None = None,
+    ) -> list[ActiveRacerState]:
+        return [
+            r for r in self.state.racers if is_active(r) and r.idx != except_racer_idx
+        ]
+
+    def get_racer_pos(self, idx: int) -> int | None:
+        if is_active(racer := self.state.racers[idx]):
+            return racer.position
+        return None
 
     def get_racers_at_position(
         self,

@@ -14,7 +14,7 @@ from magical_athlete_simulator.core.events import (
     GameEvent,
     TurnStartEvent,
 )
-from magical_athlete_simulator.core.state import RacerState
+from magical_athlete_simulator.core.state import ActiveRacerState, RacerState, is_active
 from magical_athlete_simulator.engine.movement import push_warp
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class HypnotistTrance(Ability, SelectionDecisionMixin[RacerState]):
+class HypnotistTrance(Ability, SelectionDecisionMixin[ActiveRacerState]):
     name: AbilityName = "HypnotistWarp"
     triggers: tuple[type[GameEvent], ...] = (TurnStartEvent,)
 
@@ -36,18 +36,20 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[RacerState]):
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
+        if (
+            not isinstance(event, TurnStartEvent)
+            or event.target_racer_idx != owner.idx
+            or not is_active(owner)
+        ):
             return "skip_trigger"
 
-        valid_targets = [
-            r for r in engine.state.racers if r.active and r.idx != owner.idx
-        ]
+        valid_targets = engine.get_active_racers(except_racer_idx=owner.idx)
 
         target = agent.make_selection_decision(
             engine,
             ctx=SelectionDecisionContext[
-                SelectionInteractive[RacerState],
-                RacerState,
+                SelectionInteractive[ActiveRacerState],
+                ActiveRacerState,
             ](
                 source=self,
                 event=event,
@@ -78,11 +80,12 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[RacerState]):
     def get_auto_selection_decision(
         self,
         engine: GameEngine,
-        ctx: SelectionDecisionContext[Self, RacerState],
-    ) -> RacerState | None:
+        ctx: SelectionDecisionContext[Self, ActiveRacerState],
+    ) -> ActiveRacerState | None:
         # Sort by position descending
         sorted_targets = sorted(ctx.options, key=lambda r: r.position, reverse=True)
-        me = engine.get_racer(ctx.source_racer_idx)
+        if (me := engine.get_active_racer(ctx.source_racer_idx)) is None:
+            return None
         # check if the target is ahead of Hypnotist
         if sorted_targets[0].position > me.position:
             return sorted_targets[0]

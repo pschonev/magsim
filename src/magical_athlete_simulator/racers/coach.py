@@ -17,6 +17,7 @@ from magical_athlete_simulator.core.mixins import (
     RollModificationMixin,
 )
 from magical_athlete_simulator.core.modifiers import RacerModifier
+from magical_athlete_simulator.core.state import ActiveRacerState, is_active
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     remove_racer_modifier,
@@ -63,7 +64,7 @@ class CoachAura(Ability, LifecycleManagedMixin):
     name: AbilityName = "CoachAura"
     triggers: tuple[type[GameEvent], ...] = (PostMoveEvent, PostWarpEvent)
 
-    def _update_aura(self, engine: GameEngine, owner: RacerState) -> None:
+    def _update_aura(self, engine: GameEngine, owner: ActiveRacerState) -> None:
         """Apply/remove CoachBoost to ALL racers at coach's position."""
         # Remove from everyone first (to handle position changes)
         for racer in engine.state.racers:
@@ -85,7 +86,9 @@ class CoachAura(Ability, LifecycleManagedMixin):
 
     @override
     def on_gain(self, engine: GameEngine, owner_idx: int) -> None:
-        CoachAura._update_aura(self, engine, engine.get_racer(owner_idx))
+        if (owner := engine.get_active_racer(owner_idx)) is None:
+            return
+        CoachAura._update_aura(self, engine, owner)
 
     @override
     def on_loss(self, engine: GameEngine, owner_idx: int) -> None:
@@ -103,7 +106,9 @@ class CoachAura(Ability, LifecycleManagedMixin):
         engine: GameEngine,
         agent: Agent,
     ):
-        if not isinstance(event, (PostMoveEvent, PostWarpEvent)):
+        if not isinstance(event, (PostMoveEvent, PostWarpEvent)) or not is_active(
+            owner,
+        ):
             return "skip_trigger"
 
         # check if owner (Coach) moved
@@ -111,7 +116,7 @@ class CoachAura(Ability, LifecycleManagedMixin):
         # or another racer moved away from his space
         if (
             event.target_racer_idx == owner.idx
-            or (owner := engine.get_racer(owner.idx)).position == event.start_tile
+            or owner.position == event.start_tile
             or owner.position == event.end_tile
         ):
             self._update_aura(engine, owner)

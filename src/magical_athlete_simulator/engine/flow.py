@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from magical_athlete_simulator.core.events import Phase, RacerFinishedEvent
+from magical_athlete_simulator.core.state import is_active
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.state import ActiveRacerState, RacerState
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -26,7 +27,7 @@ def log_final_standings(engine: GameEngine):
         else:
             status = ""
         engine.log_info(
-            f"{'':>1}{racer.idx}•{racer.name:<8} Pos: {racer.raw_position if racer.raw_position else '':<4} VP: {racer.victory_points:<4} {status}",
+            f"{'':>1}{racer.idx}•{racer.name:<8} Pos: {racer.position if racer.position else '':<4} VP: {racer.victory_points:<4} {status}",
         )
 
 
@@ -36,7 +37,7 @@ def check_finish(engine: GameEngine, racer: RacerState) -> bool:
     If so, triggers the standard finish flow.
     """
     # If already finished, do nothing (prevent double counting)
-    if not racer.active:
+    if not is_active(racer):
         return False
 
     # Standard rule: Position >= Board Length
@@ -49,7 +50,7 @@ def check_finish(engine: GameEngine, racer: RacerState) -> bool:
 
 def mark_finished(
     engine: GameEngine,
-    racer: RacerState,
+    racer: RacerState | ActiveRacerState,
     rank: int | None = None,
 ) -> None:
     """

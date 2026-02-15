@@ -72,7 +72,7 @@ class GameScenario:
 
         # Setup racers from config
         for cfg in self.racers_config:
-            r = RacerState(cfg.idx, cfg.name, raw_position=cfg.start_pos)
+            r = RacerState(cfg.idx, cfg.name, position=cfg.start_pos)
             racers.append(r)
             if cfg.agent:
                 agents[cfg.idx] = cfg.agent

@@ -17,6 +17,7 @@ from magical_athlete_simulator.core.mixins import (
     RollModificationMixin,
 )
 from magical_athlete_simulator.core.modifiers import RacerModifier
+from magical_athlete_simulator.core.state import is_active
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     remove_racer_modifier,
@@ -46,13 +47,12 @@ class ModifierPartySelfBoost(RacerModifier, RollModificationMixin):
     ) -> list[AbilityTriggeredEvent]:
         # This modifier is attached to Party Animal, affects their own roll
         # owner_idx is Party Animal, query.racer_idx is also Party Animal
-        if query.racer_idx != owner_idx:
+        if (
+            query.racer_idx != owner_idx
+            or owner_idx is None
+            or (owner := engine.get_active_racer(owner_idx)) is None
+        ):
             return []  # Safety check (should never happen)
-
-        if owner_idx is None:
-            raise ValueError("owner_idx should never be None")
-
-        owner = engine.get_racer(owner_idx)
 
         ability_triggered_events: list[AbilityTriggeredEvent] = []
         if guests := engine.get_racers_at_position(
@@ -109,12 +109,20 @@ class PartyAnimalPull(Ability):
         engine: GameEngine,
         agent: Agent,
     ):
-        if not isinstance(event, TurnStartEvent) or owner.idx != event.target_racer_idx:
+        if (
+            not isinstance(event, TurnStartEvent)
+            or owner.idx != event.target_racer_idx
+            or not is_active(owner)
+        ):
             return "skip_trigger"
 
         moves_to_make: list[MoveData] = []
         for r in engine.state.racers:
-            if r.idx == owner.idx or (not r.active) or (r.position == owner.position):
+            if (
+                r.idx == owner.idx
+                or (not is_active(r))
+                or (r.position == owner.position)
+            ):
                 continue
 
             direction = 1 if r.position < owner.position else -1

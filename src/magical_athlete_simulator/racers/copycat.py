@@ -24,7 +24,7 @@ from magical_athlete_simulator.core.events import (
     RacerFinishedEvent,
     TurnStartEvent,
 )
-from magical_athlete_simulator.core.state import RacerState
+from magical_athlete_simulator.core.state import RacerState, is_active
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import AbilityName
@@ -97,7 +97,7 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
                 )
 
         # 1. Determine leaders
-        active = [r for r in engine.state.racers if r.active]
+        active = [r for r in engine.state.racers if is_active(r)]
         max_pos = max(r.position for r in active)
         valid_targets = engine.get_racers_at_position(
             max_pos,

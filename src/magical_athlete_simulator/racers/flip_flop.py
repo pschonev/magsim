@@ -15,7 +15,7 @@ from magical_athlete_simulator.core.events import (
     TurnStartEvent,
     WarpData,
 )
-from magical_athlete_simulator.core.state import RacerState
+from magical_athlete_simulator.core.state import ActiveRacerState, RacerState, is_active
 from magical_athlete_simulator.engine.movement import push_simultaneous_warp
 
 if TYPE_CHECKING:
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
+class FlipFlopSwap(Ability, SelectionDecisionMixin[ActiveRacerState]):
     name: AbilityName = "FlipFlopSwap"
     triggers: tuple[type[GameEvent], ...] = (TurnStartEvent,)
 
@@ -37,20 +37,24 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
         engine: GameEngine,
         agent: Agent,
     ):
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
+        if (
+            not isinstance(event, TurnStartEvent)
+            or event.target_racer_idx != owner.idx
+            or not is_active(owner)
+        ):
             return "skip_trigger"
 
         target = agent.make_selection_decision(
             engine,
             ctx=SelectionDecisionContext[
-                SelectionInteractive[RacerState],
-                RacerState,
+                SelectionInteractive[ActiveRacerState],
+                ActiveRacerState,
             ](
                 source=self,
                 event=event,
                 game_state=engine.state,
                 source_racer_idx=owner.idx,
-                options=engine.state.racers,
+                options=engine.get_active_racers(except_racer_idx=owner.idx),
             ),
         )
         if target is None:
@@ -89,14 +93,13 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[RacerState]):
     def get_auto_selection_decision(
         self,
         engine: GameEngine,
-        ctx: SelectionDecisionContext[Self, RacerState],
-    ) -> RacerState | None:
+        ctx: SelectionDecisionContext[Self, ActiveRacerState],
+    ) -> ActiveRacerState | None:
         # pick someone at least 6 ahead (strictly greater position)
-        candidates: list[RacerState] = [
-            c
-            for c in ctx.options
-            if (c.active and c.position - engine.get_racer_pos(ctx.source_racer_idx))
-            >= 6
+        if (owner := engine.get_active_racer(ctx.source_racer_idx)) is None:
+            return None
+        candidates: list[ActiveRacerState] = [
+            c for c in ctx.options if c.position - owner.position >= 6
         ]
         if not candidates:
             return None

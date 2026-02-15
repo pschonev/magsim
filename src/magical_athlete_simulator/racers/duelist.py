@@ -18,7 +18,7 @@ from magical_athlete_simulator.core.events import (
     TurnStartEvent,
 )
 from magical_athlete_simulator.core.mixins import LifecycleManagedMixin
-from magical_athlete_simulator.core.state import RacerState
+from magical_athlete_simulator.core.state import ActiveRacerState, RacerState, is_active
 from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
@@ -46,10 +46,11 @@ class DuelistAbility(
         Check for a duel immediately upon gaining the ability (e.g., Copycat).
         GUARD: Only if the race is active (skips Setup Phase).
         """
-        if not engine.state.race_active:
+        if (
+            not engine.state.race_active
+            or (owner := engine.get_active_racer(owner_idx)) is None
+        ):
             return
-
-        owner = engine.get_racer(owner_idx)
         agent = engine.get_agent(owner_idx)
 
         # Trigger logic with a synthetic phase name
@@ -70,7 +71,7 @@ class DuelistAbility(
         # 1. Validation Logic
         if (
             not isinstance(event, (TurnStartEvent, PostMoveEvent, PostWarpEvent))
-            or not owner.active
+            or not is_active(owner)
             or not engine.get_racer(event.target_racer_idx).active
         ):
             return "skip_trigger"
@@ -80,7 +81,7 @@ class DuelistAbility(
     def _check_and_run_duel(
         self,
         engine: GameEngine,
-        owner: RacerState,
+        owner: ActiveRacerState,
         agent: Agent,
         phase: Phase,
     ) -> AbilityTriggeredEventOrSkipped:
