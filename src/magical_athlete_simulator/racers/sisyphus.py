@@ -10,7 +10,7 @@ from magical_athlete_simulator.engine.movement import push_warp
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
-    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.state import ActiveRacerState
     from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -22,7 +22,12 @@ class SisyphusCurse(Ability, SetupPhaseMixin):
     preferred_dice: D6VAlueSet = frozenset([1, 2, 3, 4, 5])
 
     @override
-    def on_setup(self, engine: GameEngine, owner: RacerState, agent: Agent) -> None:
+    def on_setup(
+        self,
+        engine: GameEngine,
+        owner: ActiveRacerState,
+        agent: Agent,
+    ) -> None:
         owner.victory_points += 4
         engine.log_info(
             f"{owner.repr} starts with +4 VP (Total: {owner.victory_points}).",
@@ -32,7 +37,7 @@ class SisyphusCurse(Ability, SetupPhaseMixin):
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ):

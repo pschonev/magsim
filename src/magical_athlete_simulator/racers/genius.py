@@ -20,7 +20,7 @@ from magical_athlete_simulator.core.events import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
-    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.state import ActiveRacerState
     from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -41,7 +41,7 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:

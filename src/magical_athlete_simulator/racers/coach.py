@@ -17,7 +17,6 @@ from magical_athlete_simulator.core.mixins import (
     RollModificationMixin,
 )
 from magical_athlete_simulator.core.modifiers import RacerModifier
-from magical_athlete_simulator.core.state import ActiveRacerState, is_active
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     remove_racer_modifier,
@@ -25,7 +24,7 @@ from magical_athlete_simulator.engine.abilities import (
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
-    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.state import ActiveRacerState
     from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -102,13 +101,11 @@ class CoachAura(Ability, LifecycleManagedMixin):
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ):
-        if not isinstance(event, (PostMoveEvent, PostWarpEvent)) or not is_active(
-            owner,
-        ):
+        if not isinstance(event, (PostMoveEvent, PostWarpEvent)):
             return "skip_trigger"
 
         # check if owner (Coach) moved

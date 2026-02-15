@@ -17,7 +17,6 @@ from magical_athlete_simulator.core.events import (
 )
 from magical_athlete_simulator.core.mixins import DestinationCalculatorMixin
 from magical_athlete_simulator.core.modifiers import RacerModifier
-from magical_athlete_simulator.core.state import is_active
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     remove_racer_modifier,
@@ -26,7 +25,7 @@ from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
-    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.state import ActiveRacerState
     from magical_athlete_simulator.core.types import AbilityName, ModifierName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -72,7 +71,7 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ):
@@ -81,7 +80,6 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
             not isinstance(event, PostMoveEvent)
             or event.target_racer_idx == owner.idx
             or event.start_tile != owner.position
-            or not is_active(owner)
         ):
             return "skip_trigger"
 
@@ -124,4 +122,4 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
             return False
 
         # check if moving forward
-        return moving_racer.active and moving_racer.position > owner.position
+        return moving_racer.position > owner.position

@@ -14,7 +14,7 @@ from magical_athlete_simulator.core.events import (
     GameEvent,
     TurnStartEvent,
 )
-from magical_athlete_simulator.core.state import ActiveRacerState, RacerState, is_active
+from magical_athlete_simulator.core.state import ActiveRacerState
 from magical_athlete_simulator.engine.movement import push_warp
 
 if TYPE_CHECKING:
@@ -32,15 +32,11 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[ActiveRacerState]):
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if (
-            not isinstance(event, TurnStartEvent)
-            or event.target_racer_idx != owner.idx
-            or not is_active(owner)
-        ):
+        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
             return "skip_trigger"
 
         valid_targets = engine.get_active_racers(except_racer_idx=owner.idx)

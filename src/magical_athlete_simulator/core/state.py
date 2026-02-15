@@ -37,18 +37,13 @@ class RollState:
 class ActiveRacerState(Protocol):
     idx: int
     name: RacerName
-
-    # NARROWED: Must be int
-    position: int
-
+    position: int  # NARROWED: Must be int
     victory_points: int
     tripped: bool
     tripping_racers: list[int | None]
     main_move_consumed: bool
     roll_override: tuple[AbilityName, int] | None
     can_reroll: bool
-    finish_position: int | None
-    eliminated: bool
     modifiers: list[RacerModifier]
     active_abilities: list[Ability]
 
@@ -56,10 +51,8 @@ class ActiveRacerState(Protocol):
     def repr(self) -> str: ...
     @property
     def abilities(self) -> set[AbilityName]: ...
-    @property
-    def finished(self) -> bool: ...
-    @property
-    def active(self) -> bool: ...
+
+    def eliminate(self) -> None: ...
 
 
 @dataclass(slots=True)
@@ -103,6 +96,10 @@ class RacerState:
     def active(self) -> bool:
         return not self.finished and not self.eliminated and self.position is not None
 
+    def eliminate(self) -> None:
+        self.position = None
+        self.eliminated = True
+
 
 def is_active(racer_state: RacerState) -> TypeGuard[ActiveRacerState]:
     """
@@ -134,12 +131,10 @@ class GameState:
 
     @property
     def unavailable_racers(self) -> frozenset[RacerName]:
-        """Unavailable = active + drawn + removed"""
+        active_names: set[RacerName] = {r.name for r in self.racers}
         return (
-            frozenset(r.name for r in self.racers)
-            .union(
-                self._drawn_racers,
-            )
+            frozenset(active_names)
+            .union(self._drawn_racers)
             .union(self._removed_racers)
         )
 

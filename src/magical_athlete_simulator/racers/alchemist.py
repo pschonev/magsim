@@ -18,7 +18,7 @@ from magical_athlete_simulator.core.events import (
 from magical_athlete_simulator.engine.roll import report_base_value_change  # NEW Import
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.state import ActiveRacerState
     from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -33,7 +33,7 @@ class AlchemistAlchemyAbility(Ability, BooleanDecisionMixin):
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:

@@ -12,7 +12,7 @@ from magical_athlete_simulator.core.mixins import ExternalAbilityMixin
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
     from magical_athlete_simulator.core.events import GameEvent
-    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.state import ActiveRacerState, RacerState
     from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet, RacerName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -42,7 +42,7 @@ class Ability:
         It checks liveness, executes logic, and automatically emits the trigger event.
         """
         # 1. Finished or eliminated racers don't use abilities
-        if not (owner := engine.get_racer(owner_idx)).active:
+        if (owner := engine.get_active_racer(owner_idx)) is None:
             return
 
         # 2. Execute
@@ -60,7 +60,7 @@ class Ability:
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
@@ -97,7 +97,7 @@ class CopyAbilityProtocol(Protocol):
 
 def copied_racer_repr(
     copying_ability: Ability,
-    copying_racer: RacerState,
+    copying_racer: ActiveRacerState | RacerState,
 ) -> str:
     if (
         not isinstance(copying_ability, CopyAbilityProtocol)

@@ -18,7 +18,7 @@ from magical_athlete_simulator.core.events import (
     TurnStartEvent,
 )
 from magical_athlete_simulator.core.mixins import LifecycleManagedMixin
-from magical_athlete_simulator.core.state import ActiveRacerState, RacerState, is_active
+from magical_athlete_simulator.core.state import ActiveRacerState
 from magical_athlete_simulator.engine.movement import push_move
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 @dataclass
 class DuelistAbility(
     Ability,
-    SelectionDecisionMixin[RacerState],
+    SelectionDecisionMixin[ActiveRacerState],
     LifecycleManagedMixin,
 ):
     name: AbilityName = "DuelistDuel"
@@ -64,14 +64,13 @@ class DuelistAbility(
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
         # 1. Validation Logic
         if (
             not isinstance(event, (TurnStartEvent, PostMoveEvent, PostWarpEvent))
-            or not is_active(owner)
             or not engine.get_racer(event.target_racer_idx).active
         ):
             return "skip_trigger"
@@ -102,8 +101,8 @@ class DuelistAbility(
         target = agent.make_selection_decision(
             engine,
             ctx=SelectionDecisionContext[
-                SelectionInteractive[RacerState],
-                RacerState,
+                SelectionInteractive[ActiveRacerState],
+                ActiveRacerState,
             ](
                 source=self,
                 event=None,  # Optional context, often None for direct calls
@@ -151,8 +150,8 @@ class DuelistAbility(
     def get_auto_selection_decision(
         self,
         engine: GameEngine,
-        ctx: SelectionDecisionContext[Self, RacerState],
-    ) -> RacerState | None:
+        ctx: SelectionDecisionContext[Self, ActiveRacerState],
+    ) -> ActiveRacerState | None:
         """
         Auto-Strategy: Always duel.
         If multiple targets, pick the one with the highest index (arbitrary deterministic choice)

@@ -19,7 +19,7 @@ from magical_athlete_simulator.core.events import (
 from magical_athlete_simulator.engine.roll import trigger_reroll
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.state import ActiveRacerState
     from magical_athlete_simulator.core.types import AbilityName, D6VAlueSet
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -40,7 +40,7 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:

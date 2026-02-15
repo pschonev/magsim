@@ -17,7 +17,7 @@ from magical_athlete_simulator.core.events import (
     RacerFinishedEvent,
     TurnStartEvent,
 )
-from magical_athlete_simulator.core.state import ActiveRacerState, RacerState, is_active
+from magical_athlete_simulator.core.state import ActiveRacerState, is_active
 from magical_athlete_simulator.engine.flow import mark_finished
 
 if TYPE_CHECKING:
@@ -37,7 +37,7 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[ActiveRacerState]
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
@@ -102,31 +102,30 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[ActiveRacerState]
                     f"{owner.repr}'s prediction was correct! {self.prediction.repr} won!",
                 )
 
-                if owner.active:
-                    # send to telemetry directly if prediction correct
-                    if engine.on_event_processed:
-                        engine.on_event_processed(
-                            engine,
-                            AbilityTriggeredEvent(
-                                responsible_racer_idx=owner.idx,
-                                source=self.name,
-                                phase=event.phase,
-                                target_racer_idx=owner.idx,
-                            ),
-                        )
-                    if engine.state.rules.hr_mastermind_steal_1st:
-                        # house rule lets Mastermind steal 1st place instead
-                        engine.log_info(f"{owner.repr} steals 1st place!")
-                        mark_finished(
-                            engine,
-                            racer=engine.get_racer(event.target_racer_idx),
-                            rank=2,
-                        )
-                        mark_finished(engine, owner, 1)
-                    else:
-                        # If Mastermind hasn't finished yet, they take 2nd place immediately.
-                        engine.log_info(f"{owner.repr} claims 2nd place immediately!")
-                        mark_finished(engine, owner, 2)
+                # send to telemetry directly if prediction correct
+                if engine.on_event_processed:
+                    engine.on_event_processed(
+                        engine,
+                        AbilityTriggeredEvent(
+                            responsible_racer_idx=owner.idx,
+                            source=self.name,
+                            phase=event.phase,
+                            target_racer_idx=owner.idx,
+                        ),
+                    )
+                if engine.state.rules.hr_mastermind_steal_1st:
+                    # house rule lets Mastermind steal 1st place instead
+                    engine.log_info(f"{owner.repr} steals 1st place!")
+                    mark_finished(
+                        engine,
+                        racer=engine.get_racer(event.target_racer_idx),
+                        rank=2,
+                    )
+                    mark_finished(engine, owner, 1)
+                else:
+                    # If Mastermind hasn't finished yet, they take 2nd place immediately.
+                    engine.log_info(f"{owner.repr} claims 2nd place immediately!")
+                    mark_finished(engine, owner, 2)
 
         return "skip_trigger"
 

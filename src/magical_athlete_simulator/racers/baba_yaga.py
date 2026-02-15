@@ -10,12 +10,11 @@ from magical_athlete_simulator.core.events import (
     PostMoveEvent,
     PostWarpEvent,
 )
-from magical_athlete_simulator.core.state import is_active
 from magical_athlete_simulator.engine.movement import push_trip
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
-    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.state import ActiveRacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -29,13 +28,11 @@ class BabaYagaTrip(Ability):
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, (PostMoveEvent, PostWarpEvent)) or not is_active(
-            owner,
-        ):
+        if not isinstance(event, (PostMoveEvent, PostWarpEvent)):
             return "skip_trigger"
 
         # CASE 1: Baba Yaga Moved onto someone

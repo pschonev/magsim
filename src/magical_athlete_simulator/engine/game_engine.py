@@ -108,7 +108,7 @@ class GameEngine:
         if self.verbose:
             self._logger.addFilter(ContextFilter(self))
 
-        for racer in self.state.racers:
+        for racer in self.get_active_racers():
             # 1. Initial Identity (e.g. "Egg", "Copycat")
             initial_core = self.instantiate_racer_abilities(racer.name)
             self.replace_core_abilities(racer.idx, initial_core)
@@ -523,14 +523,16 @@ class GameEngine:
         self,
         tile_idx: int,
         except_racer_idx: int | None = None,
-    ) -> list[RacerState]:
+    ) -> list[ActiveRacerState]:
         if except_racer_idx is None:
-            return [r for r in self.state.racers if r.active and r.position == tile_idx]
+            return [
+                r for r in self.state.racers if is_active(r) and r.position == tile_idx
+            ]
         else:
             return [
                 r
                 for r in self.state.racers
-                if r.active and r.position == tile_idx and r.idx != except_racer_idx
+                if is_active(r) and r.position == tile_idx and r.idx != except_racer_idx
             ]
 
     def skip_main_move(

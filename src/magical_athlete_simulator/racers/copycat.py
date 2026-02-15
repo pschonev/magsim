@@ -24,7 +24,7 @@ from magical_athlete_simulator.core.events import (
     RacerFinishedEvent,
     TurnStartEvent,
 )
-from magical_athlete_simulator.core.state import RacerState, is_active
+from magical_athlete_simulator.core.state import ActiveRacerState, RacerState, is_active
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.types import AbilityName
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
+class AbilityCopyLead(Ability, SelectionDecisionMixin[ActiveRacerState]):
     name: AbilityName = "CopyLead"
     triggers: tuple[type[GameEvent], ...] = (
         TurnStartEvent,
@@ -67,7 +67,7 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
@@ -91,7 +91,7 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
                 )
             elif self.current_copied_racer == "start_of_game":
                 pass
-            elif self.current_copied_racer.active:
+            else:
                 engine.log_info(
                     f"{owner.repr} currently copies the behaviour of {self._current_copied_racer_repr}.",
                 )
@@ -124,8 +124,8 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
         target = agent.make_selection_decision(
             engine,
             SelectionDecisionContext[
-                SelectionInteractive[RacerState],
-                RacerState,
+                SelectionInteractive[ActiveRacerState],
+                ActiveRacerState,
             ](
                 source=self,
                 event=event,
@@ -147,7 +147,8 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
         ):
             return "skip_trigger"
 
-        self.current_copied_racer = target
+        self.current_copied_racer = engine.get_racer(target.idx)
+
         engine.log_info(
             f"{owner.repr} decided to copy {self._current_copied_racer_repr} using {self.name}!",
         )
@@ -172,8 +173,8 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[RacerState]):
     def get_auto_selection_decision(
         self,
         engine: GameEngine,
-        ctx: SelectionDecisionContext[Self, RacerState],
-    ) -> RacerState:
+        ctx: SelectionDecisionContext[Self, ActiveRacerState],
+    ) -> ActiveRacerState:
         # Always return the first option (deterministic tie-break)
         # options are already sorted by idx in execute()
         return ctx.options[0]

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
         AbilityTriggeredEventOrSkipped,
         GameEvent,
     )
-    from magical_athlete_simulator.core.state import RacerState
+    from magical_athlete_simulator.core.state import ActiveRacerState
     from magical_athlete_simulator.core.types import AbilityName
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
@@ -34,14 +34,14 @@ class EggCopyAbility(Ability, SetupPhaseMixin, SelectionDecisionMixin[RacerStat]
 
     copied_racer: RacerName | None = None
 
-    def _copied_racer_repr(self, owner: RacerState) -> str:
+    def _copied_racer_repr(self, owner: ActiveRacerState) -> str:
         return copied_racer_repr(self, owner)
 
     @override
     def execute(
         self,
         event: GameEvent,
-        owner: RacerState,
+        owner: ActiveRacerState,
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
@@ -56,7 +56,12 @@ class EggCopyAbility(Ability, SetupPhaseMixin, SelectionDecisionMixin[RacerStat]
         return "skip_trigger"
 
     @override
-    def on_setup(self, engine: GameEngine, owner: RacerState, agent: Agent) -> None:
+    def on_setup(
+        self,
+        engine: GameEngine,
+        owner: ActiveRacerState,
+        agent: Agent,
+    ) -> None:
         racer_options = engine.draw_racers(k=3)
         engine.log_info(
             f"{owner.repr} drew {', '.join(f'{r.racer_name} ({r.avg_vp:.2f} ØVP)' for r in racer_options)}.",
