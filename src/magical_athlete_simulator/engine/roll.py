@@ -44,6 +44,11 @@ def report_base_value_change(
 
 def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) -> None:
     racer = engine.get_racer(event.target_racer_idx)
+    if racer.tripped:
+        engine.log_info(f"Skipping roll because {racer.repr} is tripped.")
+        racer.main_move_consumed = True
+        return
+
     if racer.main_move_consumed:
         engine.log_info(f"Skipping roll because {racer.repr} already used main move.")
         return
