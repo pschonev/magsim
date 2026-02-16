@@ -95,25 +95,40 @@ class SnapshotRecorder:
         current_logs_text = self.log_source.export_text()
         log_line_index = max(0, current_logs_text.count("\n") - 1)
         current_logs_html = self.log_source.export_html()
+
         current_racer_idx = engine.state.current_racer_idx
         current_racer = engine.state.racers[current_racer_idx]
 
-        # Determine if the current racer skipped their roll
-        # They skip if: tripped OR main move was consumed before rolling
         skipped_roll = current_racer.tripped or (
             current_racer.main_move_consumed
             and engine.state.roll_state.dice_value is None
         )
 
+        current_positions = [r.position for r in engine.state.racers]
+        current_tripped = [r.tripped for r in engine.state.racers]
+        current_roll = engine.state.roll_state.dice_value
+
+        if self.step_history:
+            last = self.step_history[-1]
+            if (
+                log_line_index == last.log_line_index
+                and current_positions == last.positions
+                and current_tripped == last.tripped
+                and current_roll == last.last_roll
+                and current_racer_idx == last.current_racer
+                and skipped_roll == last.skipped_roll
+            ):
+                return
+
         snapshot = StepSnapshot(
             global_step_index=len(self.step_history),
             turn_index=turn_index,
             event_name=event_name,
-            positions=[r.position for r in engine.state.racers],
-            tripped=[r.tripped for r in engine.state.racers],
+            positions=current_positions,
+            tripped=current_tripped,
             vp=[r.victory_points for r in engine.state.racers],
-            last_roll=engine.state.roll_state.dice_value,
-            current_racer=engine.state.current_racer_idx,
+            last_roll=current_roll,
+            current_racer=current_racer_idx,
             names=[r.name for r in engine.state.racers],
             modifiers=[[m.name for m in r.modifiers] for r in engine.state.racers],
             abilities=[
