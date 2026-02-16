@@ -1523,7 +1523,7 @@ def cell_vsialize_track(
             svg_elements.append(
                 f'<text x="{center_x}" y="{center_y + 35}" font-size="40" font-weight="bold" text-anchor="middle" fill="#eee" >🎲 {roll}</text>',
             )
-        elif turn_data.turn_index > 0:
+        elif turn_data.skipped_roll:
             svg_elements.append(
                 f'<text x="{center_x}" y="{center_y + 35}" font-size="60" font-weight="bold" text-anchor="middle" fill="#ff0000" >X</text>',
             )

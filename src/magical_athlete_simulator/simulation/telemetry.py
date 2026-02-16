@@ -54,6 +54,7 @@ class StepSnapshot:
     abilities: list[list[AbilityName]]
     log_html: str
     log_line_index: int
+    skipped_roll: bool
 
 
 @dataclass(slots=True)
@@ -94,6 +95,15 @@ class SnapshotRecorder:
         current_logs_text = self.log_source.export_text()
         log_line_index = max(0, current_logs_text.count("\n") - 1)
         current_logs_html = self.log_source.export_html()
+        current_racer_idx = engine.state.current_racer_idx
+        current_racer = engine.state.racers[current_racer_idx]
+
+        # Determine if the current racer skipped their roll
+        # They skip if: tripped OR main move was consumed before rolling
+        skipped_roll = current_racer.tripped or (
+            current_racer.main_move_consumed
+            and engine.state.roll_state.dice_value is None
+        )
 
         snapshot = StepSnapshot(
             global_step_index=len(self.step_history),
@@ -112,6 +122,7 @@ class SnapshotRecorder:
             ],
             log_html=current_logs_html,
             log_line_index=log_line_index,
+            skipped_roll=skipped_roll,
         )
 
         self.step_history.append(snapshot)
