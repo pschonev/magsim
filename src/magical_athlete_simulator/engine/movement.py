@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 def _publish_pre_move(engine: GameEngine, evt: MoveCmdEvent):
     if (racer := engine.get_active_racer(evt.target_racer_idx)) is None:
         return
-    engine.publish_to_subscribers(
+    engine.dispatch_immediately(
         PreMoveEvent(
             target_racer_idx=evt.target_racer_idx,
             start_tile=racer.position,
@@ -167,29 +167,33 @@ def _finalize_committed_move(
     end_tile: int,
 ):
     racer = engine.get_racer(evt.target_racer_idx)
+    # 1. Telemetry (ALWAYS)
+    post_move_event = PostMoveEvent(
+        target_racer_idx=evt.target_racer_idx,
+        start_tile=start_tile,
+        end_tile=end_tile,
+        source=evt.source,
+        phase=evt.phase,
+        responsible_racer_idx=evt.responsible_racer_idx,
+    )
+    if engine.on_event_processed:
+        engine.on_event_processed(engine, post_move_event)
 
-    if check_finish(engine, racer):
+    # 2. Check Finish / Race End
+    if check_finish(engine, racer) and not engine.state.race_active:
         return
 
-    # Board “on land” hooks
-    engine.state.board.trigger_on_land(
-        end_tile,
-        evt.target_racer_idx,
-        evt.phase,
-        engine,
-    )
+    # 3. Subscribers (Abilities) - Only if race is active
+    engine.publish_to_subscribers(post_move_event)
 
-    # Arrival hook
-    engine.publish_to_subscribers(
-        PostMoveEvent(
-            target_racer_idx=evt.target_racer_idx,
-            start_tile=start_tile,
-            end_tile=end_tile,
-            source=evt.source,
-            phase=evt.phase,
-            responsible_racer_idx=evt.responsible_racer_idx,
-        ),
-    )
+    # 4. Landing Effects - Only if racer is still on board (didn't finish)
+    if not racer.finished:
+        engine.state.board.trigger_on_land(
+            end_tile,
+            evt.target_racer_idx,
+            evt.phase,
+            engine,
+        )
 
 
 def handle_move_cmd(engine: GameEngine, evt: MoveCmdEvent):
@@ -327,29 +331,36 @@ def _finalize_committed_warp(
     end_tile: int,
 ):
     racer = engine.get_racer(event.target_racer_idx)
-
-    engine.log_info(f"Warp: {racer.repr} -> {end_tile} ({event.source})")
     racer.position = end_tile
-    if check_finish(engine, racer):
+    engine.log_info(f"Warp: {racer.repr} -> {end_tile} ({event.source})")
+
+    # 1. Telemetry (ALWAYS)
+    post_warp_event = PostWarpEvent(
+        target_racer_idx=event.target_racer_idx,
+        start_tile=start_tile,
+        end_tile=end_tile,
+        source=event.source,
+        phase=event.phase,
+        responsible_racer_idx=event.responsible_racer_idx,
+    )
+    if engine.on_event_processed:
+        engine.on_event_processed(engine, post_warp_event)
+
+    # 2. Check Finish / Race End
+    if check_finish(engine, racer) and not engine.state.race_active:
         return
 
-    engine.state.board.trigger_on_land(
-        end_tile,
-        event.target_racer_idx,
-        event.phase,
-        engine,
-    )
+    # 3. Subscribers
+    engine.publish_to_subscribers(post_warp_event)
 
-    engine.publish_to_subscribers(
-        PostWarpEvent(
-            target_racer_idx=event.target_racer_idx,
-            start_tile=start_tile,
-            end_tile=end_tile,
-            source=event.source,
-            phase=event.phase,
-            responsible_racer_idx=event.responsible_racer_idx,
-        ),
-    )
+    # 4. Landing Effects
+    if not racer.finished:
+        engine.state.board.trigger_on_land(
+            end_tile,
+            event.target_racer_idx,
+            event.phase,
+            engine,
+        )
 
 
 def handle_warp_cmd(engine: GameEngine, evt: WarpCmdEvent):
@@ -364,7 +375,7 @@ def handle_warp_cmd(engine: GameEngine, evt: WarpCmdEvent):
         return
 
     # 1. Departure hook
-    engine.publish_to_subscribers(
+    engine.dispatch_immediately(
         PreWarpEvent(
             target_racer_idx=evt.target_racer_idx,
             start_tile=start,
@@ -424,7 +435,7 @@ def handle_simultaneous_warp_cmd(engine: GameEngine, evt: SimultaneousWarpCmdEve
         )
 
         # 1. Departure hook (PreWarpEvent)
-        engine.publish_to_subscribers(
+        engine.dispatch_immediately(
             PreWarpEvent(
                 target_racer_idx=warp.warping_racer_idx,
                 start_tile=start,
@@ -469,36 +480,32 @@ def handle_simultaneous_warp_cmd(engine: GameEngine, evt: SimultaneousWarpCmdEve
 
 def handle_trip_cmd(engine: GameEngine, evt: TripCmdEvent):
     racer = engine.get_racer(evt.target_racer_idx)
-
-    # If already tripped or finished, do nothing AND emit nothing.
     if not racer.active:
         return
 
-    # whoever did the tripping will be added as responsible for trip,
-    # regardless of whether already tripped
     racer.tripping_racers.append(evt.responsible_racer_idx)
-
     if racer.tripped:
         return
 
-    # Apply effect
     racer.tripped = True
     engine.log_info(f"{evt.source}: {racer.repr} is now tripped.")
 
     if evt.emit_ability_triggered != "never":
-        engine.push_event(
-            event=AbilityTriggeredEvent.from_event(evt),
+        engine.push_event(AbilityTriggeredEvent.from_event(evt))
+
+    # Use dispatch_immediate pattern for PostTripEvent too
+    if evt.responsible_racer_idx is not None:
+        post_trip_event = PostTripEvent(
+            responsible_racer_idx=evt.responsible_racer_idx,
+            source=evt.source,
+            target_racer_idx=evt.target_racer_idx,
+            phase=evt.phase,
         )
-    if evt.responsible_racer_idx is not None and engine.on_event_processed is not None:
-        engine.on_event_processed(
-            engine,
-            PostTripEvent(
-                responsible_racer_idx=evt.responsible_racer_idx,
-                source=evt.source,
-                target_racer_idx=evt.target_racer_idx,
-                phase=evt.phase,
-            ),
-        )
+        if engine.on_event_processed:
+            engine.on_event_processed(engine, post_trip_event)
+
+        # Publish to subscribers if needed (currently Trip doesn't have listeners, but consistent)
+        engine.publish_to_subscribers(post_trip_event)
 
 
 ####

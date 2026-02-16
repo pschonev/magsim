@@ -191,8 +191,8 @@ def handle_execute_main_move(engine: GameEngine, event: ExecuteMainMoveEvent) ->
             moved_racer_idx=event.target_racer_idx,
             distance=dist,
             phase=Phase.MOVE_EXEC,
-            source=event.source,
-            responsible_racer_idx=event.responsible_racer_idx,
+            source="System",
+            responsible_racer_idx=None,
             emit_ability_triggered="never",
             is_main_move=True,
         )

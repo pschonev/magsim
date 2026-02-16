@@ -59,9 +59,11 @@ class BabaYagaTrip(Ability):
         else:
             mover = engine.get_racer(event.target_racer_idx)
             if mover.active and mover.position == owner.position:
-                engine.log_info(
-                    f"{mover.repr} stepped onto {owner.repr} and trips due to {self.name}!",
-                )
+                if not mover.tripped:
+                    # only log when actually tripping
+                    engine.log_info(
+                        f"{mover.repr} stepped onto {owner.repr} and trips due to {self.name}!",
+                    )
                 push_trip(
                     engine,
                     phase=event.phase,

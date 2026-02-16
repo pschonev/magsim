@@ -106,11 +106,11 @@ class DicemongerRerollAction(Ability, BooleanDecisionMixin, ExternalAbilityMixin
                 moved_racer_idx=self.source_racer_idx,
                 source=self.name,
                 responsible_racer_idx=self.source_racer_idx,
-                emit_ability_triggered="after_resolution",
+                emit_ability_triggered="never",
             )
 
         return AbilityTriggeredEvent(
-            responsible_racer_idx=owner.idx,
+            responsible_racer_idx=self.source_racer_idx,
             source=self.name,
             phase=event.phase,
             target_racer_idx=owner.idx,

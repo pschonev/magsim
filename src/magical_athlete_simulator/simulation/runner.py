@@ -85,8 +85,8 @@ def run_single_simulation(
     def bridge_notification_event(event: GameEvent, _owner: int, engine: GameEngine):
         aggregator.on_event(event=event, engine=engine)
 
-    engine.subscribe(PostMoveEvent, bridge_notification_event, owner_idx=-1)
-    engine.subscribe(PostWarpEvent, bridge_notification_event, owner_idx=-1)
+    # engine.subscribe(PostMoveEvent, bridge_notification_event, owner_idx=-1)
+    # engine.subscribe(PostWarpEvent, bridge_notification_event, owner_idx=-1)
 
     error_code: ErrorCode | None = None
 

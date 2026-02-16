@@ -111,4 +111,4 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
-        return False
+        return self.get_baseline_boolean_decision(engine, ctx)

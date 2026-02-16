@@ -106,7 +106,10 @@ class SnapshotRecorder:
             current_racer=engine.state.current_racer_idx,
             names=[r.name for r in engine.state.racers],
             modifiers=[[m.name for m in r.modifiers] for r in engine.state.racers],
-            abilities=[sorted(r.active_abilities) for r in engine.state.racers],
+            abilities=[
+                [a.name for a in sorted(r.active_abilities, key=lambda a: a.name)]
+                for r in engine.state.racers
+            ],
             log_html=current_logs_html,
             log_line_index=log_line_index,
         )

@@ -138,5 +138,10 @@ def end_race(engine: GameEngine) -> None:
     engine.state.race_active = False
     engine.log_info("Race ended! 🏁")
 
+    # send remaining events to telemetry
+    if engine.on_event_processed:
+        for scheduled_event in engine.state.queue:
+            engine.on_event_processed(engine, scheduled_event.event)
+
     engine.state.queue.clear()
     log_final_standings(engine)

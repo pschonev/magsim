@@ -353,8 +353,7 @@ class GameEngine:
             self._calculate_board_hash(),
         )
 
-        msg = f"{sched}"
-        self.log_debug(msg)
+        self.log_debug(f"{sched}")
         heapq.heappush(self.state.queue, sched)
 
         if (
@@ -443,6 +442,7 @@ class GameEngine:
     def publish_to_subscribers(self, event: GameEvent):
         if type(event) not in self.subscribers:
             return
+
         subs = self.subscribers[type(event)]
         curr = self.state.current_racer_idx
         count = len(self.state.racers)
@@ -450,6 +450,13 @@ class GameEngine:
 
         for sub in ordered_subs:
             sub.callback(event, sub.owner_idx, self)
+
+    def dispatch_immediately(self, event: GameEvent) -> None:
+        """Publish to subscribers immediately (PostMoveEvent, PostWarpEvent), bypassing the queue"""
+        self.publish_to_subscribers(event)
+
+        if self.on_event_processed:
+            self.on_event_processed(self, event)
 
     def _handle_event(self, event: GameEvent):
         match event:
