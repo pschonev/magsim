@@ -112,6 +112,7 @@ class RollModificationWindowEvent(GameEvent, HasTargetRacer):
     current_roll_val: int
     roll_serial: int
     phase: Phase = Phase.ROLL_WINDOW
+    modifier_breakdown: list[tuple[str, int]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, kw_only=True)

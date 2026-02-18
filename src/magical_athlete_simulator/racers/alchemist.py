@@ -15,7 +15,10 @@ from magical_athlete_simulator.core.events import (
     GameEvent,
     RollModificationWindowEvent,
 )
-from magical_athlete_simulator.engine.roll import report_base_value_change  # NEW Import
+from magical_athlete_simulator.engine.roll import (
+    log_roll_breakdown,
+    report_base_value_change,
+)  # NEW Import
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.state import ActiveRacerState
@@ -65,12 +68,20 @@ class AlchemistAlchemyAbility(Ability, BooleanDecisionMixin):
             return "skip_trigger"
 
         engine.state.roll_state.base_value = 4
-        engine.state.roll_state.final_value = 4
+        engine.state.roll_state.final_value += 4 - old_val
         owner.can_reroll = False
 
         engine.log_info(
             f"{owner.repr} used {self.name} to convert a {old_val} to a 4!",
         )
+        log_roll_breakdown(
+            engine,
+            base_value=engine.state.roll_state.base_value,
+            modifier_sources=event.modifier_breakdown,
+            final_value=engine.state.roll_state.final_value,
+            is_override=True,
+        )
+
         report_base_value_change(
             engine,
             owner.idx,

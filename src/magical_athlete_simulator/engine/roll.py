@@ -22,6 +22,31 @@ if TYPE_CHECKING:
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
+def log_roll_breakdown(
+    engine: GameEngine,
+    base_value: int,
+    modifier_sources: list[tuple[str, int]],
+    final_value: int,
+    *,
+    is_override: bool = False,
+) -> None:
+    """
+    Logs the roll breakdown in a standardized format.
+    Can be used by the main roll handler or abilities that override values (e.g. Alchemist).
+    """
+    roll_type = "Base Value Override" if is_override else "Dice Roll"
+
+    if modifier_sources:
+        parts = [f"{name}({delta:+d})" for name, delta in modifier_sources]
+        mods_str = " + ".join(parts)
+        total_delta = sum(delta for _, delta in modifier_sources)
+        engine.log_info(
+            f"{roll_type}: {base_value} | Mods: {mods_str} = {total_delta:+d} -> Result: {final_value}",
+        )
+    else:
+        engine.log_info(f"{roll_type}: {base_value} | Mods: 0 -> Result: {final_value}")
+
+
 def report_base_value_change(
     engine: GameEngine,
     racer_idx: int,
@@ -109,16 +134,13 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
     final = query.final_value
     engine.state.roll_state.final_value = final
 
-    # Logging
-    if query.modifier_sources:
-        parts = [f"{name}({delta:+d})" for name, delta in query.modifier_sources]
-        mods_str = " + ".join(parts)
-        total_delta = sum(delta for _, delta in query.modifier_sources)
-        engine.log_info(
-            f"Dice Roll: {base} | Mods: {mods_str} = {total_delta:+d} -> Result: {final}",
-        )
-    else:
-        engine.log_info(f"Dice Roll: {base} | Mods: 0 -> Result: {final}")
+    log_roll_breakdown(
+        engine,
+        base_value=base,
+        modifier_sources=query.modifier_sources,
+        final_value=final,
+        is_override=False,
+    )
 
     # Fire Window
     engine.push_event(
@@ -128,6 +150,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
             roll_serial=current_serial,
             responsible_racer_idx=event.target_racer_idx,
             source=event.source,
+            modifier_breakdown=query.modifier_sources,
         ),
     )
 
