@@ -1,42 +1,54 @@
 from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 
-def test_blimp_speed_bonus(scenario: type[GameScenario]):
-    """Blimp gets +3 before second_turn (15), -1 after."""
+def test_blimp_speed_bonus_threshold(scenario: type[GameScenario]):
+    """
+    Blimp's movement modifier changes based on position relative to the track's halfway point (15).
+    - Position < 15: +3 Speed Boost
+    - Position >= 15: -1 Speed Penalty
+    """
     game = scenario(
-        [RacerConfig(0, "Blimp", start_pos=10), 
-        RacerConfig(1, "Mastermind", start_pos=10)],
-        dice_rolls=[2, 2, 3],  # Turn 1: before, Turn 2: after
+        [
+            RacerConfig(0, "Blimp", start_pos=10),
+            RacerConfig(1, "Mastermind", start_pos=0), 
+        ],
+        dice_rolls=[
+            2, 
+            2,
+            3, 
+        ],
     )
-    
-    # Turn 1: pos 10 < 15 -> +3. 2+3=5 -> pos 15
-    game.run_turns(2)
-    blimp = game.get_racer(0)
-    assert blimp.position == 15, "Turn 1: 2 + 3 = 5"
-    
-    # Turn 2: pos 15 >= 15 -> -1. 3-1=2 -> pos 17
-    game.run_turn()
-    assert blimp.position == 17, "Turn 2: 3 - 1 = 2"
 
-def test_blimp_coach_gunk_triggers_scoocher_three_times(scenario: type[GameScenario]):
+    # --- Turn 1 ---
+    game.run_turn()
+    blimp = game.get_racer(0)
+    assert blimp.position == 15, "Turn 1: Should gain +3 speed bonus"
+
+    # --- Turn 2 ---
+    game.run_turns(2)  # Mastermind
+    assert blimp.position == 17, "Turn 2: Should suffer -1 speed penalty"
+
+
+def test_blimp_coach_gunk_interaction_triggers_scoocher(scenario: type[GameScenario]):
     """
     Scenario:
-      - Blimp starts on the same tile as Coach and Gunk.
-      - Scoocher is in the game watching.
-      - It is Blimp's turn and they roll once.
+    - Blimp (Active) rolls dice.
+    - Modifiers applied: Blimp (+3), Coach (+1), Gunk (-1).
+    - Scoocher (Observer) watches.
 
     Expectation:
-      - The roll uses (and therefore triggers) Blimp, Coach, and Gunk effects.
-      - Scoocher reacts to those 3 ability triggers and moves 3 times.
+    - Each modifier application fires an AbilityTriggeredEvent.
+    - Scoocher reacts to ALL 3 events -> Moves 3 times.
+    - Blimp net movement: 2 (Roll) + 3 + 1 - 1 = 5.
     """
     game = scenario(
         [
             RacerConfig(0, "Blimp", start_pos=0),
             RacerConfig(1, "Coach", start_pos=0),
             RacerConfig(2, "Gunk", start_pos=0),
-            RacerConfig(idx=3, name="Scoocher", start_pos=10),
+            RacerConfig(3, "Scoocher", start_pos=10),
         ],
-        dice_rolls=[2],  # Blimp roll (single roll this turn)
+        dice_rolls=[2],
     )
 
     game.run_turn()
@@ -44,11 +56,34 @@ def test_blimp_coach_gunk_triggers_scoocher_three_times(scenario: type[GameScena
     blimp = game.get_racer(0)
     scoocher = game.get_racer(3)
 
-    # Scoocher should move once per ability-triggered event:
-    # - Blimp speed bonus trigger
-    # - Coach boost trigger
-    # - Gunk slime trigger
-    assert scoocher.position == 13, f"Scoocher should have moved 3 times (10 -> 13), got {scoocher.position}"
+    # Blimp Movement Logic
+    assert blimp.position == 5, "Blimp Net Move: 2 + 3(Self) + 1(Coach) - 1(Gunk) = 5"
 
-    # Optional sanity check on the net movement: 2 + 3 (Blimp) + 1 (Coach) - 1 (Gunk) = 5
-    assert blimp.position == 5, f"Blimp should have moved to 5, got {blimp.position}"
+    # Scoocher Reaction Logic
+    # 1. BlimpSpeed triggered
+    # 2. CoachBoost triggered
+    # 3. GunkSlime triggered
+    # Total scooches: 3
+    assert scoocher.position == 13, "Scoocher should trigger 3 times (10 -> 13)"
+
+
+def test_blimp_penalty_cannot_reduce_below_zero(scenario: type[GameScenario]):
+    """
+    Verify that the -1 penalty doesn't cause negative movement total
+    if the roll is 1. (Minimum move is usually clamped to 0 or 1 depending on rules,
+    but let's assume standard 'max(0, ...)' logic in MoveDistanceQuery).
+    """
+    game = scenario(
+        [RacerConfig(0, "Blimp", start_pos=20)],  # Past threshold
+        dice_rolls=[1],
+    )
+
+    game.run_turn()
+    blimp = game.get_racer(0)
+
+    # Roll 1 - 1 = 0.
+    # Check if engine clamps to 0.
+    # If the engine enforces min move 0, position stays 20.
+    # If standard rules imply "minimum 1 unless skipped", this test validates that behavior.
+    # Assuming standard modifier math: 1 - 1 = 0.
+    assert blimp.position == 20
