@@ -19,9 +19,10 @@ from magical_athlete_simulator.core.events import (
 )
 from magical_athlete_simulator.core.state import ActiveRacerState, is_active
 from magical_athlete_simulator.engine.flow import mark_finished
+from magical_athlete_simulator.racers import get_all_racer_stats
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.types import AbilityName
+    from magical_athlete_simulator.core.types import AbilityName, RacerName, RacerStat
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -59,7 +60,7 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[ActiveRacerState]
                     event=event,
                     game_state=engine.state,
                     source_racer_idx=owner.idx,
-                    options=[r for r in engine.state.racers if is_active(r)],
+                    options=engine.get_active_racers(except_racer_idx=owner.idx),
                 ),
             )
 
@@ -130,7 +131,7 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[ActiveRacerState]
         return "skip_trigger"
 
     @override
-    def get_auto_selection_decision(
+    def get_baseline_selection_decision(
         self,
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, ActiveRacerState],
@@ -146,3 +147,23 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[ActiveRacerState]
         # Sort by position (descending)
         candidates.sort(key=lambda r: r.position, reverse=True)
         return candidates[0]
+
+    @override
+    def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, ActiveRacerState],
+    ) -> ActiveRacerState | None:
+        """
+        AI Logic: Predict the racer with the best early-game stats or position.
+        """
+        candidates: list[RacerStat] = [
+            stats
+            for name, stats in get_all_racer_stats().items()
+            if name in [r.name for r in ctx.options]
+        ]
+        highest_winrate_racer: RacerName = max(
+            candidates,
+            key=lambda r: r.winrate,
+        ).racer_name
+        return next(r for r in ctx.options if r.name == highest_winrate_racer)

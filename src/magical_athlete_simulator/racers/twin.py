@@ -112,9 +112,17 @@ class TwinCopyAbility(Ability, SetupPhaseMixin, SelectionDecisionMixin[RacerStat
         engine.replace_core_abilities(owner.idx, new_core)
 
     @override
-    def get_auto_selection_decision(
+    def get_baseline_selection_decision(
         self,
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, RacerStat],
     ) -> RacerStat | None:
         return max(ctx.options, key=lambda r: r.avg_vp)
+
+    @override
+    def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, RacerStat],
+    ) -> RacerStat | None:
+        return self.get_baseline_selection_decision(engine, ctx)

@@ -88,10 +88,18 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
         return "skip_trigger"
 
     @override
-    def get_auto_boolean_decision(
+    def get_baseline_boolean_decision(
         self,
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
         dice_val = ctx.game_state.roll_state.dice_value
         return dice_val is not None and dice_val not in self.preferred_dice
+
+    @override
+    def get_auto_boolean_decision(
+        self,
+        engine: GameEngine,
+        ctx: DecisionContext[Self],
+    ) -> bool:
+        return self.get_baseline_boolean_decision(engine, ctx)

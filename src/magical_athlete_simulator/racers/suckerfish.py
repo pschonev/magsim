@@ -108,7 +108,7 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         return "skip_trigger"
 
     @override
-    def get_auto_boolean_decision(
+    def get_baseline_boolean_decision(
         self,
         engine: GameEngine,
         ctx: DecisionContext[Self],
@@ -123,3 +123,11 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
 
         # check if moving forward
         return moving_racer.position > owner.position
+
+    @override
+    def get_auto_boolean_decision(
+        self,
+        engine: GameEngine,
+        ctx: DecisionContext[Self],
+    ) -> bool:
+        return self.get_baseline_boolean_decision(engine, ctx)

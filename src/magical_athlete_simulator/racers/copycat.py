@@ -25,9 +25,10 @@ from magical_athlete_simulator.core.events import (
     TurnStartEvent,
 )
 from magical_athlete_simulator.core.state import ActiveRacerState, RacerState, is_active
+from magical_athlete_simulator.racers import get_all_racer_stats
 
 if TYPE_CHECKING:
-    from magical_athlete_simulator.core.types import AbilityName
+    from magical_athlete_simulator.core.types import AbilityName, RacerName, RacerStat
     from magical_athlete_simulator.engine.game_engine import GameEngine
 
 
@@ -106,7 +107,10 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[ActiveRacerState]):
 
         # 2. If Copycat leads, they lose abilities
         if not valid_targets:
-            if self.current_copied_racer is None:
+            if (
+                self.current_copied_racer is None
+                or self.current_copied_racer == "start_of_game"
+            ):
                 # We are already in the correct state. Do nothing.
                 return "skip_trigger"
 
@@ -170,7 +174,7 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[ActiveRacerState]):
         )
 
     @override
-    def get_auto_selection_decision(
+    def get_baseline_selection_decision(
         self,
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, ActiveRacerState],
@@ -178,3 +182,22 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[ActiveRacerState]):
         # Always return the first option (deterministic tie-break)
         # options are already sorted by idx in execute()
         return ctx.options[0]
+
+    @override
+    def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, ActiveRacerState],
+    ) -> ActiveRacerState:
+        if len(ctx.options) == 1:
+            return ctx.options[0]
+        candidates: list[RacerStat] = [
+            stats
+            for name, stats in get_all_racer_stats().items()
+            if name in [r.name for r in ctx.options]
+        ]
+        highest_winrate_racer: RacerName = max(
+            candidates,
+            key=lambda r: r.winrate,
+        ).racer_name
+        return next(r for r in ctx.options if r.name == highest_winrate_racer)

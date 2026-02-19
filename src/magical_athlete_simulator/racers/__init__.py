@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.modifiers import RacerModifier
 from magical_athlete_simulator.core.registry import RACER_ABILITIES
-from magical_athlete_simulator.core.types import RacerStat
+from magical_athlete_simulator.core.types import RacerName, RacerStat
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -41,7 +41,9 @@ def get_modifier_classes() -> dict[AbilityName | str, type[RacerModifier]]:
 
 
 @functools.cache
-def get_all_racer_stats(log_fn: Callable[[str], None] = print) -> dict[str, RacerStat]:
+def get_all_racer_stats(
+    log_fn: Callable[[str], None] = print,
+) -> dict[RacerName, RacerStat]:
     try:
         # We read the text content directly from the package resource
         json_content = INTERNAL_STATS_PATH.read_text(encoding="utf-8")

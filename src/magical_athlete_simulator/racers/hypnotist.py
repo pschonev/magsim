@@ -73,7 +73,7 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[ActiveRacerState]):
         return "skip_trigger"
 
     @override
-    def get_auto_selection_decision(
+    def get_baseline_selection_decision(
         self,
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, ActiveRacerState],
@@ -88,3 +88,11 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[ActiveRacerState]):
         else:
             engine.log_info(f"{me.repr} is in the lead and won't use {self.name}.")
             return None
+
+    @override
+    def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, ActiveRacerState],
+    ) -> ActiveRacerState | None:
+        return self.get_baseline_selection_decision(engine, ctx)

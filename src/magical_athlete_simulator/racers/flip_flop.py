@@ -37,7 +37,12 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[ActiveRacerState]):
         engine: GameEngine,
         agent: Agent,
     ):
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
+        if (
+            not isinstance(event, TurnStartEvent)
+            or event.target_racer_idx != owner.idx
+            or owner.tripped
+            or owner.main_move_consumed
+        ):
             return "skip_trigger"
 
         target = agent.make_selection_decision(
@@ -86,7 +91,7 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[ActiveRacerState]):
         return "skip_trigger"
 
     @override
-    def get_auto_selection_decision(
+    def get_baseline_selection_decision(
         self,
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, ActiveRacerState],
@@ -105,3 +110,11 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[ActiveRacerState]):
             candidates,
             key=lambda r: r.position,
         )
+
+    @override
+    def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, ActiveRacerState],
+    ) -> ActiveRacerState | None:
+        return self.get_baseline_selection_decision(engine, ctx)

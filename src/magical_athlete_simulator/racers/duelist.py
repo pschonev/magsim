@@ -19,7 +19,9 @@ from magical_athlete_simulator.core.events import (
 )
 from magical_athlete_simulator.core.mixins import LifecycleManagedMixin
 from magical_athlete_simulator.core.state import ActiveRacerState
+from magical_athlete_simulator.core.types import RacerName, RacerStat
 from magical_athlete_simulator.engine.movement import push_move
+from magical_athlete_simulator.racers import get_all_racer_stats
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
@@ -147,17 +149,30 @@ class DuelistAbility(
         return "skip_trigger"
 
     @override
+    def get_baseline_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, ActiveRacerState],
+    ) -> ActiveRacerState | None:
+        """Auto-Strategy: Always duel."""
+        if not ctx.options:
+            return None
+        # Deterministic tie-breaker: pick highest ID
+        return max(ctx.options, key=lambda r: r.idx)
+
+    @override
     def get_auto_selection_decision(
         self,
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, ActiveRacerState],
     ) -> ActiveRacerState | None:
-        """
-        Auto-Strategy: Always duel.
-        If multiple targets, pick the one with the highest index (arbitrary deterministic choice)
-        or perhaps the one who is the biggest threat (though they are on the same space).
-        """
-        if not ctx.options:
-            return None
-        # Deterministic tie-breaker: pick highest ID (or random if you preferred)
-        return max(ctx.options, key=lambda r: r.idx)
+        candidates: list[RacerStat] = [
+            stats
+            for name, stats in get_all_racer_stats().items()
+            if name in [r.name for r in ctx.options]
+        ]
+        highest_winrate_racer: RacerName = min(
+            candidates,
+            key=lambda r: r.winrate,
+        ).racer_name
+        return next(r for r in ctx.options if r.name == highest_winrate_racer)

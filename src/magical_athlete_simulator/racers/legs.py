@@ -58,9 +58,17 @@ class LegsMoveAbility(Ability, BooleanDecisionMixin):
         return "skip_trigger"
 
     @override
-    def get_auto_boolean_decision(
+    def get_baseline_boolean_decision(
         self,
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
         return True
+
+    @override
+    def get_auto_boolean_decision(
+        self,
+        engine: GameEngine,
+        ctx: DecisionContext[Self],
+    ) -> bool:
+        return self.get_baseline_boolean_decision(engine, ctx)

@@ -97,7 +97,7 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
         )
 
     @override
-    def get_auto_selection_decision(
+    def get_baseline_selection_decision(
         self,
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, int],
@@ -108,3 +108,11 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
         if not [pos for pos in ctx.options if pos > owner.position]:
             return None
         return max(ctx.options)
+
+    @override
+    def get_auto_selection_decision(
+        self,
+        engine: GameEngine,
+        ctx: SelectionDecisionContext[Self, int],
+    ) -> int | None:
+        return self.get_baseline_selection_decision(engine, ctx)

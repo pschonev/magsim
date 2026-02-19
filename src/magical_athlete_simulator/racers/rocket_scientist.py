@@ -75,10 +75,18 @@ class RocketScientistAbility(Ability, BooleanDecisionMixin):
         return "skip_trigger"
 
     @override
-    def get_auto_boolean_decision(
+    def get_baseline_boolean_decision(
         self,
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
         current_roll = ctx.game_state.roll_state.dice_value
         return current_roll is not None and current_roll >= 4
+
+    @override
+    def get_auto_boolean_decision(
+        self,
+        engine: GameEngine,
+        ctx: DecisionContext[Self],
+    ) -> bool:
+        return self.get_baseline_boolean_decision(engine, ctx)
