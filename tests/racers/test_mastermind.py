@@ -1,86 +1,80 @@
-import itertools
+from magical_athlete_simulator.ai.baseline_agent import BaselineAgent
 from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
 
 
 def test_mastermind_predicts_winner_and_takes_second(scenario: type[GameScenario]):
     """
-    Scenario: 
-      - Mastermind (idx 0) vs Scoocher (idx 1) vs Gunk (idx 2).
-      - Mastermind should predict Gunk (logic: pick leader).
-      - Gunk finishes 1st.
-    Verify: 
-      - Mastermind correctly predicts Scoocher.
-      - When Scoocher finishes 1st, Mastermind immediately becomes 2nd.
+    Scenario: Mastermind (idx 0) vs Gunk (idx 1, Leader) vs Scoocher (idx 2).
+    - Mastermind uses BaselineAgent (predicts Leader -> Gunk).
+    - Gunk finishes 1st.
+    - Mastermind triggers ability and finishes 2nd immediately.
     """
-    infinite_dice = itertools.cycle([2, 1, 6])
-    
     game = scenario(
         [
-            RacerConfig(idx=0, name="Mastermind", start_pos=0),
-            RacerConfig(idx=1, name="Gunk", start_pos=10),
-            RacerConfig(idx=2, name="Scoocher", start_pos=0),
+            RacerConfig(0, "Mastermind", start_pos=0),
+            RacerConfig(1, "Gunk", start_pos=10),
+            RacerConfig(2, "Scoocher", start_pos=0),
         ],
-        # Rolls: 
-        # 1. Mastermind Turn: Rolls 1. Moves 1. Predicts Scoocher.
-        # 2. Scoocher Turn: Rolls 6 (Cheat). Finishes (10+6 > Finish).
-        dice_rolls=list(itertools.islice(infinite_dice, 100)), 
+        # Rolls:
+        # 1. Mastermind: 2 (Moves 0->2, Predicts Gunk)
+        # 2. Gunk: 6 (Moves 10->16, Finishes)
+        dice_rolls=[2, 6], 
     )
-    game.engine.rng.randint.side_effect = infinite_dice   # pyright: ignore[reportAttributeAccessIssue]
-    # Turn 1: Mastermind
-    # Triggers TurnStart -> MastermindPredict -> Selects Scoocher
+    
+    # Attach AI to Mastermind
+    game.engine.agents[0] = BaselineAgent()
+
+    # Run the full race (or just enough turns to finish)
     game.engine.run_race()
     
     mastermind = game.get_racer(0)
     gunk = game.get_racer(1)
 
-    # Verify Scoocher Win
+    # Gunk finished 1st
     assert gunk.finished
     assert gunk.finish_position == 1
 
-    # Verify Mastermind "Piggyback" Win
+    # Mastermind piggybacked to 2nd
     assert mastermind.finished
     assert mastermind.finish_position == 2
 
 
-def test_mastermind_houserule_predicts_winner_and_takes_first(scenario: type[GameScenario]):
+def test_mastermind_houserule_steal_first_place(scenario: type[GameScenario]):
     """
-    Scenario: 
-      - Mastermind (idx 0) vs Scoocher (idx 1) vs Gunk (idx 2).
-      - Scoocher starts significantly ahead (pos 10).
-      - Mastermind should predict Scoocher (logic: pick leader).
-      - Scoocher finishes 1st.
-    Verify: 
-      - Mastermind correctly predicts Scoocher.
-      - When Scoocher finishes 1st, Mastermind steals 1st place.
+    House Rule: Mastermind Steals 1st Place.
+    Scenario: Mastermind (idx 0) vs Gunk (idx 1, Leader).
+    - Mastermind uses BaselineAgent (predicts Gunk).
+    - Gunk crosses finish line.
+    - Mastermind triggers, takes 1st place, bumping Gunk to 2nd.
     """
-    infinite_dice = itertools.cycle([2, 1, 6])
-    
     game = scenario(
         [
-            RacerConfig(idx=0, name="Mastermind", start_pos=0),
-            RacerConfig(idx=1, name="Gunk", start_pos=10),
-            RacerConfig(idx=2, name="Scoocher", start_pos=0),
+            RacerConfig(0, "Mastermind", start_pos=0),
+            RacerConfig(1, "Gunk", start_pos=10),
+            RacerConfig(2, "Scoocher", start_pos=0),
         ],
-        # Rolls: 
-        # 1. Mastermind Turn: Rolls 1. Moves 1. Predicts Scoocher.
-        # 2. Scoocher Turn: Rolls 6 (Cheat). Finishes (10+6 > Finish).
-        dice_rolls=list(itertools.islice(infinite_dice, 100)), 
+        # Rolls:
+        # 1. Mastermind: 2 (Moves 0->2, Predicts Gunk)
+        # 2. Gunk: 6 (Moves 10->16, Finishes)
+        dice_rolls=[2, 6], 
     )
-    game.engine.rng.randint.side_effect = infinite_dice   # pyright: ignore[reportAttributeAccessIssue]
+    
+    game.engine.agents[0] = BaselineAgent()
+    
+    # Enable House Rule
     game.engine.state.rules.hr_mastermind_steal_1st = True
-    # Turn 1: Mastermind
-    # Triggers TurnStart -> MastermindPredict -> Selects Scoocher
+
     game.engine.run_race()
     
     mastermind = game.get_racer(0)
     gunk = game.get_racer(1)
 
-    # Verify Gunk bumped to 2nd
-    assert gunk.finished
-    assert gunk.finish_position == 2
-    assert gunk.victory_points == game.state.rules.winner_vp[gunk.finish_position - 1]
-
-    # Verify Mastermind win steal
+    # Mastermind stole 1st place
     assert mastermind.finished
     assert mastermind.finish_position == 1
-    assert mastermind.victory_points == game.state.rules.winner_vp[mastermind.finish_position - 1]
+    assert mastermind.victory_points == 4  # Standard 1st place VP
+
+    # Gunk bumped to 2nd place
+    assert gunk.finished
+    assert gunk.finish_position == 2
+    assert gunk.victory_points == 2  # Standard 2nd place VP
