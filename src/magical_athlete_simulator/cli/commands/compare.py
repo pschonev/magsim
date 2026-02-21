@@ -61,7 +61,7 @@ class CompareAICommand:
                     f"| Win Rate | {result.winrate_control:.1%} | {result.winrate_treatment:.1%} | {result.winrate_delta:+.1%} | {result.winrate_pct_change:+.1%} |\n",
                 )
                 f.write(
-                    f"| Avg VP | {result.vp_control:.1f} | {result.vp_treatment:.1f} | {result.vp_delta:+.1f} | {result.vp_pct_change:+.1%} |\n",
+                    f"| Avg VP | {result.vp_control:.2f} | {result.vp_treatment:.2f} | {result.vp_delta:+.2f} | {result.vp_pct_change:+.1%} |\n",
                 )
                 f.write(
                     f"| Max VP | {result.max_vp_control} | {result.max_vp_treatment} | - | - |\n",

@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, override
 
+from magical_athlete_simulator.ai.evaluation import (
+    get_benefit_at,
+    get_current_modifiers,
+    get_hazard_at,
+)
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import (
     Agent,
@@ -25,7 +30,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class LegsMoveAbility(Ability, BooleanDecisionMixin):
-    name: AbilityName = "LegsMove"
+    name: AbilityName = "LongLegs"
     triggers: tuple[type[GameEvent], ...] = (TurnStartEvent,)
 
     @override
@@ -46,7 +51,6 @@ class LegsMoveAbility(Ability, BooleanDecisionMixin):
             source_racer_idx=owner.idx,
         )
         if agent.make_boolean_decision(engine, ctx):
-            engine.log_info(f"{owner.repr} decided to move 5 using {self.name}")
             owner.roll_override = (self.name, 5)
             return AbilityTriggeredEvent(
                 responsible_racer_idx=owner.idx,
@@ -71,4 +75,22 @@ class LegsMoveAbility(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
-        return self.get_baseline_boolean_decision(engine, ctx)
+        if (me := engine.get_active_racer(ctx.source_racer_idx)) is None:
+            return True
+
+        # Calculate where "Move 5" lands us
+        mods = get_current_modifiers(engine, me.idx)
+        target_5 = me.position + 5 + mods
+
+        # 1. PRIORITY: If 5 is amazing, take it!
+        if benefit := get_benefit_at(engine, target_5):
+            engine.log_info(f"{me.repr} uses {self.name} to reach {benefit}!")
+            return True
+
+        # 2. SAFETY CHECK: If 5 trips us, avoid it.
+        if hazard := get_hazard_at(engine, target_5):
+            engine.log_info(f"{me.repr} avoids {self.name} because of {hazard}!")
+            return False
+
+        # 3. DEFAULT: Speed is king (5 > 3.5)
+        return True

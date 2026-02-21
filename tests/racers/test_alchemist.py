@@ -100,3 +100,42 @@ def test_alchemist_modifiers_apply_after_conversion(scenario: type[GameScenario]
     alchemist = game.get_racer(0)
     # 1 -> 4 (Alchemy) + 1 (Coach) = 5
     assert alchemist.position == 5
+
+def test_alchemist_applies_modifiers_to_converted_value(scenario: type[GameScenario]):
+    """
+    Modifiers (like Coach's +1) apply to the converted movement value.
+    Roll 1 -> Converted to 4 -> Coach adds +1 -> Final Move 5.
+    """
+    game = scenario(
+        [
+            RacerConfig(0, "Alchemist", start_pos=0),
+            RacerConfig(1, "Coach", start_pos=0),
+        ],
+        dice_rolls=[1],
+    )
+
+    game.run_turn()
+    assert game.get_racer(0).position == 5
+
+
+def test_alchemist_conversion_triggers_inchworm(scenario: type[GameScenario]):
+    """
+    The original die roll (1) is preserved for reactions like Inchworm.
+    Inchworm sees the 1, cancels the Alchemist's move completely, and creeps.
+    Alchemist stays at 0 (Move 4 cancelled).
+    """
+    game = scenario(
+        [
+            RacerConfig(0, "Alchemist", start_pos=0),
+            RacerConfig(1, "Inchworm", start_pos=10),
+        ],
+        dice_rolls=[1],
+    )
+
+    game.run_turn()
+
+    # Inchworm reacts to the natural 1
+    assert game.get_racer(1).position == 11
+
+    # Alchemist's move (4) is cancelled by Inchworm
+    assert game.get_racer(0).position == 0

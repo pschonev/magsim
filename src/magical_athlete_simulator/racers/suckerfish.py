@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, override
 
+from magical_athlete_simulator.ai.evaluation import (
+    get_benefit_at,
+    get_hazard_at,
+    is_turn_between,
+)
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import (
     BooleanDecisionMixin,
@@ -17,6 +22,8 @@ from magical_athlete_simulator.core.events import (
 )
 from magical_athlete_simulator.core.mixins import DestinationCalculatorMixin
 from magical_athlete_simulator.core.modifiers import RacerModifier
+from magical_athlete_simulator.core.state import is_active
+from magical_athlete_simulator.core.types import RacerName
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     remove_racer_modifier,
@@ -85,6 +92,20 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
 
         if (distance := event.end_tile - owner.position) == 0:
             return "skip_trigger"
+
+        should_ride = agent.make_boolean_decision(
+            engine,
+            ctx=DecisionContext(
+                source=self,
+                event=event,
+                game_state=engine.state,
+                source_racer_idx=owner.idx,
+            ),
+        )
+
+        if not should_ride:
+            return "skip_trigger"
+
         engine.log_info(
             f"{owner.repr} rides the wake of {engine.get_racer(event.target_racer_idx).repr} to {event.end_tile}!",
         )
@@ -130,4 +151,68 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
-        return self.get_baseline_boolean_decision(engine, ctx)
+        # Identify Suckerfish and the driver
+        if (
+            (me := engine.get_active_racer(ctx.source_racer_idx)) is None
+            or not isinstance(ctx.event, PostMoveEvent)
+            or (driver := engine.get_active_racer(ctx.event.target_racer_idx)) is None
+        ):
+            return False
+
+        bad_drivers = {
+            "Mouth",  # kills us
+            "Flip Flop",  # warps instead of moving
+            "Third Wheel",  # warps instead of moving
+            "Sisyphus",  # warps back to Start on 6
+            "Huge Baby",  # cannot share space / pushes back
+        }
+
+        dest = ctx.event.end_tile
+        dist = dest - me.position
+
+        # 1. Hard filters: obvious no-gos
+        if driver.name == "Mouth" or dist <= 0:
+            return False
+
+        # 2. Immediate benefit / hazard on destination
+        if benefit := get_benefit_at(engine, dest):
+            engine.log_info(f"{me.repr} hitchhikes to reach {benefit}!")
+            return True
+
+        if hazard := get_hazard_at(engine, dest):
+            engine.log_info(
+                f"{me.repr} avoids hitchhiking with {driver.repr} because of {hazard}!",
+            )
+            return False
+
+        # 3. Special driver cases Scoocher
+        good_drivers: list[RacerName] = ["Scoocher", "Copycat"]
+        if driver.name in good_drivers:
+            return True
+
+        # 4. Big safe rides: always take (distance ≥ 4)
+        if dist >= 4:
+            return True
+
+        # 5. Small safe rides (1–3): chain logic and local options
+        def moves_before_me(r_idx: int) -> bool:
+            return is_turn_between(driver.idx, me.idx, r_idx)
+
+        # 5a. Destination chain: highest priority among small safe rides
+        for r in engine.get_racers_at_position(dest, except_racer_idx=me.idx):
+            if moves_before_me(r.idx) and r.name not in bad_drivers:
+                engine.log_info(
+                    f"{me.repr} hitchhikes with {driver.repr} to get to {r.repr}!",
+                )
+                return True
+
+        # 5b. Current tile: consider waiting only if no destination-chain exists
+        for r in engine.get_racers_at_position(me.position, except_racer_idx=me.idx):
+            if moves_before_me(r.idx) and r.name not in bad_drivers:
+                engine.log_info(
+                    f"{me.repr} waits for another rider on his tile instead of {driver.repr} (+{dist})!",
+                )
+                return False
+
+        # 5c. No chain and no better local options: just take the small, safe ride
+        return True

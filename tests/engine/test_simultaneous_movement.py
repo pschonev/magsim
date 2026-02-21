@@ -9,7 +9,7 @@ def test_flip_flop_vs_baba_yaga_simultaneous(scenario: type[GameScenario]):
     game = scenario(
         [
             RacerConfig(0, "FlipFlop", start_pos=0),
-            RacerConfig(1, "BabaYaga", start_pos=10),
+            RacerConfig(1, "BabaYaga", start_pos=29),
         ],
         dice_rolls=[1] # Unused
     )
@@ -20,7 +20,7 @@ def test_flip_flop_vs_baba_yaga_simultaneous(scenario: type[GameScenario]):
     ff = game.get_racer(0)
     baba = game.get_racer(1)
     
-    assert ff.position == 10, "Flip Flop should be at 10"
+    assert ff.position == 29, "Flip Flop should be at 10"
     assert baba.position == 0, "Baba Yaga should be at 0"
     
     # This assertion will fail until simultaneous warp logic is implemented

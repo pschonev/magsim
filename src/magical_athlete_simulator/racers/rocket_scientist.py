@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, override
 
+from magical_athlete_simulator.ai.evaluation import get_benefit_at, get_hazard_at
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import BooleanDecisionMixin, DecisionContext
 from magical_athlete_simulator.core.events import (
@@ -89,4 +90,36 @@ class RocketScientistAbility(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
-        return self.get_baseline_boolean_decision(engine, ctx)
+        if (me := engine.get_active_racer(ctx.source_racer_idx)) is None or (
+            roll := ctx.game_state.roll_state.dice_value
+        ) is None:
+            return False
+
+        # Calculate destinations (mods = final - base)
+        mods = (
+            ctx.game_state.roll_state.final_value - ctx.game_state.roll_state.base_value
+        )
+        target_normal = me.position + roll + mods
+        target_double = me.position + (roll * 2) + mods
+
+        # 1. WIN/BENEFIT: Double if it wins or gets VP
+        if benefit := get_benefit_at(engine, target_double):
+            engine.log_info(f"{me.repr} uses {self.name} to reach {benefit}!")
+            return True
+
+        if benefit := get_benefit_at(engine, target_normal):
+            engine.log_info(f"{me.repr} avoids {self.name} to reach {benefit}!")
+            return False
+
+        # 3. ESCAPE: Double if normal move trips us anyway (Penalty already paid)
+        if hazard := get_hazard_at(engine, target_normal):
+            engine.log_info(f"{me.repr} uses {self.name} to escape {hazard}!")
+            return True
+
+        # 4. SAFETY: Don't double into a hazard (Double penalty: Trip + Bad Tile)
+        if hazard := get_hazard_at(engine, target_double):
+            engine.log_info(f"{me.repr} avoids {self.name} due to {hazard}!")
+            return False
+
+        # 5. DEFAULT: Stay safe. Doubling (Trip) costs ~3.5 movement next turn.
+        return roll >= 4

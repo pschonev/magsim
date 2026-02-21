@@ -27,7 +27,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Inchworm": {"InchwormCreep"},
     "Lackey": {"LackeyLoyalty"},
     "Leaptoad": {"LeaptoadJumpManager"},
-    "Legs": {"LegsMove"},
+    "Legs": {"LongLegs"},
     "LovableLoser": {"LovableLoserBonus"},
     "Magician": {"MagicalReroll"},
     "Mastermind": {"MastermindPredict"},

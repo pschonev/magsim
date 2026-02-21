@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, override
 
+from magical_athlete_simulator.ai.evaluation import (
+    get_benefit_at,
+    get_hazard_at,
+)
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import (
     Agent,
@@ -17,6 +21,7 @@ from magical_athlete_simulator.core.events import (
     TurnStartEvent,
 )
 from magical_athlete_simulator.core.state import ActiveRacerState, is_active
+from magical_athlete_simulator.engine.board import MoveDeltaTile
 from magical_athlete_simulator.engine.movement import push_move, push_simultaneous_move
 
 if TYPE_CHECKING:
@@ -111,4 +116,40 @@ class CheerleaderPepRally(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
-        return self.get_baseline_boolean_decision(engine, ctx)
+        if (me := engine.get_active_racer(ctx.source_racer_idx)) is None:
+            return True
+
+        # Determine landing spots to check
+        spots = [me.position + 1]  # Default: Just my +1 move
+
+        # If I am Last: I move +2, resolve delta, then move +1
+        if me.position == min(r.position for r in engine.state.racers if is_active(r)):
+            mid = me.position + 2
+
+            # Find delta at mid (e.g. if landing on an Arrow)
+            delta = next(
+                (
+                    m.delta
+                    for m in engine.state.board.get_modifiers_at(mid)
+                    if isinstance(m, MoveDeltaTile)
+                ),
+                0,
+            )
+
+            # Check both the landing of the first move (resolved) and the second move
+            spots = [mid + delta, mid + delta + 1]
+
+        # 1. BENEFIT CHECK: Take if ANY spot is excellent
+        for p in spots:
+            if benefit := get_benefit_at(engine, p):
+                engine.log_info(f"{me.repr} uses {self.name} to reach {benefit}!")
+                return True
+
+        # 2. HAZARD CHECK: Skip if ANY spot is hazardous
+        for p in spots:
+            if hazard := get_hazard_at(engine, p):
+                engine.log_info(f"{me.repr} avoids {self.name} because of {hazard}!")
+                return False
+
+        # 3. DEFAULT: Free movement is good
+        return True

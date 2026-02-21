@@ -15,8 +15,9 @@ from magical_athlete_simulator.core.events import (
     TurnStartEvent,
     WarpData,
 )
-from magical_athlete_simulator.core.state import ActiveRacerState
+from magical_athlete_simulator.core.state import ActiveRacerState, is_active
 from magical_athlete_simulator.engine.movement import push_simultaneous_warp
+from magical_athlete_simulator.racers import get_all_racer_stats
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
@@ -117,4 +118,47 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[ActiveRacerState]):
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, ActiveRacerState],
     ) -> ActiveRacerState | None:
-        return self.get_baseline_selection_decision(engine, ctx)
+        if (me := engine.get_active_racer(ctx.source_racer_idx)) is None:
+            return None
+
+        # 1. WIN NOW: If we can finish by rolling, do it.
+        if (engine.state.board.length - me.position) <= 6:
+            return None
+
+        # 2. DEFEND: Dynamic threat range based on Winrate (Speed)
+        threats: list[ActiveRacerState] = []
+        for r in ctx.options:
+            if r.position <= me.position:
+                continue
+
+            stats = get_all_racer_stats().get(r.name)
+            wr = stats.winrate if stats else 0.0
+            safe_dist = 6.0 + (wr * 6.0)
+
+            if (engine.state.board.length - r.position) <= safe_dist:
+                threats.append(r)
+
+        if threats:
+            return max(threats, key=lambda r: r.position)
+
+        # 3. FARM VP: Grab Star tiles (prefer swapping backwards)
+        vp_targets = [
+            r
+            for r in ctx.options
+            if any(
+                m.name == "VictoryPointTile"
+                for m in engine.state.board.get_modifiers_at(r.position)
+            )
+        ]
+        if vp_targets:
+            return min(vp_targets, key=lambda r: r.position)
+
+        # 4. Roll if first or last
+        if (
+            me.position
+            < (last_opponent := min(ctx.options, key=lambda r: r.position)).position
+            or me.position > max(ctx.options, key=lambda r: r.position).position
+        ):
+            return None
+
+        return last_opponent

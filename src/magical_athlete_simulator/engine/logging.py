@@ -53,6 +53,7 @@ COLOR = {
     "modifier": "bold #ffaf00",  # orange
     "board": "bold #d670d6",  # magenta
     "dice_roll": "bold #f5f543",  # yellow
+    "base_value_override": "bold #43f59c",  # yellow
 }
 
 
@@ -106,6 +107,7 @@ class GameLogHighlighter(Highlighter):
         text.highlight_regex(r"\bWarp\b", COLOR["warp"])
         text.highlight_regex(r"\bBOARD\b", COLOR["board"])
         text.highlight_regex(r"\bDice Roll\b", COLOR["dice_roll"])
+        text.highlight_regex(r"\bBase Value Override\b", COLOR["base_value_override"])
         text.highlight_regex(ABILITY_PATTERN, COLOR["ability"])
         text.highlight_regex(RACER_MODIFIER_PATTERN, COLOR["modifier"])
         text.highlight_regex(BOARD_MODIFIER_PATTERN, COLOR["board"])

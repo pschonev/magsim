@@ -14,8 +14,9 @@ from magical_athlete_simulator.core.events import (
     GameEvent,
     TurnStartEvent,
 )
-from magical_athlete_simulator.core.state import ActiveRacerState
+from magical_athlete_simulator.core.state import ActiveRacerState, is_active
 from magical_athlete_simulator.engine.movement import push_warp
+from magical_athlete_simulator.racers import get_all_racer_stats
 
 if TYPE_CHECKING:
     from magical_athlete_simulator.core.agent import Agent
@@ -78,16 +79,19 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[ActiveRacerState]):
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, ActiveRacerState],
     ) -> ActiveRacerState | None:
-        # Sort by position descending
-        sorted_targets = sorted(ctx.options, key=lambda r: r.position, reverse=True)
         if (me := engine.get_active_racer(ctx.source_racer_idx)) is None:
             return None
-        # check if the target is ahead of Hypnotist
-        if sorted_targets[0].position > me.position:
-            return sorted_targets[0]
-        else:
-            engine.log_info(f"{me.repr} is in the lead and won't use {self.name}.")
+
+        safe_targets = [
+            r
+            for r in ctx.options
+            if r.name not in ("Mouth", "BabaYaga") and r.position > me.position
+        ]
+
+        if not safe_targets:
             return None
+
+        return max(safe_targets, key=lambda x: x.position)
 
     @override
     def get_auto_selection_decision(
@@ -95,4 +99,58 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[ActiveRacerState]):
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, ActiveRacerState],
     ) -> ActiveRacerState | None:
-        return self.get_baseline_selection_decision(engine, ctx)
+        if (me := engine.get_active_racer(ctx.source_racer_idx)) is None:
+            return None
+
+        # 1. Safety Filter: Strictly ban hazards
+        candidates = [
+            r
+            for r in ctx.options
+            if r.name not in ("Mouth", "BabaYaga") and r.position > me.position
+        ]
+
+        if not candidates:
+            return None
+
+        # 2. Early Game Greed (Coach)
+        # If the leader is less than halfway, just grab the Coach for the buff
+        leader_pos = max(
+            (r.position for r in engine.state.racers if is_active(r)),
+            default=0,
+        )
+
+        if leader_pos < (engine.state.board.length / 2):
+            coach = next((r for r in candidates if r.name == "Coach"), None)
+            if coach:
+                return coach
+
+        # 3. Threat Assessment: "Turns to Finish"
+        # We want to target the racer with the LOWEST expected turns to win.
+        # To make this work with max(), we return a negative number (or invert the logic).
+        all_stats = get_all_racer_stats()
+
+        def calculate_threat_score(racer: ActiveRacerState) -> float:
+            dist_to_finish = engine.state.board.length - racer.position
+
+            # Base speed is 3.5 (avg die roll)
+            # We can check specific racers for speed bonuses (e.g., Amazon, Cyborg)
+            # but using raw Winrate as a speed modifier is a safer proxy for complex abilities.
+            stats = all_stats.get(racer.name)
+            winrate = stats.winrate if stats else 0.0
+
+            # High winrate racers move "faster" effectively.
+            # 100% WR -> Speed 4.5
+            # 0% WR   -> Speed 3.5
+            estimated_speed = 5 + winrate
+
+            turns_to_win = dist_to_finish / estimated_speed
+
+            # If they are tripped, they lose their next turn (add 1.0 turns)
+            if racer.tripped:
+                turns_to_win += 1.0
+
+            # We return negative because we want the SMALLEST turns_to_win
+            # max() will pick the least negative (closest to 0)
+            return -turns_to_win
+
+        return max(candidates, key=calculate_threat_score)

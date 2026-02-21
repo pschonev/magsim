@@ -88,13 +88,13 @@ def test_huge_baby_is_not_stuck_at_start(scenario: type[GameScenario]):
     game = scenario(
         [
             RacerConfig(0, "HugeBaby", start_pos=0),
-            RacerConfig(1, "Magician", start_pos=0),
+            RacerConfig(1, "Banana", start_pos=0),
         ],
         dice_rolls=[
             1,  # Turn 1: Baby 0 -> 1. Blocker at 1.
-            4,  # Turn 2: Magi 0 -> 4.
+            4,  # Turn 2: Banana 0 -> 4.
             5,  # Turn 3: Baby 1 -> 6. Blocker at 1 removed.
-            4,  # Turn 4: Magi 4 -> 8.
+            4,  # Turn 4: Banana 4 -> 8.
         ],
     )
 

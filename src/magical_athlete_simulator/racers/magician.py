@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, override
 
+from magical_athlete_simulator.ai.evaluation import (
+    get_benefit_at,
+    get_hazard_at,
+)
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import (
     Agent,
@@ -69,9 +73,6 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
         )
 
         if not should_reroll:
-            engine.log_info(
-                f"{owner.repr} decided not to use {self.name} for a re-roll of his {engine.state.roll_state.dice_value}!",
-            )
             return "skip_trigger"
 
         self.reroll_count += 1
@@ -102,4 +103,29 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
-        return self.get_baseline_boolean_decision(engine, ctx)
+        if (me := engine.get_active_racer(ctx.source_racer_idx)) is None or (
+            raw_roll := ctx.game_state.roll_state.dice_value
+        ) is None:
+            return False
+
+        # Use final_value to account for modifiers like Gunk
+        dest = me.position + ctx.game_state.roll_state.final_value
+
+        # 1. PRIORITY: Keep if Excellent (Win / VP / Boost)
+        if benefit := get_benefit_at(engine, dest):
+            engine.log_info(f"{me.repr} keeps roll to reach {benefit}!")
+            return False
+
+        # 2. AVOIDANCE: Reroll if Hazard (Trip / Backward)
+        if hazard := get_hazard_at(engine, dest):
+            engine.log_info(f"{me.repr} uses {self.name} to avoid {hazard}!")
+            return True
+
+        # 3. GREED: Threshold based on remaining rerolls
+        threshold = 5 if self.reroll_count == 0 else 4
+
+        if raw_roll < threshold:
+            engine.log_info(f"{me.repr} uses {self.name} due to low roll ({raw_roll})!")
+            return True
+
+        return False

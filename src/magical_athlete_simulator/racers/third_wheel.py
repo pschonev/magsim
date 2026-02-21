@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self, override
+from typing import TYPE_CHECKING, NamedTuple, Self, override
 
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import (
@@ -115,4 +115,36 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, int],
     ) -> int | None:
-        return self.get_baseline_selection_decision(engine, ctx)
+        if (owner := engine.get_active_racer(ctx.source_racer_idx)) is None:
+            return None
+
+        class ScoredTarget(NamedTuple):
+            score: int
+            position: int
+
+        candidates: list[ScoredTarget] = []
+
+        for pos in ctx.options:
+            if pos <= owner.position:
+                continue
+
+            # Base score is distance gained
+            score = pos - owner.position
+
+            racers = engine.get_racers_at_position(pos)
+            modifiers = engine.state.board.get_modifiers_at(pos)
+
+            # Hazards penalty (-4 avg roll)
+            if any(r.name == "BabaYaga" for r in racers) or any(
+                m.name == "TripTile" for m in modifiers
+            ):
+                score -= 4
+
+            # Bonus (+1 avg roll)
+            if any(r.name == "Coach" for r in racers):
+                score += 1
+
+            if score > 0:
+                candidates.append(ScoredTarget(score, pos))
+
+        return max(candidates).position if candidates else None

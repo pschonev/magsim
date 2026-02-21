@@ -65,7 +65,7 @@ AbilityName = Literal[
     "InchwormCreep",
     "LackeyLoyalty",
     "LeaptoadJumpManager",
-    "LegsMove",
+    "LongLegs",
     "LovableLoserBonus",
     "MagicalReroll",
     "MastermindPredict",
