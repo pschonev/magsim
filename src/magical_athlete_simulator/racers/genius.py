@@ -133,8 +133,9 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
         active_racers = engine.get_active_racers()
         max_pos = max((r.position for r in active_racers), default=0)
 
+        skipper_ability: AbilityName = "SkipperTurn"
         if owner.position >= max_pos:
-            if any(r.name == "Skipper" for r in active_racers if r.idx != owner.idx):
+            if any(skipper_ability in r.abilities for r in active_racers if r.idx != owner.idx):
                 # Conservative, but avoiding Skipper
                 prediction = 2
                 self.preferred_dice = frozenset([2, 4, 5, 6])

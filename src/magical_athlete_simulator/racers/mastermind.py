@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, override
 
+from magical_athlete_simulator.ai.evaluation import get_effective_racer_name
 from magical_athlete_simulator.core.abilities import Ability
 from magical_athlete_simulator.core.agent import (
     Agent,
@@ -160,10 +161,10 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[ActiveRacerState]
         candidates: list[RacerStat] = [
             stats
             for name, stats in get_all_racer_stats().items()
-            if name in [r.name for r in ctx.options]
+            if name in [get_effective_racer_name(r) for r in ctx.options]
         ]
         highest_winrate_racer: RacerName = max(
             candidates,
             key=lambda r: r.winrate,
         ).racer_name
-        return next(r for r in ctx.options if r.name == highest_winrate_racer)
+        return next(r for r in ctx.options if get_effective_racer_name(r) == highest_winrate_racer)

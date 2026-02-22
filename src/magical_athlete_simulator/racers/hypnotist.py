@@ -102,45 +102,41 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[ActiveRacerState]):
         if (me := engine.get_active_racer(ctx.source_racer_idx)) is None:
             return None
 
+
         # 1. Safety Filter: Strictly ban hazards
+        abilities_to_avoid: set[AbilityName] = {"MouthSwallow", "BabaYagaTrip"}
         candidates = [
             r
             for r in ctx.options
-            if r.name not in ("Mouth", "BabaYaga") and r.position > me.position
+            if abilities_to_avoid.isdisjoint(r.abilities) and r.position > me.position
         ]
 
         if not candidates:
             return None
 
         # 2. Early Game Greed (Coach)
-        # If the leader is less than halfway, just grab the Coach for the buff
         leader_pos = max(
             (r.position for r in engine.state.racers if is_active(r)),
             default=0,
         )
 
+        coach_ability: AbilityName = "CoachAura"
         if leader_pos < (engine.state.board.length / 2):
-            coach = next((r for r in candidates if r.name == "Coach"), None)
+            coach = next((r for r in candidates if coach_ability in r.abilities), None)
             if coach:
                 return coach
 
         # 3. Threat Assessment: "Turns to Finish"
-        # We want to target the racer with the LOWEST expected turns to win.
-        # To make this work with max(), we return a negative number (or invert the logic).
         all_stats = get_all_racer_stats()
 
         def calculate_threat_score(racer: ActiveRacerState) -> float:
             dist_to_finish = engine.state.board.length - racer.position
 
             # Base speed is 3.5 (avg die roll)
-            # We can check specific racers for speed bonuses (e.g., Amazon, Cyborg)
-            # but using raw Winrate as a speed modifier is a safer proxy for complex abilities.
             stats = all_stats.get(racer.name)
             winrate = stats.winrate if stats else 0.0
 
             # High winrate racers move "faster" effectively.
-            # 100% WR -> Speed 4.5
-            # 0% WR   -> Speed 3.5
             estimated_speed = 5 + winrate
 
             turns_to_win = dist_to_finish / estimated_speed

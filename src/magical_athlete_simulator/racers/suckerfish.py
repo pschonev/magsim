@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from turtle import position
 from typing import TYPE_CHECKING, Self, override
 
 from magical_athlete_simulator.ai.evaluation import (
@@ -23,9 +22,6 @@ from magical_athlete_simulator.core.events import (
 )
 from magical_athlete_simulator.core.mixins import DestinationCalculatorMixin
 from magical_athlete_simulator.core.modifiers import RacerModifier
-from magical_athlete_simulator.core.state import is_active
-from magical_athlete_simulator.core.types import RacerName
-from magical_athlete_simulator.engine import board
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     remove_racer_modifier,
@@ -153,7 +149,6 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
-        # Identify Suckerfish and the driver
         if (
             (me := engine.get_active_racer(ctx.source_racer_idx)) is None
             or not isinstance(ctx.event, PostMoveEvent)
@@ -161,35 +156,50 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         ):
             return False
 
-        bad_drivers = {
-            "Mouth",  # kills us
-            "Flip Flop",  # warps instead of moving
-            "Third Wheel",  # warps instead of moving
-            "Sisyphus",  # warps back to Start on 6
-            "Huge Baby",  # cannot share space / pushes back
-        }
-
         dest = ctx.event.end_tile
         dist = dest - me.position
+        
+        # 0. If the driver just finished, always follow to claim 2nd place
+        if not driver.active:
+            if dist > 0:
+                engine.log_info(f"{me.repr} follows {driver.repr} across the finish line!")
+                return True
+            return False
+
+        # Define Bad Abilities (Drivers to avoid)
+        BAD_DRIVER_ABILITIES: set[AbilityName] = {
+            "MouthSwallow",
+            "FlipFlopSwap",
+            "ThirdWheelJoin",
+            "SisyphusCurse",
+            "HugeBabyPush",
+        }
+
+        # Define Good Abilities (Drivers to prefer)
+        GOOD_DRIVER_ABILITIES: set[AbilityName] = {
+            "ScoochStep",
+        }
+
+        driver_abilities = driver.abilities
 
         # 1. Hard filters: obvious no-gos
-        if (driver.name == "Mouth" and driver.position < engine.state.board.length) or dist <= 0:
+        # Check if driver has Mouth ability AND is still on the board (active)
+        if ("MouthSwallow" in driver_abilities and driver.active) or dist <= 0:
             return False
 
         # 2. Immediate benefit / hazard on destination
-        if benefit := get_benefit_at(engine, dest):
+        if (benefit := get_benefit_at(engine, dest)) is not None:
             engine.log_info(f"{me.repr} hitchhikes to reach {benefit}!")
             return True
 
-        if hazard := get_hazard_at(engine, dest):
+        if (hazard := get_hazard_at(engine, dest)) is not None:
             engine.log_info(
                 f"{me.repr} avoids hitchhiking with {driver.repr} because of {hazard}!",
             )
             return False
 
-        # 3. Special driver cases Scoocher
-        good_drivers: list[RacerName] = ["Scoocher", "Copycat"]
-        if driver.name in good_drivers:
+        # 3. Special driver cases (Ability-based)
+        if not GOOD_DRIVER_ABILITIES.isdisjoint(driver_abilities):
             return True
 
         # 4. Big safe rides: always take (distance ≥ 4)
@@ -199,10 +209,11 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         # 5. Small safe rides (1–3): chain logic and local options
         def moves_before_me(r_idx: int) -> bool:
             return is_turn_between(driver.idx, me.idx, r_idx)
+        
 
         # 5a. Destination chain: highest priority among small safe rides
         for r in engine.get_racers_at_position(dest, except_racer_idx=me.idx):
-            if moves_before_me(r.idx) and r.name not in bad_drivers:
+            if moves_before_me(r.idx) and BAD_DRIVER_ABILITIES.isdisjoint(r.abilities):
                 engine.log_info(
                     f"{me.repr} hitchhikes with {driver.repr} to get to {r.repr}!",
                 )
@@ -210,7 +221,8 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
 
         # 5b. Current tile: consider waiting only if no destination-chain exists
         for r in engine.get_racers_at_position(me.position, except_racer_idx=me.idx):
-            if moves_before_me(r.idx) and r.name not in bad_drivers:
+            # Wait for someone who moves before me AND isn't bad
+            if moves_before_me(r.idx) and BAD_DRIVER_ABILITIES.isdisjoint(r.abilities):
                 engine.log_info(
                     f"{me.repr} waits for another rider on his tile instead of {driver.repr} (+{dist})!",
                 )
@@ -218,3 +230,4 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
 
         # 5c. No chain and no better local options: just take the small, safe ride
         return True
+

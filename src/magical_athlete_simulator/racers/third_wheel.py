@@ -119,7 +119,7 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
             return None
 
         class ScoredTarget(NamedTuple):
-            score: int
+            score: float
             position: int
 
         candidates: list[ScoredTarget] = []
@@ -129,22 +129,32 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
                 continue
 
             # Base score is distance gained
-            score = pos - owner.position
+            score = float(pos - owner.position)
 
             racers = engine.get_racers_at_position(pos)
             modifiers = engine.state.board.get_modifiers_at(pos)
 
-            # Hazards penalty (-4 avg roll)
-            if any(r.name == "BabaYaga" for r in racers) or any(
-                m.name == "TripTile" for m in modifiers
-            ):
-                score -= 4
+            # Check if this space will trip us
+            will_trip = any(m.name == "TripTile" for m in modifiers) or any(
+                "BabaYagaTrip" in r.abilities for r in racers
+            )
 
-            # Bonus (+1 avg roll)
-            if any(r.name == "Coach" for r in racers):
-                score += 1
+            if will_trip:
+                score -= 3.5
+            else: # Coach probably left by the time we roll if we trip on arrival
+                if any("CoachAura" in r.abilities for r in racers):
+                    score += 1.0
+
+            # VP Tile Bonus (valuing a VP at +2 distance equivalent)
+            if any(m.name == "VictoryPointTile" for m in modifiers):
+                score += 2.0
 
             if score > 0:
                 candidates.append(ScoredTarget(score, pos))
 
-        return max(candidates).position if candidates else None
+        if not candidates:
+             return None
+        
+        # Return the position of the highest score
+        return max(candidates, key=lambda x: x.score).position
+
