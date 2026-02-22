@@ -2,7 +2,7 @@ mkdir -p docs/results/
 
 # Copy supporting files
 cp frontend/docs/magical_athlete_analysis.css docs/
-cp -r results/*.parquet docs/results/
+cp results/{races,racer_results}.parquet docs/results/
 
 
 # Export the notebook

@@ -171,7 +171,6 @@ def cell_load_data(
     # 2. Construct Paths (Only need Races and Results now)
     path_races = base_folder / "races.parquet"
     path_res = base_folder / "racer_results.parquet"
-    # path_positions = base_folder / "race_positions.parquet"  <-- GONE
 
     # 3. Load Data
     try:
