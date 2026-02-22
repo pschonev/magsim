@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from turtle import position
 from typing import TYPE_CHECKING, Self, override
 
 from magical_athlete_simulator.ai.evaluation import (
@@ -24,6 +25,7 @@ from magical_athlete_simulator.core.mixins import DestinationCalculatorMixin
 from magical_athlete_simulator.core.modifiers import RacerModifier
 from magical_athlete_simulator.core.state import is_active
 from magical_athlete_simulator.core.types import RacerName
+from magical_athlete_simulator.engine import board
 from magical_athlete_simulator.engine.abilities import (
     add_racer_modifier,
     remove_racer_modifier,
@@ -155,7 +157,7 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         if (
             (me := engine.get_active_racer(ctx.source_racer_idx)) is None
             or not isinstance(ctx.event, PostMoveEvent)
-            or (driver := engine.get_active_racer(ctx.event.target_racer_idx)) is None
+            or (driver := engine.get_racer(ctx.event.target_racer_idx)).position is None
         ):
             return False
 
@@ -171,7 +173,7 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         dist = dest - me.position
 
         # 1. Hard filters: obvious no-gos
-        if driver.name == "Mouth" or dist <= 0:
+        if (driver.name == "Mouth" and driver.position < engine.state.board.length) or dist <= 0:
             return False
 
         # 2. Immediate benefit / hazard on destination

@@ -508,7 +508,7 @@ class GameEngine:
     def get_active_racer(self, idx: int) -> ActiveRacerState | None:
         if is_active(racer := self.get_racer(idx)):
             return racer
-        self.log_error(
+        self.log_debug(
             f"Attempted to get position of {racer.repr} but they were already eliminated.",
         )
         return None

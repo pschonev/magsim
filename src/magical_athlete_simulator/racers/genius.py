@@ -32,7 +32,7 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
         TurnStartEvent,
         RollModificationWindowEvent,
     )
-    preferred_dice: D6VAlueSet = frozenset([4, 5, 6])
+    preferred_dice: D6VAlueSet = frozenset([6])
 
     # Persistent State
     prediction: int | None = None
@@ -116,7 +116,8 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, int],
     ) -> int:
-        return 4
+        self.preferred_dice = frozenset([6])
+        return 6
 
     @override
     def get_auto_selection_decision(
@@ -124,4 +125,27 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, int],
     ) -> int:
-        return self.get_baseline_selection_decision(engine, ctx)
+        
+        if (owner := engine.get_active_racer(ctx.source_racer_idx)) is None:
+            return 6  # Fallback
+
+        # Find out if we are in the lead
+        active_racers = engine.get_active_racers()
+        max_pos = max((r.position for r in active_racers), default=0)
+
+        if owner.position >= max_pos:
+            if any(r.name == "Skipper" for r in active_racers if r.idx != owner.idx):
+                # Conservative, but avoiding Skipper
+                prediction = 2
+                self.preferred_dice = frozenset([2, 4, 5, 6])
+            else:
+                # Standard conservative hedge
+                prediction = 1
+                self.preferred_dice = frozenset([1, 4, 5, 6])
+        else:
+            # Aggressive catch-up
+            prediction = 6
+            self.preferred_dice = frozenset([6])
+
+        return prediction
+
