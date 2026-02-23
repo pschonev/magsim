@@ -1,4 +1,4 @@
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 
 def test_inchworm_cancels_opponent_rolling_one(scenario: type[GameScenario]):

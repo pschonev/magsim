@@ -1,6 +1,6 @@
 import logging
 import pytest
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 
 def test_huge_baby_push_timing_and_subsequent_move(scenario: type[GameScenario]):

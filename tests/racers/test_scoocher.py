@@ -1,4 +1,4 @@
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 
 def test_scoocher_reacts_to_external_ability(scenario: type[GameScenario]):

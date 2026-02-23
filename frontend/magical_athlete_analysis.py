@@ -45,37 +45,38 @@ async def cell_import():
     from rich.console import Console
     from rich.logging import RichHandler
 
-    MAGICAL_ATHLETE_SIMULATOR_VERSION = "0.7.1"
+    MAGSIM_VERSION = "0.7.1"
     await micropip.install(
-        f"magical-athlete-simulator=={MAGICAL_ATHLETE_SIMULATOR_VERSION}",
+        f"magsim=={MAGSIM_VERSION}",
         keep_going=True,
     )
 
-    from magical_athlete_simulator.core.events import (
+    from magsim.core.events import (
         MoveCmdEvent,
         TripCmdEvent,
         WarpCmdEvent,
     )
-    from magical_athlete_simulator.core.palettes import (
+    from magsim.core.palettes import (
         get_racer_color,
         get_racer_palette,
     )
-    from magical_athlete_simulator.core.types import RacerName
-    from magical_athlete_simulator.engine.board import (
+    from magsim.core.types import RacerName
+    from magsim.engine.board import (
         BOARD_DEFINITIONS,
         MoveDeltaTile,
         TripTile,
         VictoryPointTile,
     )
-    from magical_athlete_simulator.engine.logging import (
+    from magsim.engine.logging import (
         GameLogHighlighter,
         RichMarkupFormatter,
     )
 
     # Imports
-    from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-    from magical_athlete_simulator.simulation.telemetry import StepSnapshot
-    from magical_athlete_simulator.simulation.config import GameConfig
+    from magsim.engine.scenario import GameScenario, RacerConfig
+    from magsim.simulation.telemetry import StepSnapshot
+    from magsim.simulation.config import GameConfig
+
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -84,7 +85,7 @@ async def cell_import():
         GameLogHighlighter,
         GameScenario,
         Literal,
-        MAGICAL_ATHLETE_SIMULATOR_VERSION,
+        MAGSIM_VERSION,
         MoveCmdEvent,
         MoveDeltaTile,
         RacerConfig,
@@ -827,7 +828,7 @@ def cell_dice_input(dice_rolls_text_ui, mo, use_scripted_dice_ui):
 
 @app.cell
 def cell_display_config_ui(
-    MAGICAL_ATHLETE_SIMULATOR_VERSION,
+    MAGSIM_VERSION,
     load_status,
     mo,
     racer_results_table,
@@ -837,7 +838,7 @@ def cell_display_config_ui(
 ):
     def _header():
         return mo.hstack(
-            [mo.md(f"**v{MAGICAL_ATHLETE_SIMULATOR_VERSION}**"), reload_data_btn],
+            [mo.md(f"**v{MAGSIM_VERSION}**"), reload_data_btn],
             justify="end",
             gap=1,
         )
@@ -890,7 +891,7 @@ def cell_setup_log(
     re,
     reset_button,
 ):
-    from magical_athlete_simulator.simulation.telemetry import (
+    from magsim.simulation.telemetry import (
         MetricsAggregator,
         SnapshotPolicy,
         SnapshotRecorder,
@@ -1534,17 +1535,18 @@ def cell_vsialize_track(
                 {track_group_start}
                 {"".join(svg_elements)}
             </svg>"""
+
     return (render_game_track,)
 
 
 @app.cell
 def cell_filter_autoracers():
-    from magical_athlete_simulator.core.agent import (
+    from magsim.core.agent import (
         BooleanInteractive,
         SelectionInteractive,
     )
-    from magical_athlete_simulator.core.registry import RACER_ABILITIES
-    from magical_athlete_simulator.racers import get_ability_classes
+    from magsim.core.registry import RACER_ABILITIES
+    from magsim.racers import get_ability_classes
 
     ability_classes = get_ability_classes()
 
@@ -2864,6 +2866,7 @@ def _(BG_COLOR, alt, np, pl):
             .add_params(xzoom)
             .properties(width="container", height=800, background=BG_COLOR)
         )
+
     return (build_quadrant_chart,)
 
 

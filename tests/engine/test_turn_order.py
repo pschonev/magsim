@@ -1,6 +1,6 @@
 from typing import cast
-from magical_athlete_simulator.racers.genius import AbilityGenius
-from magical_athlete_simulator.engine.scenario import RacerConfig, GameScenario
+from magsim.racers.genius import AbilityGenius
+from magsim.engine.scenario import RacerConfig, GameScenario
 
 
 def test_skipper_steals_next_turn_and_then_order_resumes(scenario: type[GameScenario]):

@@ -1,6 +1,6 @@
-from magical_athlete_simulator.engine.board import TripTile
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-from magical_athlete_simulator.engine.board import Board, MoveDeltaTile
+from magsim.engine.board import TripTile
+from magsim.engine.scenario import GameScenario, RacerConfig
+from magsim.engine.board import Board, MoveDeltaTile
 
 
 

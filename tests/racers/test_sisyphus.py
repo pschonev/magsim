@@ -1,4 +1,4 @@
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 
 def test_sisyphus_setup_normal_play_and_curse(scenario: type[GameScenario]):

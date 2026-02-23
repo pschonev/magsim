@@ -1,4 +1,4 @@
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 
 def test_party_animal_pull_moves_everyone_towards_party_animal(scenario: type[GameScenario]):

@@ -1,4 +1,4 @@
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 
 def test_lackey_boosts_on_opponent_six_and_finishes_first(scenario: type[GameScenario]):

@@ -1,5 +1,5 @@
-from magical_athlete_simulator.ai.baseline_agent import BaselineAgent
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.ai.baseline_agent import BaselineAgent
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 
 def test_mastermind_predicts_winner_and_takes_second(scenario: type[GameScenario]):

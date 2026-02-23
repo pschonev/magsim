@@ -1,8 +1,8 @@
 from typing import Callable
 import pytest
-from magical_athlete_simulator.core.state import GameRules
-from magical_athlete_simulator.engine.board import Board
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.core.state import GameRules
+from magsim.engine.board import Board
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 
 @pytest.fixture

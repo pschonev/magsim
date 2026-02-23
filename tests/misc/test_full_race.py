@@ -1,6 +1,6 @@
 import itertools
 
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 def test_full_race_6_racers_finishes_correctly(scenario: type[GameScenario]):
     """

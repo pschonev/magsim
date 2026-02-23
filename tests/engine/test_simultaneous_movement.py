@@ -1,4 +1,4 @@
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 def test_flip_flop_vs_baba_yaga_simultaneous(scenario: type[GameScenario]):
     """

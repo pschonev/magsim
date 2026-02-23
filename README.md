@@ -1,4 +1,4 @@
-# magical-athlete-simulator
+# magsim
 Models and simulates Magical Athlete races
 
 ## Changelog

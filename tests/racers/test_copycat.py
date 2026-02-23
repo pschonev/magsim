@@ -1,6 +1,6 @@
-from magical_athlete_simulator.ai.baseline_agent import BaselineAgent
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-from magical_athlete_simulator.racers.copycat import AbilityCopyLead
+from magsim.ai.baseline_agent import BaselineAgent
+from magsim.engine.scenario import GameScenario, RacerConfig
+from magsim.racers.copycat import AbilityCopyLead
 
 
 def test_copycat_basic_ability_gain(scenario: type[GameScenario]):

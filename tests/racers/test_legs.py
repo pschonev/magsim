@@ -1,4 +1,4 @@
-from magical_athlete_simulator.engine.scenario import RacerConfig, GameScenario
+from magsim.engine.scenario import RacerConfig, GameScenario
 
 
 def test_legs_uses_ability_moves_5(scenario: type[GameScenario]):

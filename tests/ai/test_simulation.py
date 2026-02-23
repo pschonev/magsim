@@ -1,5 +1,5 @@
-from magical_athlete_simulator.ai.sandbox import simulate_turn_for
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.ai.sandbox import simulate_turn_for
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 
 def test_sandbox_turn_matches_real_turn(scenario: type[GameScenario]):

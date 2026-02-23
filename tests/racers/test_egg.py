@@ -1,5 +1,5 @@
-from magical_athlete_simulator.core.abilities import CopyAbilityProtocol
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.core.abilities import CopyAbilityProtocol
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 
 def test_egg_basic_copy(scenario: type[GameScenario]):

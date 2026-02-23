@@ -1,5 +1,5 @@
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
-from magical_athlete_simulator.racers.dicemonger import DicemongerRerollAction
+from magsim.engine.scenario import GameScenario, RacerConfig
+from magsim.racers.dicemonger import DicemongerRerollAction
 
 
 def test_dicemonger_grants_reroll_to_others(scenario: type[GameScenario]):

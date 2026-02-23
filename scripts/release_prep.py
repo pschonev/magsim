@@ -12,7 +12,7 @@ NOTEBOOK = ROOT / "frontend" / "magical_athlete_analysis.py"
 DOCS_DIR = ROOT / "docs"
 RESULTS_DIR = ROOT / "results"
 
-PACKAGE = "magical-athlete-simulator"
+PACKAGE = "magsim"
 
 
 def read_version() -> str:
@@ -33,7 +33,7 @@ def update_notebook_pin(version: str) -> None:
     text = NOTEBOOK.read_text(encoding="utf-8")
 
     # Universal pattern: any assignment to this variable
-    pattern = r'(MAGICAL_ATHLETE_SIMULATOR_VERSION\s*=\s*)(["\'])([^"\']+)\2'
+    pattern = r'(MAGSIM_VERSION\s*=\s*)(["\'])([^"\']+)\2'
 
     # Find ALL matches first
     matches = list(re.finditer(pattern, text))

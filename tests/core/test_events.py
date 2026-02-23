@@ -1,5 +1,5 @@
-from magical_athlete_simulator.engine.board import Board, MoveDeltaTile
-from magical_athlete_simulator.engine.scenario import GameScenario, RacerConfig
+from magsim.engine.board import Board, MoveDeltaTile
+from magsim.engine.scenario import GameScenario, RacerConfig
 
 # 1. Define the custom board matching your graphic
 def build_graphic_board():
