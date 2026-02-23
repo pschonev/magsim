@@ -408,6 +408,7 @@ dependencies = [
     { name = "cappa" },
     { name = "duckdb-engine" },
     { name = "msgspec" },
+    { name = "polars" },
     { name = "pyarrow" },
     { name = "rich" },
     { name = "tqdm" },
@@ -418,7 +419,6 @@ frontend = [
     { name = "altair" },
     { name = "marimo" },
     { name = "numpy" },
-    { name = "polars" },
 ]
 
 [package.dev-dependencies]
@@ -439,7 +439,7 @@ requires-dist = [
     { name = "marimo", marker = "extra == 'frontend'", specifier = "==0.18.4" },
     { name = "msgspec", specifier = ">=0.20.0" },
     { name = "numpy", marker = "extra == 'frontend'", specifier = ">=2.4.1" },
-    { name = "polars", marker = "extra == 'frontend'", specifier = "==1.36.1" },
+    { name = "polars", specifier = "==1.36.1" },
     { name = "pyarrow", specifier = ">=22.0.0" },
     { name = "rich", specifier = ">=13.7.1" },
     { name = "tqdm", specifier = ">=4.67.1" },
