@@ -44,7 +44,7 @@ async def cell_import():
     from rich.console import Console
     from rich.logging import RichHandler
 
-    MAGSIM_VERSION = "1.0.1"
+    MAGSIM_VERSION = "1.0.2"
     await micropip.install(
         f"magsim=={MAGSIM_VERSION}",
         keep_going=True,
