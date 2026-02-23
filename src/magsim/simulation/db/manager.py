@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, TypedDict
 
 import duckdb
 import msgspec
-import pyarrow as pa
 from tqdm import tqdm
 
 if TYPE_CHECKING:
@@ -157,46 +156,58 @@ class SimulationDatabase:
             self.position_buffer_cols[key].extend(positions[key])
 
     def flush_to_parquet(self):
-        """
-        Flushes buffers to DuckDB using the "Appender" pattern (executemany).
-        This is significantly faster than INSERT statements with named parameters.
-        """
-        if not self.race_buffer and not self.position_buffer_cols["config_hash"]:
+        if (
+            not self.race_buffer
+            and not self.result_buffer
+            and not self.position_buffer_cols["config_hash"]
+        ):
             return
 
         try:
-            # 1. Races: Bulk Insert Tuples
+            # 1. Races: Bulk Insert Tuples (your existing code)
             if self.race_buffer:
-                # Note: The number of '?' must match the number of fields in Race model
-                # We have 14 fields in the updated Race model.
-                placeholders = ", ".join(["?"] * 14)
+                placeholders = ", ".join(["?"] * 14)  # Adjust to your Race field count
                 self.conn.executemany(
                     f"INSERT INTO races VALUES ({placeholders})",
                     self.race_buffer,
                 )
                 self.race_buffer.clear()
 
-            # 2. Results: Bulk Insert Tuples
+            # 2. Results: Bulk Insert Tuples (your existing code)
             if self.result_buffer:
-                # We have 21 fields in the updated RacerResult model.
-                placeholders = ", ".join(["?"] * 21)
+                placeholders = ", ".join(
+                    ["?"] * 21
+                )  # Adjust to your RacerResult field count
                 self.conn.executemany(
                     f"INSERT INTO racer_results VALUES ({placeholders})",
                     self.result_buffer,
                 )
                 self.result_buffer.clear()
 
-            # 3. Positions: Arrow Table -> Columnar Insert
+            # 3. Positions: List of Tuples (SIMPLEST & FASTEST!)
             if self.position_buffer_cols["config_hash"]:
-                # Arrow is fastest for columnar data
-                table = pa.Table.from_pydict(self.position_buffer_cols)
-
-                # Register as view, insert, unregister
-                self.conn.register("temp_pos_buffer", table)
-                self.conn.execute(
-                    "INSERT INTO race_position_logs SELECT * FROM temp_pos_buffer",
+                # Transpose your columnar dict into a list of row tuples
+                # This is O(1) since the lists are already the right length
+                positions_tuples = list(
+                    zip(
+                        self.position_buffer_cols["config_hash"],
+                        self.position_buffer_cols["turn_index"],
+                        self.position_buffer_cols["current_racer_id"],
+                        self.position_buffer_cols["pos_r0"],
+                        self.position_buffer_cols["pos_r1"],
+                        self.position_buffer_cols["pos_r2"],
+                        self.position_buffer_cols["pos_r3"],
+                        self.position_buffer_cols["pos_r4"],
+                        self.position_buffer_cols["pos_r5"],
+                    )
                 )
-                self.conn.unregister("temp_pos_buffer")
+
+                # Use the SAME executemany pattern as races/results
+                placeholders = ", ".join(["?"] * 9)  # 9 columns for position logs
+                self.conn.executemany(
+                    f"INSERT INTO race_position_logs VALUES ({placeholders})",
+                    positions_tuples,
+                )
 
                 # Clear buffers
                 for key in self.position_buffer_cols:
@@ -204,7 +215,6 @@ class SimulationDatabase:
 
         except Exception:
             logger.exception("Failed to flush to DB")
-            # In a real crash scenario, you might want to pickle the buffers to disk here
             raise
 
     def export_parquet(self):
