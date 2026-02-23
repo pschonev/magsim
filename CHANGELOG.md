@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2 (2026-02-24)
+
+### Refactor
+
+- Remove pyarrow dependency
+
 ## 1.0.1 (2026-02-23)
 
 ### Fix
