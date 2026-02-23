@@ -74,8 +74,16 @@ def export_docs() -> None:
         ]
     )
 
-    for p in RESULTS_DIR.glob("*.parquet"):
-        shutil.copy2(p, DOCS_DIR / "results" / p.name)
+    target_files = ["racer_results.parquet", "races.parquet"]
+
+    for filename in target_files:
+        source_file = RESULTS_DIR / filename
+        if source_file.exists():
+            shutil.copy2(source_file, DOCS_DIR / "results" / filename)
+        else:
+            print(
+                f"⚠️ Warning: Expected data file {filename} not found in {RESULTS_DIR}"
+            )
 
 
 def main() -> None:
