@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, override
+
+from magsim.core.abilities import Ability
+from magsim.core.events import AbilityTriggeredEvent, Phase
+from magsim.core.mixins import (
+    LifecycleManagedMixin,
+    RollModificationMixin,
+)
+from magsim.core.modifiers import RacerModifier
+from magsim.engine.abilities import (
+    add_racer_modifier,
+    remove_racer_modifier,
+)
+
+if TYPE_CHECKING:
+    from magsim.core.events import GameEvent, MoveDistanceQuery
+    from magsim.core.types import AbilityName, ModifierName
+    from magsim.engine.game_engine import GameEngine
+
+
+@dataclass(eq=False)
+class ModifierSlime(RacerModifier, RollModificationMixin):
+    """Applied TO a victim racer. Reduces their roll by 1.
+    Owned by Gunk.
+    """
+
+    name: AbilityName | ModifierName = "GunkSlimeModifier"
+
+    @override
+    def modify_roll(
+        self,
+        query: MoveDistanceQuery,
+        owner_idx: int | None,
+        engine: GameEngine,
+        rolling_racer_idx: int,
+    ) -> list[AbilityTriggeredEvent]:
+        # This modifier is attached to the VICTIM, and affects their roll
+        # owner_idx is Gunk, query.racer_idx is the victim
+        if owner_idx is None:
+            msg = f"owner_idx should never be None for {self.name}"
+            raise ValueError(msg)
+
+        query.modifiers.append(-1)
+        query.modifier_sources.append((self.name, -1))
+
+        return [
+            AbilityTriggeredEvent(
+                owner_idx,
+                self.name,
+                phase=Phase.ROLL_WINDOW,
+                target_racer_idx=rolling_racer_idx,
+            ),
+        ]
+
+
+@dataclass
+class AbilitySlime(Ability, LifecycleManagedMixin):
+    name: AbilityName = "GunkSlime"
+    triggers: tuple[type[GameEvent], ...] = ()
+
+    @override
+    def on_gain(self, engine: GameEngine, owner_idx: int) -> None:
+        # Apply debuff to ALL other active racers
+        for r in engine.state.racers:
+            if r.idx != owner_idx and r.active:
+                add_racer_modifier(engine, r.idx, ModifierSlime(owner_idx=owner_idx))
+
+    @override
+    def on_loss(self, engine: GameEngine, owner_idx: int) -> None:
+        # Clean up debuff from everyone
+        for r in engine.state.racers:
+            remove_racer_modifier(engine, r.idx, ModifierSlime(owner_idx=owner_idx))
