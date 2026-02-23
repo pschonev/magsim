@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1 (2026-02-23)
+
+### Fix
+
+- Don't add race_positions in frontend
+
+### Refactor
+
+- rename project to magsim and prepare for v1.0.0
+
 ## 1.0.0 (2026-02-23)
 
 ### Feat

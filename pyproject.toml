@@ -1,6 +1,6 @@
 [project]
 name = "magsim"
-version = "1.0.0"
+version = "1.0.1"
 description = "A simulator for Magical Athlete"
 authors = [{ name = "Philipp Schoneville", email = "philipp@schoneville.com" }]
 license = "MIT"
@@ -13,13 +13,14 @@ dependencies = [
     "msgspec>=0.20.0",
     "tqdm>=4.67.1",
     "pyarrow>=22.0.0",
+    "polars==1.36.1",
 ]
 [project.urls]
 Repository = "https://github.com/pschonev/magical-athlete-simulator"
 Changelog = "https://github.com/pschonev/magical-athlete-simulator/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-frontend = ["marimo==0.18.4", "altair==6.0.0", "polars==1.36.1", "numpy>=2.4.1"]
+frontend = ["marimo==0.18.4", "altair==6.0.0", "numpy>=2.4.1"]
 
 [dependency-groups]
 dev = [
