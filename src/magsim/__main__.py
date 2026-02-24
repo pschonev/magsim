@@ -9,6 +9,7 @@ from magsim.cli.commands.compare import CompareCommand  # noqa: TC001
 from magsim.cli.commands.game import (
     GameCommand,  # noqa: TC001 # cappa needs to know about this at runtime
 )
+from magsim.cli.commands.gui import GuiCommand  # noqa: TC001
 from magsim.cli.commands.recompute import (
     RecomputeCommand,  # noqa: TC001
 )
@@ -17,7 +18,7 @@ from magsim.cli.commands.recompute import (
 @dataclass
 class Main:
     subcommand: cappa.Subcommands[
-        GameCommand | BatchCommand | RecomputeCommand | CompareCommand
+        GameCommand | BatchCommand | RecomputeCommand | CompareCommand | GuiCommand
     ]
 
 
