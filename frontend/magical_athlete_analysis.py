@@ -4,10 +4,12 @@
 #     "altair==6.0.0",
 #     "marimo>=0.19.0",
 #     "numpy>=2.4.1",
-#     "polars==1.24.0",
+#     "polars==1.36.1",
 # ]
 # [tool.marimo.display]
 # theme = "dark"
+# [tool.marimo.runtime]
+# output_max_bytes = 100_000_000
 # ///
 
 import marimo
@@ -47,8 +49,7 @@ async def cell_import():
 
     MAGSIM_VERSION = "1.0.5"
     await micropip.install(
-        f"magsim=={MAGSIM_VERSION}",
-        keep_going=True,
+        [f"magsim=={MAGSIM_VERSION}", "pyarrow"],
     )
 
     from magsim.core.events import (
