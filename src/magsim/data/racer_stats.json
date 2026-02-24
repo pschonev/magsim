@@ -1,218 +1,218 @@
 [
     {
-        "racer_name": "ThirdWheel",
-        "speed": 5.032,
-        "winrate": 0.127,
-        "avg_vp": 1.098
-    },
-    {
-        "racer_name": "Hare",
-        "speed": 6.293,
-        "winrate": 0.191,
-        "avg_vp": 1.304
-    },
-    {
-        "racer_name": "Lackey",
-        "speed": 5.716,
-        "winrate": 0.212,
-        "avg_vp": 1.523
-    },
-    {
-        "racer_name": "Dicemonger",
-        "speed": 6.939,
-        "winrate": 0.281,
-        "avg_vp": 2.42
-    },
-    {
-        "racer_name": "PartyAnimal",
-        "speed": 5.264,
-        "winrate": 0.253,
-        "avg_vp": 1.613
-    },
-    {
-        "racer_name": "Coach",
-        "speed": 5.07,
-        "winrate": 0.117,
-        "avg_vp": 0.976
-    },
-    {
-        "racer_name": "Banana",
-        "speed": 4.042,
-        "winrate": 0.104,
-        "avg_vp": 1.009
-    },
-    {
-        "racer_name": "Suckerfish",
-        "speed": 8.094,
-        "winrate": 0.236,
-        "avg_vp": 2.097
-    },
-    {
-        "racer_name": "Leaptoad",
-        "speed": 5.307,
-        "winrate": 0.175,
-        "avg_vp": 1.46
-    },
-    {
-        "racer_name": "Mastermind",
-        "speed": 3.965,
-        "winrate": 0.041,
-        "avg_vp": 1.4
-    },
-    {
-        "racer_name": "Sisyphus",
-        "speed": 4.771,
-        "winrate": 0.006,
-        "avg_vp": 3.371
-    },
-    {
-        "racer_name": "Cheerleader",
-        "speed": 6.011,
-        "winrate": 0.207,
-        "avg_vp": 1.647
-    },
-    {
-        "racer_name": "RocketScientist",
-        "speed": 6.928,
-        "winrate": 0.23,
-        "avg_vp": 1.573
-    },
-    {
-        "racer_name": "Alchemist",
-        "speed": 4.655,
-        "winrate": 0.092,
-        "avg_vp": 0.963
-    },
-    {
-        "racer_name": "Mouth",
-        "speed": 3.942,
-        "winrate": 0.154,
-        "avg_vp": 1.357
-    },
-    {
-        "racer_name": "Blimp",
-        "speed": 5.857,
-        "winrate": 0.107,
-        "avg_vp": 0.822
-    },
-    {
-        "racer_name": "HugeBaby",
-        "speed": 4.011,
-        "winrate": 0.08,
-        "avg_vp": 0.916
-    },
-    {
-        "racer_name": "Duelist",
-        "speed": 6.129,
-        "winrate": 0.17,
-        "avg_vp": 1.286
-    },
-    {
-        "racer_name": "Copycat",
-        "speed": 6.013,
-        "winrate": 0.188,
-        "avg_vp": 1.603
-    },
-    {
-        "racer_name": "Hypnotist",
-        "speed": 4.136,
-        "winrate": 0.216,
-        "avg_vp": 1.627
+        "racer_name": "Centaur",
+        "speed": 4.079,
+        "winrate": 0.085,
+        "avg_vp": 0.891
     },
     {
         "racer_name": "Egg",
-        "speed": 6.647,
-        "winrate": 0.271,
-        "avg_vp": 2.415
+        "speed": 6.565,
+        "winrate": 0.273,
+        "avg_vp": 2.401
     },
     {
-        "racer_name": "Gunk",
-        "speed": 3.961,
-        "winrate": 0.164,
-        "avg_vp": 1.35
+        "racer_name": "Mastermind",
+        "speed": 3.985,
+        "winrate": 0.046,
+        "avg_vp": 1.417
     },
     {
-        "racer_name": "Centaur",
-        "speed": 4.02,
-        "winrate": 0.08,
-        "avg_vp": 0.877
+        "racer_name": "Alchemist",
+        "speed": 4.702,
+        "winrate": 0.092,
+        "avg_vp": 0.988
     },
     {
-        "racer_name": "Scoocher",
-        "speed": 10.512,
-        "winrate": 0.568,
-        "avg_vp": 4.478
+        "racer_name": "HugeBaby",
+        "speed": 4.084,
+        "winrate": 0.087,
+        "avg_vp": 0.961
     },
     {
-        "racer_name": "FlipFlop",
-        "speed": 10.518,
-        "winrate": 0.356,
-        "avg_vp": 2.549
+        "racer_name": "RocketScientist",
+        "speed": 6.937,
+        "winrate": 0.232,
+        "avg_vp": 1.566
     },
     {
-        "racer_name": "LovableLoser",
-        "speed": 3.767,
-        "winrate": 0.045,
-        "avg_vp": 3.259
+        "racer_name": "Blimp",
+        "speed": 5.737,
+        "winrate": 0.105,
+        "avg_vp": 0.797
     },
     {
-        "racer_name": "Twin",
-        "speed": 7.918,
-        "winrate": 0.383,
-        "avg_vp": 2.673
-    },
-    {
-        "racer_name": "BabaYaga",
-        "speed": 4.095,
-        "winrate": 0.163,
-        "avg_vp": 1.268
-    },
-    {
-        "racer_name": "Stickler",
-        "speed": 4.094,
-        "winrate": 0.166,
-        "avg_vp": 1.476
-    },
-    {
-        "racer_name": "Magician",
-        "speed": 4.916,
-        "winrate": 0.182,
-        "avg_vp": 1.534
-    },
-    {
-        "racer_name": "Genius",
-        "speed": 3.879,
-        "winrate": 0.148,
-        "avg_vp": 1.176
-    },
-    {
-        "racer_name": "Romantic",
-        "speed": 9.566,
-        "winrate": 0.547,
-        "avg_vp": 2.768
-    },
-    {
-        "racer_name": "Inchworm",
-        "speed": 4.558,
-        "winrate": 0.121,
-        "avg_vp": 1.416
+        "racer_name": "Suckerfish",
+        "speed": 8.294,
+        "winrate": 0.257,
+        "avg_vp": 2.127
     },
     {
         "racer_name": "Legs",
-        "speed": 1.989,
-        "winrate": 0.296,
-        "avg_vp": 1.914
+        "speed": 2.012,
+        "winrate": 0.281,
+        "avg_vp": 1.856
+    },
+    {
+        "racer_name": "Hypnotist",
+        "speed": 4.191,
+        "winrate": 0.217,
+        "avg_vp": 1.648
+    },
+    {
+        "racer_name": "Twin",
+        "speed": 7.83,
+        "winrate": 0.374,
+        "avg_vp": 2.607
+    },
+    {
+        "racer_name": "Sisyphus",
+        "speed": 4.768,
+        "winrate": 0.005,
+        "avg_vp": 3.364
+    },
+    {
+        "racer_name": "Leaptoad",
+        "speed": 5.25,
+        "winrate": 0.171,
+        "avg_vp": 1.426
+    },
+    {
+        "racer_name": "Romantic",
+        "speed": 9.698,
+        "winrate": 0.539,
+        "avg_vp": 2.773
+    },
+    {
+        "racer_name": "Dicemonger",
+        "speed": 7.132,
+        "winrate": 0.268,
+        "avg_vp": 2.399
+    },
+    {
+        "racer_name": "Inchworm",
+        "speed": 4.658,
+        "winrate": 0.118,
+        "avg_vp": 1.39
+    },
+    {
+        "racer_name": "LovableLoser",
+        "speed": 3.828,
+        "winrate": 0.042,
+        "avg_vp": 3.257
+    },
+    {
+        "racer_name": "Scoocher",
+        "speed": 10.724,
+        "winrate": 0.578,
+        "avg_vp": 4.533
     },
     {
         "racer_name": "Skipper",
-        "speed": 3.803,
-        "winrate": 0.232,
-        "avg_vp": 1.663
+        "speed": 3.791,
+        "winrate": 0.23,
+        "avg_vp": 1.668
+    },
+    {
+        "racer_name": "Magician",
+        "speed": 4.812,
+        "winrate": 0.168,
+        "avg_vp": 1.475
+    },
+    {
+        "racer_name": "Lackey",
+        "speed": 5.753,
+        "winrate": 0.192,
+        "avg_vp": 1.452
+    },
+    {
+        "racer_name": "Hare",
+        "speed": 6.288,
+        "winrate": 0.196,
+        "avg_vp": 1.338
+    },
+    {
+        "racer_name": "Cheerleader",
+        "speed": 6.041,
+        "winrate": 0.211,
+        "avg_vp": 1.675
+    },
+    {
+        "racer_name": "Copycat",
+        "speed": 6.025,
+        "winrate": 0.183,
+        "avg_vp": 1.605
+    },
+    {
+        "racer_name": "PartyAnimal",
+        "speed": 5.105,
+        "winrate": 0.246,
+        "avg_vp": 1.582
+    },
+    {
+        "racer_name": "BabaYaga",
+        "speed": 4.032,
+        "winrate": 0.163,
+        "avg_vp": 1.289
+    },
+    {
+        "racer_name": "ThirdWheel",
+        "speed": 4.976,
+        "winrate": 0.134,
+        "avg_vp": 1.14
+    },
+    {
+        "racer_name": "Duelist",
+        "speed": 6.199,
+        "winrate": 0.167,
+        "avg_vp": 1.295
+    },
+    {
+        "racer_name": "Genius",
+        "speed": 3.86,
+        "winrate": 0.16,
+        "avg_vp": 1.197
+    },
+    {
+        "racer_name": "Mouth",
+        "speed": 3.99,
+        "winrate": 0.172,
+        "avg_vp": 1.436
+    },
+    {
+        "racer_name": "Gunk",
+        "speed": 3.983,
+        "winrate": 0.159,
+        "avg_vp": 1.334
+    },
+    {
+        "racer_name": "FlipFlop",
+        "speed": 10.578,
+        "winrate": 0.356,
+        "avg_vp": 2.513
+    },
+    {
+        "racer_name": "Coach",
+        "speed": 5.071,
+        "winrate": 0.117,
+        "avg_vp": 0.993
     },
     {
         "racer_name": "Heckler",
-        "speed": 7.225,
-        "winrate": 0.359,
-        "avg_vp": 2.1
+        "speed": 7.18,
+        "winrate": 0.365,
+        "avg_vp": 2.116
+    },
+    {
+        "racer_name": "Stickler",
+        "speed": 4.077,
+        "winrate": 0.183,
+        "avg_vp": 1.516
+    },
+    {
+        "racer_name": "Banana",
+        "speed": 4.061,
+        "winrate": 0.103,
+        "avg_vp": 1.024
     }
 ]
