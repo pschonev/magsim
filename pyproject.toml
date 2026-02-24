@@ -1,6 +1,6 @@
 [project]
 name = "magsim"
-version = "1.0.6"
+version = "1.0.7"
 description = "A simulator for Magical Athlete"
 authors = [{ name = "Philipp Schoneville", email = "philipp@schoneville.com" }]
 license = "MIT"
@@ -12,7 +12,7 @@ dependencies = [
     "duckdb-engine>=0.17.0",
     "msgspec>=0.18.6",
     "tqdm>=4.67.1",
-    "polars>=1.36.1",
+    "polars>=1.24.0",
 ]
 [project.urls]
 Repository = "https://github.com/pschonev/magsim"
