@@ -1044,6 +1044,7 @@ def cell_setup_log(
             if len(snapshot_recorder.step_history) > 1000:
                 break
 
+    snapshot_recorder.capture(engine, "RaceComplete", turn_index=t_idx)
     step_history: list[StepSnapshot] = snapshot_recorder.step_history
     turn_map = snapshot_recorder.turn_map
 
