@@ -77,6 +77,7 @@ async def cell_import():
     from magsim.engine.scenario import GameScenario, RacerConfig
     from magsim.simulation.telemetry import StepSnapshot
     from magsim.simulation.config import GameConfig
+
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -164,25 +165,26 @@ def cell_load_data(
     reload_data_btn,
     results_folder_browser,
 ):
-    reload_data_btn.value
+    reload_data_btn.value  # React to button clicks
 
     # 1. Determine the Base Folder
     if is_url:
         base_folder = default_results_path
     else:
-        if results_folder_browser.value:
+        # Fall back to the default path if the user hasn't picked anything yet
+        if results_folder_browser is not None and results_folder_browser.value:
             base_folder = Path(results_folder_browser.value[0].path)
         else:
-            base_folder = Path("results")
+            base_folder = default_results_path
 
-    # 2. Construct Paths (Only need Races and Results now)
+    # 2. Construct Paths
     path_races = base_folder / "races.parquet"
     path_res = base_folder / "racer_results.parquet"
 
-    # 3. Load Data
+    # 3. Load Data Safely
     try:
-        if not is_url:  # noqa: SIM102
-            if not Path(path_races).exists() or not Path(path_res).exists():
+        if not is_url:
+            if not path_races.exists() or not path_res.exists():
                 raise FileNotFoundError(
                     f"Folder '{base_folder}' must contain 'races.parquet' and 'racer_results.parquet'",
                 )
@@ -192,9 +194,9 @@ def cell_load_data(
             import urllib.request
 
             def _wasm_read_parquet(path: Path) -> pl.DataFrame:
-                with urllib.request.urlopen(path) as response:
+                with urllib.request.urlopen(str(path)) as response:
                     parquet_bytes = response.read()
-                return pl.read_parquet(io.BytesIO(parquet_bytes), use_pyarrow=True)
+                return pl.read_parquet(io.BytesIO(parquet_bytes))
 
             df_racer_results = _wasm_read_parquet(path_res)
             df_races = _wasm_read_parquet(path_races)
@@ -205,15 +207,35 @@ def cell_load_data(
         load_status = f"✅ Loaded from: `{base_folder}`"
 
     except Exception as e:
-        df_racer_results = pl.DataFrame()
-        df_races = pl.DataFrame()
+        # THIS IS THE FIX: Return empty DataFrames with the exact columns
+        # that your downstream cells expect so they don't crash!
+        df_racer_results = pl.DataFrame(
+            schema={
+                "config_hash": pl.String,
+                "racer_id": pl.Int64,
+                "racer_name": pl.String,
+            }
+        )
+
+        df_races = pl.DataFrame(
+            schema={
+                "config_hash": pl.String,
+                "racer_names": pl.String,  # Must be string to support your downstream cast to List(Utf8)
+                "board": pl.String,
+                "racer_count": pl.Int64,
+                "seed": pl.Int64,
+                "error_code": pl.String,
+                "total_turns": pl.Int64,
+                "timestamp": pl.String,
+            }
+        )
         load_status = f"❌ Error: {e!s}"
         print(load_status)
 
-    print(f"df_races: {df_races.height} rows, columns: {df_races.columns}")
-    print(
-        f"df_racer_results: {df_racer_results.height} rows, columns: {df_racer_results.columns}",
-    )
+    print(f"df_races: {df_races.height} rows")
+    print(f"df_racer_results: {df_racer_results.height} rows")
+
+    # EXACTLY ONE RETURN at the end of the cell
     return df_racer_results, df_races, load_status
 
 
@@ -1542,6 +1564,7 @@ def cell_vsialize_track(
                 {track_group_start}
                 {"".join(svg_elements)}
             </svg>"""
+
     return (render_game_track,)
 
 
@@ -2872,6 +2895,7 @@ def _(BG_COLOR, alt, np, pl):
             .add_params(xzoom)
             .properties(width="container", height=800, background=BG_COLOR)
         )
+
     return (build_quadrant_chart,)
 
 
