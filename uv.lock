@@ -438,7 +438,7 @@ requires-dist = [
     { name = "marimo", marker = "extra == 'frontend'", specifier = "==0.18.4" },
     { name = "msgspec", specifier = ">=0.18.6" },
     { name = "numpy", marker = "extra == 'frontend'", specifier = ">=2.4.1" },
-    { name = "polars", specifier = ">=1.38.1" },
+    { name = "polars", specifier = ">=1.36.1" },
     { name = "rich", specifier = ">=13.7.1" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]

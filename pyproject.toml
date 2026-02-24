@@ -12,7 +12,7 @@ dependencies = [
     "duckdb-engine>=0.17.0",
     "msgspec>=0.18.6",
     "tqdm>=4.67.1",
-    "polars>=1.38.1",
+    "polars>=1.36.1",
 ]
 [project.urls]
 Repository = "https://github.com/pschonev/magsim"
