@@ -3,7 +3,8 @@
 # dependencies = [
 #     "altair==6.0.0",
 #     "marimo>=0.19.0",
-#     "numpy>=2.4.1"
+#     "numpy>=2.4.1",
+#     "polars==1.24.0",
 # ]
 # [tool.marimo.display]
 # theme = "dark"
@@ -44,7 +45,7 @@ async def cell_import():
     from rich.console import Console
     from rich.logging import RichHandler
 
-    MAGSIM_VERSION = "1.0.4"
+    MAGSIM_VERSION = "1.0.5"
     await micropip.install(
         f"magsim=={MAGSIM_VERSION}",
         keep_going=True,
