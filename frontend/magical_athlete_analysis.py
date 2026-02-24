@@ -181,14 +181,54 @@ def cell_load_data(
     path_races = base_folder / "races.parquet"
     path_res = base_folder / "racer_results.parquet"
 
-    # 3. Load Data Safely
-    try:
-        if not is_url:
-            if not path_races.exists() or not path_res.exists():
-                raise FileNotFoundError(
-                    f"Folder '{base_folder}' must contain 'races.parquet' and 'racer_results.parquet'",
-                )
+    # 3. Helper to fetch/sync from GitHub using ETags
+    def _sync_github_file(filename: str) -> Path:
+        import urllib.request
+        from urllib.error import HTTPError
 
+        # Global OS-agnostic cache directory
+        cache_dir = Path.home() / ".magsim" / "results_cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        file_path = cache_dir / filename
+        etag_path = cache_dir / f"{filename}.etag"
+        raw_url = f"https://raw.githubusercontent.com/pschonev/magsim/main/docs/results/{filename}"
+
+        headers = {}
+        if file_path.exists() and etag_path.exists():
+            headers["If-None-Match"] = etag_path.read_text().strip()
+
+        req = urllib.request.Request(raw_url, headers=headers)
+        try:
+            with urllib.request.urlopen(req) as response:
+                # 200 OK: File changed, save new binary and new ETag
+                file_path.write_bytes(response.read())
+                new_etag = response.headers.get("ETag")
+                if new_etag:
+                    etag_path.write_text(new_etag)
+                print(f"Downloaded new version of {filename} from GitHub")
+        except HTTPError as e:
+            if e.code == 304:
+                # 304 Not Modified: Cache is up to date
+                print(f"Using cached version of {filename} (not modified)")
+            else:
+                print(f"Failed to fetch {filename} from GitHub: {e}")
+                if not file_path.exists():
+                    raise FileNotFoundError(
+                        f"Could not download {filename} and no local cache exists."
+                    ) from e
+        except Exception as e:
+            # Catch general network errors (e.g., no internet connection)
+            print(f"Network error fetching {filename}: {e}")
+            if not file_path.exists():
+                raise FileNotFoundError(
+                    f"Could not download {filename} and no local cache exists."
+                ) from e
+
+        return file_path
+
+    # 4. Load Data Safely
+    try:
         if is_url:
             import io
             import urllib.request
@@ -200,11 +240,21 @@ def cell_load_data(
 
             df_racer_results = _wasm_read_parquet(path_res)
             df_races = _wasm_read_parquet(path_races)
+            load_status = f"✅ Loaded from URL: `{base_folder}`"
         else:
+            # If local files are missing, fall back to downloading/caching from GitHub
+            if not path_races.exists() or not path_res.exists():
+                print(
+                    f"Data not found at '{base_folder}'. Falling back to GitHub cache..."
+                )
+                path_races = _sync_github_file("races.parquet")
+                path_res = _sync_github_file("racer_results.parquet")
+                load_status = f"✅ Loaded from GitHub cache: `{path_races.parent}`"
+            else:
+                load_status = f"✅ Loaded from local folder: `{base_folder}`"
+
             df_racer_results = pl.read_parquet(path_res)
             df_races = pl.read_parquet(path_races)
-
-        load_status = f"✅ Loaded from: `{base_folder}`"
 
     except Exception as e:
         # THIS IS THE FIX: Return empty DataFrames with the exact columns
