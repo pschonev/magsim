@@ -14,36 +14,33 @@ def _normalize(s: str) -> str:
     return s.strip().replace(" ", "").replace(".", "").lower()
 
 
-def validate_racer_names(racer_args: list[str]) -> list[RacerName]:
+def validate_racer_name(racer_arg: str) -> RacerName:
     """
-    Validate and resolve a racer name using fuzzy matching.
+    Validate and resolve a single racer name using fuzzy matching.
     Input "m.o.u.t.h" matches "Mouth".
     """
-    racer_names: list[RacerName] = []
-    for racer_arg in racer_args:
-        normalized_input = _normalize(racer_arg)
+    normalized_input = _normalize(racer_arg)
 
-        # Map normalized keys to canonical names
-        # e.g., "babayaga" -> "BabaYaga"
-        lookup_map: dict[str, RacerName] = {
-            _normalize(k): k for k in get_args(RacerName)
-        }
+    # Map normalized keys to canonical names
+    lookup_map: dict[str, RacerName] = {_normalize(k): k for k in get_args(RacerName)}
 
-        if normalized_input in lookup_map:
-            racer_names.append(lookup_map[normalized_input])
-            continue
+    if normalized_input in lookup_map:
+        return lookup_map[normalized_input]
 
-        # No exact match, try suggestions
-        canonical_names = get_args(RacerName)
-        # Use the raw input for diffing against canonical names for better readability
-        matches = difflib.get_close_matches(racer_arg, canonical_names, n=3, cutoff=0.5)
+    # No exact match, try suggestions
+    canonical_names = get_args(RacerName)
+    matches = difflib.get_close_matches(racer_arg, canonical_names, n=3, cutoff=0.5)
 
-        msg = f"Racer '{racer_arg}' not found."
-        if matches:
-            msg += f" Did you mean: {', '.join(matches)}?"
+    msg = f"Racer '{racer_arg}' not found."
+    if matches:
+        msg += f" Did you mean: {', '.join(matches)}?"
 
-        raise cappa.Exit(msg, code=1)
-    return racer_names
+    raise cappa.Exit(msg, code=1)
+
+
+def validate_racer_names(racer_args: list[str]) -> list[RacerName]:
+    """Validate and resolve multiple racer names."""
+    return [validate_racer_name(arg) for arg in racer_args]
 
 
 def validate_board_name(value: str) -> str:

@@ -14,6 +14,7 @@ from magsim.analysis.baseline import (
     run_racer_impact_comparison,
     run_rule_comparison,
 )
+from magsim.cli.converters import validate_racer_name
 from magsim.core.types import RacerName  # noqa: TC001
 
 RESULTS_DIR = Path("results")
@@ -29,7 +30,13 @@ logger.propagate = False
 @cappa.command(name="ai", help="Compare AI performance (Smart vs Baseline).")
 @dataclass
 class CompareAICommand:
-    racer: Annotated[RacerName, cappa.Arg(help="Racer to test.")]
+    racer: Annotated[
+        RacerName,
+        cappa.Arg(
+            parse=validate_racer_name,
+            help="Racer to test.",
+        ),
+    ]
     number: Annotated[int, cappa.Arg(short="-n", default=500, help="Number of games.")]
     output: Annotated[
         Path | None,
@@ -133,7 +140,14 @@ class CompareRuleCommand:
 @cappa.command(name="racer", help="Analyze impact of a racer on the field.")
 @dataclass
 class CompareRacerCommand:
-    racer: Annotated[RacerName, cappa.Arg(help="Target racer to analyze.")]
+    racer: Annotated[
+        RacerName,
+        cappa.Arg(
+            parse=validate_racer_name,
+            help="Target racer to analyze.",
+        ),
+    ]
+
     number: Annotated[int, cappa.Arg(short="-n", default=1000, help="Total games.")]
     output: Annotated[
         Path | None,
