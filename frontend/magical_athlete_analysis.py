@@ -77,6 +77,7 @@ async def cell_import():
     from magsim.engine.scenario import GameScenario, RacerConfig
     from magsim.simulation.telemetry import StepSnapshot
     from magsim.simulation.config import GameConfig
+
     return (
         Any,
         BOARD_DEFINITIONS,
@@ -127,7 +128,7 @@ def cell_file_browser(mo):
     )
 
     # Check if the default results path exists
-    if not default_results_path.exists():
+    if not is_url and not default_results_path.exists():
         print(f"Results dir not found: {default_results_path}")
         print(f"Falling back to notebook directory: {notebook_loc}")
         default_results_path = notebook_loc
@@ -1613,6 +1614,7 @@ def cell_vsialize_track(
                 {track_group_start}
                 {"".join(svg_elements)}
             </svg>"""
+
     return (render_game_track,)
 
 
@@ -2943,6 +2945,7 @@ def _(BG_COLOR, alt, np, pl):
             .add_params(xzoom)
             .properties(width="container", height=800, background=BG_COLOR)
         )
+
     return (build_quadrant_chart,)
 
 
