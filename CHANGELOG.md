@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2 (2026-03-06)
+
+### Fix
+
+- **frontend**: Fix WASM data loading with polars and pyarrow
+
 ## 1.1.1 (2026-03-05)
 
 ### Fix
