@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 class Board:
     length: int
     static_features: dict[int, list[SpaceModifier]]
+    first_corner: int = 12
     second_turn: int = 15
     dynamic_modifiers: defaultdict[int, list[SpaceModifier]] = field(
         init=False,

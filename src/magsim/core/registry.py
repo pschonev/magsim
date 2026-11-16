@@ -42,6 +42,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Mole": {"MoleTunnel"},
     "Mouth": {"MouthSwallow"},
     "Nemesis": {"NemesisGrudgeMatch"},
+    "NepoBaby": {"NepoBabyStart"},
     "Overtaker": {"OvertakerModifierManager"},
     "PartyAnimal": {"PartyPull", "PartyBoostManager"},
     "Romantic": {"RomanticMove"},
