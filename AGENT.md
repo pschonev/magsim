@@ -21,6 +21,16 @@ Rules for implementing the Second Wind expansion. Plan: `docs/second_wind_analys
 - Touch the core engine only when it is really necessary. Make the smallest change and say why in the milestone report.
 - Follow the current racer definitions (abilities, mixins, events, `RACER_ABILITIES`, `RacerName`/`AbilityName`, `data/racer_stats.json`). Reuse existing helpers before adding new ones.
 
+### New racer checklist
+
+Every new racer needs all of these:
+
+- A module in `src/magsim/racers/`.
+- `RacerName` and `AbilityName` entries (and `ModifierName` for modifiers) in `src/magsim/core/types.py`.
+- A `RACER_ABILITIES` entry in `src/magsim/core/registry.py`.
+- A `src/magsim/data/racer_stats.json` entry.
+- A `tests/racers/test_<racer>.py`.
+
 ## Tests
 
 - Use the current test structure: `tests/racers/test_<racer>.py`, the `scenario` fixture from `tests/conftest.py`, `GameScenario`, `RacerConfig` and the existing helpers.
