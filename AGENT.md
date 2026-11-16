@@ -62,4 +62,6 @@ After each milestone, report:
 3. What was added or changed (racers, engine changes and why).
 4. A one-line Conventional Commit message.
 
+Then add a ✅ after the milestone ID in the table in `docs/second_wind_analysis.md` (the only allowed edit to `docs/`), e.g. `M1 ✅`.
+
 Stop after the report and wait before starting the next milestone.

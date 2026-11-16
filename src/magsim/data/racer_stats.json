@@ -78,6 +78,24 @@
         "avg_vp": 0.0
     },
     {
+        "racer_name": "Diva",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
+        "racer_name": "Hopfrog",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
+        "racer_name": "Mole",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
         "racer_name": "Twin",
         "speed": 7.83,
         "winrate": 0.374,

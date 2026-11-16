@@ -100,8 +100,8 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 
 | Milestone | Racers | Engine work | Notes |
 | --- | --- | --- | --- |
-| M1 | Overtaker, Tail, Kingtripper | none | Passive modifier, two start-of-turn decisions. |
-| M2 | Diva, Hopfrog, Mole | none | Swap warp, extra turn, roll override. |
+| M1 ✅ | Overtaker, Tail, Kingtripper | none | Passive modifier, two start-of-turn decisions. |
+| M2 ✅ | Diva, Hopfrog, Mole | none | Swap warp, extra turn, roll override. |
 | M3 | Kraken, Soulmate, Critic | none | Once per race, setup selection, reroll for others. |
 | M4 | Hotel, Nemesis, The Hose | none | Hotel uses racer `victory_points` for now (E7 revisit in M17). Nemesis and The Hose use `engine.rng` directly (E2 revisit in M12/M13). |
 | M5 | Icarus, Bite Mark, Speed Demon | E13 shared elimination helper (extract from `mouth.py`) | Speed Demon uses racer `victory_points` for now. |

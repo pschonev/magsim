@@ -125,7 +125,7 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, int],
     ) -> int:
-        
+
         if (owner := engine.get_active_racer(ctx.source_racer_idx)) is None:
             return 6  # Fallback
 

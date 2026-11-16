@@ -15,7 +15,7 @@ from magsim.core.events import (
     TurnStartEvent,
     WarpData,
 )
-from magsim.core.state import ActiveRacerState, is_active
+from magsim.core.state import ActiveRacerState
 from magsim.engine.movement import push_simultaneous_warp
 from magsim.racers import get_all_racer_stats
 

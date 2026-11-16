@@ -18,7 +18,7 @@ from magsim.core.events import (
     RacerFinishedEvent,
     TurnStartEvent,
 )
-from magsim.core.state import ActiveRacerState, is_active
+from magsim.core.state import ActiveRacerState
 from magsim.engine.flow import mark_finished
 from magsim.racers import get_all_racer_stats
 

@@ -158,7 +158,7 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
 
         dest = ctx.event.end_tile
         dist = dest - me.position
-        
+
         # 0. If the driver just finished, always follow to claim 2nd place
         if not driver.active:
             if dist > 0:
@@ -178,7 +178,7 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         # Define Good Abilities (Drivers to prefer)
         GOOD_DRIVER_ABILITIES: set[AbilityName] = {
             "ScoochStep",
-            "RomanticMove"
+            "RomanticMove",
         }
 
         driver_abilities = driver.abilities
@@ -210,7 +210,7 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         # 5. Small safe rides (1–3): chain logic and local options
         def moves_before_me(r_idx: int) -> bool:
             return is_turn_between(driver.idx, me.idx, r_idx)
-        
+
 
         # 5a. Destination chain: highest priority among small safe rides
         for r in engine.get_racers_at_position(dest, except_racer_idx=me.idx):

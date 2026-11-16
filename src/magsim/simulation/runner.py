@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 import polars as pl
 from tqdm import tqdm
 
-from magsim.core.events import PostMoveEvent, PostWarpEvent
 from magsim.engine.board import BOARD_DEFINITIONS
 from magsim.engine.scenario import GameScenario, RacerConfig
 from magsim.simulation.metrics import (

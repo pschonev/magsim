@@ -176,7 +176,7 @@ class SimulationDatabase:
             # 2. Results: Bulk Insert Tuples (your existing code)
             if self.result_buffer:
                 placeholders = ", ".join(
-                    ["?"] * 21
+                    ["?"] * 21,
                 )  # Adjust to your RacerResult field count
                 self.conn.executemany(
                     f"INSERT INTO racer_results VALUES ({placeholders})",
@@ -199,7 +199,7 @@ class SimulationDatabase:
                         self.position_buffer_cols["pos_r3"],
                         self.position_buffer_cols["pos_r4"],
                         self.position_buffer_cols["pos_r5"],
-                    )
+                    ),
                 )
 
                 # Use the SAME executemany pattern as races/results

@@ -4,6 +4,7 @@ from magsim.core.types import RacerName
 from magsim.engine.board import MoveDeltaTile
 from magsim.engine.game_engine import GameEngine
 
+
 def get_benefit_at(engine: GameEngine, pos: int) -> str | None:
     """
     Returns the display name of the feature making this position excellent.
@@ -40,7 +41,7 @@ def get_hazard_at(engine: GameEngine, pos: int) -> str | None:
 
     # 1. Board Hazards (Trip Tiles, Backward Boosts)
     modifiers = engine.state.board.get_modifiers_at(pos)
-    
+
     if trip := next((m for m in modifiers if m.name == "TripTile"), None):
         return trip.display_name
 
@@ -118,5 +119,5 @@ def get_effective_racer_name(racer: ActiveRacerState) -> RacerName:
     for ability in racer.active_abilities:
         if isinstance(ability, CopyAbilityProtocol) and ability.copied_racer is not None:
             return ability.copied_racer
-    
+
     return racer.name

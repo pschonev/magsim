@@ -23,10 +23,9 @@ def test_twin_draws_from_weighted_winners(scenario: type[GameScenario]):
 
     twin = game.get_racer(0)
 
-    # Should have more abilities than just "TwinCopy"
-    # (TwinCopy + whatever they copied)
-    assert len(twin.abilities) >= 2
-    assert "TwinCopy" in twin.abilities
+    # TwinCopy is replaced by the abilities of whichever racer was copied
+    assert twin.abilities
+    assert "TwinCopy" not in twin.abilities
 
 
 def test_twin_copied_racer_removed_from_pool(scenario: type[GameScenario]):

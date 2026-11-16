@@ -154,7 +154,7 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
 
         if not candidates:
              return None
-        
+
         # Return the position of the highest score
         return max(candidates, key=lambda x: x.score).position
 
