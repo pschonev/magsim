@@ -25,6 +25,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "HugeBaby": {"HugeBabyPush"},
     "Hypnotist": {"HypnotistWarp"},
     "Inchworm": {"InchwormCreep"},
+    "Kingtripper": {"KingtripperTrip"},
     "Lackey": {"LackeyLoyalty"},
     "Leaptoad": {"LeaptoadJumpManager"},
     "Legs": {"LongLegs"},
@@ -32,6 +33,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Magician": {"MagicalReroll"},
     "Mastermind": {"MastermindPredict"},
     "Mouth": {"MouthSwallow"},
+    "Overtaker": {"OvertakerModifierManager"},
     "PartyAnimal": {"PartyPull", "PartyBoostManager"},
     "Romantic": {"RomanticMove"},
     "RocketScientist": {"RocketScientistBoost"},
@@ -40,6 +42,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Skipper": {"SkipperTurn"},
     "Stickler": {"SticklerStrictFinishManager"},
     "Suckerfish": {"SuckerfishRide"},
+    "Tail": {"TailWarp"},
     "ThirdWheel": {"ThirdWheelJoin"},
     "Twin": {"TwinCopy"},
 }

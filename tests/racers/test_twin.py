@@ -1,5 +1,8 @@
 from magsim.core.abilities import CopyAbilityProtocol
+from magsim.core.agent import SelectionDecisionContext
+from magsim.core.types import RacerStat
 from magsim.engine.scenario import GameScenario, RacerConfig
+from magsim.racers.twin import TwinCopyAbility
 
 
 def test_twin_draws_from_weighted_winners(scenario: type[GameScenario]):
@@ -59,9 +62,7 @@ def test_twin_copied_racer_removed_from_pool(scenario: type[GameScenario]):
 
 def test_twin_auto_selection_picks_highest_avg_vp(scenario: type[GameScenario]):
     """
-    The auto-agent logic for Twin is to pick the winner with the highest average VP.
-    We can't easily force which winners are generated without deep mocking,
-    but we can verify that a choice was made and it didn't crash.
+    Auto-agent selects the offered winner with the highest average VP.
     """
     game = scenario(
         [
@@ -71,13 +72,23 @@ def test_twin_auto_selection_picks_highest_avg_vp(scenario: type[GameScenario]):
         dice_rolls=None,
         seed=99,
     )
+    ability = TwinCopyAbility()
+    options = [
+        RacerStat("Banana", avg_vp=1.0),
+        RacerStat("Centaur", avg_vp=3.0),
+        RacerStat("Mouth", avg_vp=2.0),
+    ]
 
-    twin = game.get_racer(0)
-    # Just verify setup completed
-    assert len(twin.abilities) > 1
-    copied_racer_name = next(
-        (a.copied_racer for a in twin.active_abilities if isinstance(a, CopyAbilityProtocol)),
-        None,
+    picked = ability.get_auto_selection_decision(
+        game.engine,
+        SelectionDecisionContext(
+            source=ability,
+            event=None,
+            game_state=game.state,
+            source_racer_idx=0,
+            options=options,
+        ),
     )
 
-    assert copied_racer_name == "Scoocher"
+    assert picked is not None
+    assert picked.racer_name == "Centaur"
