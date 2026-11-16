@@ -1,3 +1,4 @@
+from magsim.ai.baseline_agent import BaselineAgent
 from magsim.engine.scenario import GameScenario, RacerConfig
 
 
@@ -7,7 +8,7 @@ def test_flip_flop_chooses_furthest_target(scenario: type[GameScenario]):
     """
     game = scenario(
         [
-            RacerConfig(0, "FlipFlop", start_pos=0),
+            RacerConfig(0, "FlipFlop", start_pos=0, agent=BaselineAgent()),
             RacerConfig(1, "Centaur", start_pos=10),      # Valid (+10)
             RacerConfig(2, "PartyAnimal", start_pos=20),  # Valid & Further (+20)
         ],
@@ -52,7 +53,7 @@ def test_flip_flop_swap_consumes_main_move(scenario: type[GameScenario]):
     """
     game = scenario(
         [
-            RacerConfig(0, "FlipFlop", start_pos=0),
+            RacerConfig(0, "FlipFlop", start_pos=0, agent=BaselineAgent()),
             RacerConfig(1, "Centaur", start_pos=10),
         ],
         dice_rolls=[6],  # Roll should be ignored
@@ -74,7 +75,7 @@ def test_flip_flop_swap_ignores_path_hazards(scenario: type[GameScenario]):
     """
     game = scenario(
         [
-            RacerConfig(0, "FlipFlop", start_pos=0),
+            RacerConfig(0, "FlipFlop", start_pos=0, agent=BaselineAgent()),
             RacerConfig(1, "Banana", start_pos=5),     # Hazard
             RacerConfig(2, "Centaur", start_pos=10),   # Target
         ],
@@ -98,7 +99,7 @@ def test_flip_flop_swap_is_simultaneous_avoiding_collision(scenario: type[GameSc
     """
     game = scenario(
         [
-            RacerConfig(0, "FlipFlop", start_pos=0),
+            RacerConfig(0, "FlipFlop", start_pos=0, agent=BaselineAgent()),
             RacerConfig(1, "BabaYaga", start_pos=10),  # Target with collision trap
         ],
         dice_rolls=[1],

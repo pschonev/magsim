@@ -1,4 +1,5 @@
 from typing import cast
+from magsim.ai.baseline_agent import BaselineAgent
 from magsim.racers.genius import AbilityGenius
 from magsim.engine.scenario import RacerConfig, GameScenario
 
@@ -49,11 +50,11 @@ def test_genius_gets_back_to_back_turn_on_correct_prediction(scenario: type[Game
     """
     game = scenario(
         [
-            RacerConfig(0, "Genius", start_pos=0),
+            RacerConfig(0, "Genius", start_pos=0, agent=BaselineAgent()),
             RacerConfig(1, "Magician", start_pos=0),
         ],
         dice_rolls=[
-            4,  # Genius roll: should match Genius's default/forced prediction in your implementation
+            6,  # Matches BaselineAgent's Genius prediction (always 6)
             2,  # Genius extra turn roll (any number)
         ],
     )
@@ -66,7 +67,7 @@ def test_genius_gets_back_to_back_turn_on_correct_prediction(scenario: type[Game
     # Turn 1 (Genius again) -> now should proceed to Magician
     game.run_turn()
     assert game.engine.state.current_racer_idx == 1
-    assert game.engine.get_racer(0).position == 6
+    assert game.engine.get_racer(0).position == 8
 
 
 def test_genius_predicts_1_but_skipper_steals_next_turn(scenario: type[GameScenario]):
