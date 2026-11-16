@@ -10,9 +10,8 @@ from magsim.core.events import (
     GameEvent,
     PostMoveEvent,
     PostWarpEvent,
-    RacerEliminatedEvent,
 )
-from magsim.engine.flow import mark_finished
+from magsim.engine.elimination import eliminate_racer
 
 if TYPE_CHECKING:
     from magsim.core.agent import Agent
@@ -48,33 +47,16 @@ class MouthDevour(Ability):
             return "skip_trigger"
 
         victim = others_on_space[0]
-        # strip racer of all their abilities
-        engine.clear_all_abilities(victim.idx)
-        victim.eliminate()
-
         engine.log_info(
             f"{owner.repr} ATE {victim.repr}!!!",
         )
-        engine.push_event(
-            RacerEliminatedEvent(
-                target_racer_idx=victim.idx,
-                responsible_racer_idx=owner.idx,
-                source=self.name,
-                phase=event.phase,
-            ),
+        eliminate_racer(
+            engine,
+            victim,
+            responsible_racer_idx=owner.idx,
+            source=self.name,
+            phase=event.phase,
         )
-
-        # Check for sudden game end (if only 1 racer left)
-        active_count = sum(1 for r in engine.state.racers if r.active)
-        if active_count == 1:
-            rank = sum([1 for r in engine.state.racers if r.finished]) + 1
-            if rank <= 2:
-                engine.log_info(f"{owner.repr} is the last remaining racer.")
-                mark_finished(engine, racer=owner, rank=rank)
-            else:
-                engine.log_error(
-                    f"Unexpected state: {owner.repr} is the last remaining racer but more than one racer has finished.",
-                )
 
         return AbilityTriggeredEvent(
             responsible_racer_idx=owner.idx,

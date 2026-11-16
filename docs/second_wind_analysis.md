@@ -104,7 +104,7 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 | M2 ✅ | Diva, Hopfrog, Mole | none | Swap warp, extra turn, roll override. |
 | M3 ✅ | Kraken, Soulmate, Critic | none | Once per race, setup selection, reroll for others. |
 | M4 ✅ | Hotel, Nemesis, The Hose | none | Hotel uses racer `victory_points` for now (E7 revisit in M17). Nemesis and The Hose use `engine.rng` directly (E2 revisit in M12/M13). |
-| M5 | Icarus, Bite Mark, Speed Demon | E13 shared elimination helper (extract from `mouth.py`) | Speed Demon uses racer `victory_points` for now. |
+| M5 ✅ | Icarus, Bite Mark, Speed Demon | E13 shared elimination helper (extract from `mouth.py`) | Speed Demon uses racer `victory_points` for now. |
 | M6 | Nepo Baby | E9 corner positions on `Board` | Gloth reuses this in M9. |
 | M7 | Streaker, Magical Athlete | E12 `is_main` on `PassingEvent` | Magical Athlete 5 needs a negative non-main `push_move`. |
 | M8 | Blunderdog | E1 backward main move, non-additive modifiers | Reused by Le Saboteur and Penguin. |
