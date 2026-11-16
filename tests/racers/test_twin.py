@@ -39,7 +39,7 @@ def test_twin_copied_racer_removed_from_pool(scenario: type[GameScenario]):
             RacerConfig(1, "Banana", start_pos=0),
         ],
         dice_rolls=None,
-        seed=55,
+        seed=56,
     )
 
     twin = game.get_racer(0)

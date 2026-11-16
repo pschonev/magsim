@@ -374,7 +374,7 @@ class MetricsAggregator:
         output: list[RacerResult] = []
         for racer in engine.state.racers:
             stats = self._get_result(racer.idx)
-            stats.final_vp = racer.victory_points
+            stats.final_vp = racer.victory_points - racer.starting_vp
             stats.finish_position = racer.finish_position
             stats.eliminated = racer.eliminated
             output.append(stats)

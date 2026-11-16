@@ -25,6 +25,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Hare": {"HareHubris"},
     "Heckler": {"HecklerHeckle"},
     "Hopfrog": {"HopfrogHop"},
+    "Hotel": {"HotelMonopolize"},
     "HugeBaby": {"HugeBabyPush"},
     "Hypnotist": {"HypnotistWarp"},
     "Inchworm": {"InchwormCreep"},
@@ -38,6 +39,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Mastermind": {"MastermindPredict"},
     "Mole": {"MoleTunnel"},
     "Mouth": {"MouthSwallow"},
+    "Nemesis": {"NemesisGrudgeMatch"},
     "Overtaker": {"OvertakerModifierManager"},
     "PartyAnimal": {"PartyPull", "PartyBoostManager"},
     "Romantic": {"RomanticMove"},
@@ -49,6 +51,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Stickler": {"SticklerStrictFinishManager"},
     "Suckerfish": {"SuckerfishRide"},
     "Tail": {"TailWarp"},
+    "TheHose": {"TheHosePowerWash"},
     "ThirdWheel": {"ThirdWheelJoin"},
     "Twin": {"TwinCopy"},
 }

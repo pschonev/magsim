@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from tqdm import tqdm
 
+from magsim.core.state import GameRules
 from magsim.engine.board import BOARD_DEFINITIONS
 from magsim.engine.scenario import GameScenario, RacerConfig
 from magsim.simulation.metrics import (
@@ -67,6 +68,7 @@ def run_single_simulation(
         racers_config=racers_config,
         seed=config.seed,
         board=board,
+        rules=GameRules.for_play(config.rules),
     )
 
     engine = scenario.engine

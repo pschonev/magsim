@@ -7,6 +7,7 @@ from magsim.core.registry import RACER_ABILITIES
 
 if TYPE_CHECKING:
     import random
+    from collections.abc import Mapping
 
     from magsim.core.abilities import Ability
     from magsim.core.events import ScheduledEvent
@@ -23,6 +24,16 @@ class GameRules:
     timing_mode: TimingMode = "DFS"
     count_0_moves_for_ability_triggered: bool = False
     hr_mastermind_steal_1st: bool = False
+    starting_vp: bool = False
+
+    @classmethod
+    def for_play(cls, overrides: Mapping[str, object]) -> GameRules:
+        """Rules for real runs: starting VP on, config overrides applied on top."""
+        rules = cls(starting_vp=True)
+        for key, value in overrides.items():
+            if hasattr(rules, key):
+                setattr(rules, key, value)
+        return rules
 
 
 @dataclass(slots=True)
@@ -63,6 +74,7 @@ class RacerState:
     # game state
     position: int | None = 0
     victory_points: int = 0
+    starting_vp: int = 0
     tripped: bool = False
     tripping_racers: list[int | None] = field(default_factory=list)
 

@@ -54,6 +54,7 @@ from magsim.engine.roll import (
     handle_perform_main_roll,
     resolve_main_move,
 )
+from magsim.engine.starting_vp import assign_starting_vp
 from magsim.racers import get_ability_classes, get_all_racer_stats
 
 if TYPE_CHECKING:
@@ -107,6 +108,9 @@ class GameEngine:
 
         if self.verbose:
             self._logger.addFilter(ContextFilter(self))
+
+        if self.state.rules.starting_vp and not self.state.race_active:
+            assign_starting_vp(self.state, self.rng)
 
         for racer in self.get_active_racers():
             # 1. Initial Identity (e.g. "Egg", "Copycat")

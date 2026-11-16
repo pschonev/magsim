@@ -180,7 +180,7 @@ def run_ai_comparison(
             res_c = _run_config_with_setup(
                 config,
                 {target_idx: BaselineAgent()},
-                GameRules(),
+                GameRules.for_play({}),
                 max_turns=max_turns,
             )
             t1 = time.perf_counter()
@@ -200,7 +200,7 @@ def run_ai_comparison(
             res_t = _run_config_with_setup(
                 config,
                 {target_idx: SmartAgent()},
-                GameRules(),
+                GameRules.for_play({}),
                 max_turns=max_turns,
             )
             t3 = time.perf_counter()
@@ -270,8 +270,8 @@ def run_rule_comparison(
 
     run_id = str(uuid.uuid4())[:8]
     timestamp = datetime.now(UTC)
-    rules_c = GameRules()
-    rules_t = GameRules(**{rule_key: rule_value})
+    rules_c = GameRules.for_play({})
+    rules_t = GameRules(**{"starting_vp": True, rule_key: rule_value})
 
     games_processed = 0
 
@@ -392,7 +392,12 @@ def run_racer_impact_comparison(
             tqdm.write(f"[Sim {games_processed + 1} Treatment] {config.repr}")
 
             t2 = time.perf_counter()
-            res_t = _run_config_with_setup(config, {}, GameRules(), max_turns=max_turns)
+            res_t = _run_config_with_setup(
+                config,
+                {},
+                GameRules.for_play({}),
+                max_turns=max_turns,
+            )
             t3 = time.perf_counter()
 
             if res_t is None:
@@ -430,7 +435,7 @@ def run_racer_impact_comparison(
             res_c = _run_config_with_setup(
                 config_c,
                 {},
-                GameRules(),
+                GameRules.for_play({}),
                 max_turns=max_turns,
             )
             t1 = time.perf_counter()
@@ -527,5 +532,5 @@ def _run_config_with_setup(
             winner_idx = r.idx
             break
 
-    vps = {r.idx: r.victory_points for r in scenario.state.racers}
+    vps = {r.idx: r.victory_points - r.starting_vp for r in scenario.state.racers}
     return SimulationResult(winner_idx=winner_idx, vp_scores=vps)
