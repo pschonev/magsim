@@ -96,6 +96,24 @@
         "avg_vp": 0.0
     },
     {
+        "racer_name": "Kraken",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
+        "racer_name": "Soulmate",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
+        "racer_name": "Critic",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
         "racer_name": "Twin",
         "speed": 7.83,
         "winrate": 0.374,

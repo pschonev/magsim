@@ -32,7 +32,10 @@ class HopfrogHop(Ability):
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, TurnEndEvent) or engine.state.current_racer_idx != owner.idx:
+        if (
+            not isinstance(event, TurnEndEvent)
+            or engine.state.current_racer_idx != owner.idx
+        ):
             return "skip_trigger"
 
         if (me := engine.get_active_racer(owner.idx)) is None:
@@ -42,7 +45,9 @@ class HopfrogHop(Ability):
         if not any(r.position == me.position + 1 for r in others):
             return "skip_trigger"
 
-        engine.log_info(f"{me.repr} ends 1 space behind a racer and takes an extra turn using {self.name}!")
+        engine.log_info(
+            f"{me.repr} ends 1 space behind a racer and takes an extra turn using {self.name}!"
+        )
         engine.state.next_turn_override = owner.idx
 
         if engine.on_event_processed is not None:
