@@ -108,7 +108,7 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 | M6 ✅ | Nepo Baby | E9 corner positions on `Board` | Gloth reuses this in M9. |
 | M7 ✅ | Streaker, Magical Athlete | E12 `is_main` on `PassingEvent` | Magical Athlete 5 needs a negative non-main `push_move`. |
 | M8 ✅ | Blunderdog | E1 backward main move, non-additive modifiers | Reused by Le Saboteur and Penguin. |
-| M9 | Spoilsport, Gloth | E5 race-end event and race cancel | Needs E9 from M6. |
+| M9 ✅ | Spoilsport, Gloth | E5 race-end event and race cancel | Needs E9 from M6. |
 | M10 | Mush, Understudy | E14 runtime ability grant that survives `replace_core_abilities` | Understudy is easy but fits here. Its Hog Knight copy case waits for M15. |
 | M11 | Doppelgängster | E6 pre-finish interception | Needs E13 and E14. |
 | M12 | Party Pooper, Stunner | E2 central die roll, E3 base-die override by aura | Re-route Nemesis and The Hose through the central roll. |
@@ -123,3 +123,8 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 | M21 | Twisty Twirl board (twist) | Twist mechanics | Very hard. Twist cards (section 2) are scheduled together with it. |
 
 Every racer in section 1 appears exactly once.
+
+## Open questions
+
+- **Spoilsport cancel + Gloth**: Gloth's race-end bonus also fires when Spoilsport cancels the race.
+- **Negative total movement**: a main move with a negative total is clamped to 0. Designers disagree: https://boardgamegeek.com/thread/3598754/negative-movement

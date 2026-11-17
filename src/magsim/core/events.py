@@ -65,6 +65,13 @@ class RacerFinishedEvent(GameEvent, HasTargetRacer):
 class RacerEliminatedEvent(GameEvent, HasTargetRacer): ...
 
 
+@dataclass(frozen=True)
+class RaceEndedEvent(GameEvent):
+    """Dispatched immediately when the race ends, for any reason."""
+
+    phase: Phase = Phase.SYSTEM
+
+
 # -- Turns --
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from magsim.core.events import Phase, RacerFinishedEvent
+from magsim.core.events import Phase, RaceEndedEvent, RacerFinishedEvent
 from magsim.core.state import is_active
 
 if TYPE_CHECKING:
@@ -137,6 +137,9 @@ def end_race(engine: GameEngine) -> None:
 
     engine.state.race_active = False
     engine.log_info("Race ended! 🏁")
+    engine.dispatch_immediately(
+        RaceEndedEvent(responsible_racer_idx=None, source="System"),
+    )
 
     # send remaining events to telemetry
     if engine.on_event_processed:
