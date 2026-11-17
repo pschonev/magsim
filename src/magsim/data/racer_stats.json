@@ -156,6 +156,18 @@
         "avg_vp": 0.0
     },
     {
+        "racer_name": "Streaker",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
+        "racer_name": "MagicalAthlete",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
         "racer_name": "Twin",
         "speed": 7.83,
         "winrate": 0.374,

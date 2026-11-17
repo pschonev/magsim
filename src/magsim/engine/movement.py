@@ -152,6 +152,7 @@ def _process_passing_and_logs(
                             phase=evt.phase,
                             source=evt.source,
                             tile_idx=current,
+                            is_main=evt.is_main,
                         ),
                     )
             current += step

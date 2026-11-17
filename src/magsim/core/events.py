@@ -274,6 +274,7 @@ class PassingEvent(GameEvent):
     target_racer_idx: Annotated[int, "The ID of the racer that is being passed."]
     tile_idx: int
     phase: Phase
+    is_main: bool = False
 
     @property
     def passing_racer_idx(self) -> int:
