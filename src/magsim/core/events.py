@@ -137,16 +137,19 @@ class RollData:
 # -- Main Move Modification --
 
 
-@dataclass(frozen=True)
+@dataclass
 class MoveDistanceQuery:
     racer_idx: int
     base_amount: int
     modifiers: list[int] = field(default_factory=list)
     modifier_sources: list[tuple[str, int]] = field(default_factory=list)
+    base_multiplier: int = 1
+    reversals: int = 0  # odd = backward main move, even = forward
 
     @property
     def final_value(self) -> int:
-        return max(0, self.base_amount + sum(self.modifiers))
+        forward = max(0, self.base_amount * self.base_multiplier + sum(self.modifiers))
+        return -forward if self.reversals % 2 else forward
 
 
 @dataclass(frozen=True, kw_only=True)

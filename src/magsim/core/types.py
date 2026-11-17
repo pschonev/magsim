@@ -9,6 +9,7 @@ RacerName = Literal[
     "Banana",
     "BiteMark",
     "Blimp",
+    "Blunderdog",
     "Cheerleader",
     "Centaur",
     "Coach",
@@ -66,6 +67,7 @@ AbilityName = Literal[
     "BananaTrip",
     "BiteMarkTransform",
     "BlimpModifierManager",
+    "BlunderdogModifierManager",
     "CentaurTrample",
     "CheerleaderSupport",
     "CoachAura",
@@ -122,6 +124,7 @@ AbilityName = Literal[
 
 RacerModifierName = Literal[
     "BlimpModifier",
+    "BlunderdogModifier",
     "CoachBoost",
     "GunkSlimeModifier",
     "HareSpeed",

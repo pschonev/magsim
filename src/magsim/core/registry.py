@@ -11,6 +11,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Banana": {"BananaTrip"},
     "BiteMark": {"BiteMarkTransform"},
     "Blimp": {"BlimpModifierManager"},
+    "Blunderdog": {"BlunderdogModifierManager"},
     "Centaur": {"CentaurTrample"},
     "Cheerleader": {"CheerleaderSupport"},
     "Coach": {"CoachAura"},

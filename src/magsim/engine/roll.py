@@ -213,7 +213,7 @@ def handle_execute_main_move(engine: GameEngine, event: ExecuteMainMoveEvent) ->
         return
 
     dist = engine.state.roll_state.final_value
-    if dist > 0:
+    if dist != 0:
         push_move(
             engine=engine,
             moved_racer_idx=event.target_racer_idx,
