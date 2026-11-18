@@ -14,7 +14,7 @@ from magsim.core.events import (
     RollModificationWindowEvent,
     RollResultEvent,
 )
-from magsim.core.mixins import RollModificationMixin
+from magsim.core.mixins import DieRollHookMixin, RollModificationMixin
 from magsim.engine.movement import push_move
 
 if TYPE_CHECKING:
@@ -67,6 +67,26 @@ def report_base_value_change(
     )
 
 
+def roll_die(engine: GameEngine, roller_idx: int) -> D6Values:
+    """The single place where a d6 is rolled; ability hooks may force or reject values."""
+    roller = engine.get_racer(roller_idx)
+    hooks = [
+        (other, ability)
+        for other in engine.get_active_racers()
+        for ability in other.active_abilities
+        if isinstance(ability, DieRollHookMixin)
+    ]
+    for other, ability in hooks:
+        if (forced := ability.forced_die_value(engine, other, roller)) is not None:
+            return cast("D6Values", forced)
+
+    while True:
+        value = engine.rng.randint(1, 6)
+        rejections = [a.rejects_die_value(engine, o, roller, value) for o, a in hooks]
+        if not any(rejections):
+            return cast("D6Values", value)
+
+
 def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) -> None:
     racer = engine.get_racer(event.target_racer_idx)
     if racer.tripped:
@@ -96,7 +116,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
 
         racer.roll_override = None  # Consume it
     else:
-        base = cast("D6Values", engine.rng.randint(1, 6))
+        base = roll_die(engine, racer.idx)
         engine.state.roll_state.dice_value = base
         racer.can_reroll = True
 

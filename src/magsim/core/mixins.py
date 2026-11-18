@@ -110,6 +110,29 @@ class FinishInterceptorMixin(ABC):
         """Returns True if the finish was intercepted (finisher must not finish)."""
 
 
+class DieRollHookMixin:
+    """Lets an ability intercept every die roll made by a racer (main roll, duels, ...)."""
+
+    def forced_die_value(
+        self,
+        engine: GameEngine,
+        owner: ActiveRacerState,
+        roller: ActiveRacerState,
+    ) -> int | None:
+        """Returns a value the die must show instead of being rolled, or None."""
+        return None
+
+    def rejects_die_value(
+        self,
+        engine: GameEngine,
+        owner: ActiveRacerState,
+        roller: ActiveRacerState,
+        value: int,
+    ) -> bool:
+        """Returns True if the rolled value must be thrown away and rolled again."""
+        return False
+
+
 class SetupPhaseMixin(ABC):
     """Mixin for abilities that trigger logic once at the very beginning of the game."""
 

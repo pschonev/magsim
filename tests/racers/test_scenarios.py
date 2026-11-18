@@ -1214,3 +1214,96 @@ def test_doppelgangster_is_eliminated_when_it_crosses_first(
     assert game.get_racer(0).victory_points == 0
     assert game.get_racer(0).finish_position is None
     assert game.engine.state.race_active
+
+
+# --- Party Pooper / Stunner ---
+
+
+def test_party_pooper_rerolls_sixes_across_a_varied_field(
+    scenario: type[GameScenario],
+):
+    """Pooper complains once per rerolled six on any racer's main roll, and the
+    reroll is what actually moves the roller.
+    """
+    game = scenario(
+        [
+            r(0, "PartyPooper", 10),
+            r(1, "Hopfrog", 0),
+            r(2, "Stickler", 3),
+            r(3, "Romantic", 20),
+            r(4, "Tail", 5),
+        ],
+        dice_rolls=[1, 6, 6, 2],
+    )
+
+    game.run_turns(2)
+
+    assert game.get_racer(0).position == 10 + 1 + 2
+    assert game.get_racer(1).position == 2
+
+
+def test_stunner_aura_slows_a_mixed_pack(scenario: type[GameScenario]):
+    """Racers within 1 of the Stunner always roll 1, even when the dice say 6, while
+    a racer further away rolls freely (Sisyphus rolls the 6 and is sent back).
+    """
+    game = scenario(
+        [
+            r(0, "Banana", 9),
+            r(1, "Stickler", 11),
+            r(2, "Sisyphus", 3),
+            r(3, "Stunner", 10),
+        ],
+        dice_rolls=[6, 3, 4],
+    )
+
+    game.run_turns(4)
+
+    assert game.get_racer(0).position == 10
+    assert game.get_racer(1).position == 12
+    assert game.get_racer(2).position == 0
+    assert game.get_racer(3).position == 13
+
+
+def test_duelist_duel_next_to_stunner_and_party_pooper(
+    scenario: type[GameScenario],
+):
+    """A Duelist duel is made of real dice: Party Pooper rerolls a duel 6 (moving 1)
+    while the Stunner is too far away to force anything.
+    """
+    game = scenario(
+        [
+            r(0, "Duelist", 5),
+            r(1, "Mastermind", 5),
+            r(2, "Stunner", 20),
+            r(3, "PartyPooper", 25),
+            r(4, "Hotel", 15),
+        ],
+        dice_rolls=[6, 4, 3, 1],
+    )
+
+    game.run_turn()
+
+    assert game.get_racer(3).position == 26
+    assert game.get_racer(0).position == 5 + 2 + 1
+
+
+def test_hose_and_nemesis_dice_go_through_central_roll(
+    scenario: type[GameScenario],
+):
+    """Nemesis and The Hose roll their own dice, so Party Pooper rerolls their sixes
+    and he gains a move each time.
+    """
+    game = scenario(
+        [
+            r(0, "TheHose", 0),
+            r(1, "Nemesis", 12),
+            r(2, "PartyPooper", 20),
+            r(3, "Banana", 8),
+        ],
+        dice_rolls=[6, 3, 1, 1, 1, 1, 1],
+    )
+
+    game.run_turn()
+
+    assert game.get_racer(2).position == 21
+    assert game.get_racer(0).position == 3

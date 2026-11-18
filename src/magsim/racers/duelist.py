@@ -21,6 +21,7 @@ from magsim.core.mixins import LifecycleManagedMixin
 from magsim.core.state import ActiveRacerState
 from magsim.core.types import RacerName, RacerStat
 from magsim.engine.movement import push_move
+from magsim.engine.roll import roll_die
 from magsim.racers import get_all_racer_stats
 
 if TYPE_CHECKING:
@@ -120,13 +121,18 @@ class DuelistAbility(
             )
             return "skip_trigger"
 
+        # Lock before rolling: a Party Pooper reroll move resolves synchronously and
+        # would otherwise re-enter this duel check.
+        if engine.current_processing_event is not None:
+            engine.current_processing_event.locked_abilities.add(self.name)
+
         # 3. Execute Duel
         engine.log_info(
             f"{owner.repr} challenges {target.repr} to a {self.name}!",
         )
 
-        owner_roll = engine.rng.randint(1, 6)
-        target_roll = engine.rng.randint(1, 6)
+        owner_roll = roll_die(engine, owner.idx)
+        target_roll = roll_die(engine, target.idx)
         winner = owner if owner_roll >= target_roll else target
         engine.log_info(
             f"{self.name}: {owner.repr} rolls a {owner_roll}, {target.repr} rolls a {target_roll} - {winner.repr} wins!",
@@ -141,10 +147,6 @@ class DuelistAbility(
             responsible_racer_idx=owner.idx,
             emit_ability_triggered="immediately",
         )
-
-        # 4. Add lock on event
-        if engine.current_processing_event is not None:
-            engine.current_processing_event.locked_abilities.add(self.name)
 
         return "skip_trigger"
 

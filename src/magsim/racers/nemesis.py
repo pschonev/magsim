@@ -14,6 +14,7 @@ from magsim.core.events import (
 )
 from magsim.engine.board import MoveDeltaTile, TripTile
 from magsim.engine.movement import push_move
+from magsim.engine.roll import roll_die
 
 if TYPE_CHECKING:
     from magsim.core.agent import Agent
@@ -51,7 +52,7 @@ class NemesisGrudgeMatch(Ability, BooleanDecisionMixin):
         if not agent.make_boolean_decision(engine, ctx):
             return "skip_trigger"
 
-        roll = engine.rng.randint(1, 6)
+        roll = roll_die(engine, owner.idx)
         engine.log_info(
             f"{owner.repr} rolls {roll} against {event.dice_value} ({self.name}).",
         )

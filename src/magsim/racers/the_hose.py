@@ -11,6 +11,7 @@ from magsim.core.events import (
     TurnEndEvent,
 )
 from magsim.engine.movement import push_trip
+from magsim.engine.roll import roll_die
 
 if TYPE_CHECKING:
     from magsim.core.agent import Agent
@@ -38,7 +39,7 @@ class TheHosePowerWash(Ability):
         ):
             return "skip_trigger"
 
-        reach = engine.rng.randint(1, 6)
+        reach = roll_die(engine, owner.idx)
         engine.log_info(f"{owner.repr} rolls {reach} for {self.name}.")
 
         victims = [
