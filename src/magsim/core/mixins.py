@@ -97,6 +97,19 @@ class MovementValidatorMixin(ABC):
         pass
 
 
+class FinishInterceptorMixin(ABC):
+    """Lets an ability veto a physical finish and handle the finisher itself."""
+
+    @abstractmethod
+    def intercept_finish(
+        self,
+        engine: GameEngine,
+        owner: ActiveRacerState,
+        finisher: ActiveRacerState,
+    ) -> bool:
+        """Returns True if the finish was intercepted (finisher must not finish)."""
+
+
 class SetupPhaseMixin(ABC):
     """Mixin for abilities that trigger logic once at the very beginning of the game."""
 

@@ -181,7 +181,9 @@ def _finalize_committed_move(
         engine.on_event_processed(engine, post_move_event)
 
     # 2. Check Finish / Race End
-    if check_finish(engine, racer) and not engine.state.race_active:
+    if check_finish(engine, racer) and (
+        not engine.state.race_active or racer.eliminated
+    ):
         return
 
     # 3. Subscribers (Abilities) - Only if race is active
@@ -348,7 +350,9 @@ def _finalize_committed_warp(
         engine.on_event_processed(engine, post_warp_event)
 
     # 2. Check Finish / Race End
-    if check_finish(engine, racer) and not engine.state.race_active:
+    if check_finish(engine, racer) and (
+        not engine.state.race_active or racer.eliminated
+    ):
         return
 
     # 3. Subscribers

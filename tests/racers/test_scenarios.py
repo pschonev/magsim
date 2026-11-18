@@ -1116,3 +1116,101 @@ def test_understudy_copying_mush_gets_a_drawn_power_on_a_low_roll(
         "GlothModifierManager",
         "GlothRaceEndBonus",
     }
+
+
+# --- Doppelgangster ---
+
+
+def test_doppelgangster_takes_banana_from_the_racer_who_would_win(
+    scenario: type[GameScenario],
+):
+    """Banana would have won the race but dives instead, and Doppelgangster gains the
+    Banana trip power. Nobody has finished, so the race continues.
+    """
+    game = scenario(
+        [
+            r(0, "Doppelgangster"),
+            r(1, "Banana", 28),
+            r(2, "Hotel", 3),
+            r(3, "Inchworm", 5),
+        ],
+        dice_rolls=[1, 3, 3, 3],
+    )
+
+    game.run_turn()
+    game.run_turn()
+
+    assert game.get_racer(1).eliminated
+    assert game.get_racer(1).victory_points == 0
+    assert "BananaTrip" in abilities(game, 0)
+    assert game.engine.state.race_active
+
+
+def test_doppelgangster_dive_lets_the_next_crosser_win(scenario: type[GameScenario]):
+    """After the dive is spent, Sisyphus crosses next and takes 1st place (4 VP on top
+    of its 4 starting VP) while the race stays open for a second finisher.
+    """
+    game = scenario(
+        [
+            r(0, "Doppelgangster"),
+            r(1, "Gunk", 28),
+            r(2, "Sisyphus", 27),
+            r(3, "Heckler", 10),
+            r(4, "Mouth", 20),
+        ],
+        dice_rolls=[1, 4, 5, 1, 1],
+    )
+
+    game.run_turns(3)
+
+    assert game.get_racer(1).eliminated
+    assert game.get_racer(2).finish_position == 1
+    assert game.get_racer(2).victory_points == 8
+    assert game.engine.state.race_active
+
+
+def test_doppelgangster_gains_legs_and_uses_it_on_the_next_turn(
+    scenario: type[GameScenario],
+):
+    """Legs dives on its way over the line and Doppelgangster keeps the power, so its
+    next turn skips the roll and moves 5.
+    """
+    game = scenario(
+        [
+            r(0, "Doppelgangster"),
+            r(1, "Legs", 25),
+            r(2, "Alchemist"),
+            r(3, "Lackey", 8),
+        ],
+        dice_rolls=[1, 1, 1, 1, 1],
+    )
+
+    game.run_turns(5)
+
+    assert game.get_racer(1).eliminated
+    assert positions(game)[0] == 6
+
+
+def test_doppelgangster_is_eliminated_when_it_crosses_first(
+    scenario: type[GameScenario],
+):
+    """Doppelgangster crossing the line first is eliminated like anyone else, scoring
+    nothing, while the rest of the field is untouched.
+    """
+    game = scenario(
+        [
+            r(0, "Doppelgangster", 27),
+            r(1, "Magician", 5),
+            r(2, "Coach", 10),
+            r(3, "Kraken", 3),
+            r(4, "PartyAnimal", 12),
+        ],
+        dice_rolls=[4, 1, 1, 1, 1],
+    )
+
+    game.run_turn()
+
+    assert game.get_racer(0).eliminated
+    assert game.get_racer(0).victory_points == 0
+    assert game.get_racer(0).finish_position is None
+    assert game.engine.state.race_active

@@ -19,6 +19,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Critic": {"CriticReroll"},
     "Dicemonger": {"DicemongerRerollManager"},
     "Diva": {"DivaSwap"},
+    "Doppelgangster": {"DoppelgangsterTakeADive"},
     "Duelist": {"DuelistDuel"},
     "Egg": {"EggCopy"},
     "FlipFlop": {"FlipFlopSwap"},

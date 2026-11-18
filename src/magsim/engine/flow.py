@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from magsim.core.events import Phase, RaceEndedEvent, RacerFinishedEvent
+from magsim.core.mixins import FinishInterceptorMixin
 from magsim.core.state import is_active
 
 if TYPE_CHECKING:
@@ -42,9 +43,23 @@ def check_finish(engine: GameEngine, racer: RacerState) -> bool:
 
     # Standard rule: Position >= Board Length
     if racer.position >= engine.state.board.length:
+        if _finish_intercepted(engine, racer):
+            return True
         mark_finished(engine, racer)
         return True
 
+    return False
+
+
+def _finish_intercepted(engine: GameEngine, racer: ActiveRacerState) -> bool:
+    for other in engine.get_active_racers():
+        for ability in other.active_abilities:
+            if isinstance(ability, FinishInterceptorMixin) and ability.intercept_finish(
+                engine,
+                other,
+                racer,
+            ):
+                return True
     return False
 
 

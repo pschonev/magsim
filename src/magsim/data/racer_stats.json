@@ -352,5 +352,11 @@
         "speed": 0.0,
         "winrate": 0.0,
         "avg_vp": 0.0
+    },
+    {
+        "racer_name": "Doppelgangster",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
     }
 ]
