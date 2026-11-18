@@ -340,5 +340,17 @@
         "speed": 4.061,
         "winrate": 0.103,
         "avg_vp": 1.024
+    },
+    {
+        "racer_name": "Mush",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
+        "racer_name": "Understudy",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
     }
 ]

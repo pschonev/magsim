@@ -546,6 +546,15 @@ class GameEngine:
                 if is_active(r) and r.position == tile_idx and r.idx != except_racer_idx
             ]
 
+    def can_replace_main_roll(self, racer_idx: int) -> bool:
+        """Whether the racer may still trade its main roll for a power (once per turn)."""
+        racer = self.get_racer(racer_idx)
+        return not (
+            racer.tripped
+            or racer.main_move_consumed
+            or racer.roll_override is not None
+        )
+
     def skip_main_move(
         self,
         *,
@@ -607,13 +616,15 @@ class GameEngine:
     ) -> None:
         """
         Updates the racer's Intrinsic (Identity) abilities.
-        Preserves any ability that inherits from ExternalAbilityMixin.
+        Preserves any ability that inherits from ExternalAbilityMixin or was granted.
         """
         racer = self.get_racer(racer_idx)
 
         # 1. Keep the buffs (The ones that opt-in to being External)
         external_abilities = [
-            ab for ab in racer.active_abilities if isinstance(ab, ExternalAbilityMixin)
+            ab
+            for ab in racer.active_abilities
+            if isinstance(ab, ExternalAbilityMixin) or ab.granted
         ]
 
         # 2. Combine with new identity
@@ -622,8 +633,16 @@ class GameEngine:
         # 3. Reconcile
         self._update_abilities(racer_idx, final_list)
 
-    def grant_ability(self, target_idx: int, ability_instance: Ability) -> None:
-        """Adds an external ability instance."""
+    def grant_ability(
+        self,
+        target_idx: int,
+        ability_instance: Ability,
+        *,
+        persistent: bool = False,
+    ) -> None:
+        """Adds an external ability instance. Persistent grants survive core swaps."""
+        if persistent:
+            ability_instance.granted = True
         racer = self.get_racer(target_idx)
         new_list = [*racer.active_abilities, ability_instance]
         self._update_abilities(target_idx, new_list)

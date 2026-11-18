@@ -41,7 +41,11 @@ class LegsMoveAbility(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
+        if (
+            not isinstance(event, TurnStartEvent)
+            or event.target_racer_idx != owner.idx
+            or not engine.can_replace_main_roll(owner.idx)
+        ):
             return "skip_trigger"
 
         ctx = DecisionContext[BooleanInteractive](

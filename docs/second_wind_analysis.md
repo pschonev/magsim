@@ -109,7 +109,7 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 | M7 ✅ | Streaker, Magical Athlete | E12 `is_main` on `PassingEvent` | Magical Athlete 5 needs a negative non-main `push_move`. |
 | M8 ✅ | Blunderdog | E1 backward main move, non-additive modifiers | Reused by Le Saboteur and Penguin. |
 | M9 ✅ | Spoilsport, Gloth | E5 race-end event and race cancel | Needs E9 from M6. |
-| M10 | Mush, Understudy | E14 runtime ability grant that survives `replace_core_abilities` | Understudy is easy but fits here. Its Hog Knight copy case waits for M15. |
+| M10 ✅ | Mush, Understudy | E14 runtime ability grant that survives `replace_core_abilities` | Understudy is easy but fits here. Its Hog Knight copy case waits for M15. |
 | M11 | Doppelgängster | E6 pre-finish interception | Needs E13 and E14. |
 | M12 | Party Pooper, Stunner | E2 central die roll, E3 base-die override by aura | Re-route Nemesis and The Hose through the central roll. |
 | M13 | Mr. Dice Guy, Show-Off | E2 multi-dice roll state | All dice values exposed to triggers. |
@@ -127,4 +127,5 @@ Every racer in section 1 appears exactly once.
 ## Open questions
 
 - **Spoilsport cancel + Gloth**: Gloth's race-end bonus also fires when Spoilsport cancels the race.
+- **Multiple roll-replacing powers on one racer** (Mush, copies): Legs, Mole and Flip Flop each "skip rolling for the main move … instead". Implemented as one trade per turn: the first power to claim it wins (`engine.can_replace_main_roll`), so Legs + Flip Flop never swap and then move 5. Combining compatible trades is a plausible alternative reading.
 - **Negative total movement**: a main move with a negative total is clamped to 0. Designers disagree: https://boardgamegeek.com/thread/3598754/negative-movement

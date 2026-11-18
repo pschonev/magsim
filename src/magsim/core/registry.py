@@ -44,6 +44,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Mastermind": {"MastermindPredict"},
     "Mole": {"MoleTunnel"},
     "Mouth": {"MouthSwallow"},
+    "Mush": {"MushGlobsterMash"},
     "Nemesis": {"NemesisGrudgeMatch"},
     "NepoBaby": {"NepoBabyStart"},
     "Overtaker": {"OvertakerModifierManager"},
@@ -63,4 +64,5 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "TheHose": {"TheHosePowerWash"},
     "ThirdWheel": {"ThirdWheelJoin"},
     "Twin": {"TwinCopy"},
+    "Understudy": {"UnderstudyMethod"},
 }

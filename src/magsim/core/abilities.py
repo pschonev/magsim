@@ -26,6 +26,7 @@ class Ability:
     name: AbilityName
     triggers: tuple[type[GameEvent], ...] = ()
     preferred_dice: D6VAlueSet = frozenset([4, 5, 6])
+    granted: bool = False
 
     def register(self, engine: GameEngine, owner_idx: int):
         """Subscribes this ability to the engine events defined in `triggers`."""

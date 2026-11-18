@@ -72,7 +72,11 @@ class HareHubris(Ability, LifecycleManagedMixin):
         engine: GameEngine,
         agent: Agent,
     ):
-        if not isinstance(event, TurnStartEvent) or event.target_racer_idx != owner.idx:
+        if (
+            not isinstance(event, TurnStartEvent)
+            or event.target_racer_idx != owner.idx
+            or owner.main_move_consumed
+        ):
             return "skip_trigger"
 
         max_others = max(

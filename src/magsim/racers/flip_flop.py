@@ -41,8 +41,7 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[ActiveRacerState]):
         if (
             not isinstance(event, TurnStartEvent)
             or event.target_racer_idx != owner.idx
-            or owner.tripped
-            or owner.main_move_consumed
+            or not engine.can_replace_main_roll(owner.idx)
         ):
             return "skip_trigger"
 

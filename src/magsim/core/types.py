@@ -42,6 +42,7 @@ RacerName = Literal[
     "Mastermind",
     "Mole",
     "Mouth",
+    "Mush",
     "Nemesis",
     "NepoBaby",
     "Overtaker",
@@ -61,6 +62,7 @@ RacerName = Literal[
     "TheHose",
     "ThirdWheel",
     "Twin",
+    "Understudy",
 ]
 
 AbilityName = Literal[
@@ -104,6 +106,7 @@ AbilityName = Literal[
     "MastermindPredict",
     "MoleTunnel",
     "MouthSwallow",
+    "MushGlobsterMash",
     "NemesisGrudgeMatch",
     "NepoBabyStart",
     "OvertakerModifierManager",
@@ -124,6 +127,7 @@ AbilityName = Literal[
     "TheHosePowerWash",
     "ThirdWheelJoin",
     "TwinCopy",
+    "UnderstudyMethod",
     "WeremouthRampage",
 ]
 

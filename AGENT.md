@@ -30,12 +30,15 @@ Every new racer needs all of these:
 - A `RACER_ABILITIES` entry in `src/magsim/core/registry.py`.
 - A `src/magsim/data/racer_stats.json` entry.
 - A `tests/racers/test_<racer>.py`.
+- New scenarios in `tests/racers/test_scenarios.py` using the new racers (appending there is allowed despite the rule against modifying existing tests).
 
 ## Tests
 
 - Use the current test structure: `tests/racers/test_<racer>.py`, the `scenario` fixture from `tests/conftest.py`, `GameScenario`, `RacerConfig` and the existing helpers.
 - Test only new racer abilities (and new engine behavior added for them). Do not test trivial engine behavior.
 - Each test covers one distinct aspect of an ability. No two tests check the same thing.
+- Every scenario in `tests/racers/test_scenarios.py` has 4-6 DIFFERENT racers (no duplicates). Choose racers for diversity across scenarios; do not reuse the same few racers everywhere.
+- Every non-trivial test gets a 1-2 sentence docstring saying what is tested and why (the edge case or interaction). Skip it only for trivial, basic tests whose name already says it all. Applies to scenarios in `test_scenarios.py` too.
 - Cover edge cases: ties, first/last place, finished or eliminated racers, tripped racers, no valid target, once-per-turn/race limits, interaction with modifiers.
 
 ## Code style
