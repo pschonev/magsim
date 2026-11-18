@@ -50,8 +50,7 @@ class AlchemistAlchemyAbility(Ability, BooleanDecisionMixin):
         ):
             return "skip_trigger"
 
-        dice_val = engine.state.roll_state.dice_value
-        if dice_val is None or dice_val not in (1, 2):
+        if not {1, 2}.intersection(engine.state.roll_state.dice_values):
             return "skip_trigger"
 
         should_convert = agent.make_boolean_decision(

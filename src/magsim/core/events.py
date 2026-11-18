@@ -129,6 +129,7 @@ class RollResultEvent(GameEvent, HasTargetRacer):
     """
 
     dice_value: int | None
+    dice_values: tuple[int, ...] = ()
     base_value: int
     final_value: int
     phase: Phase = Phase.MAIN_ACT

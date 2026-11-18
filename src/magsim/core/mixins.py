@@ -14,6 +14,7 @@ if TYPE_CHECKING:
         Phase,
     )
     from magsim.core.state import ActiveRacerState
+    from magsim.core.types import D6Values
     from magsim.engine.game_engine import GameEngine
 
 
@@ -154,3 +155,23 @@ class ExternalAbilityMixin:
     """
 
     source_racer_idx: int
+
+
+@dataclass(frozen=True)
+class MainRollResult:
+    dice: tuple[D6Values, ...]
+    base_value: int
+    counting_die: D6Values | None
+
+
+class MainRollMixin(ABC):
+    """Lets an ability produce the dice and base value of its owner's main roll."""
+
+    @abstractmethod
+    def roll_main(
+        self,
+        engine: GameEngine,
+        owner: ActiveRacerState,
+        agent: Agent,
+    ) -> MainRollResult:
+        """Rolls the dice. Must skip the main move itself if the roll yields no move."""

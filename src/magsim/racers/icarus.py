@@ -76,7 +76,7 @@ class IcarusFlightRisk(Ability, LifecycleManagedMixin):
         if (
             not isinstance(event, RollResultEvent)
             or event.target_racer_idx != owner.idx
-            or event.dice_value != FATAL_DIE
+            or FATAL_DIE not in event.dice_values
         ):
             return "skip_trigger"
 

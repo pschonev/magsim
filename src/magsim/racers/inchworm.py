@@ -38,7 +38,8 @@ class AbilityInchwormCreep(Ability):
         ):
             return "skip_trigger"
 
-        if event.dice_value == 1:
+        ones = event.dice_values.count(1)
+        if ones:
             engine.log_info(
                 f"{owner.repr} saw a 1 and steals the move of {engine.get_racer(event.target_racer_idx).repr} with {self.name}!",
             )
@@ -48,7 +49,7 @@ class AbilityInchwormCreep(Ability):
                 skipped_racer_idx=event.target_racer_idx,
             )
 
-            # Inchworm moves 1
+        for _ in range(ones):
             push_move(
                 engine,
                 distance=1,

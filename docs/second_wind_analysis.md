@@ -114,7 +114,7 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 | M10 ✅ | Mush, Understudy | E14 runtime ability grant that survives `replace_core_abilities` | Understudy is easy but fits here. Its Hog Knight copy case waits for M15. |
 | M11 ✅ | Doppelgängster | E6 pre-finish interception | Needs E13 and E14. |
 | M12 ✅ | Party Pooper, Stunner | E2 central die roll, E3 base-die override by aura | Re-route Nemesis and The Hose through the central roll. |
-| M13 | Mr. Dice Guy, Show-Off | E2 multi-dice roll state | All dice values exposed to triggers. |
+| M13 ✅ | Mr. Dice Guy, Show-Off | E2 multi-dice roll state | All dice values exposed to triggers. |
 | M14 | Le Saboteur, Penguin | E1 (done), E10 roll while tripped | Le Saboteur needs E1 and E2, Penguin needs E1. |
 | M15 | Hog Knight | E11 pieces (hogs) | Then add the Hog Knight case to Understudy. |
 | M16 | `<NULL>` | E4 resync hook before `publish_to_subscribers` | Strip-and-restore. |

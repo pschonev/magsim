@@ -39,7 +39,7 @@ class NemesisGrudgeMatch(Ability, BooleanDecisionMixin):
         if (
             not isinstance(event, RollResultEvent)
             or event.target_racer_idx == owner.idx
-            or event.dice_value is None
+            or not event.dice_values
         ):
             return "skip_trigger"
 
@@ -54,9 +54,9 @@ class NemesisGrudgeMatch(Ability, BooleanDecisionMixin):
 
         roll = roll_die(engine, owner.idx)
         engine.log_info(
-            f"{owner.repr} rolls {roll} against {event.dice_value} ({self.name}).",
+            f"{owner.repr} rolls {roll} against {list(event.dice_values)} ({self.name}).",
         )
-        if roll != event.dice_value:
+        if roll not in event.dice_values:
             return "skip_trigger"
 
         push_move(
@@ -83,14 +83,16 @@ class NemesisGrudgeMatch(Ability, BooleanDecisionMixin):
     ) -> bool:
         if (
             not isinstance(ctx.event, RollResultEvent)
-            or ctx.event.dice_value is None
+            or not ctx.event.dice_values
             or (me := engine.get_active_racer(ctx.source_racer_idx)) is None
         ):
             return False
 
-        landing = me.position + ctx.event.dice_value
-        return not any(
-            isinstance(mod, TripTile)
-            or (isinstance(mod, MoveDeltaTile) and mod.delta < 0)
-            for mod in engine.state.board.get_modifiers_at(landing)
+        return all(
+            not any(
+                isinstance(mod, TripTile)
+                or (isinstance(mod, MoveDeltaTile) and mod.delta < 0)
+                for mod in engine.state.board.get_modifiers_at(me.position + die)
+            )
+            for die in ctx.event.dice_values
         )

@@ -47,7 +47,7 @@ class SisyphusCurse(Ability, SetupPhaseMixin):
         ):
             return "skip_trigger"
 
-        if event.dice_value == 6:
+        if 6 in event.dice_values:
             engine.log_info(f"{owner.repr} rolled a 6! The boulder rolls back...")
 
             # 1. Warp to Start

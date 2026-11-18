@@ -14,7 +14,7 @@ from magsim.core.events import (
     RollModificationWindowEvent,
     RollResultEvent,
 )
-from magsim.core.mixins import DieRollHookMixin, RollModificationMixin
+from magsim.core.mixins import DieRollHookMixin, MainRollMixin, RollModificationMixin
 from magsim.engine.movement import push_move
 
 if TYPE_CHECKING:
@@ -101,9 +101,15 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
     engine.state.roll_state.serial_id += 1
     current_serial = engine.state.roll_state.serial_id
 
+    roll_state = engine.state.roll_state
+    producer = next(
+        (a for a in racer.active_abilities if isinstance(a, MainRollMixin)),
+        None,
+    )
     if racer.roll_override is not None:
         source, base = racer.roll_override
-        engine.state.roll_state.dice_value = None  # Not a dice roll
+        roll_state.dice_value = None  # Not a dice roll
+        roll_state.dice_values = ()
         racer.can_reroll = False
 
         report_base_value_change(
@@ -115,9 +121,16 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
         )
 
         racer.roll_override = None  # Consume it
+    elif producer is not None and (active := engine.get_active_racer(racer.idx)):
+        result = producer.roll_main(engine, active, engine.get_agent(racer.idx))
+        base = result.base_value
+        roll_state.dice_value = result.counting_die
+        roll_state.dice_values = result.dice
+        racer.can_reroll = True
     else:
         base = roll_die(engine, racer.idx)
-        engine.state.roll_state.dice_value = base
+        roll_state.dice_value = base
+        roll_state.dice_values = (base,)
         racer.can_reroll = True
 
     engine.state.roll_state.base_value = base
@@ -200,6 +213,7 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent) -> None:
             responsible_racer_idx=event.responsible_racer_idx,
             source=event.source,
             dice_value=engine.state.roll_state.dice_value,
+            dice_values=engine.state.roll_state.dice_values,
             base_value=engine.state.roll_state.base_value,
             final_value=engine.state.roll_state.final_value,
             phase=Phase.MAIN_ACT,

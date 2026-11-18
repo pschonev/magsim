@@ -38,7 +38,7 @@ class AbilityLackeyLoyalty(Ability):
         ):
             return "skip_trigger"
 
-        if event.dice_value == 6:
+        for _ in range(event.dice_values.count(6)):
             engine.log_info(
                 f"{owner.repr} saw a 6 and rushes ahead +2 with {self.name}!",
             )

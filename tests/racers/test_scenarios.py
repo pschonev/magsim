@@ -1307,3 +1307,49 @@ def test_hose_and_nemesis_dice_go_through_central_roll(
 
     assert game.get_racer(2).position == 21
     assert game.get_racer(0).position == 3
+
+
+def test_mr_dice_guy_sixes_feed_lackey_and_gunk_trims_the_pick(
+    scenario: type[GameScenario],
+):
+    """Two sixes among the six dice make Lackey move twice, Mr. Dice Guy moves the
+    picked 6 minus Gunk's -1 and lands on Gunk, which pays Romantic.
+    """
+    game = scenario(
+        [
+            r(0, "MrDiceGuy", 0),
+            r(1, "Lackey", 10),
+            r(2, "Gunk", 5),
+            r(3, "Romantic", 20),
+        ],
+        dice_rolls=[6, 6, 1, 2, 3, 4],
+    )
+
+    game.run_turn()
+
+    assert game.get_racer(1).position == 14
+    assert game.get_racer(0).position == 5
+    assert game.get_racer(3).position == 22
+
+
+def test_show_off_busts_while_inchworm_and_skipper_react_to_the_one(
+    scenario: type[GameScenario],
+):
+    """Show-Off rolls 3, keeps going and rolls a 1 (a bust): he does not move, but the 1
+    was rolled, so Inchworm moves 1 and Skipper takes the next turn.
+    """
+    game = scenario(
+        [
+            r(0, "ShowOff", 0),
+            r(1, "Inchworm", 10),
+            r(2, "Skipper", 15),
+            r(3, "Coach", 20),
+        ],
+        dice_rolls=[3, 1, 4],
+    )
+
+    game.run_turns(2)
+
+    assert game.get_racer(0).position == 0
+    assert game.get_racer(1).position == 11
+    assert game.get_racer(2).position == 19

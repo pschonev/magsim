@@ -40,14 +40,14 @@ class MushGlobsterMashAbility(Ability):
             not isinstance(event, RollResultEvent)
             or event.target_racer_idx != owner.idx
             or event.phase != Phase.MAIN_ACT
-            or event.dice_value not in MUSH_TRIGGER_VALUES
+            or not MUSH_TRIGGER_VALUES.intersection(event.dice_values)
         ):
             return "skip_trigger"
 
         (drawn,) = engine.draw_racers(k=1)
         granted = engine.instantiate_racer_abilities(drawn.racer_name)
         engine.log_info(
-            f"{owner.repr} rolled {event.dice_value} and gains the power of {drawn.racer_name}!",
+            f"{owner.repr} rolled {sorted(event.dice_values)} and gains the power of {drawn.racer_name}!",
         )
         modifiers_before = list(owner.modifiers)
         for ability in granted:

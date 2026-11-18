@@ -74,7 +74,7 @@ class BiteMarkTransform(Ability):
         if (
             not isinstance(event, RollResultEvent)
             or event.target_racer_idx != owner.idx
-            or event.dice_value not in TRANSFORM_DICE
+            or not TRANSFORM_DICE.intersection(event.dice_values)
         ):
             return "skip_trigger"
 

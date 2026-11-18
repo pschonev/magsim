@@ -36,7 +36,7 @@ class AbilitySkipper(Ability):
         if not isinstance(event, RollResultEvent):
             return "skip_trigger"
 
-        if event.dice_value == 1:
+        if 1 in event.dice_values:
             engine.state.next_turn_override = owner.idx
 
             def _is_between_current_and_skipper(

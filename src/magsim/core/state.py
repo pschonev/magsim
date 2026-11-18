@@ -40,6 +40,7 @@ class GameRules:
 class RollState:
     serial_id: int = 0
     dice_value: D6Values | None = None
+    dice_values: tuple[D6Values, ...] = ()
     base_value: int = 0
     final_value: int = 0
 
