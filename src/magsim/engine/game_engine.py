@@ -34,6 +34,7 @@ from magsim.core.events import (
 from magsim.core.mixins import (
     ExternalAbilityMixin,
     LifecycleManagedMixin,
+    PositionAuraMixin,
     RollsWhileTrippedMixin,
     SetupPhaseMixin,
 )
@@ -140,6 +141,7 @@ class GameEngine:
                     # If this ability has setup logic (e.g. Egg picking a card), run it
                     if isinstance(ability, SetupPhaseMixin):
                         ability.on_setup(self, racer, self.agents[racer.idx])
+        self.resync_position_auras()
         # finally, start the race
         self.state.race_active = True
 
@@ -443,6 +445,21 @@ class GameEngine:
         # 3. Subscriber Safety Net
         if to_remove or to_add:
             self._rebuild_subscribers()
+
+    def resync_position_auras(self) -> None:
+        """Re-evaluates position-dependent abilities until stable (called before PostMove/PostWarp subscribers)."""
+        for _ in range(len(self.state.racers) + 1):
+            changed = False
+            for racer in self.state.racers:
+                for ability in list(racer.active_abilities):
+                    if (
+                        isinstance(ability, PositionAuraMixin)
+                        and any(a is ability for a in racer.active_abilities)
+                        and ability.resync(self, racer.idx)
+                    ):
+                        changed = True
+            if not changed:
+                return
 
     def publish_to_subscribers(self, event: GameEvent):
         if type(event) not in self.subscribers:

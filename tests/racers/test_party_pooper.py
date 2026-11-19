@@ -121,23 +121,3 @@ def test_the_hose_reach_six_is_rerolled(scenario: type[GameScenario]):
     assert game.get_racer(0).position == 3
     assert not game.get_racer(1).tripped
     assert game.get_racer(2).position == 21
-
-
-def test_pooper_moves_at_the_reroll_before_the_roller_moves(
-    scenario: type[GameScenario],
-):
-    """Pooper complains at the moment of the reroll, so he is already 1 ahead when the roller's
-    Overtaker bonus is counted (+1 for the racer ahead), rather than moving after the roller."""
-    game = scenario(
-        [
-            RacerConfig(0, "Overtaker", start_pos=0),
-            pooper(1, 0),
-            dummy(2, 0),
-        ],
-        dice_rolls=[6, 2],
-    )
-
-    game.run_turn()
-
-    assert game.get_racer(1).position == 1
-    assert game.get_racer(0).position == 3

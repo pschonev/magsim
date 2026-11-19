@@ -196,6 +196,7 @@ def _finalize_committed_move(
 
     # 3. Subscribers (Abilities) - Only if race is active
     _trigger_stopped_on(engine, evt.target_racer_idx, end_tile)
+    engine.resync_position_auras()
     engine.publish_to_subscribers(post_move_event)
 
     # 4. Landing Effects - Only if racer is still on board (didn't finish)
@@ -366,6 +367,7 @@ def _finalize_committed_warp(
 
     # 3. Subscribers
     _trigger_stopped_on(engine, event.target_racer_idx, end_tile)
+    engine.resync_position_auras()
     engine.publish_to_subscribers(post_warp_event)
 
     # 4. Landing Effects

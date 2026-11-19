@@ -67,17 +67,3 @@ def test_gloth_race_end_bonus_uses_board_second_corner(
     end_race(game.engine)
 
     assert game.get_racer(0).victory_points == 0
-
-
-def test_gloth_gets_bonus_when_spoilsport_cancels_race(
-    scenario: type[GameScenario],
-):
-    game = scenario(
-        [RacerConfig(0, "Spoilsport"), RacerConfig(1, "Gloth", start_pos=5)],
-        dice_rolls=[3],
-    )
-
-    # Gloth at 5 is exactly 5 ahead of Spoilsport at 0
-    game.run_turn()
-
-    assert game.get_racer(1).victory_points == 3

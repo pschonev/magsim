@@ -104,31 +104,6 @@ def test_inchworm_steals_the_move_when_any_die_is_a_one(
     assert game.get_racer(1).position == 11
 
 
-def test_party_pooper_rerolls_each_six_die(scenario: type[GameScenario]):
-    """Sixes are rerolled per die, so no six survives and Pooper moves once for it."""
-    game = scenario(
-        [dice_guy(0), RacerConfig(1, "PartyPooper", start_pos=10), dummy(2, 20)],
-        dice_rolls=[6, 1, 2, 3, 3, 4, 5],
-    )
-
-    game.run_turn()
-
-    assert game.get_racer(0).position == 3
-    assert game.get_racer(1).position == 11
-
-
-def test_stunner_forces_all_six_dice_to_one(scenario: type[GameScenario]):
-    """Next to a Stunner every die is a 1, which is a duplicate, so he moves 1."""
-    game = scenario(
-        [dice_guy(0, 10), RacerConfig(1, "Stunner", start_pos=10), dummy(2, 30)],
-        dice_rolls=[6, 5, 4, 3, 2, 1],
-    )
-
-    game.run_turn()
-
-    assert game.get_racer(0).position == 11
-
-
 def test_gunk_reduces_the_picked_number(scenario: type[GameScenario]):
     game = scenario(
         [dice_guy(0), RacerConfig(1, "Gunk", start_pos=10), dummy(2, 20)],

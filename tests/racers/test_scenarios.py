@@ -1426,3 +1426,87 @@ def test_hog_knight_rides_boosted_and_loses_the_hog_to_a_racer_stopping_on_him(
     assert game.get_racer(1).position == 7
     assert [m.name for m in game.get_racer(0).modifiers] == []
     assert [m.name for m in game.get_racer(1).modifiers] == ["HogKnightHog"]
+
+
+# --- Null ---
+
+
+def test_null_strips_the_pack_ahead_until_it_is_passed(scenario: type[GameScenario]):
+    """Null (2 -> 7) strips Banana and Coach ahead. Centaur (3 + 5 = 8) passes Null
+    with a full roll, loses its power on landing and never kicks Null back. Banana
+    (3 - 1) and Coach (4 - 1) move one less and trip and boost nobody.
+    """
+    game = scenario(
+        [r(0, "Null", 5), r(1, "Centaur", 3), r(2, "Banana", 10), r(3, "Coach", 12)],
+        dice_rolls=[2, 5, 3, 4],
+    )
+
+    game.run_turns(4)
+
+    assert positions(game) == [7, 8, 12, 15]
+    assert tripped(game) == set()
+    assert abilities(game, 1) == set()
+    assert abilities(game, 0) == {"NullVoid"}
+
+
+# --- Stepdad ---
+
+
+def test_stepdad_boosts_the_next_racer_and_collects_when_it_wins(
+    scenario: type[GameScenario],
+):
+    """Stepdad's stepkid Stickler gets +2 on its main move. Stickler finishes 1st
+    from 28 (4 + 2), so Stepdad gains 3 VP on top of nothing from his own run.
+    """
+    game = scenario(
+        [r(0, "Stepdad"), r(1, "Stickler", 28), r(2, "Banana"), r(3, "Coach")],
+        dice_rolls=[1, 4, 1, 1],
+    )
+
+    game.run_turns(2)
+
+    assert game.get_racer(1).finish_position == 1
+    assert game.get_racer(0).victory_points == 3
+
+
+def test_stepdad_as_last_racer_boosts_racer_zero_and_coach_stacks(
+    scenario: type[GameScenario],
+):
+    """Stepdad is last in turn order, so racer 0 is his stepkid. Stickler rolls
+    3 + 2 (Stepdad) + 1 (Coach) while Banana only gets Coach's +1.
+    """
+    game = scenario(
+        [r(0, "Stickler"), r(1, "Banana"), r(2, "Coach"), r(3, "Stepdad")],
+        dice_rolls=[3, 3, 1, 1],
+    )
+
+    game.run_turns(2)
+
+    assert positions(game)[:2] == [3 + 2 + 1, 3 + 1]
+
+
+# --- Cheatah ---
+
+
+@pytest.mark.parametrize(
+    ("seed", "cheatah_position"),
+    [(1, 0), (0, 7)],
+    ids=["guessed", "unguessed"],
+)
+def test_baseline_cheatah_sets_six_and_moves_only_if_it_is_not_guessed(
+    scenario: type[GameScenario],
+    seed: int,
+    cheatah_position: int,
+):
+    """The baseline Cheatah always sets 6. If the guess hits, his main move is
+    skipped; otherwise he moves 6 + 1 from Coach. The others move normally.
+    """
+    game = scenario(
+        [r(0, "Cheatah", smart=True), r(1, "Stickler"), r(2, "Banana"), r(3, "Coach")],
+        dice_rolls=[4, 3, 2, 1],
+        seed=seed,
+    )
+
+    game.run_turns(4)
+
+    assert positions(game) == [cheatah_position, 5, 4, 3]

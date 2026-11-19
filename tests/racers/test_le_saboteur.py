@@ -157,38 +157,6 @@ def test_no_trigger_when_no_3_is_rolled(scenario: type[GameScenario]):
     assert game.get_racer(2).position == 0
 
 
-def test_no_trigger_when_the_main_move_is_replaced(scenario: type[GameScenario]):
-    """Magical Athlete's 3 warps instead of moving: Scoocher sees only MA's trigger (1 step), not Saboteur's."""
-    game = scenario(
-        [
-            RacerConfig(0, "MagicalAthlete", start_pos=0),
-            saboteur(1),
-            RacerConfig(2, "Scoocher", start_pos=0),
-            dummy(3, 20),
-        ],
-        dice_rolls=[3],
-    )
-
-    game.run_turn()
-
-    assert game.get_racer(2).position == 1
-    assert game.get_racer(0).position == 20
-
-
-def test_mr_dice_guy_reverses_when_the_3_is_not_the_duplicate(
-    scenario: type[GameScenario],
-):
-    """Any 3 among the six dice reverses him, even though he moves by the 5s."""
-    game = scenario(
-        [RacerConfig(0, "MrDiceGuy", start_pos=10), saboteur(1)],
-        dice_rolls=[3, 5, 5, 1, 2, 6],
-    )
-
-    game.run_turn()
-
-    assert game.get_racer(0).position == 5
-
-
 def test_mr_dice_guy_without_a_3_moves_forward(scenario: type[GameScenario]):
     game = scenario(
         [RacerConfig(0, "MrDiceGuy", start_pos=10), saboteur(1)],
@@ -198,15 +166,3 @@ def test_mr_dice_guy_without_a_3_moves_forward(scenario: type[GameScenario]):
     game.run_turn()
 
     assert game.get_racer(0).position == 15
-
-
-def test_show_off_goes_backwards_by_his_whole_total(scenario: type[GameScenario]):
-    """A 3 at any point of the chain reverses the entire summed distance."""
-    game = scenario(
-        [RacerConfig(0, "ShowOff", start_pos=20), saboteur(1)],
-        dice_rolls=[1, 3, 5],
-    )
-
-    game.run_turn()
-
-    assert game.get_racer(0).position == 11

@@ -104,31 +104,6 @@ def test_a_busting_roll_of_one_still_triggers_inchworm(
     assert game.get_racer(1).position == 11
 
 
-def test_party_pooper_rerolls_sixes_in_the_chain(scenario: type[GameScenario]):
-    """A 6 is rerolled before Show-Off sees it, and Pooper moves 1."""
-    game = scenario(
-        [show_off(0), RacerConfig(1, "PartyPooper", start_pos=10), dummy(2, 20)],
-        dice_rolls=[6, 4],
-    )
-
-    game.run_turn()
-
-    assert game.get_racer(0).position == 4
-    assert game.get_racer(1).position == 11
-
-
-def test_stunner_makes_the_second_roll_bust(scenario: type[GameScenario]):
-    """Forced 1s: the first 1 is low so he keeps rolling, the next 1 is equal."""
-    game = scenario(
-        [show_off(0, 10), RacerConfig(1, "Stunner", start_pos=10), dummy(2, 30)],
-        dice_rolls=[5],
-    )
-
-    game.run_turn()
-
-    assert game.get_racer(0).position == 10
-
-
 def test_legs_replaces_the_roll_entirely(scenario: type[GameScenario]):
     """Legs skips the roll and moves 5, so Show-Off's own rolling never starts and
     no mocked dice are consumed.

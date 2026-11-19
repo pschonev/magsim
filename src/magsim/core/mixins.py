@@ -69,6 +69,14 @@ class LifecycleManagedMixin(ABC):
         pass
 
 
+class PositionAuraMixin(ABC):
+    """Ability whose effect depends on racer positions; the engine resyncs it before PostMove/PostWarp subscribers run."""
+
+    @abstractmethod
+    def resync(self, engine: GameEngine, owner_idx: int) -> bool:
+        """Returns True if anything changed (the engine repeats until nothing does)."""
+
+
 class StoppedOnHookMixin(ABC):
     """Allows a racer modifier to react when another racer stops on its owner's tile."""
 

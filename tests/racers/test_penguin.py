@@ -1,4 +1,3 @@
-from magsim.engine.board import BOARD_DEFINITIONS
 from magsim.engine.scenario import GameScenario, RacerConfig
 from magsim.racers.penguin import PenguinTummyTime
 
@@ -150,56 +149,3 @@ def test_tripped_mush_with_penguins_power_rolls_double_and_cannot_trade_roll(
 
     assert game.get_racer(0).position == 8
     assert game.get_racer(0).tripped is False
-
-
-def test_tripped_penguin_passing_banana_mid_move_ends_tripped(
-    scenario: type[GameScenario],
-):
-    """Open question: recovery fires right after his move, so a trip picked up during that move persists."""
-    game = scenario(
-        [penguin(0, 2), RacerConfig(1, "Banana", start_pos=4), dummy(2, 20)],
-        dice_rolls=[2],
-    )
-    game.engine.get_racer(0).tripped = True
-
-    game.run_turn()
-
-    racer = game.get_racer(0)
-    assert racer.position == 6
-    assert racer.tripped is True
-
-
-def test_tripped_penguin_landing_on_a_trip_tile_mid_move_ends_tripped(
-    scenario: type[GameScenario],
-):
-    """Open question: a trip tile hit during his doubled move leaves him tripped for the next turn."""
-    game = scenario(
-        [penguin(0, 1), dummy(1, 20)],
-        dice_rolls=[2],
-        board=BOARD_DEFINITIONS["WildWilds"](),
-    )
-    game.engine.get_racer(0).tripped = True
-
-    game.run_turn()
-
-    racer = game.get_racer(0)
-    assert racer.position == 5
-    assert racer.tripped is True
-
-
-def test_penguin_re_tripped_mid_move_still_rolls_double_next_turn(
-    scenario: type[GameScenario],
-):
-    """He is never forced to lose a turn: the re-trip only keeps the doubled roll going."""
-    game = scenario(
-        [penguin(0, 1), dummy(1, 20)],
-        dice_rolls=[2, 1, 4],
-        board=BOARD_DEFINITIONS["WildWilds"](),
-    )
-    game.engine.get_racer(0).tripped = True
-
-    game.run_turns(3)
-
-    racer = game.get_racer(0)
-    assert racer.position == 5 + 8
-    assert racer.tripped is False

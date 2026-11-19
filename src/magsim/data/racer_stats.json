@@ -400,5 +400,23 @@
         "speed": 0.0,
         "winrate": 0.0,
         "avg_vp": 0.0
+    },
+    {
+        "racer_name": "Null",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
+        "racer_name": "Stepdad",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
+        "racer_name": "Cheatah",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
     }
 ]

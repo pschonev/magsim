@@ -34,3 +34,8 @@ Candidate replacements (compare on known racers before choosing):
 - Spread of `finish_position` normalised by `racer_count` (a rank is less lumpy than VP).
 - Entropy of the finish-position distribution (low = predictable outcome).
 - Bottom-20 % mean VP (CVaR) compared to the racer's mean VP.
+
+# Env Adaptability
+- should not measure against its own average but go one step further: how much its own average shifts compared to other racers on the same map/player count
+- sums for just board and just player count (e.g. Stickler hates more players)
+- stats for race length (e.g. Sisyphus hates long races)
