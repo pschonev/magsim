@@ -382,5 +382,17 @@
         "speed": 0.0,
         "winrate": 0.0,
         "avg_vp": 0.0
+    },
+    {
+        "racer_name": "LeSaboteur",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
+    },
+    {
+        "racer_name": "Penguin",
+        "speed": 0.0,
+        "winrate": 0.0,
+        "avg_vp": 0.0
     }
 ]

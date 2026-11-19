@@ -122,6 +122,8 @@ class DicemongerRerollAction(Ability, BooleanDecisionMixin, ExternalAbilityMixin
         engine: GameEngine,
         ctx: DecisionContext[DicemongerRerollAction],
     ) -> bool:
+        if ctx.game_state.roll_state.no_move_by is not None:
+            return True
         dice_val = ctx.game_state.roll_state.dice_value
         if dice_val is None:
             return False

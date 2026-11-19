@@ -43,6 +43,7 @@ class RollState:
     dice_values: tuple[D6Values, ...] = ()
     base_value: int = 0
     final_value: int = 0
+    no_move_by: AbilityName | None = None
 
 
 @runtime_checkable

@@ -40,7 +40,7 @@ class MrDiceGuyMoreAbility(Ability, MainRollMixin, SelectionDecisionMixin[int]):
     ) -> MainRollResult:
         dice = tuple(roll_die(engine, owner.idx) for _ in range(DICE_COUNT))
         engine.log_info(
-            f"{owner.repr} rolls all six dice: {sorted(dice)} ({self.name})."
+            f"{owner.repr} rolls all six dice: {sorted(dice)} ({self.name}).",
         )
 
         duplicates = sorted(
@@ -49,12 +49,12 @@ class MrDiceGuyMoreAbility(Ability, MainRollMixin, SelectionDecisionMixin[int]):
         )
         if not duplicates:
             engine.log_info(f"{owner.repr} rolled no duplicate and does not move.")
-            engine.skip_main_move(
-                responsible_racer_idx=owner.idx,
-                source=self.name,
-                skipped_racer_idx=owner.idx,
+            return MainRollResult(
+                dice=dice,
+                base_value=0,
+                counting_die=None,
+                no_move=True,
             )
-            return MainRollResult(dice=dice, base_value=0, counting_die=None)
 
         chosen = agent.make_selection_decision(
             engine,

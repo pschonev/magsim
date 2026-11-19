@@ -99,7 +99,9 @@ class SnapshotRecorder:
         current_racer_idx = engine.state.current_racer_idx
         current_racer = engine.state.racers[current_racer_idx]
 
-        skipped_roll = current_racer.tripped or (
+        skipped_roll = (
+            current_racer.tripped and not engine.rolls_while_tripped(current_racer_idx)
+        ) or (
             current_racer.main_move_consumed
             and engine.state.roll_state.dice_value is None
         )

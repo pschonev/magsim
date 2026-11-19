@@ -34,6 +34,7 @@ from magsim.core.events import (
 from magsim.core.mixins import (
     ExternalAbilityMixin,
     LifecycleManagedMixin,
+    RollsWhileTrippedMixin,
     SetupPhaseMixin,
 )
 from magsim.core.registry import (
@@ -173,7 +174,7 @@ class GameEngine:
             ),
         )
 
-        if racer.tripped:
+        if racer.tripped and not self.rolls_while_tripped(cr):
             self.log_info(f"{racer.repr} recovers from Trip.")
             racer.tripped = False
             tripping_racers = racer.tripping_racers.copy()
@@ -545,6 +546,12 @@ class GameEngine:
                 for r in self.state.racers
                 if is_active(r) and r.position == tile_idx and r.idx != except_racer_idx
             ]
+
+    def rolls_while_tripped(self, racer_idx: int) -> bool:
+        return any(
+            isinstance(a, RollsWhileTrippedMixin)
+            for a in self.get_racer(racer_idx).active_abilities
+        )
 
     def can_replace_main_roll(self, racer_idx: int) -> bool:
         """Whether the racer may still trade its main roll for a power (once per turn)."""

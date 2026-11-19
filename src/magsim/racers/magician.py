@@ -94,6 +94,8 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
+        if ctx.game_state.roll_state.no_move_by is not None:
+            return True
         dice_val = ctx.game_state.roll_state.dice_value
         return dice_val is not None and dice_val not in self.preferred_dice
 
@@ -103,6 +105,9 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
         engine: GameEngine,
         ctx: DecisionContext[Self],
     ) -> bool:
+        if ctx.game_state.roll_state.no_move_by is not None:
+            return True
+
         if (me := engine.get_active_racer(ctx.source_racer_idx)) is None or (
             raw_roll := ctx.game_state.roll_state.dice_value
         ) is None:

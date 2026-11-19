@@ -134,6 +134,10 @@ class DieRollHookMixin:
         return False
 
 
+class RollsWhileTrippedMixin:
+    """Marker: while tripped, the owner rolls its main move and recovers after it."""
+
+
 class SetupPhaseMixin(ABC):
     """Mixin for abilities that trigger logic once at the very beginning of the game."""
 
@@ -162,6 +166,7 @@ class MainRollResult:
     dice: tuple[D6Values, ...]
     base_value: int
     counting_die: D6Values | None
+    no_move: bool = False
 
 
 class MainRollMixin(ABC):
@@ -174,4 +179,4 @@ class MainRollMixin(ABC):
         owner: ActiveRacerState,
         agent: Agent,
     ) -> MainRollResult:
-        """Rolls the dice. Must skip the main move itself if the roll yields no move."""
+        """Rolls the dice. A roll yielding no move sets `no_move`; the engine skips the move after the reroll window."""

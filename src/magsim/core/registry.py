@@ -47,6 +47,8 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Mouth": {"MouthSwallow"},
     "MrDiceGuy": {"MrDiceGuyMore"},
     "ShowOff": {"ShowOffGuysWatch"},
+    "LeSaboteur": {"LeSaboteurTroisRevoir"},
+    "Penguin": {"PenguinTummyTime"},
     "Mush": {"MushGlobsterMash"},
     "Nemesis": {"NemesisGrudgeMatch"},
     "NepoBaby": {"NepoBabyStart"},

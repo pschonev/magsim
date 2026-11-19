@@ -1353,3 +1353,51 @@ def test_show_off_busts_while_inchworm_and_skipper_react_to_the_one(
     assert game.get_racer(0).position == 0
     assert game.get_racer(1).position == 11
     assert game.get_racer(2).position == 19
+
+
+def test_le_saboteur_reverses_boosted_three_over_banana_and_scoocher_follows(
+    scenario: type[GameScenario],
+):
+    """Coach's 3 is a 4 with his own boost, Le Saboteur sends all of it backwards over
+    Banana (tripping Coach), and Scoocher steps once each for the boost, the sabotage
+    and the trip.
+    """
+    game = scenario(
+        [
+            r(0, "Coach", 10),
+            r(1, "LeSaboteur", 15),
+            r(2, "Banana", 8),
+            r(3, "Scoocher", 0),
+        ],
+        dice_rolls=[3],
+    )
+
+    game.run_turn()
+
+    assert game.get_racer(0).position == 6
+    assert game.get_racer(0).tripped is True
+    assert game.get_racer(3).position == 3
+
+
+def test_penguin_tripped_by_inchworm_rolls_double_through_gunk_and_recovers(
+    scenario: type[GameScenario],
+):
+    """Inchworm's 6 (-1 Gunk, Lackey moves 2 first) passes Penguin, who trips and then
+    rolls his 3 doubled to 6, minus Gunk's 1, instead of skipping, and is up again.
+    """
+    game = scenario(
+        [
+            r(0, "Inchworm", 0),
+            r(1, "Penguin", 3),
+            r(2, "Lackey", 10),
+            r(3, "Gunk", 20),
+        ],
+        dice_rolls=[6, 3],
+    )
+
+    game.run_turns(2)
+
+    assert game.get_racer(0).position == 5
+    assert game.get_racer(2).position == 12
+    assert game.get_racer(1).position == 8
+    assert game.get_racer(1).tripped is False

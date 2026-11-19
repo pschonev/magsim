@@ -13,6 +13,7 @@ from magsim.core.events import (
     RollData,
     RollModificationWindowEvent,
     RollResultEvent,
+    TripRecoveryEvent,
 )
 from magsim.core.mixins import DieRollHookMixin, MainRollMixin, RollModificationMixin
 from magsim.engine.movement import push_move
@@ -89,7 +90,7 @@ def roll_die(engine: GameEngine, roller_idx: int) -> D6Values:
 
 def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) -> None:
     racer = engine.get_racer(event.target_racer_idx)
-    if racer.tripped:
+    if racer.tripped and not engine.rolls_while_tripped(racer.idx):
         engine.log_info(f"Skipping roll because {racer.repr} is tripped.")
         racer.main_move_consumed = True
         return
@@ -110,6 +111,7 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
         source, base = racer.roll_override
         roll_state.dice_value = None  # Not a dice roll
         roll_state.dice_values = ()
+        roll_state.no_move_by = None
         racer.can_reroll = False
 
         report_base_value_change(
@@ -126,11 +128,13 @@ def handle_perform_main_roll(engine: GameEngine, event: PerformMainRollEvent) ->
         base = result.base_value
         roll_state.dice_value = result.counting_die
         roll_state.dice_values = result.dice
+        roll_state.no_move_by = producer.name if result.no_move else None
         racer.can_reroll = True
     else:
         base = roll_die(engine, racer.idx)
         roll_state.dice_value = base
         roll_state.dice_values = (base,)
+        roll_state.no_move_by = None
         racer.can_reroll = True
 
     engine.state.roll_state.base_value = base
@@ -206,6 +210,13 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent) -> None:
         engine.log_debug("Ignoring stale roll resolution (Re-roll occurred).")
         return
 
+    if (no_move_by := engine.state.roll_state.no_move_by) is not None:
+        engine.skip_main_move(
+            responsible_racer_idx=event.target_racer_idx,
+            source=no_move_by,
+            skipped_racer_idx=event.target_racer_idx,
+        )
+
     # Notify listeners (RollResultEvent) - Phase 20 (MAIN_ACT)
     engine.push_event(
         RollResultEvent(
@@ -239,6 +250,20 @@ def resolve_main_move(engine: GameEngine, event: ResolveMainMoveEvent) -> None:
 def handle_execute_main_move(engine: GameEngine, event: ExecuteMainMoveEvent) -> None:
     """Actually performs the move if it hasn't been cancelled."""
     racer = engine.get_racer(event.target_racer_idx)
+
+    if racer.tripped and engine.rolls_while_tripped(racer.idx):
+        engine.log_info(f"{racer.repr} recovers from Trip after the main move.")
+        racer.tripped = False
+        tripping_racers = racer.tripping_racers
+        racer.tripping_racers = []
+        engine.push_event(
+            TripRecoveryEvent(
+                target_racer_idx=racer.idx,
+                tripping_racers=tripping_racers,
+                responsible_racer_idx=None,
+                source="System",
+            ),
+        )
 
     if racer.main_move_consumed:
         engine.log_debug(
