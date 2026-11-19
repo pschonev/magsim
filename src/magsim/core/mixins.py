@@ -69,6 +69,14 @@ class LifecycleManagedMixin(ABC):
         pass
 
 
+class StoppedOnHookMixin(ABC):
+    """Allows a racer modifier to react when another racer stops on its owner's tile."""
+
+    @abstractmethod
+    def on_stopped_on(self, mover_idx: int, engine: GameEngine) -> None:
+        pass
+
+
 class DestinationCalculatorMixin(ABC):
     """Allows a modifier to override the standard 'start + distance' math."""
 

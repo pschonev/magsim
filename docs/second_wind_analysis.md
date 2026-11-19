@@ -116,7 +116,7 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 | M12 ✅ | Party Pooper, Stunner | E2 central die roll, E3 base-die override by aura | Re-route Nemesis and The Hose through the central roll. |
 | M13 ✅ | Mr. Dice Guy, Show-Off | E2 multi-dice roll state | All dice values exposed to triggers. |
 | M14 ✅ | Le Saboteur, Penguin | E1 (done), E10 roll while tripped | Le Saboteur needs E1 and E2, Penguin needs E1. |
-| M15 | Hog Knight | E11 pieces (hogs) | Then add the Hog Knight case to Understudy. |
+| M15 | Hog Knight | E11 pieces (hogs) | Then add the Hog Knight case to Understudy. | ✅ |
 | M16 | `<NULL>` | E4 resync hook before `publish_to_subscribers` | Strip-and-restore. |
 | M17 | Stepdad, Cheatah | E7 `turn_order` seat list (read-only use) | Switch `advance_turn` and `publish_to_subscribers` to the seat list. |
 | M18 | Switcharoo | E7 swap of seats, `victory_points`, agents; per-seat result attribution | Result attribution is in `simulation/`, which AGENT.md forbids. Ask first. Revisit Hotel, Speed Demon. |

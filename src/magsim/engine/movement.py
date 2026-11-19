@@ -23,6 +23,7 @@ from magsim.core.events import (
 from magsim.core.mixins import (
     DestinationCalculatorMixin,
     MovementValidatorMixin,
+    StoppedOnHookMixin,
 )
 from magsim.core.state import is_active
 from magsim.engine.flow import check_finish
@@ -161,6 +162,13 @@ def _process_passing_and_logs(
                 break
 
 
+def _trigger_stopped_on(engine: GameEngine, mover_idx: int, tile: int) -> None:
+    for other in engine.get_racers_at_position(tile, except_racer_idx=mover_idx):
+        for mod in list(other.modifiers):
+            if isinstance(mod, StoppedOnHookMixin):
+                mod.on_stopped_on(mover_idx, engine)
+
+
 def _finalize_committed_move(
     engine: GameEngine,
     evt: MoveCmdEvent,
@@ -187,6 +195,7 @@ def _finalize_committed_move(
         return
 
     # 3. Subscribers (Abilities) - Only if race is active
+    _trigger_stopped_on(engine, evt.target_racer_idx, end_tile)
     engine.publish_to_subscribers(post_move_event)
 
     # 4. Landing Effects - Only if racer is still on board (didn't finish)
@@ -356,6 +365,7 @@ def _finalize_committed_warp(
         return
 
     # 3. Subscribers
+    _trigger_stopped_on(engine, event.target_racer_idx, end_tile)
     engine.publish_to_subscribers(post_warp_event)
 
     # 4. Landing Effects

@@ -1401,3 +1401,28 @@ def test_penguin_tripped_by_inchworm_rolls_double_through_gunk_and_recovers(
     assert game.get_racer(2).position == 12
     assert game.get_racer(1).position == 8
     assert game.get_racer(1).tripped is False
+
+
+def test_hog_knight_rides_boosted_and_loses_the_hog_to_a_racer_stopping_on_him(
+    scenario: type[GameScenario],
+):
+    """HogKnight's 2 plus the hog's +2 reaches 7. Legs (4 + 1) stops on him and takes
+    the hog, leaving HogKnight with no modifiers.
+    """
+    game = scenario(
+        [
+            r(0, "HogKnight", 3),
+            r(1, "Legs", 2),
+            r(2, "Banana", 15),
+            r(3, "Coach", 20),
+        ],
+        dice_rolls=[2, 4, 1, 1],
+    )
+
+    game.run_turn()
+    assert game.get_racer(0).position == 7
+
+    game.run_turns(1)
+    assert game.get_racer(1).position == 7
+    assert [m.name for m in game.get_racer(0).modifiers] == []
+    assert [m.name for m in game.get_racer(1).modifiers] == ["HogKnightHog"]
