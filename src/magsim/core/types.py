@@ -55,6 +55,7 @@ RacerName = Literal[
     "PartyAnimal",
     "PartyPooper",
     "Penguin",
+    "ReRunner",
     "Romantic",
     "RocketScientist",
     "Scoocher",

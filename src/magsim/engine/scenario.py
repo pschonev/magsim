@@ -40,13 +40,7 @@ class RacerConfig:
                 msg = f"Racer '{self.name}' not found in RACER_ABILITIES."
                 raise ValueError(msg)
 
-            defaults = RACER_ABILITIES[self.name]
-
-            if not defaults:
-                msg = f"Racer '{self.name}' has no default abilities defined."
-                raise ValueError(msg)
-
-            self.abilities = defaults.copy()
+            self.abilities = RACER_ABILITIES[self.name].copy()
 
 
 @dataclass

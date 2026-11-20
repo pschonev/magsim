@@ -1510,3 +1510,20 @@ def test_baseline_cheatah_sets_six_and_moves_only_if_it_is_not_guessed(
     game.run_turns(4)
 
     assert positions(game) == [cheatah_position, 5, 4, 3]
+
+
+# --- Re-Runner ---
+
+
+def test_re_runner_gets_only_the_coach_boost_and_no_power_of_her_own(
+    scenario: type[GameScenario],
+):
+    """Re-Runner has no powers: she only gets Coach's +1, like Coach himself."""
+    game = scenario(
+        [r(0, "ReRunner"), r(1, "Coach"), r(2, "Banana"), r(3, "Stickler")],
+        dice_rolls=[4, 3, 2, 1],
+    )
+
+    game.run_turns(4)
+
+    assert positions(game) == [4 + 1, 3 + 1, 2, 1]

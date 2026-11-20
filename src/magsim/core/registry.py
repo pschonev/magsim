@@ -58,6 +58,7 @@ RACER_ABILITIES: dict[RacerName, set[AbilityName]] = {
     "Overtaker": {"OvertakerModifierManager"},
     "PartyAnimal": {"PartyPull", "PartyBoostManager"},
     "PartyPooper": {"PartyPooperNoiseComplaint"},
+    "ReRunner": set(),
     "Romantic": {"RomanticMove"},
     "RocketScientist": {"RocketScientistBoost"},
     "Scoocher": {"ScoochStep"},
