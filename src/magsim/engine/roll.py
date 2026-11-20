@@ -15,7 +15,12 @@ from magsim.core.events import (
     RollResultEvent,
     TripRecoveryEvent,
 )
-from magsim.core.mixins import DieRollHookMixin, MainRollMixin, RollModificationMixin
+from magsim.core.mixins import (
+    DieRollHookMixin,
+    MainMoveInterceptorMixin,
+    MainRollMixin,
+    RollModificationMixin,
+)
 from magsim.engine.movement import push_move
 
 if TYPE_CHECKING:
@@ -272,6 +277,12 @@ def handle_execute_main_move(engine: GameEngine, event: ExecuteMainMoveEvent) ->
         return
 
     dist = engine.state.roll_state.final_value
+    if (active := engine.get_active_racer(racer.idx)) and any(
+        isinstance(mod, MainMoveInterceptorMixin)
+        and mod.intercept_main_move(engine, active, dist)
+        for mod in racer.modifiers
+    ):
+        return
     if dist != 0:
         push_move(
             engine=engine,

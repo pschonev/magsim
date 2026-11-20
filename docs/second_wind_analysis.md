@@ -151,8 +151,8 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 | M20 ✅ | Whirly World board (warp) | New board type, warp tiles | Easy. |
 | M21 | Twisty Twirl board (twist) | Twist draw on 13 -> 14, once per game | Draw and `Blank` card are in. The real cards are M22-M30. |
 | M22 ✅ | Twist: Roast Chicken on the Ground!, You Tromped on a Time Imp! | E15 card dispatch with the triggering racer, real deck | Immediate effects only, no state kept. `Blank` stays selectable for tests. |
-| M23 | Twist: Bonkbug Infestation at the Finish Line!, The Piñata is Leaking! | E17 consumable chips | Board modifiers placed at draw time. |
-| M24 | Twist: The Conveyor Belt is On!, No Running by the Scrying Pool! | E16 global rules in the main roll/move; E15 keeps several cards active | Persistent rules for the rest of the race. |
+| M23 ✅ | Twist: Bonkbug Infestation at the Finish Line!, The Piñata is Leaking! | E17 consumable chips | Board modifiers placed at draw time. |
+| M24 ✅ | Twist: The Conveyor Belt is On!, No Running by the Scrying Pool! | E16 global rules in the main roll/move; E15 keeps several cards active | Persistent rules for the rest of the race. |
 | M25 | Twist: Randomness has Randomly Ceased!, Curse Wands for Everyone! | E18 fixed die values, E19 turn skipping | Both go through `roll_die`. Curse Wands also changes the turn flow. |
 | M26 ⚪ | Twist: Swap Meet! | none | Not implemented. The simulation measures racers, not players, so swapping a racer mid-race has no meaningful result. |
 | M27 | Twist: Alchemy Lab Containment Breach! | E20 piece position on engine state | Minor. Not a racer, so counts, rank and finish stay unchanged. Bite Mark case is a warp plus extra moves. |
@@ -275,8 +275,8 @@ Card text and clarifications: section 2. Cards sorted by technical relation, the
 
 **M24**
 
-- **The Conveyor Belt is On!** (Persistent): `push_simultaneous_warp` all active racers to tile 1 (a warp, so no passing). The +3 is a global modifier in `handle_perform_main_roll` with its own source name, not a `RacerModifier` per racer, so later racers get it too.
-- **No Running by the Scrying Pool!** (Persistent): in the main move handler, a final distance of 6+ (after modifiers) calls `eliminate_racer` instead of moving. Open: replaced rolls (Mole 6, Legs 5, Cheatah) count as a main move of that distance.
+- **The Conveyor Belt is On!** (Persistent): `push_simultaneous_warp` all active racers to tile 1 (a warp, so no passing). The +3 is a `ConveyorBeltBonus` `RacerModifier` (`RollModificationMixin`, `owner_idx=None`) attached to every active racer at the draw, with its own source name. Racers added after the draw do not get it.
+- **No Running by the Scrying Pool!** (Persistent): a `ScryingPoolRule` `RacerModifier` (`MainMoveInterceptorMixin`) attached to every active racer at the draw. `handle_execute_main_move` asks each interceptor first, and a final distance of 6+ (after modifiers) calls `eliminate_racer` instead of moving. Open: replaced rolls (Mole 6, Legs 5, Cheatah) count as a main move of that distance.
 
 **M25**
 

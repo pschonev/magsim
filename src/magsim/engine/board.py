@@ -297,6 +297,7 @@ class VictoryPointTile(SpaceModifier, LandingHookMixin):
     priority: int = 5
     owner_idx: int | None = None
     name: AbilityName | ModifierName = "VictoryPointTile"
+    consumable: bool = False
 
     @property
     @override
@@ -316,6 +317,8 @@ class VictoryPointTile(SpaceModifier, LandingHookMixin):
         engine.log_info(
             f"{self.display_name}: {racer.repr} gains +{self.amount} VP (now {racer.victory_points}).",
         )
+        if self.consumable:
+            engine.state.board.unregister_modifier(tile, self, engine)
 
 
 def build_wild_wilds() -> Board:

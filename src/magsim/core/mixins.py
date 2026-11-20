@@ -127,6 +127,19 @@ class FinishInterceptorMixin(ABC):
         """Returns True if the finish was intercepted (finisher must not finish)."""
 
 
+class MainMoveInterceptorMixin(ABC):
+    """Lets a modifier veto a racer's main move after its distance is known."""
+
+    @abstractmethod
+    def intercept_main_move(
+        self,
+        engine: GameEngine,
+        racer: ActiveRacerState,
+        distance: int,
+    ) -> bool:
+        """Returns True if the move was intercepted (the racer must not move)."""
+
+
 class DieRollHookMixin:
     """Lets an ability intercept every die roll made by a racer (main roll, duels, ...)."""
 

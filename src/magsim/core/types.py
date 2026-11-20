@@ -158,6 +158,7 @@ RacerModifierName = Literal[
     "BlimpModifier",
     "BlunderdogModifier",
     "CoachBoost",
+    "ConveyorBeltBonus",
     "GlothModifier",
     "GunkSlimeModifier",
     "HareSpeed",
@@ -172,6 +173,7 @@ RacerModifierName = Literal[
     "PartySelfBoost",
     "PenguinDouble",
     "RocketScientistLiftoff",
+    "ScryingPoolRule",
     "SisyphusStumble",
     "SpeedDemonBoost",
     "StepdadBoost",
@@ -188,7 +190,14 @@ BoardModifierName = Literal[
 
 BoardName = Literal["Standard", "WildWilds", "WhirlyWorld", "TwistyTwirl"]
 
-TwistName = Literal["Roast Chicken", "Time Imp"]
+TwistName = Literal[
+    "Roast Chicken",
+    "Time Imp",
+    "Bonkbug",
+    "Pinata",
+    "Conveyor Belt",
+    "Scrying Pool",
+]
 
 SystemSource = Literal["Board", "System"]
 ModifierName = RacerModifierName | BoardModifierName

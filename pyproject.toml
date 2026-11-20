@@ -69,6 +69,13 @@ reportUnusedCallResult = "none"
 reportMissingTypeStubs = "none"
 reportUnusedParameter = "none"
 
+# Pyrefly
+[tool.pyrefly]
+preset = "strict"
+
+[tool.pyrefly.errors]
+implicit-bool = "ignore"
+
 # Pytest
 [tool.pytest.ini_options]
 pythonpath = ["tests"]
