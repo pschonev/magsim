@@ -121,7 +121,7 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 | M17 ✅ | Stepdad, Cheatah | E7 `turn_order` seat list (read-only use) | Switch `advance_turn` and `publish_to_subscribers` to the seat list. |
 | M18 | Switcharoo | E7 swap of seats, `victory_points`, agents; per-seat result attribution | Result attribution is in `simulation/`, which AGENT.md forbids. Ask first. Revisit Hotel, Speed Demon. |
 | M19 ✅ | Re-Runner | `RACER_ABILITIES` entry only | Generic racer. |
-| M20 | Whirly World board (warp) | New board type, warp tiles | Easy. |
+| M20 ✅ | Whirly World board (warp) | New board type, warp tiles | Easy. |
 | M21 | Twisty Twirl board (twist) | Twist mechanics | Very hard. Twist cards (section 2) are scheduled together with it. |
 
 ### Racer notes by milestone

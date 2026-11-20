@@ -377,6 +377,7 @@ def _finalize_committed_warp(
             event.target_racer_idx,
             event.phase,
             engine,
+            arrived_by=event.source,
         )
 
 

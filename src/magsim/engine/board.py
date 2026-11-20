@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, override
 
 from magsim.core.mixins import ApproachHookMixin, LandingHookMixin
 from magsim.core.modifiers import SpaceModifier
-from magsim.engine.movement import push_move
+from magsim.engine.movement import push_move, push_warp
 
 if TYPE_CHECKING:
     from magsim.core.events import GameEvent, Phase
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
         AbilityName,
         BoardName,
         ModifierName,
+        Source,
     )
     from magsim.engine.game_engine import GameEngine
 
@@ -120,11 +121,13 @@ class Board:
         racer_idx: int,
         phase: Phase,
         engine: GameEngine,
+        arrived_by: Source | None = None,
     ) -> None:
         for mod in (
             mod
             for mod in self.get_modifiers_at(tile)
             if isinstance(mod, LandingHookMixin)
+            and not (arrived_by == "WarpTile" and isinstance(mod, WarpTile))
         ):
             if not engine.get_racer(racer_idx).active:
                 return
@@ -190,6 +193,38 @@ class MoveDeltaTile(SpaceModifier, LandingHookMixin):
             self.delta,
             phase=phase,
             moved_racer_idx=racer_idx,
+            source=self.name,
+            responsible_racer_idx=None,
+        )
+
+
+@dataclass
+class WarpTile(SpaceModifier, LandingHookMixin):
+    """On landing, warp to the paired tile. Arriving by warp does not warp back."""
+
+    target: int = 0
+    priority: int = 5
+    owner_idx: int | None = None
+    name: AbilityName | ModifierName = "WarpTile"
+
+    @property
+    @override
+    def display_name(self) -> str:
+        return f"WarpTile(->{self.target})"
+
+    @override
+    def on_land(
+        self,
+        tile: int,
+        racer_idx: int,
+        phase: Phase,
+        engine: GameEngine,
+    ) -> None:
+        push_warp(
+            engine,
+            self.target,
+            phase=phase,
+            warped_racer_idx=racer_idx,
             source=self.name,
             responsible_racer_idx=None,
         )
@@ -265,6 +300,20 @@ def build_wild_wilds() -> Board:
     )
 
 
+WHIRL_PAIRS = ((4, 6), (8, 12), (11, 15), (17, 22), (20, 23), (24, 28))
+
+
+def build_whirly_world() -> Board:
+    return Board(
+        length=30,
+        static_features={
+            tile: [WarpTile(None, target=other)]
+            for a, b in WHIRL_PAIRS
+            for tile, other in ((a, b), (b, a))
+        },
+    )
+
+
 BoardFactory = Callable[[], Board]
 
 BOARD_DEFINITIONS: dict[BoardName, BoardFactory] = {
@@ -273,4 +322,5 @@ BOARD_DEFINITIONS: dict[BoardName, BoardFactory] = {
         static_features={},
     ),
     "WildWilds": build_wild_wilds,
+    "WhirlyWorld": build_whirly_world,
 }

@@ -4,6 +4,7 @@ import pytest
 
 from magsim.ai.baseline_agent import BaselineAgent
 from magsim.core.agent import Agent, SelectionDecisionContext, SelectionInteractive
+from magsim.engine.board import BOARD_DEFINITIONS
 from magsim.engine.scenario import GameScenario, RacerConfig
 
 MIN_RACERS = 4
@@ -1527,3 +1528,78 @@ def test_re_runner_gets_only_the_coach_boost_and_no_power_of_her_own(
     game.run_turns(4)
 
     assert positions(game) == [4 + 1, 3 + 1, 2, 1]
+
+
+# --- Whirly World ---
+
+
+def test_whirly_world_tail_warping_onto_a_whirl_is_carried_past_banana_untripped(
+    scenario: type[GameScenario],
+):
+    """Tail warps behind Banana onto whirl 4, which sends it to 6, beyond Banana. A
+    warp does not pass, so it is not tripped, and its roll then moves it on.
+    """
+    game = scenario(
+        [r(0, "Tail"), r(1, "Banana", 5), r(2, "Centaur", 10), r(3, "Genius", 15)],
+        dice_rolls=[1],
+        board=BOARD_DEFINITIONS["WhirlyWorld"](),
+    )
+
+    game.run_turn()
+
+    assert positions(game) == [7, 5, 10, 15]
+    assert tripped(game) == set()
+
+
+def test_whirly_world_banana_trips_the_mover_who_still_whirls_to_the_pair(
+    scenario: type[GameScenario],
+):
+    """Stickler passes Banana and lands on whirl 4, so it is tripped and still warps to
+    6. Checks the whirl fires for a moved racer even when tripped en route.
+    """
+    game = scenario(
+        [r(0, "Stickler", 2), r(1, "Banana", 3), r(2, "Centaur", 10), r(3, "Genius", 15)],
+        dice_rolls=[2],
+        board=BOARD_DEFINITIONS["WhirlyWorld"](),
+    )
+
+    game.run_turn()
+
+    assert positions(game) == [6, 3, 10, 15]
+    assert tripped(game) == {0}
+
+
+def test_whirly_world_hotel_at_the_exit_tile_trips_the_whirled_racer(
+    scenario: type[GameScenario],
+):
+    """Stickler lands on whirl 4 and exits on 6 where Hotel sits, with no VP to pay the
+    toll. Checks Hotel reacts to the whirl's warp.
+    """
+    game = scenario(
+        [r(0, "Stickler", 2), r(1, "Hotel", 6), r(2, "Centaur", 10), r(3, "Genius", 15)],
+        dice_rolls=[2],
+        board=BOARD_DEFINITIONS["WhirlyWorld"](),
+    )
+
+    game.run_turn()
+
+    assert positions(game) == [6, 6, 10, 15]
+    assert tripped(game) == {0}
+
+
+def test_whirly_world_racer_whirls_on_consecutive_turns(scenario: type[GameScenario]):
+    """Stickler whirls from 4 to 6, then next turn from 8 to 12. Checks the exit tile
+    does not trap it and later whirls still fire.
+    """
+    game = scenario(
+        [r(0, "Stickler"), r(1, "Banana", 13), r(2, "Centaur", 20), r(3, "Lackey", 25)],
+        dice_rolls=[4, 1, 1, 1, 2],
+        board=BOARD_DEFINITIONS["WhirlyWorld"](),
+    )
+
+    game.run_turns(1)
+    assert game.get_racer(0).position == 6
+
+    game.run_turns(4)
+
+    assert positions(game) == [12, 14, 21, 26]
