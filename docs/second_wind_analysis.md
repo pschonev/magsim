@@ -153,7 +153,7 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 | M22 ✅ | Twist: Roast Chicken on the Ground!, You Tromped on a Time Imp! | E15 card dispatch with the triggering racer, real deck | Immediate effects only, no state kept. `Blank` stays selectable for tests. |
 | M23 ✅ | Twist: Bonkbug Infestation at the Finish Line!, The Piñata is Leaking! | E17 consumable chips | Board modifiers placed at draw time. |
 | M24 ✅ | Twist: The Conveyor Belt is On!, No Running by the Scrying Pool! | E16 global rules in the main roll/move; E15 keeps several cards active | Persistent rules for the rest of the race. |
-| M25 | Twist: Randomness has Randomly Ceased!, Curse Wands for Everyone! | E18 fixed die values, E19 turn skipping | Both go through `roll_die`. Curse Wands also changes the turn flow. |
+| M25 ✅ | Twist: Randomness has Randomly Ceased!, Curse Wands for Everyone! | E18 fixed die values, E19 turn skipping | Both go through `roll_die`. Curse Wands also changes the turn flow. |
 | M26 ⚪ | Twist: Swap Meet! | none | Not implemented. The simulation measures racers, not players, so swapping a racer mid-race has no meaningful result. |
 | M27 | Twist: Alchemy Lab Containment Breach! | E20 piece position on engine state | Minor. Not a racer, so counts, rank and finish stay unchanged. Bite Mark case is a warp plus extra moves. |
 | M28 | Twist: Mirror World Theory Confirmed! | E22 mirror positions once at the draw | Minor. Race logic stays forward. Apply after the drawing move completes, as a silent renumbering. Racers on the Start finish at once. |
@@ -280,8 +280,8 @@ Card text and clarifications: section 2. Cards sorted by technical relation, the
 
 **M25**
 
-- **Randomness has Randomly Ceased!** (Persistent): at the draw, each active racer rolls once through `roll_die` and the value is stored per racer idx. `roll_die` then returns it for every roll. Stunner's forced value still wins (twist is a track power). A rejected value (Party Pooper on a stored 6) must not loop: treat the stored value as final. Multi-dice powers (Mr. Dice Guy, Show-Off) see identical dice. Open: whether Party Pooper still moves 1.
-- **Curse Wands for Everyone!** (Persistent): after each turn, `roll_die` for that racer and skip that many seats in `advance_turn`. Counting includes finished and eliminated seats. Open: landing on an inactive seat moves on to the next active one, and the interaction with `next_turn_override` (Hopfrog, Genius). One racer per player here, so one roll per turn.
+- **Randomness has Randomly Ceased!** (Persistent): at the draw, each active racer rolls once through `roll_die` and gets a `FixedDie` `RacerModifier` (`FixedDieMixin`) holding the value. `roll_die` returns it for every later roll. Stunner's forced value still wins (twist is a track power). The stored value is final: Party Pooper does not reject or loop it. Multi-dice powers (Mr. Dice Guy, Show-Off) see identical dice.
+- **Curse Wands for Everyone!** (Persistent): a `CurseWand` `RacerModifier` (`TurnSkipMixin`) on every active racer. `advance_turn` asks the current racer's modifiers for `seats_to_skip` (a `roll_die`) after each turn. Counting includes finished and eliminated seats. Landing on an inactive seat moves on to the next active one. `next_turn_override` (Hopfrog, Genius) wins, but the skip die is still rolled. One racer per player here, so one roll per turn.
 
 **M26**
 

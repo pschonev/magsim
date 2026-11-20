@@ -17,10 +17,12 @@ from magsim.core.events import (
 )
 from magsim.core.mixins import (
     DieRollHookMixin,
+    FixedDieMixin,
     MainMoveInterceptorMixin,
     MainRollMixin,
     RollModificationMixin,
 )
+from magsim.core.state import is_active
 from magsim.engine.movement import push_move
 
 if TYPE_CHECKING:
@@ -76,15 +78,27 @@ def report_base_value_change(
 def roll_die(engine: GameEngine, roller_idx: int) -> D6Values:
     """The single place where a d6 is rolled; ability hooks may force or reject values."""
     roller = engine.get_racer(roller_idx)
-    hooks = [
-        (other, ability)
-        for other in engine.get_active_racers()
-        for ability in other.active_abilities
-        if isinstance(ability, DieRollHookMixin)
-    ]
+    # Auras need a position; finished or eliminated racers still roll, unaffected.
+    hooks = (
+        [
+            (other, ability)
+            for other in engine.get_active_racers()
+            for ability in other.active_abilities
+            if isinstance(ability, DieRollHookMixin)
+        ]
+        if is_active(roller)
+        else []
+    )
     for other, ability in hooks:
         if (forced := ability.forced_die_value(engine, other, roller)) is not None:
             return cast("D6Values", forced)
+
+    for mod in roller.modifiers:
+        if (
+            isinstance(mod, FixedDieMixin)
+            and (fixed := mod.fixed_die_value(engine, roller_idx)) is not None
+        ):
+            return cast("D6Values", fixed)
 
     while True:
         value = engine.rng.randint(1, 6)

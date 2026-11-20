@@ -37,6 +37,7 @@ from magsim.core.mixins import (
     PositionAuraMixin,
     RollsWhileTrippedMixin,
     SetupPhaseMixin,
+    TurnSkipMixin,
 )
 from magsim.core.registry import (
     RACER_ABILITIES,
@@ -292,6 +293,14 @@ class GameEngine:
         if not self.state.race_active:
             return
 
+        curr = self.state.current_racer_idx
+        # Rolled every turn, even when an override then replaces the skip.
+        skipped = sum(
+            mod.seats_to_skip(self, curr)
+            for mod in self.get_racer(curr).modifiers
+            if isinstance(mod, TurnSkipMixin)
+        )
+
         if self.state.next_turn_override is not None:
             next_idx = self.state.next_turn_override
             self.state.next_turn_override = None
@@ -301,9 +310,8 @@ class GameEngine:
             )
             return
 
-        curr = self.state.current_racer_idx
         n = len(self.state.racers)
-        next_idx = (curr + 1) % n
+        next_idx = (curr + 1 + skipped) % n
 
         start_search = next_idx
         while not self.state.racers[next_idx].active:
@@ -574,9 +582,7 @@ class GameEngine:
         """Whether the racer may still trade its main roll for a power (once per turn)."""
         racer = self.get_racer(racer_idx)
         return not (
-            racer.tripped
-            or racer.main_move_consumed
-            or racer.roll_override is not None
+            racer.tripped or racer.main_move_consumed or racer.roll_override is not None
         )
 
     def skip_main_move(

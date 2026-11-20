@@ -140,6 +140,22 @@ class MainMoveInterceptorMixin(ABC):
         """Returns True if the move was intercepted (the racer must not move)."""
 
 
+class FixedDieMixin(ABC):
+    """Lets a racer modifier fix the value of every die its holder rolls."""
+
+    @abstractmethod
+    def fixed_die_value(self, engine: GameEngine, roller_idx: int) -> int | None:
+        """Returns the value the die must show (final, never rerolled), or None."""
+
+
+class TurnSkipMixin(ABC):
+    """Lets a racer modifier skip seats in the turn order after its holder's turn."""
+
+    @abstractmethod
+    def seats_to_skip(self, engine: GameEngine, racer_idx: int) -> int:
+        """Returns how many seats the turn order jumps over after this turn."""
+
+
 class DieRollHookMixin:
     """Lets an ability intercept every die roll made by a racer (main roll, duels, ...)."""
 

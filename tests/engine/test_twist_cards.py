@@ -2,7 +2,7 @@ from magsim.core.types import TwistName
 from magsim.engine.abilities import add_racer_modifier
 from magsim.engine.board import BOARD_DEFINITIONS, Board, TripTile, WarpTile
 from magsim.engine.scenario import GameScenario, RacerConfig
-from magsim.engine.twist import ConveyorBeltBonus, ScryingPoolRule
+from magsim.engine.twist import ConveyorBeltBonus, FixedDie, ScryingPoolRule
 
 
 def twisty(*forced: TwistName) -> Board:
@@ -375,3 +375,113 @@ def test_scrying_pool_counts_the_distance_after_modifiers(
 
     assert game.get_racer(1).eliminated
     assert game.get_racer(2).position == 4
+
+
+def test_randomness_ceased_fixes_every_later_roll_to_the_drawn_value(
+    scenario: type[GameScenario],
+):
+    """Core rule: each racer rolls once at the draw and then rolls that value forever."""
+    game = scenario(
+        [plain(0, 13), plain(1), plain(2)],
+        dice_rolls=[1, 2, 3, 4],
+        board=twisty("Randomness Ceased"),
+    )
+
+    game.run_turns(6)
+
+    assert game.get_racer(0).position == 14 + 2
+    assert game.get_racer(1).position == 3 * 2
+    assert game.get_racer(2).position == 4 * 2
+
+
+def test_randomness_ceased_stunner_still_forces_a_one(scenario: type[GameScenario]):
+    """Twists are track powers, so Stunner's aura wins over the stored value."""
+    game = scenario(
+        [plain(0), RacerConfig(1, "Stunner")],
+        dice_rolls=[3],
+    )
+    add_racer_modifier(game.engine, 0, FixedDie(owner_idx=None, value=4))
+
+    game.run_turns(1)
+
+    assert game.get_racer(0).position == 1
+
+
+def test_randomness_ceased_stored_value_is_final_for_party_pooper(
+    scenario: type[GameScenario],
+):
+    """A stored 6 is not rerolled, so Party Pooper neither loops nor moves."""
+    game = scenario(
+        [RacerConfig(0, "PartyPooper"), plain(1)],
+        dice_rolls=[2],
+    )
+    add_racer_modifier(game.engine, 1, FixedDie(owner_idx=None, value=6))
+
+    game.run_turns(2)
+
+    assert game.get_racer(0).position == 2
+    assert game.get_racer(1).position == 6
+
+
+def test_curse_wands_skip_as_many_seats_as_rolled(scenario: type[GameScenario]):
+    """Core rule: after a turn the racer rolls and the turn order jumps that many seats."""
+    game = scenario(
+        [plain(0, 13), plain(1), plain(2), plain(3)],
+        dice_rolls=[1, 1, 2, 1],
+        board=twisty("Curse Wands"),
+    )
+
+    game.run_turns(2)
+
+    assert game.get_racer(1).position == 0
+    assert game.get_racer(2).position == 2
+    assert game.state.current_racer_idx == 0
+
+
+def test_curse_wands_count_eliminated_seats(scenario: type[GameScenario]):
+    """Eliminated racers still occupy a seat when counting, so a skip of 2 lands on seat 3."""
+    game = scenario(
+        [plain(0, 13), plain(1), plain(2), plain(3)],
+        dice_rolls=[1, 2],
+        board=twisty("Curse Wands"),
+    )
+    game.get_racer(1).eliminate()
+
+    game.run_turns(1)
+
+    assert game.state.current_racer_idx == 3
+
+
+def test_curse_wands_landing_on_an_inactive_seat_moves_on(
+    scenario: type[GameScenario],
+):
+    """Open question pinned: a skip ending on an eliminated seat goes to the next active one."""
+    game = scenario(
+        [plain(0, 13), plain(1), plain(2), plain(3)],
+        dice_rolls=[1, 4],
+        board=twisty("Curse Wands"),
+    )
+    game.get_racer(1).eliminate()
+
+    game.run_turns(1)
+
+    assert game.state.current_racer_idx == 2
+
+
+def test_curse_wands_still_roll_when_a_turn_override_applies(
+    scenario: type[GameScenario],
+):
+    """Open question pinned: the override picks the next racer, but the skip die is still rolled."""
+    game = scenario(
+        [plain(0, 13), plain(1), plain(2), plain(3)],
+        dice_rolls=[1, 1],
+        board=twisty("Curse Wands"),
+    )
+    game.engine.run_turn()
+    game.state.next_turn_override = 3
+
+    game.engine.advance_turn()
+
+    assert game.state.current_racer_idx == 3
+    assert game.mock_rng is not None
+    assert game.mock_rng.randint.call_count == 2

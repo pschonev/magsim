@@ -159,6 +159,8 @@ RacerModifierName = Literal[
     "BlunderdogModifier",
     "CoachBoost",
     "ConveyorBeltBonus",
+    "CurseWand",
+    "FixedDie",
     "GlothModifier",
     "GunkSlimeModifier",
     "HareSpeed",
@@ -197,6 +199,8 @@ TwistName = Literal[
     "Pinata",
     "Conveyor Belt",
     "Scrying Pool",
+    "Randomness Ceased",
+    "Curse Wands",
 ]
 
 SystemSource = Literal["Board", "System"]

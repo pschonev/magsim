@@ -4,11 +4,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 from magsim.core.events import MoveData, Phase, WarpData
-from magsim.core.mixins import MainMoveInterceptorMixin, RollModificationMixin
+from magsim.core.mixins import (
+    FixedDieMixin,
+    MainMoveInterceptorMixin,
+    RollModificationMixin,
+    TurnSkipMixin,
+)
 from magsim.core.modifiers import RacerModifier
 from magsim.engine.abilities import add_racer_modifier
 from magsim.engine.elimination import eliminate_racer
 from magsim.engine.movement import push_simultaneous_move, push_simultaneous_warp
+from magsim.engine.roll import roll_die
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -66,6 +72,29 @@ class ScryingPoolRule(RacerModifier, MainMoveInterceptorMixin):
             phase=Phase.MOVE_EXEC,
         )
         return True
+
+
+@dataclass
+class FixedDie(RacerModifier, FixedDieMixin):
+    name: AbilityName | ModifierName = "FixedDie"
+    value: int = 1
+
+    @override
+    def fixed_die_value(self, engine: GameEngine, roller_idx: int) -> int | None:
+        return self.value
+
+
+@dataclass
+class CurseWand(RacerModifier, TurnSkipMixin):
+    name: AbilityName | ModifierName = "CurseWand"
+
+    @override
+    def seats_to_skip(self, engine: GameEngine, racer_idx: int) -> int:
+        skipped = roll_die(engine, racer_idx)
+        engine.log_info(
+            f"{engine.get_racer(racer_idx).repr} rolls {skipped} and skips {skipped} seats ({self.name}).",
+        )
+        return skipped
 
 
 def roast_chicken(engine: GameEngine, _triggering_idx: int, phase: Phase) -> None:
@@ -151,6 +180,20 @@ def scrying_pool(engine: GameEngine, _triggering_idx: int, _phase: Phase) -> Non
         add_racer_modifier(engine, r.idx, ScryingPoolRule(owner_idx=None))
 
 
+def randomness_ceased(engine: GameEngine, _triggering_idx: int, _phase: Phase) -> None:
+    """Every racer rolls once; that value is every die they roll for the rest of the race."""
+    for r in engine.get_active_racers():
+        value = roll_die(engine, r.idx)
+        engine.log_info(f"{r.repr} is stuck on {value} for the rest of the race.")
+        add_racer_modifier(engine, r.idx, FixedDie(owner_idx=None, value=value))
+
+
+def curse_wands(engine: GameEngine, _triggering_idx: int, _phase: Phase) -> None:
+    """After every turn the racer rolls a die and the turn order skips that many seats."""
+    for r in engine.get_active_racers():
+        add_racer_modifier(engine, r.idx, CurseWand(owner_idx=None))
+
+
 TWIST_HANDLERS: dict[TwistName, TwistHandler] = {
     "Roast Chicken": roast_chicken,
     "Time Imp": time_imp,
@@ -158,5 +201,7 @@ TWIST_HANDLERS: dict[TwistName, TwistHandler] = {
     "Pinata": pinata,
     "Conveyor Belt": conveyor_belt,
     "Scrying Pool": scrying_pool,
+    "Randomness Ceased": randomness_ceased,
+    "Curse Wands": curse_wands,
 }
 TWIST_DECK: tuple[TwistName, ...] = tuple(TWIST_HANDLERS)
