@@ -186,7 +186,9 @@ BoardModifierName = Literal[
     "WarpTile",
 ]
 
-BoardName = Literal["Standard", "WildWilds", "WhirlyWorld"]
+BoardName = Literal["Standard", "WildWilds", "WhirlyWorld", "TwistyTwirl"]
+
+TwistName = Literal["Roast Chicken", "Time Imp"]
 
 SystemSource = Literal["Board", "System"]
 ModifierName = RacerModifierName | BoardModifierName

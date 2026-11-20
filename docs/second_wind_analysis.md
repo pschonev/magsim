@@ -87,10 +87,37 @@ Ability text, clarifications and flavor: [racers.md](racers.md). Per-racer code 
 | E12 | `is_main` on `PassingEvent` | Only `MoveCmdEvent.is_main` exists; `PassingEvent.source` is `"System"` for any system move. | Streaker, Magical Athlete |
 | E13 | Shared elimination helper | Elimination + sole-survivor check inlined in `racers/mouth.py`. | Bite Mark, Doppelgängster, Icarus, Speed Demon |
 | E14 | Runtime ability grant from copies/draws | `replace_core_abilities` keeps only `ExternalAbilityMixin` abilities. | Mush, Doppelgängster |
+| E15 | Twist card dispatch | `TWIST_DECK = ("Blank",)`; `Board.twist` holds one name; no per-card handler, no "racer that triggered" passed on, no way to keep two cards active. | All twist cards |
+| E16 | Global per-race rules in roll/move code | Main-move distance only sees per-racer modifiers; `handle_execute_main_move` has no veto. | Conveyor Belt, Scrying Pool |
+| E17 | Consumable space chips | `VictoryPointTile` stays on the board after landing. | Piñata |
+| E18 | Fixed die values | `roll_die` asks hooks to force or reject; no per-racer stored value, and a fixed value that gets rejected would loop forever. | Randomness has Randomly Ceased |
+| E19 | Turn skipping by count | `advance_turn` handles `next_turn_override` (one racer) or the next active racer; no skip-N over all seats, finished and eliminated included. | Curse Wands |
+| E20 | Persistent turn-end piece | No per-race state for a piece that is not a racer. Needs one integer position on engine state (not in the racer list) and a `TurnEndEvent` handler. | Alchemy Lab Containment Breach |
+| E21 | In-place racer replacement | Not needed: Swap Meet is not simulated (M26). | none |
+| E22 | Direction reversal | Handled by mirroring once, not by changing direction logic. Needs a `Board` mirror (tile keys, corners, tile-internal targets) and a position map for active racers and stored positions, applied after the drawing move completes. | Mirror World Theory Confirmed |
+| E23 | Second race inside one game | Single race per `GameEngine` (E8); `end_race` is final. Needs a pending-finale flag, a `sidelined` state for the other racers and a re-initialisation of the two finalists. | Season Finale |
 
 ## 2. Twist cards
 
-_TODO._ Rulebook lists: Bonkbug Infestation, Mirror World Theory, Curse Wands for Everyone, The Piñata is Leaking, Alchemy Lab Containment Breach, The Fans Demand Chaos, The Conveyor Belt is On, No Running by the Scrying Pool, Roast Chicken on the Ground, Swap Meet, Randomness has Randomly Ceased, Season Finale, You Tromped on a Time Imp.
+On Twisty Twirl, the first move from space 13 to 14 (not a warp) draws one twist card, once per game. Implemented so far: the draw (`Board.draw_twist_on_crossing`, `TWIST_DECK`) with a single `Blank` card that changes nothing. The real cards below are not implemented yet.
+
+13 cards, rulebook pages 1-2. Flavor text: none for any card.
+
+| # | Card | Ability | Clarifications | Page |
+| --- | --- | --- | --- | --- |
+| 1 | Alchemy Lab Containment Breach! | Put the W.E.R.E.M.O.U.T.H. on the Start. Roll for its move after every turn. Any racer it passes is eliminated. | If someone is racing as Bite Mark, they still race as the W.E.R.E.M.O.U.T.H., but go back to the Start and will move more often. It can cross the finish line, but doesn't place or get points (unless controlled by a Bite Mark player). | 1 |
+| 2 | The Fans Demand Chaos! | Draw 2 twist cards and do both in order. | none | 1 |
+| 3 | Bonkbug Infestation at the Finish Line! | When a racer stops on one of the last 2 spaces, they move backwards 5. | none | 1 |
+| 4 | Mirror World Theory Confirmed! | Reverse the direction of the race. | If multiple racers are on the Start when this happens, turn order determines the finish order, e.g. the player closest in turn order would win. | 1 |
+| 5 | The Conveyor Belt is On! | Warp all racers to one space after Start. Everybody gets +3 to their main move. | none | 1 |
+| 6 | No Running by the Scrying Pool! | Any racer that moves 6+ spaces for their main move is eliminated instead. | none | 1 |
+| 7 | Curse Wands for Everyone! | After each player’s turn, they roll a die. Skip that many players in turn order. | Players and racers that are finished or eliminated are still included in counting and still roll for skipping. If players have multiple racers, roll for each. | 1 |
+| 8 | The Piñata is Leaking! | Put a point chip on every empty space after the first corner. When a racer stops on a space with one, they take it. | none | 1 |
+| 9 | Randomness has Randomly Ceased! | All players roll their die: that’s what they roll for anything for the rest of the race. | Twists are technically a track power, so these happen before racer powers. Racers like Stunner would still change these to a 1, for example. | 2 |
+| 10 | You Tromped on a Time Imp! | The racer that triggered this is eliminated, but participates in the next race as an extra racer for their player. | If Mush triggered this, they start with all the powers they had when they were eliminated. | 2 |
+| 11 | Roast Chicken on the Ground! | Move the last place racer 7. | If multiple racers are in last place, they all get the bonus. They move simultaneously, if it matters. | 2 |
+| 12 | Season Finale! | The racers who finish 1st and 2nd race one-on-one to win both trophies. They start on the second corner and 1st place goes first. | This counts as a new race, just quicker, so powers like Nepo Baby still trigger. Any points gotten by other racers that weren't 1st or 2nd chips stay with those racers. | 2 |
+| 13 | Swap Meet! | All players draw a new racer and can swap it with their current one. | The decision is simultaneous. If you swap, your new racer starts at the same space as the old racer. Start of race powers do not happen, though end of race powers could. | 2 |
 
 ## 3. Boards and tracks
 
@@ -122,7 +149,16 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 | M18 | Switcharoo | E7 swap of seats, `victory_points`, agents; per-seat result attribution | Result attribution is in `simulation/`, which AGENT.md forbids. Ask first. Revisit Hotel, Speed Demon. |
 | M19 ✅ | Re-Runner | `RACER_ABILITIES` entry only | Generic racer. |
 | M20 ✅ | Whirly World board (warp) | New board type, warp tiles | Easy. |
-| M21 | Twisty Twirl board (twist) | Twist mechanics | Very hard. Twist cards (section 2) are scheduled together with it. |
+| M21 | Twisty Twirl board (twist) | Twist draw on 13 -> 14, once per game | Draw and `Blank` card are in. The real cards are M22-M30. |
+| M22 ✅ | Twist: Roast Chicken on the Ground!, You Tromped on a Time Imp! | E15 card dispatch with the triggering racer, real deck | Immediate effects only, no state kept. `Blank` stays selectable for tests. |
+| M23 | Twist: Bonkbug Infestation at the Finish Line!, The Piñata is Leaking! | E17 consumable chips | Board modifiers placed at draw time. |
+| M24 | Twist: The Conveyor Belt is On!, No Running by the Scrying Pool! | E16 global rules in the main roll/move; E15 keeps several cards active | Persistent rules for the rest of the race. |
+| M25 | Twist: Randomness has Randomly Ceased!, Curse Wands for Everyone! | E18 fixed die values, E19 turn skipping | Both go through `roll_die`. Curse Wands also changes the turn flow. |
+| M26 ⚪ | Twist: Swap Meet! | none | Not implemented. The simulation measures racers, not players, so swapping a racer mid-race has no meaningful result. |
+| M27 | Twist: Alchemy Lab Containment Breach! | E20 piece position on engine state | Minor. Not a racer, so counts, rank and finish stay unchanged. Bite Mark case is a warp plus extra moves. |
+| M28 | Twist: Mirror World Theory Confirmed! | E22 mirror positions once at the draw | Minor. Race logic stays forward. Apply after the drawing move completes, as a silent renumbering. Racers on the Start finish at once. |
+| M29 | Twist: Season Finale! | E23 second race, E5 race-end event | Hard. Same racer states across both races, so `simulation/` should stay unchanged (verify). |
+| M30 | Twist: The Fans Demand Chaos! | E15 (two cards at once) | Trivial alone. Last because card combinations need the other cards. |
 
 ### Racer notes by milestone
 
@@ -222,6 +258,52 @@ Trigger and code hook per racer (moved from the former runner table). Ability an
 - **Re-Runner** (Between races): Only affects later races of a multi-race game, so nothing to simulate per race. Register with an empty `RACER_ABILITIES` entry (generic racer). Expected extra VP in a multi-race game = her per-race VP in the single-race results, times the number of races she races in as an additional racer.
 
 Every racer in section 1 appears exactly once.
+
+### Twist notes by milestone
+
+Card text and clarifications: section 2. Cards sorted by technical relation, then by effort.
+
+**M22**
+
+- **Roast Chicken on the Ground!** (Immediate): find the minimum position among active racers, `push_simultaneous_move` +7 for every racer on it (non-main move, so passing, landing and finish apply).
+- **You Tromped on a Time Imp!** (Immediate): `eliminate_racer` on the racer whose move crossed 13 -> 14. Needs that racer passed into the card handler. The extra racer in the next race is not simulated (multi-race, E8), as with Re-Runner. Mush keeps nothing to simulate.
+
+**M23**
+
+- **Bonkbug Infestation at the Finish Line!** (Board modifier): `register_modifier` a `MoveDeltaTile(delta=-5)` on the last two tiles (`length - 2`, `length - 1`). "Stops on" matches `LandingHookMixin`. Check that the landing hook also fires for warps.
+- **The Piñata is Leaking!** (Board modifier): a one-shot VP tile that unregisters itself in `on_land`, placed on every tile after the first corner without a feature, a modifier or a racer. Open: the racer that triggered the draw is already standing on tile 14, so it takes no chip.
+
+**M24**
+
+- **The Conveyor Belt is On!** (Persistent): `push_simultaneous_warp` all active racers to tile 1 (a warp, so no passing). The +3 is a global modifier in `handle_perform_main_roll` with its own source name, not a `RacerModifier` per racer, so later racers get it too.
+- **No Running by the Scrying Pool!** (Persistent): in the main move handler, a final distance of 6+ (after modifiers) calls `eliminate_racer` instead of moving. Open: replaced rolls (Mole 6, Legs 5, Cheatah) count as a main move of that distance.
+
+**M25**
+
+- **Randomness has Randomly Ceased!** (Persistent): at the draw, each active racer rolls once through `roll_die` and the value is stored per racer idx. `roll_die` then returns it for every roll. Stunner's forced value still wins (twist is a track power). A rejected value (Party Pooper on a stored 6) must not loop: treat the stored value as final. Multi-dice powers (Mr. Dice Guy, Show-Off) see identical dice. Open: whether Party Pooper still moves 1.
+- **Curse Wands for Everyone!** (Persistent): after each turn, `roll_die` for that racer and skip that many seats in `advance_turn`. Counting includes finished and eliminated seats. Open: landing on an inactive seat moves on to the next active one, and the interaction with `next_turn_override` (Hopfrog, Genius). One racer per player here, so one roll per turn.
+
+**M26**
+
+- **Swap Meet!** (Not simulated): the simulation measures how well racers perform, not players. A mid-race swap makes one result row belong to two racers, so the card is skipped. If drawn, it behaves like `Blank`.
+
+**M27**
+
+- **Alchemy Lab Containment Breach!** (Persistent): the piece is one integer position on engine state (start 0), not an entry in the racer list, so sole-survivor and race-over counts, rank and finish are untouched. A `TurnEndEvent` handler rolls through `roll_die`, moves it, and calls `eliminate_racer` on every active racer strictly between the old and new position. It stops past `length` and skips its roll when the race is over. Bite Mark racing as W.E.R.E.M.O.U.T.H.: no piece is added; the racer warps to the Start at the draw and gets one extra non-main `push_move` from a roll after every turn, with its existing passing elimination, and keeps its VP. Open: a racer on the Start when the piece begins to move is not passed, so it survives.
+
+**M28**
+
+- **Mirror World Theory Confirmed!** (Persistent): mirror once, then the race continues forward. Map `p -> length - p` for every active racer (finished and eliminated stay), static and dynamic tile keys, `first_corner`/`second_turn`, and positions stored inside tiles or abilities (`WarpTile` targets, hogs, Suckerfish target, Heckler turn start positions). Deltas keep their sign (forward stays forward). Apply after the drawing move completes: the draw happens mid-move 13 -> 14, so the mover is mapped after its passing, landing and finish checks. The mirror is plain assignment of numbers: no warp, move, passing, landing or any other event. Racers on the Start map to `length` and finish immediately via `check_finish`, in turn order starting after the current racer (clarification); the race ends at the second finisher. Open: a mirrored tile can sit under a racer that is already standing there, so it triggers only on the next landing.
+
+**M29**
+
+- **Season Finale!** (Deferred): a full first race, then a full second race, one game. Race 1 ends normally (race-end powers fire there: Gloth, Doppelgängster, Mastermind, Spoilsport). A Spoilsport cancel or a sole survivor ends the game with no second race. After race 1 ends with two finishers, start race 2: the 1st and 2nd finishers keep their `RacerState` (VP chips and tokens), everyone else is `sidelined` (inactive, abilities stripped, VP kept, not in race 2 at all, so Gloth gets no second bonus). Race 2 resets the finalists like a fresh race: position 15 (`second_turn`), `finish_position = None`, race 1 rank VP removed, abilities re-instantiated (Mush loses granted powers), once-per-race state fresh (Kraken), setup re-run (Spoilsport, Gloth if finalist, Mastermind, Nepo Baby on 12 = `first_corner`), `race_active = True`, 1st place takes the first turn. Race 2 payout: the winner gets `winner_vp[0] + winner_vp[1]`, the loser nothing from rank. Race 2 ends through the normal finish path. Open: `RaceEndedEvent` fires twice; `winning_turn_count` in the runner then reflects race 1.
+
+**M30**
+
+- **The Fans Demand Chaos!** (Immediate): draw two cards from the remaining deck and run both handlers in order. Needs every other card first. Open: drawing Fans again, drawing the same card twice, and Mirror World plus Season Finale.
+
+Every card in section 2 appears exactly once.
 
 ## AI notes
 

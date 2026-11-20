@@ -199,8 +199,15 @@ def _finalize_committed_move(
     engine.resync_position_auras()
     engine.publish_to_subscribers(post_move_event)
 
-    # 4. Landing Effects - Only if racer is still on board (didn't finish)
+    # 4. Twist and landing effects - Only if racer is still on board (didn't finish)
     if not racer.finished:
+        engine.state.board.draw_twist_on_crossing(
+            start_tile,
+            end_tile,
+            engine,
+            evt.target_racer_idx,
+            evt.phase,
+        )
         engine.state.board.trigger_on_land(
             end_tile,
             evt.target_racer_idx,

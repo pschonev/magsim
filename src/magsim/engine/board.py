@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, override
 from magsim.core.mixins import ApproachHookMixin, LandingHookMixin
 from magsim.core.modifiers import SpaceModifier
 from magsim.engine.movement import push_move, push_warp
+from magsim.engine.twist import TWIST_DECK, TWIST_HANDLERS
 
 if TYPE_CHECKING:
     from magsim.core.events import GameEvent, Phase
@@ -17,8 +18,11 @@ if TYPE_CHECKING:
         BoardName,
         ModifierName,
         Source,
+        TwistName,
     )
     from magsim.engine.game_engine import GameEngine
+
+TWISTY_TWIRL_TILE = 13
 
 
 @dataclass(slots=True)
@@ -27,10 +31,42 @@ class Board:
     static_features: dict[int, list[SpaceModifier]]
     first_corner: int = 12
     second_turn: int = 15
+    twist_after_tile: int | None = None
     dynamic_modifiers: defaultdict[int, list[SpaceModifier]] = field(
         init=False,
         default_factory=lambda: defaultdict(list),
     )
+    forced_twists: list[TwistName] = field(default_factory=list)
+    twists: list[TwistName] = field(init=False, default_factory=list)
+
+    def draw_twist(self, engine: GameEngine) -> TwistName:
+        """Draw one card; forced cards (tests) are consumed before the random deck."""
+        card = (
+            self.forced_twists.pop(0)
+            if self.forced_twists
+            else engine.rng.choice(TWIST_DECK)
+        )
+        self.twists.append(card)
+        engine.log_info(f"TWIST: card drawn: {card}")
+        return card
+
+    def draw_twist_on_crossing(
+        self,
+        start_tile: int,
+        end_tile: int,
+        engine: GameEngine,
+        triggering_idx: int,
+        phase: Phase,
+    ) -> None:
+        """Draw the twist card once, when a move crosses from twist_after_tile to the next."""
+        if (
+            self.twist_after_tile is None
+            or self.twists
+            or not start_tile <= self.twist_after_tile < end_tile
+        ):
+            return
+        card = self.draw_twist(engine)
+        TWIST_HANDLERS[card](engine, triggering_idx, phase)
 
     def register_modifier(
         self,
@@ -323,4 +359,9 @@ BOARD_DEFINITIONS: dict[BoardName, BoardFactory] = {
     ),
     "WildWilds": build_wild_wilds,
     "WhirlyWorld": build_whirly_world,
+    "TwistyTwirl": lambda: Board(
+        length=30,
+        static_features={},
+        twist_after_tile=TWISTY_TWIRL_TILE,
+    ),
 }
