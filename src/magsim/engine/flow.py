@@ -7,8 +7,16 @@ from magsim.core.mixins import FinishInterceptorMixin
 from magsim.core.state import is_active
 
 if TYPE_CHECKING:
-    from magsim.core.state import ActiveRacerState, RacerState
+    from magsim.core.state import ActiveRacerState, GameState, RacerState
     from magsim.engine.game_engine import GameEngine
+
+
+def rank_reward(state: GameState, rank: int) -> int:
+    """VP for a finishing rank; the second race pays the winner both rewards and the loser nothing."""
+    rewards = state.rules.winner_vp
+    if state.race_number == 2:
+        return sum(rewards) if rank == 1 else 0
+    return rewards[rank - 1] if 1 <= rank <= len(rewards) else 0
 
 
 def log_final_standings(engine: GameEngine):
@@ -81,16 +89,11 @@ def mark_finished(
     old_rank = racer.finish_position
     racer.finish_position = rank
 
-    # Update VP
-    rewards = engine.state.rules.winner_vp
-
     # Undo old VP if re-ranking (e.g., bumping down)
-    if old_rank is not None and old_rank > 0 and old_rank <= len(rewards):
-        racer.victory_points -= rewards[old_rank - 1]
+    if old_rank is not None:
+        racer.victory_points -= rank_reward(engine.state, old_rank)
 
-    # Apply new VP
-    if rank <= len(rewards):
-        racer.victory_points += rewards[rank - 1]
+    racer.victory_points += rank_reward(engine.state, rank)
 
     engine.log_info(
         f"!!! {racer.repr} FINISHED rank {rank} ({racer.victory_points} VP) !!!",
@@ -134,6 +137,7 @@ def check_race_over_condition(engine: GameEngine) -> None:
     if len(active_racers) == 1:
         survivor = active_racers[0]
         next_rank = count + 1
+        engine.state.finale_pending = False
         engine.log_info(
             f"Last survivor {survivor.repr} auto-finishes at Rank {next_rank}",
         )

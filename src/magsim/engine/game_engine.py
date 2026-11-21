@@ -44,6 +44,7 @@ from magsim.core.registry import (
     RACER_ABILITIES,
 )
 from magsim.core.state import ActiveRacerState, RollState, is_active
+from magsim.engine.finale import start_second_race
 from magsim.engine.logging import ContextFilter
 from magsim.engine.loop_detection import LoopDetector
 from magsim.engine.movement import (
@@ -116,6 +117,12 @@ class GameEngine:
         if self.state.rules.starting_vp and not self.state.race_active:
             assign_starting_vp(self.state, self.rng)
 
+        self.setup_racers()
+        # finally, start the race
+        self.state.race_active = True
+
+    def setup_racers(self) -> None:
+        """Gives every active racer fresh abilities and runs their setup phase."""
         for racer in self.get_active_racers():
             # 1. Initial Identity (e.g. "Egg", "Copycat")
             initial_core = self.instantiate_racer_abilities(racer.name)
@@ -144,8 +151,6 @@ class GameEngine:
                     if isinstance(ability, SetupPhaseMixin):
                         ability.on_setup(self, racer, self.agents[racer.idx])
         self.resync_position_auras()
-        # finally, start the race
-        self.state.race_active = True
 
     # --- Main Loop ---
     def run_race(self):
@@ -291,6 +296,8 @@ class GameEngine:
         return hash((self.state.current_racer_idx, racer_states))
 
     def advance_turn(self):
+        if start_second_race(self):
+            return
         if not self.state.race_active:
             return
 

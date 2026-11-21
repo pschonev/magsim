@@ -194,6 +194,7 @@ class BatchCommand:
                                 turns_on_winning_round=result.turns_on_winning_round,
                                 tightness_score=result.tightness_score,
                                 volatility_score=result.volatility_score,
+                                twist=result.twist,
                             )
 
                             db.save_simulation(

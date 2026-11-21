@@ -358,6 +358,14 @@ def mirror_world(engine: GameEngine, triggering_idx: int, _phase: Phase) -> None
     )
 
 
+def season_finale(engine: GameEngine, _triggering_idx: int, _phase: Phase) -> None:
+    """When the race ends with two finishers, they race again from the second corner."""
+    engine.log_info(
+        "Season Finale: once this race ends, its first two finishers race again.",
+    )
+    engine.state.finale_pending = True
+
+
 TWIST_HANDLERS: dict[TwistName, TwistHandler] = {
     "Roast Chicken": roast_chicken,
     "Time Imp": time_imp,
@@ -369,5 +377,6 @@ TWIST_HANDLERS: dict[TwistName, TwistHandler] = {
     "Curse Wands": curse_wands,
     "Alchemy Lab": alchemy_lab,
     "Mirror World": mirror_world,
+    "Season Finale": season_finale,
 }
 TWIST_DECK: tuple[TwistName, ...] = tuple(TWIST_HANDLERS)

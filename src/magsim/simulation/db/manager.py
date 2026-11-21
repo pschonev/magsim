@@ -84,6 +84,9 @@ class SimulationDatabase:
         try:
             # Create tables from our Single Source of Truth
             self.conn.execute(Race.get_create_sql())
+            self.conn.execute(
+                "ALTER TABLE races ADD COLUMN IF NOT EXISTS twist VARCHAR",
+            )
             self.conn.execute(RacerResult.get_create_sql())
             self.conn.execute(RacePositionLogHelper.get_create_sql())
 
@@ -106,7 +109,7 @@ class SimulationDatabase:
             # DuckDB's read_parquet is highly optimized
             if self.races_parquet.exists():
                 self.conn.execute(
-                    f"INSERT INTO races SELECT * FROM read_parquet('{self.races_parquet}')",
+                    f"INSERT INTO races BY NAME SELECT * FROM read_parquet('{self.races_parquet}')",
                 )
             if self.results_parquet.exists():
                 self.conn.execute(
@@ -166,7 +169,7 @@ class SimulationDatabase:
         try:
             # 1. Races: Bulk Insert Tuples (your existing code)
             if self.race_buffer:
-                placeholders = ", ".join(["?"] * 14)  # Adjust to your Race field count
+                placeholders = ", ".join(["?"] * 15)  # Adjust to your Race field count
                 self.conn.executemany(
                     f"INSERT INTO races VALUES ({placeholders})",
                     self.race_buffer,

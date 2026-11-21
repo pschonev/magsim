@@ -186,6 +186,8 @@ class MetricsAggregator:
 
     results: dict[int, RacerResult] = field(default_factory=dict)
     turn_history: list[TurnRecord] = field(default_factory=list)
+    race_one_turns: dict[int, int] = field(default_factory=dict)
+    race_one_finish: dict[int, int | None] = field(default_factory=dict)
 
     # COLUMNAR BUFFER: Dict of Lists
     position_logs: PositionLogColumns = field(
@@ -349,6 +351,15 @@ class MetricsAggregator:
                     dice_roll=roll_val,
                 ),
             )
+
+        # Season Finale: the position log and race-one stats stop with race one.
+        if engine.state.race_number != 1:
+            return
+
+        self.race_one_turns = {
+            idx: res.turns_taken for idx, res in self.results.items()
+        }
+        self.race_one_finish = {r.idx: r.finish_position for r in engine.state.racers}
 
         # 2. Capture Positions (FLAT FORMAT - one row per turn)
         cols = self.position_logs

@@ -88,6 +88,7 @@ class RacerState:
     # finished
     finish_position: int | None = None
     eliminated: bool = False
+    sidelined: bool = False
 
     # abilities and modifiers
     modifiers: list[RacerModifier] = field(default_factory=list)
@@ -108,7 +109,12 @@ class RacerState:
 
     @property
     def active(self) -> bool:
-        return not self.finished and not self.eliminated and self.position is not None
+        return (
+            not self.finished
+            and not self.eliminated
+            and not self.sidelined
+            and self.position is not None
+        )
 
     def eliminate(self) -> None:
         self.position = None
@@ -123,6 +129,7 @@ def is_active(racer_state: RacerState) -> TypeGuard[ActiveRacerState]:
     return (
         racer_state.position is not None
         and not racer_state.eliminated
+        and not racer_state.sidelined
         and not racer_state.finished
     )
 
@@ -139,6 +146,8 @@ class GameState:
     queue: list[ScheduledEvent] = field(default_factory=list)
     serial: int = 0
     race_active: bool = False
+    race_number: int = 1
+    finale_pending: bool = False
     history: set[int] = field(default_factory=set)
     _drawn_racers: set[RacerName] = field(default_factory=set)
     _removed_racers: set[RacerName] = field(default_factory=set)

@@ -43,6 +43,7 @@ class SimulationResult:
     position_logs: PositionLogColumns
     tightness_score: float = 0.0
     volatility_score: float = 0.0
+    twist: str | None = None
 
 
 def run_single_simulation(
@@ -93,7 +94,7 @@ def run_single_simulation(
 
     while engine.state.race_active:
         active_racer_idx = engine.state.current_racer_idx
-        scenario.run_turn()
+        engine.run_turn()
         aggregator.on_turn_end(
             engine,
             turn_index=turn_counter,
@@ -106,6 +107,8 @@ def run_single_simulation(
                 if r.finish_position == 1:
                     winning_turn_count = turn_counter
                     break
+
+        engine.advance_turn()
 
         if turn_counter >= max_turns:
             error_code = "MAX_TURNS_REACHED"
@@ -175,8 +178,8 @@ def run_single_simulation(
                 {
                     "config_hash": r.config_hash,
                     "racer_id": r.racer_id,
-                    "turns_taken": r.turns_taken,
-                    "finish_position": r.finish_position,
+                    "turns_taken": aggregator.race_one_turns[r.racer_id],
+                    "finish_position": aggregator.race_one_finish[r.racer_id],
                 }
                 for r in metrics
             ],
@@ -225,4 +228,5 @@ def run_single_simulation(
         position_logs=positions,
         tightness_score=race_tightness,
         volatility_score=race_volatility,
+        twist=engine.state.board.twists[0] if engine.state.board.twists else None,
     )
