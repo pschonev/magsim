@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from magsim.core.state import TimingMode
-    from magsim.core.types import Source
+    from magsim.core.types import Source, TwistName
 
 
 class Phase(IntEnum):
@@ -23,6 +23,7 @@ class Phase(IntEnum):
     MAIN_ACT = 20
     MOVE_EXEC = 21
     REACTION = 25
+    TWIST_QUEUE = 30  # After everything an earlier twist card queued has resolved
 
 
 EventTriggerMode = Literal[
@@ -99,6 +100,16 @@ class TurnEndEvent(GameEvent):
     """
 
     phase: Phase = Phase.SYSTEM
+
+
+@dataclass(frozen=True, kw_only=True)
+class TwistCardEvent(GameEvent):
+    """A drawn twist card whose turn to take effect comes after earlier cards have resolved."""
+
+    card: TwistName
+    triggering_idx: int
+    effect_phase: Phase
+    phase: Phase = Phase.TWIST_QUEUE
 
 
 # -- Roll and Modify --

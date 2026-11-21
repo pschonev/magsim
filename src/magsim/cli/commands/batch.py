@@ -125,6 +125,8 @@ class BatchCommand:
         tqdm.write(f"Eligible racers: {len(eligible_racers)}")
         tqdm.write(f"Racer counts: {sim_config.racer_counts}")
         tqdm.write(f"Boards: {sim_config.boards}")
+        if sim_config.exclude_twists:
+            tqdm.write(f"Banned twists: {sim_config.exclude_twists}")
         tqdm.write(f"Runs per combo: {runs_per_combo}")
         tqdm.write(f"Max total runs: {max_total}")
         tqdm.write("-" * 30)
@@ -138,6 +140,7 @@ class BatchCommand:
             max_total_runs=max_total,
             seed_offset=self.seed_offset,
             filters=sim_config.filters,
+            exclude_twists=tuple(sim_config.exclude_twists),
         )
 
         # Database Setup
@@ -194,7 +197,7 @@ class BatchCommand:
                                 turns_on_winning_round=result.turns_on_winning_round,
                                 tightness_score=result.tightness_score,
                                 volatility_score=result.volatility_score,
-                                twist=result.twist,
+                                twists=result.twists,
                             )
 
                             db.save_simulation(

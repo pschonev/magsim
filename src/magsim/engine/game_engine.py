@@ -29,6 +29,7 @@ from magsim.core.events import (
     TripRecoveryEvent,
     TurnEndEvent,
     TurnStartEvent,
+    TwistCardEvent,
     WarpCmdEvent,
 )
 from magsim.core.mixins import (
@@ -60,6 +61,7 @@ from magsim.engine.roll import (
     resolve_main_move,
 )
 from magsim.engine.starting_vp import assign_starting_vp
+from magsim.engine.twist import TWIST_HANDLERS
 from magsim.racers import get_ability_classes, get_all_racer_stats
 
 if TYPE_CHECKING:
@@ -515,6 +517,13 @@ class GameEngine:
                     for mod in list(racer.modifiers):
                         if isinstance(mod, TurnEndHookMixin) and self.state.race_active:
                             mod.on_turn_end(self)
+            case TwistCardEvent():
+                if self.state.race_active:
+                    TWIST_HANDLERS[event.card](
+                        self,
+                        event.triggering_idx,
+                        event.effect_phase,
+                    )
             case TripCmdEvent():
                 handle_trip_cmd(self, event)
             case MoveCmdEvent():

@@ -1,5 +1,5 @@
 from magsim.core.events import RaceEndedEvent
-from magsim.engine.board import BOARD_DEFINITIONS, Board
+from magsim.engine.board import BOARD_DEFINITIONS, Board, MoveDeltaTile
 from magsim.engine.scenario import GameScenario, RacerConfig
 from magsim.engine.twist import TWIST_DECK
 
@@ -154,3 +154,21 @@ def test_mirror_world_keeps_the_flipped_second_turn_for_the_restart(
     assert board.second_turn == 22
     assert game.state.race_number == 2
     assert game.get_racer(0).position == 22
+
+
+def test_open_question_board_modifiers_persist_into_race_two(
+    scenario: type[GameScenario],
+):
+    """Pinned, to confirm with the designers: the board survives the finale, racer modifiers do not."""
+    game = finale_game(scenario, [plain(0, 29), plain(1, 28), plain(2)])
+    board = game.state.board
+    board.mirror()
+    board.register_modifier(5, MoveDeltaTile(None, delta=-5), game.engine)
+    second_turn = board.second_turn
+
+    game.run_turn()
+    game.run_turn()
+
+    assert game.state.race_number == 2
+    assert any(isinstance(m, MoveDeltaTile) for m in board.dynamic_modifiers[5])
+    assert board.second_turn == second_turn

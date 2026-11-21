@@ -12,7 +12,7 @@ from magsim.simulation.config import GameConfig
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
-    from magsim.core.types import BoardName, RacerName
+    from magsim.core.types import BoardName, RacerName, TwistName
     from magsim.simulation.config import CombinationFilter
 
 
@@ -119,6 +119,7 @@ def generate_combinations(
     max_total_runs: int | None,
     filters: list[CombinationFilter] | None = None,
     seed_offset: int = 0,
+    exclude_twists: tuple[TwistName, ...] = (),
 ) -> Iterator[GameConfig]:
     """
     Smart generator that guarantees unique combinations even in massive spaces
@@ -239,6 +240,7 @@ def generate_combinations(
                 racers=tuple(selected_racers),
                 board=bucket.board,
                 seed=final_seed,
+                exclude_twists=exclude_twists,
             )
             global_yield_counter += 1
 

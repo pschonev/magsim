@@ -10,7 +10,7 @@ from typing import get_args
 
 import msgspec
 
-from magsim.core.types import BoardName, RacerName
+from magsim.core.types import BoardName, RacerName, TwistName
 
 
 class GameConfig(msgspec.Struct, frozen=True):
@@ -24,22 +24,23 @@ class GameConfig(msgspec.Struct, frozen=True):
     seed: int
     # Rules are part of the config now!
     rules: dict[str, int | float | str | bool] = msgspec.field(default_factory=dict)
+    # Twist cards that are never drawn; part of the hash only when set
+    exclude_twists: tuple[TwistName, ...] = ()
 
     def compute_hash(self) -> str:
         """Compute stable SHA-256 hash of this configuration."""
         # msgspec.json.encode is faster and deterministic enough for simple types if we sort
         # But to be safe and match legacy behavior exactly, let's stick to explicit dict creation
-        canonical = json.dumps(
-            {
-                "racers": list(self.racers),
-                "board": self.board,
-                "seed": self.seed,
-                # Include rules in hash if present
-                "rules": dict(sorted(self.rules.items())) if self.rules else {},
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        )
+        data = {
+            "racers": list(self.racers),
+            "board": self.board,
+            "seed": self.seed,
+            # Include rules in hash if present
+            "rules": dict(sorted(self.rules.items())) if self.rules else {},
+        }
+        if self.exclude_twists:
+            data["exclude_twists"] = sorted(self.exclude_twists)
+        canonical = json.dumps(data, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     @property
@@ -54,6 +55,8 @@ class GameConfig(msgspec.Struct, frozen=True):
         }
         if self.rules:
             data["rules"] = self.rules
+        if self.exclude_twists:
+            data["exclude_twists"] = sorted(self.exclude_twists)
 
         canonical = json.dumps(data, sort_keys=True, separators=(",", ":"))
         return base64.urlsafe_b64encode(canonical.encode("utf-8")).decode("ascii")
@@ -68,6 +71,7 @@ class GameConfig(msgspec.Struct, frozen=True):
             board=data["board"],
             seed=data["seed"],
             rules=data.get("rules", {}),
+            exclude_twists=tuple(data.get("exclude_twists", ())),
         )
 
     @property
@@ -85,6 +89,7 @@ class PartialGameConfig(msgspec.Struct):
     board: BoardName | None = None
     seed: int | None = None
     rules: dict[str, int | float | str | bool] | None = None
+    exclude_twists: list[TwistName] | None = None
 
 
 class CombinationFilter(msgspec.Struct):
@@ -112,6 +117,7 @@ class SimulationConfig(msgspec.Struct):
 
     include_racers: list[RacerName] = msgspec.field(default_factory=list)
     exclude_racers: list[RacerName] = msgspec.field(default_factory=list)
+    exclude_twists: list[TwistName] = msgspec.field(default_factory=list)
 
     # Combinations to test
     # Use a lambda to return your specific default lists

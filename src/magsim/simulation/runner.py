@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -43,7 +43,7 @@ class SimulationResult:
     position_logs: PositionLogColumns
     tightness_score: float = 0.0
     volatility_score: float = 0.0
-    twist: str | None = None
+    twists: list[str] = field(default_factory=list)
 
 
 def run_single_simulation(
@@ -64,6 +64,7 @@ def run_single_simulation(
     ]
 
     board = BOARD_DEFINITIONS[config.board]()
+    board.banned_twists = frozenset(config.exclude_twists)
 
     scenario = GameScenario(
         racers_config=racers_config,
@@ -228,5 +229,5 @@ def run_single_simulation(
         position_logs=positions,
         tightness_score=race_tightness,
         volatility_score=race_volatility,
-        twist=engine.state.board.twists[0] if engine.state.board.twists else None,
+        twists=list(engine.state.board.twists),
     )

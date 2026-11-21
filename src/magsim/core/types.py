@@ -207,6 +207,7 @@ TwistName = Literal[
     "Alchemy Lab",
     "Mirror World",
     "Season Finale",
+    "Fans Demand Chaos",
 ]
 
 SystemSource = Literal["Board", "System"]

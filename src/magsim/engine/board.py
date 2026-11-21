@@ -41,15 +41,30 @@ class Board:
         default_factory=lambda: defaultdict(list),
     )
     forced_twists: list[TwistName] = field(default_factory=list)
+    banned_twists: frozenset[TwistName] = frozenset()
     twists: list[TwistName] = field(init=False, default_factory=list)
 
-    def draw_twist(self, engine: GameEngine) -> TwistName:
-        """Draw one card; forced cards (tests) are consumed before the random deck."""
-        card = (
-            self.forced_twists.pop(0)
-            if self.forced_twists
-            else engine.rng.choice(TWIST_DECK)
-        )
+    def draw_twist(
+        self,
+        engine: GameEngine,
+        exclude: tuple[TwistName, ...] = (),
+    ) -> TwistName | None:
+        """Draw one card; forced cards (tests) are consumed before the random deck.
+
+        Banned and excluded cards are never drawn; None when no card is left.
+        """
+        if self.forced_twists:
+            card = self.forced_twists.pop(0)
+        else:
+            deck = [
+                c
+                for c in TWIST_DECK
+                if c not in self.banned_twists and c not in exclude
+            ]
+            if not deck:
+                engine.log_info("TWIST: no card left to draw.")
+                return None
+            card = engine.rng.choice(deck)
         self.twists.append(card)
         engine.log_info(f"TWIST: card drawn: {card}")
         return card
@@ -69,8 +84,8 @@ class Board:
             or not start_tile <= self.twist_after_tile < end_tile
         ):
             return
-        card = self.draw_twist(engine)
-        TWIST_HANDLERS[card](engine, triggering_idx, phase)
+        if (card := self.draw_twist(engine)) is not None:
+            TWIST_HANDLERS[card](engine, triggering_idx, phase)
 
     def mirror(self) -> None:
         """Renumber every tile p -> length - p: tile keys, corners and positions stored in tiles."""

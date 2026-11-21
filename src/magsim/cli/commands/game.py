@@ -20,6 +20,7 @@ from magsim.core.state import GameRules
 from magsim.core.types import (
     BoardName,
     RacerName,
+    TwistName,
 )
 from magsim.engine.board import BOARD_DEFINITIONS
 from magsim.engine.scenario import GameScenario, RacerConfig
@@ -33,6 +34,8 @@ def _print_config(config: GameConfig) -> None:
     logger.log(logging.INFO, config.repr)
     if config.rules:
         logger.log(logging.INFO, f"House Rules: {config.rules}")
+    if config.exclude_twists:
+        logger.log(logging.INFO, f"Banned twists: {list(config.exclude_twists)}")
 
 
 def run_console_game(config: GameConfig, max_turns: int = 200) -> None:
@@ -55,9 +58,11 @@ def run_console_game(config: GameConfig, max_turns: int = 200) -> None:
         RacerConfig(idx=i, name=name) for i, name in enumerate(config.racers)
     ]
 
+    board = BOARD_DEFINITIONS[config.board]()
+    board.banned_twists = frozenset(config.exclude_twists)
     scenario = GameScenario(
         racers_config=racer_configs,
-        board=BOARD_DEFINITIONS[config.board](),
+        board=board,
         rules=rules,
         seed=config.seed,
     )
@@ -147,6 +152,7 @@ class GameCommand:
         final_board: BoardName = "WildWilds"
         final_seed: int = random.randint(0, 1000000)
         final_rules: dict[str, int | float | str] = {}
+        final_exclude_twists: tuple[TwistName, ...] = ()
 
         # 1. Load File (Middle Priority)
         if self.config_file:
@@ -166,6 +172,8 @@ class GameCommand:
                     final_seed = file_conf.seed
                 if file_conf.rules:
                     final_rules.update(file_conf.rules)
+                if file_conf.exclude_twists:
+                    final_exclude_twists = tuple(file_conf.exclude_twists)
 
             except msgspec.DecodeError as e:
                 msg = f"Invalid TOML config: {e}"
@@ -180,6 +188,8 @@ class GameCommand:
                 final_seed = decoded.seed
                 if decoded.rules:
                     final_rules.update(decoded.rules)
+                if decoded.exclude_twists:
+                    final_exclude_twists = decoded.exclude_twists
             except Exception as e:  # noqa: BLE001
                 msg = f"Invalid encoding: {e}"
                 raise cappa.Exit(msg, code=1)  # noqa: B904
@@ -229,6 +239,7 @@ class GameCommand:
             board=final_board,
             seed=final_seed,
             rules=final_rules,
+            exclude_twists=final_exclude_twists,
         )
 
         run_console_game(config, max_turns=self.max_turns)

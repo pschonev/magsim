@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
-from magsim.core.events import MoveData, Phase, WarpData
+from magsim.core.events import MoveData, Phase, TwistCardEvent, WarpData
 from magsim.core.mixins import (
     FixedDieMixin,
     MainMoveInterceptorMixin,
@@ -38,6 +38,7 @@ BONKBUG_DELTA = -5
 CONVEYOR_BELT_TILE = 1
 CONVEYOR_BELT_BONUS = 3
 SCRYING_POOL_LIMIT = 6
+FANS_CARD: TwistName = "Fans Demand Chaos"
 
 type TwistHandler = Callable[[GameEngine, int, Phase], None]
 
@@ -173,9 +174,13 @@ class WeremouthExtraMove(RacerModifier, TurnEndHookMixin):
 
 @dataclass
 class MirrorWorldPending(RacerModifier, TurnEndHookMixin):
-    """Mirrors the board once, when the turn that drew the card has ended."""
+    """Mirrors the board once, when the turn that drew the card has ended.
+
+    Cards drawn after it in the same draw (`then`) take effect on the mirrored board.
+    """
 
     name: AbilityName | ModifierName = "MirrorWorld"
+    then: tuple[TwistName, ...] = ()
 
     @override
     def on_turn_end(self, engine: GameEngine) -> None:
@@ -203,6 +208,14 @@ class MirrorWorldPending(RacerModifier, TurnEndHookMixin):
             racer = engine.state.racers[(current + step) % count]
             if racer in racers:
                 check_finish(engine, racer)
+        for card in self.then:
+            if not engine.state.race_active:
+                return
+            TWIST_HANDLERS[card](
+                engine,
+                current,
+                Phase.REACTION,
+            )
 
 
 def roast_chicken(engine: GameEngine, _triggering_idx: int, phase: Phase) -> None:
@@ -348,14 +361,46 @@ def alchemy_lab(engine: GameEngine, triggering_idx: int, phase: Phase) -> None:
         )
 
 
-def mirror_world(engine: GameEngine, triggering_idx: int, _phase: Phase) -> None:
+def mirror_world(
+    engine: GameEngine,
+    triggering_idx: int,
+    _phase: Phase,
+    then: tuple[TwistName, ...] = (),
+) -> None:
     """Once this turn ends, every position and tile is renumbered p -> length - p."""
     engine.log_info("Mirror World: the board will be mirrored once this turn ends.")
     add_racer_modifier(
         engine,
         triggering_idx,
-        MirrorWorldPending(owner_idx=triggering_idx),
+        MirrorWorldPending(owner_idx=triggering_idx, then=then),
     )
+
+
+def fans_demand_chaos(engine: GameEngine, triggering_idx: int, phase: Phase) -> None:
+    """Two more distinct cards are drawn and played in order, the second after the first has resolved."""
+    board = engine.state.board
+    engine.log_info(
+        "The Fans Demand Chaos: two more cards are drawn and played in order.",
+    )
+    first = board.draw_twist(engine, exclude=(FANS_CARD,))
+    if first is None:
+        return
+    second = board.draw_twist(engine, exclude=(FANS_CARD, first))
+    later = (second,) if second is not None else ()
+    if first == "Mirror World":
+        mirror_world(engine, triggering_idx, phase, then=later)
+        return
+    TWIST_HANDLERS[first](engine, triggering_idx, phase)
+    if second is not None:
+        engine.push_event(
+            TwistCardEvent(
+                responsible_racer_idx=None,
+                source="Board",
+                card=second,
+                triggering_idx=triggering_idx,
+                effect_phase=phase,
+            ),
+        )
 
 
 def season_finale(engine: GameEngine, _triggering_idx: int, _phase: Phase) -> None:
@@ -378,5 +423,6 @@ TWIST_HANDLERS: dict[TwistName, TwistHandler] = {
     "Alchemy Lab": alchemy_lab,
     "Mirror World": mirror_world,
     "Season Finale": season_finale,
+    FANS_CARD: fans_demand_chaos,
 }
 TWIST_DECK: tuple[TwistName, ...] = tuple(TWIST_HANDLERS)

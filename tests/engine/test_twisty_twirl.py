@@ -46,10 +46,13 @@ def test_landing_on_13_draws_nothing_but_the_next_step_does(
 
 
 def test_twist_is_drawn_only_once_per_game(scenario: type[GameScenario]):
+    """Fans is banned here: it legitimately draws two more cards."""
+    board = BOARD_DEFINITIONS["TwistyTwirl"]()
+    board.banned_twists = frozenset({"Fans Demand Chaos"})
     game = scenario(
         [plain(0), plain(1)],
         dice_rolls=[6],
-        board=BOARD_DEFINITIONS["TwistyTwirl"](),
+        board=board,
     )
 
     game.run_turns(8)

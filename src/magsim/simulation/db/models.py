@@ -41,8 +41,8 @@ class Race(msgspec.Struct, array_like=True, gc=False):
     tightness_score: float = 0.0
     volatility_score: float = 0.0
 
-    # --- Twist card drawn this game (None if never drawn) ---
-    twist: str | None = None
+    # --- Twist cards in resolution order (empty if none drawn) ---
+    twists: list[str] = msgspec.field(default_factory=list)
 
     @classmethod
     def get_create_sql(cls) -> str:
@@ -65,7 +65,7 @@ class Race(msgspec.Struct, array_like=True, gc=False):
             created_at TIMESTAMP,
             tightness_score DOUBLE,
             volatility_score DOUBLE,
-            twist VARCHAR
+            twists VARCHAR[]
         )
         """
 

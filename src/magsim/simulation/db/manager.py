@@ -85,8 +85,9 @@ class SimulationDatabase:
             # Create tables from our Single Source of Truth
             self.conn.execute(Race.get_create_sql())
             self.conn.execute(
-                "ALTER TABLE races ADD COLUMN IF NOT EXISTS twist VARCHAR",
+                "ALTER TABLE races ADD COLUMN IF NOT EXISTS twists VARCHAR[]",
             )
+            self._migrate_single_twist_column()
             self.conn.execute(RacerResult.get_create_sql())
             self.conn.execute(RacePositionLogHelper.get_create_sql())
 
@@ -99,6 +100,18 @@ class SimulationDatabase:
             # If explicit check fails, try importing anyway (safe fallback)
             self.import_existing_parquet()
 
+    def _migrate_single_twist_column(self):
+        """Fold the legacy single `twist` column into the ordered `twists` list."""
+        legacy = self.conn.execute(
+            "SELECT count(*) FROM information_schema.columns WHERE table_name = 'races' AND column_name = 'twist'",
+        ).fetchone()[0]
+        if not legacy:
+            return
+        self.conn.execute(
+            "UPDATE races SET twists = [twist] WHERE twist IS NOT NULL AND twists IS NULL",
+        )
+        self.conn.execute("ALTER TABLE races DROP COLUMN twist")
+
     def import_existing_parquet(self):
         """Load legacy parquet files into the active DuckDB instance."""
         if not self.races_parquet.exists():
@@ -108,8 +121,19 @@ class SimulationDatabase:
         try:
             # DuckDB's read_parquet is highly optimized
             if self.races_parquet.exists():
+                columns = {
+                    row[0]
+                    for row in self.conn.execute(
+                        f"DESCRIBE SELECT * FROM read_parquet('{self.races_parquet}')",
+                    ).fetchall()
+                }
+                select = (
+                    "* EXCLUDE (twist), CASE WHEN twist IS NULL THEN NULL ELSE [twist] END AS twists"
+                    if "twist" in columns and "twists" not in columns
+                    else "*"
+                )
                 self.conn.execute(
-                    f"INSERT INTO races BY NAME SELECT * FROM read_parquet('{self.races_parquet}')",
+                    f"INSERT INTO races BY NAME SELECT {select} FROM read_parquet('{self.races_parquet}')",
                 )
             if self.results_parquet.exists():
                 self.conn.execute(
