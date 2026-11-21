@@ -156,6 +156,13 @@ class TurnSkipMixin(ABC):
         """Returns how many seats the turn order jumps over after this turn."""
 
 
+class TurnEndHookMixin(ABC):
+    """Lets a racer modifier act after every turn, whoever's turn it was."""
+
+    @abstractmethod
+    def on_turn_end(self, engine: GameEngine) -> None: ...
+
+
 class DieRollHookMixin:
     """Lets an ability intercept every die roll made by a racer (main roll, duels, ...)."""
 

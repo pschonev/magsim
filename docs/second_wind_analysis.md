@@ -155,7 +155,7 @@ Low-hanging fruit first, then engine changes grouped by gap, from small to large
 | M24 ✅ | Twist: The Conveyor Belt is On!, No Running by the Scrying Pool! | E16 global rules in the main roll/move; E15 keeps several cards active | Persistent rules for the rest of the race. |
 | M25 ✅ | Twist: Randomness has Randomly Ceased!, Curse Wands for Everyone! | E18 fixed die values, E19 turn skipping | Both go through `roll_die`. Curse Wands also changes the turn flow. |
 | M26 ⚪ | Twist: Swap Meet! | none | Not implemented. The simulation measures racers, not players, so swapping a racer mid-race has no meaningful result. |
-| M27 | Twist: Alchemy Lab Containment Breach! | E20 piece position on engine state | Minor. Not a racer, so counts, rank and finish stay unchanged. Bite Mark case is a warp plus extra moves. |
+| M27 ✅ | Twist: Alchemy Lab Containment Breach! | E20 `TurnEndHookMixin` modifiers | Minor. Not a racer, so counts, rank and finish stay unchanged. Bite Mark case is a warp plus extra moves. |
 | M28 | Twist: Mirror World Theory Confirmed! | E22 mirror positions once at the draw | Minor. Race logic stays forward. Apply after the drawing move completes, as a silent renumbering. Racers on the Start finish at once. |
 | M29 | Twist: Season Finale! | E23 second race, E5 race-end event | Hard. Same racer states across both races, so `simulation/` should stay unchanged (verify). |
 | M30 | Twist: The Fans Demand Chaos! | E15 (two cards at once) | Trivial alone. Last because card combinations need the other cards. |
@@ -289,7 +289,7 @@ Card text and clarifications: section 2. Cards sorted by technical relation, the
 
 **M27**
 
-- **Alchemy Lab Containment Breach!** (Persistent): the piece is one integer position on engine state (start 0), not an entry in the racer list, so sole-survivor and race-over counts, rank and finish are untouched. A `TurnEndEvent` handler rolls through `roll_die`, moves it, and calls `eliminate_racer` on every active racer strictly between the old and new position. It stops past `length` and skips its roll when the race is over. Bite Mark racing as W.E.R.E.M.O.U.T.H.: no piece is added; the racer warps to the Start at the draw and gets one extra non-main `push_move` from a roll after every turn, with its existing passing elimination, and keeps its VP. Open: a racer on the Start when the piece begins to move is not passed, so it survives.
+- **Alchemy Lab Containment Breach!** (Persistent): the piece is a `WeremouthPiece` modifier (position, start 0) hosted by the triggering racer, not an entry in the racer list, so sole-survivor and race-over counts, rank and finish are untouched. A generic `TurnEndHookMixin` hook, called after `TurnEndEvent`, rolls with the engine rng (not `roll_die`, so no die modifiers apply), moves it, and calls `eliminate_racer` on every active racer strictly between the old and new position. It stops past `length` and skips its roll when the race is over. Bite Mark racing as W.E.R.E.M.O.U.T.H.: no piece is added; the racer warps to the Start at the draw and gets one extra non-main `push_move` from a roll after every turn, with its existing passing elimination, and keeps its VP. Open: a racer on the Start when the piece begins to move is not passed, so it survives.
 
 **M28**
 

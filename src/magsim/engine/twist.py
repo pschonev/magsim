@@ -8,12 +8,18 @@ from magsim.core.mixins import (
     FixedDieMixin,
     MainMoveInterceptorMixin,
     RollModificationMixin,
+    TurnEndHookMixin,
     TurnSkipMixin,
 )
 from magsim.core.modifiers import RacerModifier
 from magsim.engine.abilities import add_racer_modifier
 from magsim.engine.elimination import eliminate_racer
-from magsim.engine.movement import push_simultaneous_move, push_simultaneous_warp
+from magsim.engine.movement import (
+    push_move,
+    push_simultaneous_move,
+    push_simultaneous_warp,
+    push_warp,
+)
 from magsim.engine.roll import roll_die
 
 if TYPE_CHECKING:
@@ -95,6 +101,66 @@ class CurseWand(RacerModifier, TurnSkipMixin):
             f"{engine.get_racer(racer_idx).repr} rolls {skipped} and skips {skipped} seats ({self.name}).",
         )
         return skipped
+
+
+@dataclass
+class WeremouthPiece(RacerModifier, TurnEndHookMixin):
+    """The W.E.R.E.M.O.U.T.H. piece; not a racer, so counts, rank and finish are untouched."""
+
+    name: AbilityName | ModifierName = "WeremouthPiece"
+    position: int = 0
+
+    @override
+    def on_turn_end(self, engine: GameEngine) -> None:
+        length = engine.state.board.length
+        if self.position >= length:
+            return
+        old = self.position
+        distance = engine.rng.randint(1, 6)
+        self.position = old + distance
+        engine.log_info(
+            f"The W.E.R.E.M.O.U.T.H. rolls {distance} and moves {old}->{self.position}.",
+        )
+        for racer in engine.get_active_racers():
+            if old < racer.position < self.position:
+                engine.log_info(f"The W.E.R.E.M.O.U.T.H. ELIMINATED {racer.repr}!")
+                eliminate_racer(
+                    engine,
+                    racer,
+                    responsible_racer_idx=engine.state.current_racer_idx,
+                    source=self.name,
+                    phase=Phase.REACTION,
+                )
+                if not engine.state.race_active:
+                    return
+
+
+@dataclass
+class WeremouthExtraMove(RacerModifier, TurnEndHookMixin):
+    """A racer already racing as the W.E.R.E.M.O.U.T.H. moves again after every turn."""
+
+    name: AbilityName | ModifierName = "WeremouthExtraMove"
+
+    @override
+    def on_turn_end(self, engine: GameEngine) -> None:
+        if (
+            self.owner_idx is None
+            or (racer := engine.get_active_racer(self.owner_idx)) is None
+            or "WeremouthRampage" not in racer.abilities
+        ):
+            return
+        distance = roll_die(engine, racer.idx)
+        engine.log_info(
+            f"{racer.repr} rolls {distance} for an extra move ({self.name}).",
+        )
+        push_move(
+            engine,
+            distance,
+            Phase.REACTION,
+            moved_racer_idx=racer.idx,
+            source=self.name,
+            responsible_racer_idx=racer.idx,
+        )
 
 
 def roast_chicken(engine: GameEngine, _triggering_idx: int, phase: Phase) -> None:
@@ -194,6 +260,26 @@ def curse_wands(engine: GameEngine, _triggering_idx: int, _phase: Phase) -> None
         add_racer_modifier(engine, r.idx, CurseWand(owner_idx=None))
 
 
+def alchemy_lab(engine: GameEngine, triggering_idx: int, phase: Phase) -> None:
+    """A W.E.R.E.M.O.U.T.H. piece starts at the Start; a Bite Mark one warps back and moves more."""
+    mouths = [
+        r for r in engine.get_active_racers() if "WeremouthRampage" in r.abilities
+    ]
+    if not mouths:
+        add_racer_modifier(engine, triggering_idx, WeremouthPiece(owner_idx=None))
+        return
+    for r in mouths:
+        add_racer_modifier(engine, r.idx, WeremouthExtraMove(owner_idx=r.idx))
+        push_warp(
+            engine,
+            0,
+            phase,
+            warped_racer_idx=r.idx,
+            source="Board",
+            responsible_racer_idx=None,
+        )
+
+
 TWIST_HANDLERS: dict[TwistName, TwistHandler] = {
     "Roast Chicken": roast_chicken,
     "Time Imp": time_imp,
@@ -203,5 +289,6 @@ TWIST_HANDLERS: dict[TwistName, TwistHandler] = {
     "Scrying Pool": scrying_pool,
     "Randomness Ceased": randomness_ceased,
     "Curse Wands": curse_wands,
+    "Alchemy Lab": alchemy_lab,
 }
 TWIST_DECK: tuple[TwistName, ...] = tuple(TWIST_HANDLERS)

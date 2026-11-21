@@ -2,7 +2,13 @@ from magsim.core.types import TwistName
 from magsim.engine.abilities import add_racer_modifier
 from magsim.engine.board import BOARD_DEFINITIONS, Board, TripTile, WarpTile
 from magsim.engine.scenario import GameScenario, RacerConfig
-from magsim.engine.twist import ConveyorBeltBonus, FixedDie, ScryingPoolRule
+from magsim.engine.twist import (
+    ConveyorBeltBonus,
+    FixedDie,
+    ScryingPoolRule,
+    WeremouthPiece,
+)
+from magsim.racers.bite_mark import WeremouthRampage
 
 
 def twisty(*forced: TwistName) -> Board:
@@ -485,3 +491,106 @@ def test_curse_wands_still_roll_when_a_turn_override_applies(
     assert game.state.current_racer_idx == 3
     assert game.mock_rng is not None
     assert game.mock_rng.randint.call_count == 2
+
+
+def piece_of(game: GameScenario) -> WeremouthPiece:
+    return next(
+        m
+        for r in game.state.racers
+        for m in r.modifiers
+        if isinstance(m, WeremouthPiece)
+    )
+
+
+def test_alchemy_lab_piece_eliminates_racers_it_passes(scenario: type[GameScenario]):
+    """Core rule: the piece rolls after the turn and eliminates racers strictly between old and new position."""
+    game = scenario(
+        [plain(0, 13), plain(1, 3), plain(2)],
+        dice_rolls=[1, 4],
+        board=twisty("Alchemy Lab"),
+    )
+
+    game.run_turns(1)
+
+    assert piece_of(game).position == 4
+    assert game.get_racer(1).eliminated
+    assert not game.get_racer(2).eliminated
+
+
+def test_alchemy_lab_piece_spares_the_racer_it_lands_on(scenario: type[GameScenario]):
+    """Open question pinned: only passed racers die, so landing on one or standing on the Start is safe."""
+    game = scenario(
+        [plain(0, 13), plain(1, 4), plain(2)],
+        dice_rolls=[1, 4],
+        board=twisty("Alchemy Lab"),
+    )
+
+    game.run_turns(1)
+
+    assert not game.get_racer(1).eliminated
+    assert not game.get_racer(2).eliminated
+
+
+def test_alchemy_lab_piece_rolls_after_every_turn(scenario: type[GameScenario]):
+    """The piece keeps its position between turns and rolls again after each one."""
+    game = scenario(
+        [plain(0, 13), plain(1), plain(2)],
+        dice_rolls=[1, 2, 3, 4],
+        board=twisty("Alchemy Lab"),
+    )
+
+    game.run_turns(2)
+
+    assert piece_of(game).position == 6
+
+
+def test_alchemy_lab_piece_stops_rolling_past_the_finish(
+    scenario: type[GameScenario],
+):
+    """Past the board length the piece is done and no longer rolls."""
+    game = scenario([plain(0), plain(1)], dice_rolls=[1])
+    add_racer_modifier(game.engine, 0, WeremouthPiece(owner_idx=None, position=30))
+
+    game.run_turns(1)
+
+    assert game.mock_rng is not None
+    assert game.mock_rng.randint.call_count == 1
+
+
+def test_alchemy_lab_bite_mark_warps_to_start_and_adds_no_piece(
+    scenario: type[GameScenario],
+):
+    """Bite Mark racing as W.E.R.E.M.O.U.T.H. goes back to the Start and gets the extra move instead of a piece."""
+    game = scenario(
+        [plain(0, 13), RacerConfig(1, "BiteMark", start_pos=8)],
+        dice_rolls=[1, 3],
+        board=twisty("Alchemy Lab"),
+    )
+    game.engine.grant_ability(1, WeremouthRampage())
+
+    game.run_turns(1)
+
+    assert game.get_racer(1).position == 3
+    assert not any(
+        isinstance(m, WeremouthPiece) for r in game.state.racers for m in r.modifiers
+    )
+
+
+def test_alchemy_lab_bite_mark_extra_move_eliminates_passed_racers(
+    scenario: type[GameScenario],
+):
+    """The extra move is a normal move, so Bite Mark's passing elimination applies."""
+    game = scenario(
+        [
+            plain(0, 13),
+            RacerConfig(1, "BiteMark", start_pos=8),
+            plain(2, 2),
+        ],
+        dice_rolls=[1, 4],
+        board=twisty("Alchemy Lab"),
+    )
+    game.engine.grant_ability(1, WeremouthRampage())
+
+    game.run_turns(1)
+
+    assert game.get_racer(2).eliminated

@@ -37,6 +37,7 @@ from magsim.core.mixins import (
     PositionAuraMixin,
     RollsWhileTrippedMixin,
     SetupPhaseMixin,
+    TurnEndHookMixin,
     TurnSkipMixin,
 )
 from magsim.core.registry import (
@@ -494,7 +495,6 @@ class GameEngine:
                 AbilityTriggeredEvent()
                 | PreTurnStartEvent()
                 | TurnStartEvent()
-                | TurnEndEvent()
                 | PassingEvent()
                 | RollModificationWindowEvent()
                 | RollResultEvent()
@@ -502,6 +502,12 @@ class GameEngine:
                 | RacerEliminatedEvent()
             ):
                 self.publish_to_subscribers(event)
+            case TurnEndEvent():
+                self.publish_to_subscribers(event)
+                for racer in self.state.racers:
+                    for mod in list(racer.modifiers):
+                        if isinstance(mod, TurnEndHookMixin) and self.state.race_active:
+                            mod.on_turn_end(self)
             case TripCmdEvent():
                 handle_trip_cmd(self, event)
             case MoveCmdEvent():
