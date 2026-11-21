@@ -7,13 +7,15 @@ from magsim.core.events import MoveData, Phase, WarpData
 from magsim.core.mixins import (
     FixedDieMixin,
     MainMoveInterceptorMixin,
+    PositionRemapMixin,
     RollModificationMixin,
     TurnEndHookMixin,
     TurnSkipMixin,
 )
 from magsim.core.modifiers import RacerModifier
-from magsim.engine.abilities import add_racer_modifier
+from magsim.engine.abilities import add_racer_modifier, remove_racer_modifier
 from magsim.engine.elimination import eliminate_racer
+from magsim.engine.flow import check_finish
 from magsim.engine.movement import (
     push_move,
     push_simultaneous_move,
@@ -104,11 +106,17 @@ class CurseWand(RacerModifier, TurnSkipMixin):
 
 
 @dataclass
-class WeremouthPiece(RacerModifier, TurnEndHookMixin):
+class WeremouthPiece(RacerModifier, TurnEndHookMixin, PositionRemapMixin):
     """The W.E.R.E.M.O.U.T.H. piece; not a racer, so counts, rank and finish are untouched."""
 
     name: AbilityName | ModifierName = "WeremouthPiece"
     position: int = 0
+
+    @override
+    def remap_positions(self, remap: Callable[[int], int]) -> None:
+        # A piece already past the finish stays out of play: its mirror image is not on the board.
+        if (mirrored := remap(self.position)) > 0:
+            self.position = mirrored
 
     @override
     def on_turn_end(self, engine: GameEngine) -> None:
@@ -161,6 +169,40 @@ class WeremouthExtraMove(RacerModifier, TurnEndHookMixin):
             source=self.name,
             responsible_racer_idx=racer.idx,
         )
+
+
+@dataclass
+class MirrorWorldPending(RacerModifier, TurnEndHookMixin):
+    """Mirrors the board once, when the turn that drew the card has ended."""
+
+    name: AbilityName | ModifierName = "MirrorWorld"
+
+    @override
+    def on_turn_end(self, engine: GameEngine) -> None:
+        if self.owner_idx is not None:
+            remove_racer_modifier(engine, self.owner_idx, self)
+        board = engine.state.board
+        engine.log_info(
+            f"The board is mirrored: tile p becomes tile {board.length} - p.",
+        )
+        board.mirror()
+        racers = engine.get_active_racers()
+        for racer in racers:
+            old = racer.position
+            racer.position = board.length - old
+            engine.log_info(f"{racer.repr} is mirrored from {old} to {racer.position}.")
+        for racer in engine.state.racers:
+            for mod in racer.modifiers:
+                if isinstance(mod, PositionRemapMixin):
+                    mod.remap_positions(lambda tile: board.length - tile)
+        count = len(engine.state.racers)
+        current = engine.state.current_racer_idx
+        for step in range(1, count + 1):
+            if not engine.state.race_active:
+                return
+            racer = engine.state.racers[(current + step) % count]
+            if racer in racers:
+                check_finish(engine, racer)
 
 
 def roast_chicken(engine: GameEngine, _triggering_idx: int, phase: Phase) -> None:
@@ -306,6 +348,16 @@ def alchemy_lab(engine: GameEngine, triggering_idx: int, phase: Phase) -> None:
         )
 
 
+def mirror_world(engine: GameEngine, triggering_idx: int, _phase: Phase) -> None:
+    """Once this turn ends, every position and tile is renumbered p -> length - p."""
+    engine.log_info("Mirror World: the board will be mirrored once this turn ends.")
+    add_racer_modifier(
+        engine,
+        triggering_idx,
+        MirrorWorldPending(owner_idx=triggering_idx),
+    )
+
+
 TWIST_HANDLERS: dict[TwistName, TwistHandler] = {
     "Roast Chicken": roast_chicken,
     "Time Imp": time_imp,
@@ -316,5 +368,6 @@ TWIST_HANDLERS: dict[TwistName, TwistHandler] = {
     "Randomness Ceased": randomness_ceased,
     "Curse Wands": curse_wands,
     "Alchemy Lab": alchemy_lab,
+    "Mirror World": mirror_world,
 }
 TWIST_DECK: tuple[TwistName, ...] = tuple(TWIST_HANDLERS)

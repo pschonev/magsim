@@ -5,7 +5,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, override
 
-from magsim.core.mixins import ApproachHookMixin, LandingHookMixin
+from magsim.core.mixins import (
+    ApproachHookMixin,
+    LandingHookMixin,
+    PositionRemapMixin,
+)
 from magsim.core.modifiers import SpaceModifier
 from magsim.engine.movement import push_move, push_warp
 from magsim.engine.twist import TWIST_DECK, TWIST_HANDLERS
@@ -67,6 +71,26 @@ class Board:
             return
         card = self.draw_twist(engine)
         TWIST_HANDLERS[card](engine, triggering_idx, phase)
+
+    def mirror(self) -> None:
+        """Renumber every tile p -> length - p: tile keys, corners and positions stored in tiles."""
+
+        def flip(tile: int) -> int:
+            return self.length - tile
+
+        self.static_features = {
+            flip(tile): mods for tile, mods in self.static_features.items()
+        }
+        self.dynamic_modifiers = defaultdict(
+            list,
+            {flip(tile): mods for tile, mods in self.dynamic_modifiers.items()},
+        )
+        for mods in (*self.static_features.values(), *self.dynamic_modifiers.values()):
+            for mod in mods:
+                if isinstance(mod, PositionRemapMixin):
+                    mod.remap_positions(flip)
+        self.first_corner = flip(self.first_corner)
+        self.second_turn = flip(self.second_turn)
 
     def register_modifier(
         self,
@@ -235,13 +259,17 @@ class MoveDeltaTile(SpaceModifier, LandingHookMixin):
 
 
 @dataclass
-class WarpTile(SpaceModifier, LandingHookMixin):
+class WarpTile(SpaceModifier, LandingHookMixin, PositionRemapMixin):
     """On landing, warp to the paired tile. Arriving by warp does not warp back."""
 
     target: int = 0
     priority: int = 5
     owner_idx: int | None = None
     name: AbilityName | ModifierName = "WarpTile"
+
+    @override
+    def remap_positions(self, remap: Callable[[int], int]) -> None:
+        self.target = remap(self.target)
 
     @property
     @override

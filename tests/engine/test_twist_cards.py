@@ -4,11 +4,14 @@ from magsim.engine.board import BOARD_DEFINITIONS, Board, TripTile, WarpTile
 from magsim.engine.scenario import GameScenario, RacerConfig
 from magsim.engine.twist import (
     ConveyorBeltBonus,
+    TWIST_DECK,
     FixedDie,
+    MirrorWorldPending,
     ScryingPoolRule,
     WeremouthPiece,
 )
 from magsim.racers.bite_mark import WeremouthRampage
+from magsim.racers.suckerfish import SuckerfishTargetModifier
 
 
 def twisty(*forced: TwistName) -> Board:
@@ -594,3 +597,110 @@ def test_alchemy_lab_bite_mark_extra_move_eliminates_passed_racers(
     game.run_turns(1)
 
     assert game.get_racer(2).eliminated
+
+
+def test_mirror_world_is_in_the_deck():
+    """The card must be drawable."""
+    assert "Mirror World" in TWIST_DECK
+
+
+def test_mirror_world_mirrors_after_the_drawing_turn(scenario: type[GameScenario]):
+    """Positions map p -> length - p once the turn ends, and finished or eliminated racers stay."""
+    game = scenario(
+        [plain(0, 13), plain(1, 3), plain(2, 20), plain(3, 8)],
+        dice_rolls=[1],
+        board=twisty("Mirror World"),
+    )
+    game.state.racers[2].finish_position = 1
+    game.state.racers[3].eliminate()
+
+    game.run_turns(1)
+
+    assert game.get_racer(0).position == 16
+    assert game.get_racer(1).position == 27
+    assert game.get_racer(2).position == 20
+    assert game.get_racer(3).position is None
+
+
+def test_mirror_world_lands_before_it_mirrors(scenario: type[GameScenario]):
+    """The mover's landing effects resolve on the old tile; the mirror then renumbers silently."""
+    board = twisty("Mirror World")
+    board.static_features[14] = [TripTile(None)]
+    game = scenario([plain(0, 13), plain(1)], dice_rolls=[1], board=board)
+
+    game.run_turns(1)
+
+    assert game.get_racer(0).tripped
+    assert game.get_racer(0).position == 16
+    assert 16 in board.static_features
+    assert 14 not in board.static_features
+
+
+def test_mirror_world_mirrors_tiles_corners_and_warp_targets(
+    scenario: type[GameScenario],
+):
+    """Tile keys, corners and tile-internal targets all follow the same map."""
+    board = twisty("Mirror World")
+    board.static_features[4] = [WarpTile(None, target=6)]
+    board.static_features[6] = [WarpTile(None, target=4)]
+    game = scenario([plain(0, 13), plain(1, 10)], dice_rolls=[1], board=board)
+
+    game.run_turns(1)
+
+    assert board.first_corner == 18
+    assert board.second_turn == 15
+    assert sorted(board.static_features) == [24, 26]
+    assert board.static_features[24][0].target == 26
+    assert board.static_features[26][0].target == 24
+
+
+def test_mirror_world_mirrors_once(scenario: type[GameScenario]):
+    """A second turn must not mirror again."""
+    game = scenario(
+        [plain(0, 13), plain(1, 3)],
+        dice_rolls=[1, 2],
+        board=twisty("Mirror World"),
+    )
+
+    game.run_turns(2)
+
+    assert game.get_racer(1).position == 27 + 2
+
+
+def test_mirror_world_racers_on_the_start_finish_in_turn_order_after_the_current(
+    scenario: type[GameScenario],
+):
+    """Start maps to the finish; racers finish in turn order after the current one and the race ends at two."""
+    game = scenario(
+        [plain(0), plain(1, 13), plain(2), plain(3)],
+        dice_rolls=[1],
+        board=twisty("Mirror World"),
+    )
+    game.state.current_racer_idx = 1
+
+    MirrorWorldPending(owner_idx=None).on_turn_end(game.engine)
+
+    assert game.get_racer(2).finish_position == 1
+    assert game.get_racer(3).finish_position == 2
+    assert game.get_racer(0).finish_position is None
+    assert not game.state.race_active
+
+
+def test_mirror_world_remaps_stored_positions(scenario: type[GameScenario]):
+    """Modifiers that store positions renumber them: Suckerfish's target and the W.E.R.E.M.O.U.T.H. piece."""
+    game = scenario([plain(0), plain(1)], dice_rolls=[1])
+    add_racer_modifier(
+        game.engine,
+        1,
+        SuckerfishTargetModifier(owner_idx=1, target_tile=10),
+    )
+    add_racer_modifier(game.engine, 0, WeremouthPiece(owner_idx=None, position=4))
+
+    MirrorWorldPending(owner_idx=None).on_turn_end(game.engine)
+
+    assert piece_of(game).position == 26
+    assert next(
+        m
+        for m in game.get_racer(1).modifiers
+        if isinstance(m, SuckerfishTargetModifier)
+    ).target_tile == 20

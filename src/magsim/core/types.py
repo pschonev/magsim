@@ -180,6 +180,7 @@ RacerModifierName = Literal[
     "SpeedDemonBoost",
     "StepdadBoost",
     "SticklerStrictFinish",
+    "MirrorWorld",
     "SuckerfishTarget",
     "WeremouthExtraMove",
     "WeremouthPiece",
@@ -204,6 +205,7 @@ TwistName = Literal[
     "Randomness Ceased",
     "Curse Wands",
     "Alchemy Lab",
+    "Mirror World",
 ]
 
 SystemSource = Literal["Board", "System"]

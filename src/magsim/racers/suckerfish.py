@@ -20,7 +20,7 @@ from magsim.core.events import (
     Phase,
     PostMoveEvent,
 )
-from magsim.core.mixins import DestinationCalculatorMixin
+from magsim.core.mixins import DestinationCalculatorMixin, PositionRemapMixin
 from magsim.core.modifiers import RacerModifier
 from magsim.engine.abilities import (
     add_racer_modifier,
@@ -29,6 +29,8 @@ from magsim.engine.abilities import (
 from magsim.engine.movement import push_move
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from magsim.core.agent import Agent
     from magsim.core.state import ActiveRacerState
     from magsim.core.types import AbilityName, ModifierName
@@ -36,10 +38,18 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class SuckerfishTargetModifier(RacerModifier, DestinationCalculatorMixin):
+class SuckerfishTargetModifier(
+    RacerModifier,
+    DestinationCalculatorMixin,
+    PositionRemapMixin,
+):
     name: AbilityName | ModifierName = "SuckerfishTarget"
     priority: int = 0  # High priority to ensure exact landing
     target_tile: int = 0
+
+    @override
+    def remap_positions(self, remap: Callable[[int], int]) -> None:
+        self.target_tile = remap(self.target_tile)
 
     @override
     def calculate_destination(
@@ -162,7 +172,9 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         # 0. If the driver just finished, always follow to claim 2nd place
         if not driver.active:
             if dist > 0:
-                engine.log_info(f"{me.repr} follows {driver.repr} across the finish line!")
+                engine.log_info(
+                    f"{me.repr} follows {driver.repr} across the finish line!",
+                )
                 return True
             return False
 
@@ -211,7 +223,6 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
         def moves_before_me(r_idx: int) -> bool:
             return is_turn_between(driver.idx, me.idx, r_idx)
 
-
         # 5a. Destination chain: highest priority among small safe rides
         for r in engine.get_racers_at_position(dest, except_racer_idx=me.idx):
             if moves_before_me(r.idx) and BAD_DRIVER_ABILITIES.isdisjoint(r.abilities):
@@ -231,4 +242,3 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
 
         # 5c. No chain and no better local options: just take the small, safe ride
         return True
-

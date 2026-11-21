@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from magsim.core.agent import Agent
     from magsim.core.events import (
         AbilityTriggeredEvent,
@@ -161,6 +163,13 @@ class TurnEndHookMixin(ABC):
 
     @abstractmethod
     def on_turn_end(self, engine: GameEngine) -> None: ...
+
+
+class PositionRemapMixin(ABC):
+    """Lets a modifier that stores board positions renumber them when the board is renumbered."""
+
+    @abstractmethod
+    def remap_positions(self, remap: Callable[[int], int]) -> None: ...
 
 
 class DieRollHookMixin:
