@@ -169,12 +169,15 @@ def roast_chicken(engine: GameEngine, _triggering_idx: int, phase: Phase) -> Non
     if not racers:
         return
     last = min(r.position for r in racers)
+    movers = [r for r in racers if r.position == last]
+    engine.log_info(
+        f"Roast Chicken: {', '.join(r.repr for r in movers)} in last place move {ROAST_CHICKEN_DISTANCE}.",
+    )
     push_simultaneous_move(
         engine,
         [
             MoveData(moving_racer_idx=r.idx, distance=ROAST_CHICKEN_DISTANCE)
-            for r in racers
-            if r.position == last
+            for r in movers
         ],
         phase,
         source="Board",
@@ -187,6 +190,7 @@ def time_imp(engine: GameEngine, triggering_idx: int, phase: Phase) -> None:
     """The racer whose move triggered the twist is eliminated."""
     if (racer := engine.get_active_racer(triggering_idx)) is None:
         return
+    engine.log_info(f"The Time Imp eliminates {racer.repr}!")
     eliminate_racer(
         engine,
         racer,
@@ -201,7 +205,11 @@ def bonkbug(engine: GameEngine, _triggering_idx: int, _phase: Phase) -> None:
     from magsim.engine.board import MoveDeltaTile  # noqa: PLC0415
 
     board = engine.state.board
-    for tile in range(board.length - BONKBUG_TILES, board.length):
+    first = board.length - BONKBUG_TILES
+    engine.log_info(
+        f"Bonkbugs infest tiles {first}-{board.length - 1}: stopping there moves a racer {BONKBUG_DELTA}.",
+    )
+    for tile in range(first, board.length):
         board.register_modifier(tile, MoveDeltaTile(None, delta=BONKBUG_DELTA), engine)
 
 
@@ -210,6 +218,7 @@ def pinata(engine: GameEngine, _triggering_idx: int, _phase: Phase) -> None:
     from magsim.engine.board import VictoryPointTile  # noqa: PLC0415
 
     board = engine.state.board
+    placed = 0
     for tile in range(board.first_corner + 1, board.length):
         if board.get_modifiers_at(tile) or engine.get_racers_at_position(tile):
             continue
@@ -218,6 +227,8 @@ def pinata(engine: GameEngine, _triggering_idx: int, _phase: Phase) -> None:
             VictoryPointTile(None, consumable=True),
             engine,
         )
+        placed += 1
+    engine.log_info(f"The Piñata leaks: {placed} empty tiles get a one-shot VP chip.")
 
 
 def conveyor_belt(engine: GameEngine, _triggering_idx: int, phase: Phase) -> None:
@@ -225,6 +236,9 @@ def conveyor_belt(engine: GameEngine, _triggering_idx: int, phase: Phase) -> Non
     racers = engine.get_active_racers()
     if not racers:
         return
+    engine.log_info(
+        f"The Conveyor Belt is on: all racers warp to tile {CONVEYOR_BELT_TILE} and get +{CONVEYOR_BELT_BONUS} on their main move.",
+    )
     for r in racers:
         add_racer_modifier(engine, r.idx, ConveyorBeltBonus(owner_idx=None))
     push_simultaneous_warp(
@@ -242,6 +256,9 @@ def conveyor_belt(engine: GameEngine, _triggering_idx: int, phase: Phase) -> Non
 
 def scrying_pool(engine: GameEngine, _triggering_idx: int, _phase: Phase) -> None:
     """Every racer is eliminated instead of making a main move of 6+."""
+    engine.log_info(
+        f"Scrying Pool: a main move of {SCRYING_POOL_LIMIT} or more now eliminates the racer.",
+    )
     for r in engine.get_active_racers():
         add_racer_modifier(engine, r.idx, ScryingPoolRule(owner_idx=None))
 
@@ -256,6 +273,9 @@ def randomness_ceased(engine: GameEngine, _triggering_idx: int, _phase: Phase) -
 
 def curse_wands(engine: GameEngine, _triggering_idx: int, _phase: Phase) -> None:
     """After every turn the racer rolls a die and the turn order skips that many seats."""
+    engine.log_info(
+        "Curse Wands: after each turn the next seats are skipped by a die roll.",
+    )
     for r in engine.get_active_racers():
         add_racer_modifier(engine, r.idx, CurseWand(owner_idx=None))
 
@@ -266,9 +286,15 @@ def alchemy_lab(engine: GameEngine, triggering_idx: int, phase: Phase) -> None:
         r for r in engine.get_active_racers() if "WeremouthRampage" in r.abilities
     ]
     if not mouths:
+        engine.log_info(
+            "Alchemy Lab: the W.E.R.E.M.O.U.T.H. breaks out at the Start and will move after every turn.",
+        )
         add_racer_modifier(engine, triggering_idx, WeremouthPiece(owner_idx=None))
         return
     for r in mouths:
+        engine.log_info(
+            f"Alchemy Lab: {r.repr} is the W.E.R.E.M.O.U.T.H.; it returns to the Start and moves again after every turn.",
+        )
         add_racer_modifier(engine, r.idx, WeremouthExtraMove(owner_idx=r.idx))
         push_warp(
             engine,
