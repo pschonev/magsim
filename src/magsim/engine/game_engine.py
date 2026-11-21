@@ -60,7 +60,7 @@ from magsim.engine.roll import (
     handle_perform_main_roll,
     resolve_main_move,
 )
-from magsim.engine.starting_vp import assign_starting_vp
+from magsim.engine.starting_vp import assign_starting_vp, vp_relevant_racers
 from magsim.engine.twist import TWIST_HANDLERS
 from magsim.racers import get_ability_classes, get_all_racer_stats
 
@@ -118,6 +118,11 @@ class GameEngine:
 
         if self.state.rules.starting_vp and not self.state.race_active:
             assign_starting_vp(self.state, self.rng)
+            if relevant := vp_relevant_racers(self.state.racers):
+                self.log_info(
+                    "Starting VP (earlier races, not counted as gained): "
+                    + ", ".join(f"{r.name} {r.starting_vp}" for r in relevant),
+                )
 
         self.setup_racers()
         # finally, start the race
@@ -613,9 +618,11 @@ class GameEngine:
         responsible_racer_idx: int,
         source: Source,
         skipped_racer_idx: int,
+        traded: bool = False,
     ) -> None:
         """
         Marks the racer's main move as consumed and emits a notification event.
+        `traded` means the racer swaps the move for another action instead of losing it.
         Does nothing if the move was already consumed.
         """
         racer = self.get_racer(skipped_racer_idx)
@@ -629,6 +636,7 @@ class GameEngine:
                     responsible_racer_idx=responsible_racer_idx,
                     source=source,
                     target_racer_idx=skipped_racer_idx,
+                    kind="traded" if traded else "lost",
                 ),
             )
 
@@ -680,7 +688,11 @@ class GameEngine:
         ]
 
         # 2. Combine with new identity
-        final_list = external_abilities + new_core_instances
+        final_list = external_abilities + [
+            ab
+            for ab in new_core_instances
+            if not any(ab is ext for ext in external_abilities)
+        ]
 
         # 3. Reconcile
         self._update_abilities(racer_idx, final_list)

@@ -98,6 +98,7 @@ class MagicalAthleteFlexomancy(Ability, SelectionDecisionMixin[ActiveRacerState]
             responsible_racer_idx=owner.idx,
             source=self.name,
             skipped_racer_idx=owner.idx,
+            traded=True,
         )
 
     def _replace_with_main_move(
@@ -133,6 +134,7 @@ class MagicalAthleteFlexomancy(Ability, SelectionDecisionMixin[ActiveRacerState]
                     target_racer_idx=racer.idx,
                     source=self.name,
                     responsible_racer_idx=owner.idx,
+                    kind="turn_skipped",
                 ),
             )
 

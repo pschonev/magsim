@@ -72,6 +72,7 @@ class AbilitySkipper(Ability):
                             target_racer_idx=racer.idx,
                             source=self.name,
                             responsible_racer_idx=owner.idx,
+                            kind="turn_skipped",
                         ),
                     )
 

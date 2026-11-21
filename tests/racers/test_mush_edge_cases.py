@@ -481,3 +481,22 @@ def test_understudy_copy_of_mush_and_mush_draw_different_racers(
     }
     assert mush_draws
     assert not (mush_draws & copier_draws) or not copier_draws
+
+
+def test_mush_with_copycat_power_does_not_duplicate_it_on_core_swap(
+    scenario: type[GameScenario],
+):
+    """A drawn Copycat is a granted ability. Copycat's own core swap re-submits that
+    same instance, which must not be listed twice (it multiplied every trigger).
+    """
+    game = scenario([mush(), plain(1)], dice_rolls=[1])
+    leave_only(game, "Copycat")
+
+    game.run_turn()
+
+    abilities = game.get_racer(0).active_abilities
+    assert len({id(a) for a in abilities}) == len(abilities)
+    copy_lead = [a for a in abilities if a.name == "CopyLead"]
+    game.engine.replace_core_abilities(0, [*copy_lead])
+    game.engine.replace_core_abilities(0, [*copy_lead])
+    assert [a.name for a in game.get_racer(0).active_abilities].count("CopyLead") == 1

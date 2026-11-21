@@ -42,11 +42,14 @@ RACER_COMPOSITE_PATTERN = re.compile(
     rf"(?P<prefix>[\d\.]*[:•])(?P<name>{'|'.join(map(re.escape, RACER_NAMES))})\b",
 )
 
+TWIST_BANNER = "!!! TWIST CARD DRAWN !!!"
+
 COLOR = {
     "move": "bold #23d18b",  # light green
     "warp": "bold #87d700",  # yellow-ish green
     "main_move": "bold #319e31",  # mid green
     "warning": "bold bright_red",
+    "twist_banner": "bold red",
     "ability": "bold #29b8db",  # cyan
     "prefix": "grey50",
     "level": "bold",
@@ -113,6 +116,7 @@ class GameLogHighlighter(Highlighter):
         text.highlight_regex(BOARD_MODIFIER_PATTERN, COLOR["board"])
 
         text.highlight_regex(r"!!!", COLOR["warning"])
+        text.highlight_regex(re.escape(TWIST_BANNER), COLOR["twist_banner"])
         text.highlight_regex(r"\bVP:\b", "bold yellow")
         text.highlight_regex(r"\b\+1 VP\b", "bold green")
         text.highlight_regex(r"\b-1 VP\b", "bold red")

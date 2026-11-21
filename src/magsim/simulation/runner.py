@@ -65,6 +65,7 @@ def run_single_simulation(
 
     board = BOARD_DEFINITIONS[config.board]()
     board.banned_twists = frozenset(config.exclude_twists)
+    board.forced_twists = list(config.forced_twists)
 
     scenario = GameScenario(
         racers_config=racers_config,

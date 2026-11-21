@@ -5,7 +5,7 @@ from typing import get_args
 
 import cappa
 
-from magsim.core.types import BoardName, RacerName
+from magsim.core.types import BoardName, RacerName, TwistName
 from magsim.engine.board import BOARD_DEFINITIONS
 
 
@@ -59,6 +59,22 @@ def validate_board_name(value: str) -> str:
         msg += f" Did you mean: {', '.join(matches)}?"
 
     raise cappa.Exit(msg, code=1)
+
+
+def validate_twist_names(twist_args: list[str]) -> list[TwistName]:
+    """Validate and resolve twist card names, ignoring case, spaces and dots."""
+    canonical_names = get_args(TwistName)
+    lookup_map: dict[str, TwistName] = {_normalize(k): k for k in canonical_names}
+    resolved: list[TwistName] = []
+    for arg in twist_args:
+        if (card := lookup_map.get(_normalize(arg))) is not None:
+            resolved.append(card)
+            continue
+        msg = f"Twist card '{arg}' not found."
+        if matches := difflib.get_close_matches(arg, canonical_names, n=3, cutoff=0.5):
+            msg += f" Did you mean: {', '.join(matches)}?"
+        raise cappa.Exit(msg, code=1)
+    return resolved
 
 
 def parse_house_rules(value: list[str]) -> dict[str, str | int | float]:

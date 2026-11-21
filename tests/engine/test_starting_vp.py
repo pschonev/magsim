@@ -11,6 +11,7 @@ def _racers() -> list[RacerConfig]:
         RacerConfig(0, "Centaur", abilities=set()),
         RacerConfig(1, "Banana"),
         RacerConfig(2, "Mouth"),
+        RacerConfig(3, "Hotel", abilities=set()),
     ]
 
 
@@ -97,7 +98,6 @@ def test_for_play_override_can_disable_starting_vp():
 
 
 def test_reported_final_vp_excludes_starting_vp(scenario: type[GameScenario]):
-    max_race_vp = max(GameRules().winner_vp)
     seen_nonzero_start = False
 
     for seed in SEEDS:
@@ -117,7 +117,48 @@ def test_reported_final_vp_excludes_starting_vp(scenario: type[GameScenario]):
         for result in results:
             racer = game.get_racer(result.racer_id)
             assert result.final_vp == racer.victory_points - starts[racer.idx]
-            assert 0 <= result.final_vp <= max_race_vp
+            assert result.final_vp >= -starts[racer.idx]
         seen_nonzero_start |= any(starts.values())
 
     assert seen_nonzero_start
+
+
+def test_generic_starting_vp_only_with_hotel_or_copier(scenario: type[GameScenario]):
+    no_hotel = [r for r in _racers() if r.name != "Hotel"]
+
+    for seed in SEEDS:
+        game = scenario(
+            no_hotel,
+            dice_rolls=[1],
+            rules=GameRules(starting_vp=True),
+            seed=seed,
+        )
+        assert all(r.starting_vp == 0 for r in game.state.racers)
+
+    with_mush = [*no_hotel, RacerConfig(3, "Mush", abilities=set())]
+    starts = [
+        r.starting_vp
+        for seed in SEEDS
+        for r in scenario(
+            with_mush,
+            dice_rolls=[1],
+            rules=GameRules(starting_vp=True),
+            seed=seed,
+        ).state.racers
+    ]
+    assert any(starts)
+
+
+def test_sisyphus_game_is_a_first_race_with_zero_vp_for_all(
+    scenario: type[GameScenario],
+):
+    racers = [*_racers(), RacerConfig(4, "Sisyphus", abilities=set())]
+
+    for seed in SEEDS:
+        game = scenario(
+            racers,
+            dice_rolls=[1],
+            rules=GameRules(starting_vp=True),
+            seed=seed,
+        )
+        assert all(r.starting_vp == 0 for r in game.state.racers)

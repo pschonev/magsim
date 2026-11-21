@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import atexit
 import logging
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 
 import duckdb
 import msgspec
+import polars as pl
 from tqdm import tqdm
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from magsim.simulation.db.models import Race, RacerResult
 
 # Import the models (Source of Truth)
@@ -182,6 +183,15 @@ class SimulationDatabase:
         for key in self.position_buffer_cols:
             self.position_buffer_cols[key].extend(positions[key])
 
+    def _bulk_insert(self, table: str, frame: pl.DataFrame) -> None:
+        """Insert via a temp parquet file; `executemany` is orders of magnitude slower."""
+        with tempfile.TemporaryDirectory(dir=self.results_dir) as tmp:
+            path = Path(tmp) / "batch.parquet"
+            frame.write_parquet(path)
+            self.conn.execute(
+                f"INSERT INTO {table} BY POSITION SELECT * FROM read_parquet('{path}')",  # noqa: S608
+            )
+
     def flush_to_parquet(self):
         if (
             not self.race_buffer
@@ -191,52 +201,38 @@ class SimulationDatabase:
             return
 
         try:
-            # 1. Races: Bulk Insert Tuples (your existing code)
             if self.race_buffer:
-                placeholders = ", ".join(["?"] * 15)  # Adjust to your Race field count
-                self.conn.executemany(
-                    f"INSERT INTO races VALUES ({placeholders})",
-                    self.race_buffer,
+                self._bulk_insert(
+                    "races",
+                    pl.DataFrame(
+                        self.race_buffer,
+                        schema=list(Race.__struct_fields__),
+                        orient="row",
+                        infer_schema_length=None,
+                    ),
                 )
                 self.race_buffer.clear()
 
-            # 2. Results: Bulk Insert Tuples (your existing code)
             if self.result_buffer:
-                placeholders = ", ".join(
-                    ["?"] * 21,
-                )  # Adjust to your RacerResult field count
-                self.conn.executemany(
-                    f"INSERT INTO racer_results VALUES ({placeholders})",
-                    self.result_buffer,
+                self._bulk_insert(
+                    "racer_results",
+                    pl.DataFrame(
+                        self.result_buffer,
+                        schema=list(RacerResult.__struct_fields__),
+                        orient="row",
+                        infer_schema_length=None,
+                    ),
                 )
                 self.result_buffer.clear()
 
-            # 3. Positions: List of Tuples (SIMPLEST & FASTEST!)
             if self.position_buffer_cols["config_hash"]:
-                # Transpose your columnar dict into a list of row tuples
-                # This is O(1) since the lists are already the right length
-                positions_tuples = list(
-                    zip(
-                        self.position_buffer_cols["config_hash"],
-                        self.position_buffer_cols["turn_index"],
-                        self.position_buffer_cols["current_racer_id"],
-                        self.position_buffer_cols["pos_r0"],
-                        self.position_buffer_cols["pos_r1"],
-                        self.position_buffer_cols["pos_r2"],
-                        self.position_buffer_cols["pos_r3"],
-                        self.position_buffer_cols["pos_r4"],
-                        self.position_buffer_cols["pos_r5"],
+                self._bulk_insert(
+                    "race_position_logs",
+                    pl.DataFrame(
+                        dict(self.position_buffer_cols),
+                        infer_schema_length=None,
                     ),
                 )
-
-                # Use the SAME executemany pattern as races/results
-                placeholders = ", ".join(["?"] * 9)  # 9 columns for position logs
-                self.conn.executemany(
-                    f"INSERT INTO race_position_logs VALUES ({placeholders})",
-                    positions_tuples,
-                )
-
-                # Clear buffers
                 for key in self.position_buffer_cols:
                     self.position_buffer_cols[key].clear()
 

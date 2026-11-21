@@ -279,6 +279,7 @@ def handle_execute_main_move(engine: GameEngine, event: ExecuteMainMoveEvent) ->
             TripRecoveryEvent(
                 target_racer_idx=racer.idx,
                 tripping_racers=tripping_racers,
+                lost_main_move=False,
                 responsible_racer_idx=None,
                 source="System",
             ),

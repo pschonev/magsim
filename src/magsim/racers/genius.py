@@ -101,6 +101,7 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
                             target_racer_idx=skipped_racer_idx,
                             source=self.name,
                             responsible_racer_idx=owner.idx,
+                            kind="turn_skipped",
                         ),
                     )
 
@@ -125,7 +126,6 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
         engine: GameEngine,
         ctx: SelectionDecisionContext[Self, int],
     ) -> int:
-
         if (owner := engine.get_active_racer(ctx.source_racer_idx)) is None:
             return 6  # Fallback
 
@@ -135,7 +135,11 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
 
         skipper_ability: AbilityName = "SkipperTurn"
         if owner.position >= max_pos:
-            if any(skipper_ability in r.abilities for r in active_racers if r.idx != owner.idx):
+            if any(
+                skipper_ability in r.abilities
+                for r in active_racers
+                if r.idx != owner.idx
+            ):
                 # Conservative, but avoiding Skipper
                 prediction = 2
                 self.preferred_dice = frozenset([2, 4, 5, 6])
@@ -149,4 +153,3 @@ class AbilityGenius(Ability, SelectionDecisionMixin[int]):
             self.preferred_dice = frozenset([6])
 
         return prediction
-

@@ -13,6 +13,7 @@ def _racers() -> list[RacerConfig]:
         RacerConfig(0, "SpeedDemon", abilities=set()),
         RacerConfig(1, "Centaur", abilities=set()),
         RacerConfig(2, "Banana", abilities=set()),
+        RacerConfig(3, "Hotel", abilities=set()),
     ]
 
 

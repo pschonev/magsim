@@ -219,3 +219,16 @@ def test_game_config_hash_and_encoding_include_banned_twists():
     assert base.compute_hash() != banned.compute_hash()
     assert GameConfig.from_encoded(banned.encoded) == banned
     assert GameConfig.from_encoded(base.encoded) == base
+
+
+def test_game_config_hash_and_encoding_include_forced_twists():
+    base = GameConfig(racers=("ReRunner", "Centaur"), board="TwistyTwirl", seed=1)
+    forced = GameConfig(
+        racers=base.racers,
+        board=base.board,
+        seed=1,
+        forced_twists=(FANS_CARD, "Time Imp", "Pinata"),
+    )
+
+    assert base.compute_hash() != forced.compute_hash()
+    assert GameConfig.from_encoded(forced.encoded) == forced

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 # --- Configuration ---
 MAX_IDENTICAL_BOARD_VISITS = 200  # Threshold for physical board state oscillations
 HEURISTIC_LOOP_TOLERANCE = 5  # Threshold for repeated actions on the same state
+MAX_EVENTS_PER_TURN = 2000  # Hard cap for cascades whose board state never repeats
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,7 @@ class LoopDetector:
     # Global Sanity State
     board_visit_counts: Counter[int] = field(default_factory=Counter)
     last_board_hash: int | None = None
+    events_this_turn: int = 0
 
     # Exact Cycle State
     exact_state_history: set[int] = field(default_factory=set)
@@ -62,6 +64,7 @@ class LoopDetector:
         """Resets all tracking history for a new turn."""
         self.board_visit_counts.clear()
         self.last_board_hash = None
+        self.events_this_turn = 0
         self.exact_state_history.clear()
         self.heuristic_history.clear()
         self.event_creation_hashes.clear()
@@ -130,6 +133,10 @@ class LoopDetector:
         Layer 3 (Global): Returns True if the board state has oscillated too many times
         in total during this turn. Acts as a final failsafe.
         """
+        self.events_this_turn += 1
+        if self.events_this_turn > MAX_EVENTS_PER_TURN:
+            return True
+
         # Only increment count on state entry/re-entry
         if current_board_hash != self.last_board_hash:
             self.board_visit_counts[current_board_hash] += 1

@@ -193,7 +193,14 @@ class BaseValueModificationEvent(GameEvent):
 
 @dataclass(frozen=True, kw_only=True)
 class MainMoveSkippedEvent(GameEvent, HasTargetRacer):
+    """
+    lost: the move is gone, nothing replaces it.
+    traded: the move is swapped for another action of the racer.
+    turn_skipped: the racer's whole turn is never taken.
+    """
+
     responsible_racer_idx: int
+    kind: Literal["lost", "traded", "turn_skipped"] = "lost"
     phase: Phase = Phase.ROLL_DICE
 
 
@@ -318,6 +325,7 @@ class PostTripEvent(GameEvent, HasTargetRacer): ...
 @dataclass(frozen=True)
 class TripRecoveryEvent(GameEvent, HasTargetRacer):
     tripping_racers: list[int | None] = field(default_factory=list)
+    lost_main_move: bool = True
     phase: Phase = Phase.PRE_MAIN
 
 

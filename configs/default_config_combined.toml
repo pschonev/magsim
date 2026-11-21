@@ -1,0 +1,15 @@
+# Base game + Second Wind: every racer, every board, every twist card except Time Imp.
+include_racers = []
+exclude_racers = []
+exclude_twists = ["Time Imp"]
+
+racer_counts = [4, 5, 6]
+boards = ["Standard", "WildWilds", "WhirlyWorld", "TwistyTwirl"]
+
+runs_per_combination = 1
+max_total_runs = 1000
+max_turns_per_race = 300
+
+[[filters]]
+racers = ["Copycat", "Scoocher"]
+boards = ["Standard"]

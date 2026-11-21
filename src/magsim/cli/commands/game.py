@@ -15,6 +15,7 @@ from magsim.cli.converters import (
     parse_house_rules,
     validate_board_name,
     validate_racer_names,
+    validate_twist_names,
 )
 from magsim.core.state import GameRules
 from magsim.core.types import (
@@ -36,6 +37,8 @@ def _print_config(config: GameConfig) -> None:
         logger.log(logging.INFO, f"House Rules: {config.rules}")
     if config.exclude_twists:
         logger.log(logging.INFO, f"Banned twists: {list(config.exclude_twists)}")
+    if config.forced_twists:
+        logger.log(logging.INFO, f"Forced twists: {list(config.forced_twists)}")
 
 
 def run_console_game(config: GameConfig, max_turns: int = 200) -> None:
@@ -60,6 +63,7 @@ def run_console_game(config: GameConfig, max_turns: int = 200) -> None:
 
     board = BOARD_DEFINITIONS[config.board]()
     board.banned_twists = frozenset(config.exclude_twists)
+    board.forced_twists = list(config.forced_twists)
     scenario = GameScenario(
         racers_config=racer_configs,
         board=board,
@@ -82,6 +86,14 @@ def run_console_game(config: GameConfig, max_turns: int = 200) -> None:
         raise
 
     logger.log(logging.INFO, "-" * 20)
+    logger.log(
+        logging.INFO,
+        "VP gained this race: "
+        + ", ".join(
+            f"{r.name} {r.victory_points - r.starting_vp:+d}"
+            for r in scenario.state.racers
+        ),
+    )
     _print_config(config)
 
 
@@ -118,6 +130,19 @@ class GameCommand:
         int | None,
         cappa.Arg(short="-s", long="--seed", help="RNG seed."),
     ] = None
+    twists: Annotated[
+        list[TwistName] | None,
+        cappa.Arg(
+            short="-t",
+            long="--twist",
+            parse=validate_twist_names,
+            num_args=-1,
+            help=(
+                "Twist cards drawn in this order instead of random ones "
+                "(give three for 'Fans Demand Chaos'). Defaults the board to TwistyTwirl."
+            ),
+        ),
+    ] = None
 
     config_file: Annotated[
         Path | None,
@@ -149,10 +174,11 @@ class GameCommand:
     def __call__(self):
         # Default State
         final_racers: list[RacerName] = []
-        final_board: BoardName = "WildWilds"
+        final_board: BoardName | None = None
         final_seed: int = random.randint(0, 1000000)
         final_rules: dict[str, int | float | str] = {}
         final_exclude_twists: tuple[TwistName, ...] = ()
+        final_forced_twists: tuple[TwistName, ...] = ()
 
         # 1. Load File (Middle Priority)
         if self.config_file:
@@ -174,6 +200,8 @@ class GameCommand:
                     final_rules.update(file_conf.rules)
                 if file_conf.exclude_twists:
                     final_exclude_twists = tuple(file_conf.exclude_twists)
+                if file_conf.forced_twists:
+                    final_forced_twists = tuple(file_conf.forced_twists)
 
             except msgspec.DecodeError as e:
                 msg = f"Invalid TOML config: {e}"
@@ -190,6 +218,8 @@ class GameCommand:
                     final_rules.update(decoded.rules)
                 if decoded.exclude_twists:
                     final_exclude_twists = decoded.exclude_twists
+                if decoded.forced_twists:
+                    final_forced_twists = decoded.forced_twists
             except Exception as e:  # noqa: BLE001
                 msg = f"Invalid encoding: {e}"
                 raise cappa.Exit(msg, code=1)  # noqa: B904
@@ -201,6 +231,24 @@ class GameCommand:
             final_board = self.board
         if self.seed is not None:
             final_seed = self.seed
+        if self.twists:
+            final_forced_twists = tuple(self.twists)
+
+        if final_board is None:
+            final_board = (
+                "TwistyTwirl"
+                if final_forced_twists
+                else random.Random(final_seed).choice(get_args(BoardName))
+            )
+
+        if (
+            final_forced_twists
+            and BOARD_DEFINITIONS[final_board]().twist_after_tile is None
+        ):
+            msg = (
+                f"Board {final_board} has no twist tile; forced twists have no effect."
+            )
+            raise cappa.Exit(msg, code=1)
 
         if self.house_rules:
             final_rules.update(parse_house_rules(self.house_rules))
@@ -240,6 +288,7 @@ class GameCommand:
             seed=final_seed,
             rules=final_rules,
             exclude_twists=final_exclude_twists,
+            forced_twists=final_forced_twists,
         )
 
         run_console_game(config, max_turns=self.max_turns)

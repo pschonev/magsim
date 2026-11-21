@@ -11,6 +11,7 @@ from magsim.core.mixins import (
     PositionRemapMixin,
 )
 from magsim.core.modifiers import SpaceModifier
+from magsim.engine.logging import TWIST_BANNER
 from magsim.engine.movement import push_move, push_warp
 from magsim.engine.twist import TWIST_DECK, TWIST_HANDLERS
 
@@ -66,7 +67,7 @@ class Board:
                 return None
             card = engine.rng.choice(deck)
         self.twists.append(card)
-        engine.log_info(f"TWIST: card drawn: {card}")
+        engine.log_info(TWIST_BANNER)
         return card
 
     def draw_twist_on_crossing(

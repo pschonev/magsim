@@ -26,6 +26,8 @@ class GameConfig(msgspec.Struct, frozen=True):
     rules: dict[str, int | float | str | bool] = msgspec.field(default_factory=dict)
     # Twist cards that are never drawn; part of the hash only when set
     exclude_twists: tuple[TwistName, ...] = ()
+    # Twist cards drawn in this order before the random deck; part of the hash only when set
+    forced_twists: tuple[TwistName, ...] = ()
 
     def compute_hash(self) -> str:
         """Compute stable SHA-256 hash of this configuration."""
@@ -40,6 +42,8 @@ class GameConfig(msgspec.Struct, frozen=True):
         }
         if self.exclude_twists:
             data["exclude_twists"] = sorted(self.exclude_twists)
+        if self.forced_twists:
+            data["forced_twists"] = list(self.forced_twists)
         canonical = json.dumps(data, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -57,6 +61,8 @@ class GameConfig(msgspec.Struct, frozen=True):
             data["rules"] = self.rules
         if self.exclude_twists:
             data["exclude_twists"] = sorted(self.exclude_twists)
+        if self.forced_twists:
+            data["forced_twists"] = list(self.forced_twists)
 
         canonical = json.dumps(data, sort_keys=True, separators=(",", ":"))
         return base64.urlsafe_b64encode(canonical.encode("utf-8")).decode("ascii")
@@ -72,6 +78,7 @@ class GameConfig(msgspec.Struct, frozen=True):
             seed=data["seed"],
             rules=data.get("rules", {}),
             exclude_twists=tuple(data.get("exclude_twists", ())),
+            forced_twists=tuple(data.get("forced_twists", ())),
         )
 
     @property
@@ -90,6 +97,7 @@ class PartialGameConfig(msgspec.Struct):
     seed: int | None = None
     rules: dict[str, int | float | str | bool] | None = None
     exclude_twists: list[TwistName] | None = None
+    forced_twists: list[TwistName] | None = None
 
 
 class CombinationFilter(msgspec.Struct):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, override
 
 from magsim.core.abilities import Ability
@@ -11,13 +11,14 @@ from magsim.core.events import (
     MoveDistanceQuery,
     Phase,
     RollResultEvent,
+    TurnStartEvent,
 )
 from magsim.core.mixins import RollModificationMixin
 
 if TYPE_CHECKING:
     from magsim.core.agent import Agent
     from magsim.core.state import ActiveRacerState
-    from magsim.core.types import AbilityName
+    from magsim.core.types import AbilityName, RacerName
     from magsim.engine.game_engine import GameEngine
 
 MUSH_TRIGGER_VALUES = frozenset({1, 2})
@@ -26,7 +27,9 @@ MUSH_TRIGGER_VALUES = frozenset({1, 2})
 @dataclass
 class MushGlobsterMashAbility(Ability):
     name: AbilityName = "MushGlobsterMash"
-    triggers: tuple[type[GameEvent], ...] = (RollResultEvent,)
+    triggers: tuple[type[GameEvent], ...] = (RollResultEvent, TurnStartEvent)
+
+    copied_racers: list[RacerName] = field(default_factory=list)
 
     @override
     def execute(
@@ -36,6 +39,13 @@ class MushGlobsterMashAbility(Ability):
         engine: GameEngine,
         agent: Agent,
     ) -> AbilityTriggeredEventOrSkipped:
+        if isinstance(event, TurnStartEvent):
+            if owner.idx == event.target_racer_idx and self.copied_racers:
+                engine.log_info(
+                    f"{owner.repr} acts as {', '.join(self.copied_racers)}.",
+                )
+            return "skip_trigger"
+
         if (
             not isinstance(event, RollResultEvent)
             or event.target_racer_idx != owner.idx
@@ -46,6 +56,7 @@ class MushGlobsterMashAbility(Ability):
 
         (drawn,) = engine.draw_racers(k=1)
         granted = engine.instantiate_racer_abilities(drawn.racer_name)
+        self.copied_racers.append(drawn.racer_name)
         engine.log_info(
             f"{owner.repr} rolled {sorted(event.dice_values)} and gains the power of {drawn.racer_name}!",
         )

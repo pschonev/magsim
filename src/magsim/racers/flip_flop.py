@@ -86,6 +86,7 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[ActiveRacerState]):
             responsible_racer_idx=owner.idx,
             source=self.name,
             skipped_racer_idx=owner.idx,
+            traded=True,
         )
 
         return "skip_trigger"
