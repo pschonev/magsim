@@ -19,9 +19,9 @@ from magsim.core.events import (
     WarpCmdEvent,
 )
 from magsim.core.mixins import ApproachHookMixin
-from magsim.core.palettes import get_racer_color
+from magsim.core.palettes import get_racer_color, get_racer_palette
 from magsim.core.registry import RACER_ABILITIES
-from magsim.core.state import GameRules, is_active
+from magsim.core.state import GameRules
 from magsim.core.types import (
     AbilityName,
     BoardModifierName,
@@ -38,6 +38,7 @@ from magsim.engine.board import (
     VictoryPointTile,
     WarpTile,
 )
+from magsim.engine.logging import TWIST_BANNER
 from magsim.engine.scenario import GameScenario, RacerConfig
 from magsim.engine.twist import TWIST_DECK
 from magsim.simulation.config import GameConfig
@@ -47,6 +48,7 @@ from magsim.web.schemas import (
     ConfigEncodeResponseDTO,
     DecodedConfigDTO,
     LogEntryDTO,
+    RacerPaletteDTO,
     RuleValueDTO,
     SimulationRequestDTO,
     SimulationResponseDTO,
@@ -250,6 +252,14 @@ def _build_game_config(req: SimulationRequestDTO) -> GameConfig:
     )
 
 
+def _palettes(names: list[str]) -> dict[str, RacerPaletteDTO]:
+    palettes = {name: get_racer_palette(name) for name in names}
+    return {
+        name: RacerPaletteDTO(p.primary, p.secondary, p.outline)
+        for name, p in palettes.items()
+    }
+
+
 def get_simulator_meta() -> SimulatorMetaDTO:
     """Return static engine registries, colors, and defaults for the simulator UI."""
     racers = sorted(str(r) for r in get_args(RacerName))
@@ -257,7 +267,6 @@ def get_simulator_meta() -> SimulatorMetaDTO:
     twists = [str(t) for t in TWIST_DECK]
     auto_set = get_automatic_racers()
     automatic_racers = [r for r in racers if r in auto_set]
-    racer_colors = {r: get_racer_color(r) for r in racers}
     racer_abilities = {
         str(racer): [str(ab) for ab in abilities]
         for racer, abilities in RACER_ABILITIES.items()
@@ -267,11 +276,13 @@ def get_simulator_meta() -> SimulatorMetaDTO:
         boards=boards,
         twists=twists,
         automatic_racers=automatic_racers,
-        racer_colors=racer_colors,
+        racer_colors={r: get_racer_color(r) for r in racers},
+        racer_palettes=_palettes(racers),
         racer_abilities=racer_abilities,
         ability_names=sorted(str(a) for a in get_args(AbilityName)),
         racer_modifier_names=sorted(str(m) for m in get_args(RacerModifierName)),
         board_modifier_names=sorted(str(b) for b in get_args(BoardModifierName)),
+        twist_banner=TWIST_BANNER,
         default_racers=list(DEFAULT_RACERS),
         default_board=DEFAULT_BOARD,
         default_seed=DEFAULT_SEED,
@@ -320,6 +331,7 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
             total_turns=0,
             racer_names=list(req.racers),
             racer_colors={r: get_racer_color(r) for r in req.racers},
+            racer_palettes=_palettes(req.racers),
             board_states=[],
             steps=[],
             turn_map={},
@@ -394,7 +406,7 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
                 positions=[r.position for r in eng.state.racers],
                 tripped=[r.tripped for r in eng.state.racers],
                 eliminated=[r.eliminated for r in eng.state.racers],
-                sidelined=[not is_active(r) and not r.eliminated for r in eng.state.racers],
+                sidelined=[r.sidelined for r in eng.state.racers],
                 finish_positions=[r.finish_position for r in eng.state.racers],
                 vp=[r.victory_points for r in eng.state.racers],
                 last_roll=effective_roll,
@@ -439,9 +451,9 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
 
         record_snapshot(engine, 0, "InitialState", override_racer=-1, override_roll=0)
 
-        max_steps = max(1, req.max_steps)
+        max_snapshots = max(1, req.max_steps)
         step_counter = 0
-        while engine.state.race_active and step_counter < max_steps:
+        while engine.state.race_active:
             step_counter += 1
             current_turn_ref[0] = step_counter
             actual_racer_idx = engine.state.current_racer_idx
@@ -463,8 +475,7 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
                 )
             else:
                 last_snap = steps[-1]
-                log_end = len(collector.entries)
-                last_log_cursor = log_end
+                last_log_cursor = len(collector.entries)
                 steps[-1] = StepSnapshotDTO(
                     global_step_index=last_snap.global_step_index,
                     turn_index=last_snap.turn_index,
@@ -484,10 +495,13 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
                     board_state_idx=get_board_state_idx(engine.state.board),
                     pieces=_extract_board_pieces(engine),
                     log_start_index=last_snap.log_start_index,
-                    log_end_index=log_end,
+                    log_end_index=last_snap.log_end_index,
                 )
 
-        record_snapshot(engine, current_turn_ref[0] + 1, "RaceComplete")
+            if len(steps) > max_snapshots:
+                break
+
+        record_snapshot(engine, current_turn_ref[0], "RaceComplete")
         total_turns = step_counter
     except Exception as exc:  # noqa: BLE001
         error_message = str(exc)
@@ -506,6 +520,7 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
         total_turns=total_turns,
         racer_names=racer_names,
         racer_colors={r: get_racer_color(r) for r in racer_names},
+        racer_palettes=_palettes(racer_names),
         board_states=board_states,
         steps=steps,
         turn_map={str(k): v for k, v in turn_map.items()},

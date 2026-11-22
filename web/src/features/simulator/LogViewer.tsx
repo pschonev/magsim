@@ -1,77 +1,111 @@
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LogEntryDTO, StepSnapshotDTO } from "../../types/api";
+import { LEVEL_COLORS, type LogHighlighter } from "./logFormat";
 
 interface LogViewerProps {
   logs: LogEntryDTO[];
   steps: StepSnapshotDTO[];
   activeStepIndex: number;
   racerNames: string[];
+  highlighter: LogHighlighter;
   onJumpToStep: (stepIndex: number) => void;
 }
 
-const KIND_BADGE: Record<string, string> = {
-  turn: "bg-indigo-500/20 text-indigo-300 border-indigo-500/40",
-  roll: "bg-sky-500/20 text-sky-300 border-sky-500/40",
-  move: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
-  ability: "bg-amber-500/20 text-amber-300 border-amber-500/40",
-  finish: "bg-yellow-500/20 text-yellow-200 border-yellow-500/40",
-  twist: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/40",
-  error: "bg-rose-500/20 text-rose-300 border-rose-500/40",
-  info: "bg-slate-800 text-slate-400 border-slate-700",
-};
+interface TurnSegment {
+  turn: number;
+  entries: LogEntryDTO[];
+  lastStep: number;
+}
+
+const BG_COLOR = "#181c1a";
+
+function buildSegments(logs: LogEntryDTO[], steps: StepSnapshotDTO[]): TurnSegment[] {
+  const firstStep = new Map<number, number>();
+  const lastStep = new Map<number, number>();
+  steps.forEach((s, i) => {
+    if (!firstStep.has(s.turn_index)) firstStep.set(s.turn_index, i);
+    lastStep.set(s.turn_index, i);
+  });
+  const turns = [...firstStep.keys()].sort((a, b) => a - b);
+  return turns.map((turn, n) => {
+    const start = steps[firstStep.get(turn) ?? 0].log_start_index;
+    const nextTurn = turns[n + 1];
+    const end =
+      nextTurn === undefined
+        ? logs.length
+        : steps[firstStep.get(nextTurn) ?? 0].log_start_index;
+    return { turn, entries: logs.slice(start, end), lastStep: lastStep.get(turn) ?? 0 };
+  });
+}
+
+function mentionsRacer(entry: LogEntryDTO, racer: string): boolean {
+  return entry.message.includes(racer) || entry.prefix.includes(racer);
+}
 
 export function LogViewer({
   logs,
   steps,
   activeStepIndex,
   racerNames,
+  highlighter,
   onJumpToStep,
 }: LogViewerProps) {
   const [search, setSearch] = useState("");
-  const [racerFilter, setRacerFilter] = useState<string>("");
+  const [racerFilter, setRacerFilter] = useState("");
   const [showDebug, setShowDebug] = useState(true);
-  const activeRowRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const turnRef = useRef<HTMLDivElement | null>(null);
+  const markerRef = useRef<HTMLDivElement | null>(null);
 
   const activeStep = steps[activeStepIndex];
-  const logStart = activeStep?.log_start_index ?? -1;
-  const logEnd = activeStep?.log_end_index ?? -1;
+  const activeTurn = activeStep?.turn_index ?? 0;
+  const markerBefore = activeStep?.log_end_index ?? 0;
 
-  // Map log index -> step index for click-to-jump
+  const segments = useMemo(() => buildSegments(logs, steps), [logs, steps]);
+
   const logToStep = useMemo(() => {
-    const arr = new Int32Array(logs.length).fill(-1);
-    for (let sIdx = 0; sIdx < steps.length; sIdx++) {
-      const s = steps[sIdx];
-      for (
-        let l = Math.max(0, s.log_start_index);
-        l < Math.min(logs.length, s.log_end_index);
-        l++
-      ) {
-        arr[l] = sIdx;
-      }
-    }
-    return arr;
+    const map = new Int32Array(logs.length).fill(-1);
+    steps.forEach((s, stepIdx) => {
+      const end = Math.min(logs.length, s.log_end_index);
+      for (let l = Math.max(0, s.log_start_index); l < end; l++) map[l] = stepIdx;
+    });
+    return map;
   }, [logs.length, steps]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return logs.filter((entry) => {
-      if (!showDebug && entry.level === "debug") return false;
-      if (racerFilter && entry.racer_name !== racerFilter) return false;
-      if (q && !entry.message.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [logs, search, racerFilter, showDebug]);
+  const visible = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const keep = (entry: LogEntryDTO) =>
+      (showDebug || entry.level !== "DEBUG") &&
+      (!racerFilter || mentionsRacer(entry, racerFilter)) &&
+      (!query || entry.message.toLowerCase().includes(query));
+    return segments
+      .map((seg) => ({ ...seg, entries: seg.entries.filter(keep) }))
+      .filter((seg) => seg.entries.length > 0 || seg.turn === activeTurn);
+  }, [segments, search, racerFilter, showDebug, activeTurn]);
+
+  const total = useMemo(
+    () => visible.reduce((n, seg) => n + seg.entries.length, 0),
+    [visible],
+  );
 
   useEffect(() => {
-    activeRowRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [activeStepIndex]);
+    const container = containerRef.current;
+    const turnEl = turnRef.current;
+    if (!container || !turnEl) return;
+    let top = turnEl.offsetTop - 20;
+    const marker = markerRef.current;
+    if (marker && marker.offsetTop - top > container.clientHeight - 60) {
+      top = marker.offsetTop - container.clientHeight / 2;
+    }
+    container.scrollTo({ top, behavior: "smooth" });
+  }, [activeStepIndex, activeTurn]);
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/70 p-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-xs font-semibold text-white">
-          Simulation Event Log ({filtered.length.toLocaleString()})
+          Simulation Event Log ({total.toLocaleString()})
         </h3>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
@@ -90,9 +124,9 @@ export function LogViewer({
             className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200"
           >
             <option value="">All racers</option>
-            {racerNames.map((n) => (
-              <option key={n} value={n}>
-                {n}
+            {racerNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </select>
@@ -108,50 +142,117 @@ export function LogViewer({
         </div>
       </div>
 
-      <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950/90 font-mono text-[11px]">
-        {filtered.length === 0 ? (
+      <div
+        ref={containerRef}
+        className="relative max-h-[80vh] overflow-y-auto"
+        style={{
+          height: 750,
+          background: BG_COLOR,
+          fontFamily: "Menlo, Monaco, 'Courier New', monospace",
+          fontSize: 15,
+          lineHeight: 1.3,
+          padding: 8,
+        }}
+      >
+        {visible.length === 0 && (
           <div className="p-6 text-center text-slate-500">
             No matching log events.
           </div>
-        ) : (
-          filtered.map((entry) => {
-            const isActive =
-              entry.index >= logStart && entry.index < logEnd;
-            const targetStep = logToStep[entry.index];
-            const badge =
-              KIND_BADGE[entry.kind] ?? KIND_BADGE.info;
-
-            return (
-              <div
-                key={entry.index}
-                ref={isActive && entry.index === logStart ? activeRowRef : undefined}
-                onClick={() => {
-                  if (targetStep >= 0) onJumpToStep(targetStep);
-                }}
-                className={`flex items-start gap-2 border-b border-slate-900 px-2.5 py-1 transition-colors ${
-                  targetStep >= 0 ? "cursor-pointer" : ""
-                } ${
-                  isActive
-                    ? "bg-indigo-500/20 text-white"
-                    : "text-slate-300 hover:bg-slate-900"
-                }`}
-              >
-                <span className="w-8 shrink-0 text-right text-slate-600">
-                  {entry.index + 1}
-                </span>
-                <span
-                  className={`shrink-0 rounded border px-1.5 py-0 text-[9px] uppercase ${badge}`}
-                >
-                  {entry.kind}
-                </span>
-                <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-                  {entry.message}
-                </span>
-              </div>
-            );
-          })
         )}
+        {visible.map((seg) => {
+          const isActive = seg.turn === activeTurn;
+          const markerAt = isActive
+            ? seg.entries.findIndex((e) => e.index >= markerBefore)
+            : -1;
+          return (
+            <div
+              key={seg.turn}
+              ref={isActive ? turnRef : undefined}
+              style={{
+                padding: 4,
+                borderLeft: `4px solid ${isActive ? "#00FF00" : "#333"}`,
+                background: isActive ? "#181818" : BG_COLOR,
+                opacity: isActive ? 1 : 0.5,
+                borderBottom: "1px solid #333",
+              }}
+            >
+              <div style={{ fontSize: 9, color: "#666", fontWeight: "bold" }}>
+                TURN {seg.turn}
+              </div>
+              {seg.entries.map((entry, i) => (
+                <div key={entry.index}>
+                  {isActive && i === markerAt && <Marker markerRef={markerRef} />}
+                  <LogRow
+                    entry={entry}
+                    highlighter={highlighter}
+                    onClick={() =>
+                      onJumpToStep(
+                        logToStep[entry.index] >= 0
+                          ? logToStep[entry.index]
+                          : seg.lastStep,
+                      )
+                    }
+                  />
+                </div>
+              ))}
+              {isActive && markerAt === -1 && <Marker markerRef={markerRef} />}
+            </div>
+          );
+        })}
       </div>
+    </div>
+  );
+}
+
+function Marker({ markerRef }: { markerRef: React.RefObject<HTMLDivElement | null> }) {
+  return (
+    <div
+      ref={markerRef}
+      style={{
+        color: "red",
+        fontSize: 10,
+        borderTop: "1px dashed red",
+        marginTop: 2,
+        marginBottom: 2,
+      }}
+    >
+      ▲ CURRENT STEP
+    </div>
+  );
+}
+
+interface LogRowProps {
+  entry: LogEntryDTO;
+  highlighter: LogHighlighter;
+  onClick: () => void;
+}
+
+function LogRow({ entry, highlighter, onClick }: LogRowProps) {
+  const spans = useMemo(
+    () => highlighter.highlight(entry.prefix, entry.message),
+    [highlighter, entry.prefix, entry.message],
+  );
+  return (
+    <div className="flex cursor-pointer items-start hover:bg-white/5" onClick={onClick}>
+      <span
+        className="shrink-0 whitespace-pre"
+        style={{ color: LEVEL_COLORS[entry.level] ?? "#c0c0c0", width: "9ch" }}
+      >
+        {entry.level.padEnd(8)}
+      </span>
+      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words" style={{ color: "#eee" }}>
+        {spans.map((span, i) => (
+          <span
+            key={i}
+            style={{
+              color: span.color ?? undefined,
+              fontWeight: span.bold ? "bold" : undefined,
+            }}
+          >
+            {span.text}
+          </span>
+        ))}
+      </span>
     </div>
   );
 }

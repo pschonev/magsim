@@ -192,6 +192,14 @@ class RawTablePageDTO(msgspec.Struct, frozen=True):
     rows: list[dict[str, object]]
 
 
+class RacerPaletteDTO(msgspec.Struct, frozen=True):
+    """Three-color racer palette used to draw tokens on the track."""
+
+    primary: str
+    secondary: str | None
+    outline: str
+
+
 class SimulatorMetaDTO(msgspec.Struct, frozen=True):
     """Static engine metadata for the interactive simulator UI."""
 
@@ -200,10 +208,12 @@ class SimulatorMetaDTO(msgspec.Struct, frozen=True):
     twists: list[str]
     automatic_racers: list[str]
     racer_colors: dict[str, str]
+    racer_palettes: dict[str, RacerPaletteDTO]
     racer_abilities: dict[str, list[str]]
     ability_names: list[str]
     racer_modifier_names: list[str]
     board_modifier_names: list[str]
+    twist_banner: str
     default_racers: list[str]
     default_board: str
     default_seed: int
@@ -321,6 +331,7 @@ class SimulationResponseDTO(msgspec.Struct, frozen=True):
     total_turns: int
     racer_names: list[str]
     racer_colors: dict[str, str]
+    racer_palettes: dict[str, RacerPaletteDTO]
     board_states: list[BoardSnapshotDTO]
     steps: list[StepSnapshotDTO]
     turn_map: dict[str, list[int]]

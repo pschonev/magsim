@@ -170,6 +170,8 @@ def test_simulator_meta_and_config_roundtrip() -> None:
     assert "TwistyTwirl" in meta.boards
     assert "Mirror World" in meta.twists
     assert "Banana" in meta.racers
+    assert set(meta.racer_palettes) == set(meta.racers)
+    assert meta.racer_palettes["Banana"].primary == meta.racer_colors["Banana"]
     assert len(meta.ability_names) > 0
 
     req = SimulationRequestDTO(
@@ -211,8 +213,16 @@ def test_run_simulation_all_boards_and_logger_cleanup(board: str) -> None:
     assert resp.board_name == board
     assert resp.total_turns > 0
     assert len(resp.steps) >= 3
+    assert set(resp.racer_palettes) == set(resp.racer_names)
     assert resp.steps[0].event_name == "InitialState"
     assert resp.steps[-1].event_name == "RaceComplete"
+    final = resp.steps[-1]
+    assert any(place is not None for place in final.finish_positions)
+    assert not any(
+        sidelined
+        for place, sidelined in zip(final.finish_positions, final.sidelined, strict=True)
+        if place is not None
+    )
     assert len(resp.board_states) >= 1
     assert len(resp.logs) > 0
     assert "0" in resp.turn_map
@@ -279,3 +289,34 @@ def test_web_facade_runs_without_optional_cli_dependencies() -> None:
         check=False,
     )
     assert proc.returncode == 0, proc.stderr
+
+
+def test_snapshot_cap_limits_steps_and_race_complete_stays_in_last_turn() -> None:
+    """Notebook parity: the cap counts snapshots, RaceComplete joins the final turn."""
+    racers = ["Banana", "Centaur", "Gunk", "Scoocher"]
+    full = run_simulation(SimulationRequestDTO(racers=racers, seed=42))
+    capped = run_simulation(SimulationRequestDTO(racers=racers, seed=42, max_steps=10))
+
+    assert len(full.steps) > 20
+    assert len(capped.steps) < len(full.steps)
+    assert capped.steps[-1].event_name == "RaceComplete"
+    assert full.steps[-1].turn_index == full.steps[-2].turn_index
+
+
+def test_log_ranges_are_ordered_and_leave_turn_end_logs_unassigned() -> None:
+    """Turn grouping in the log viewer relies on step log ranges being monotonic."""
+    resp = run_simulation(
+        SimulationRequestDTO(
+            racers=["Banana", "Centaur", "Gunk", "Scoocher"],
+            seed=42,
+            debug_mode=True,
+        ),
+    )
+    starts = [step.log_start_index for step in resp.steps]
+    assert starts == sorted(starts)
+    assert all(
+        step.log_start_index <= step.log_end_index <= len(resp.logs)
+        for step in resp.steps
+    )
+    assigned = sum(step.log_end_index - step.log_start_index for step in resp.steps)
+    assert assigned <= len(resp.logs)

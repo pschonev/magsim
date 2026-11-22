@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { BootScreen } from "./components/BootScreen";
 import { DatasetUploadModal } from "./components/DatasetUploadModal";
 import { PyodideEngineClient } from "./engine/pyodideClient";
+import { SimulatorView } from "./features/simulator/SimulatorView";
 import type { BootProgress, BootResult } from "./types/api";
 import { type AppTab, readUrlState, updateUrlState } from "./utils/urlState";
 
@@ -29,6 +30,9 @@ export function App() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>(
     () => readUrlState().tab ?? "dashboard",
+  );
+  const [simulatorMounted, setSimulatorMounted] = useState(
+    activeTab === "simulator",
   );
   const [uploadOpen, setUploadOpen] = useState(false);
 
@@ -57,6 +61,7 @@ export function App() {
 
   const selectTab = (tab: AppTab) => {
     setActiveTab(tab);
+    if (tab === "simulator") setSimulatorMounted(true);
     updateUrlState({ tab });
   };
 
@@ -138,6 +143,16 @@ export function App() {
       </header>
 
       <main className="mx-auto w-full max-w-[1600px] flex-1 p-4">
+        {simulatorMounted && client && (
+          <div hidden={activeTab !== "simulator"}>
+            <SimulatorView
+              client={client}
+              simMeta={bootResult.simulatorMeta}
+              active={activeTab === "simulator"}
+            />
+          </div>
+        )}
+        {activeTab !== "simulator" && (
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
           <h2 className="text-base font-semibold text-white">{tab.label}</h2>
           <p className="mt-1 text-xs text-slate-400">
@@ -156,6 +171,7 @@ export function App() {
             <Stat label="Polars" value={bootResult.polarsVersion} />
           </dl>
         </section>
+        )}
       </main>
 
       <DatasetUploadModal

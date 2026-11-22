@@ -162,16 +162,24 @@ export interface RawTablePageDTO {
 // SIMULATOR DTOs
 // =============================================================================
 
+export interface RacerPaletteDTO {
+  primary: string;
+  secondary: string | null;
+  outline: string;
+}
+
 export interface SimulatorMetaDTO {
   racers: string[];
   boards: string[];
   twists: string[];
   automatic_racers: string[];
   racer_colors: Record<string, string>;
+  racer_palettes: Record<string, RacerPaletteDTO>;
   racer_abilities: Record<string, string[]>;
   ability_names: string[];
   racer_modifier_names: string[];
   board_modifier_names: string[];
+  twist_banner: string;
   default_racers: string[];
   default_board: string;
   default_seed: number;
@@ -271,6 +279,7 @@ export interface SimulationResponseDTO {
   total_turns: number;
   racer_names: string[];
   racer_colors: Record<string, string>;
+  racer_palettes: Record<string, RacerPaletteDTO>;
   board_states: BoardSnapshotDTO[];
   steps: StepSnapshotDTO[];
   turn_map: Record<string, number[]>;
