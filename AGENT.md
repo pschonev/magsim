@@ -1,70 +1,56 @@
 # AGENT.md
 
-Rules for implementing the Second Wind expansion. Plan: `docs/second_wind_analysis.md`.
+Rules for the React + Pyodide frontend refactor. Plan: `docs/react_frontend_architecture.md`.
 
 ## Permissions
 
 - Never edit this file without explicit permission.
 - Never modify existing tests. Only add new test files.
-- Edit only `src/magsim/ai`, `src/magsim/core`, `src/magsim/data`, `src/magsim/engine`, `src/magsim/racers`, plus new files under `tests/`. Nothing else (`simulation`, `analysis`, `cli`, `docs`, `configs`, `scripts`, `frontend`, `pyproject.toml`) without asking.
-- Never run `git commit`, `git push` or other history-changing commands. Suggest the commit message only.
+- Never run `git commit`, `git push`, `git stash` or other history- or working-tree-changing commands. Suggest the commit message only.
+- Edit only: `src/magsim/analysis`, `src/magsim/web`, `src/magsim/simulation`, `src/magsim/cli`, `web/`, `scripts/`, `pyproject.toml`, `docs/react_frontend_architecture.md`, plus new files under `tests/`.
+- Do not touch `src/magsim/engine`, `racers`, `core`, `ai`, `data`. If a refactor need cannot be met outside them, make the smallest change and ask first.
+- Exception already made: `src/magsim/engine/logging.py` (lazy `rich` import for Pyodide).
+- `frontend/` (legacy Marimo notebook) stays untouched until the M6 cutover.
 
 ## Regressions
 
-- Run the full suite before the first change to record a baseline (`uv run pytest`).
-- Every test that passes at the baseline must still pass after every milestone.
-- If an engine change breaks an existing test, fix the change, not the test. Ask if that is impossible.
+- Baseline: `uv run pytest` before the first change of a milestone.
+- Known baseline failures (flaky or failing on clean HEAD): `test_scrying_pool_counts_the_distance_after_modifiers`, `test_soulmate_warps_to_a_racer_within_five_and_moves_from_there`.
+- Every other test that passes at the baseline must still pass.
+- Analytics must stay at parity with the legacy notebook: `tests/test_notebook_parity.py` must pass.
 
 ## Code placement
 
-- Keep each racer's logic inside its own module in `src/magsim/racers/`.
-- Touch the core engine only when it is really necessary. Make the smallest change and say why in the milestone report.
-- Follow the current racer definitions (abilities, mixins, events, `RACER_ABILITIES`, `RacerName`/`AbilityName`, `data/racer_stats.json`). Reuse existing helpers before adding new ones.
-
-### New racer checklist
-
-Every new racer needs all of these:
-
-- A module in `src/magsim/racers/`.
-- `RacerName` and `AbilityName` entries (and `ModifierName` for modifiers) in `src/magsim/core/types.py`.
-- A `RACER_ABILITIES` entry in `src/magsim/core/registry.py`.
-- A `src/magsim/data/racer_stats.json` entry.
-- A `tests/racers/test_<racer>.py`.
-- New scenarios in `tests/racers/test_scenarios.py` using the new racers (appending there is allowed despite the rule against modifying existing tests).
+- Reusable Polars metrics: `src/magsim/analysis`. Browser-agnostic DTO facade: `src/magsim/web`. No `js`/`pyodide` imports there.
+- `magsim.web` must run without `rich`, `duckdb`, `sqlalchemy`, `cappa`, `tqdm`.
+- Python DTOs in `src/magsim/web/schemas.py` and TypeScript types in `web/src/types/api.ts` change together.
+- Frontend logic stays behind the transport-agnostic `EngineClient` interface.
+- Never commit build output: `web/dist`, `web/public/wheels`, `web/public/results`, `node_modules`.
 
 ## Tests
 
-- Use the current test structure: `tests/racers/test_<racer>.py`, the `scenario` fixture from `tests/conftest.py`, `GameScenario`, `RacerConfig` and the existing helpers.
-- Test only new racer abilities (and new engine behavior added for them). Do not test trivial engine behavior.
-- Each test covers one distinct aspect of an ability. No two tests check the same thing.
-- Every scenario in `tests/racers/test_scenarios.py` has 4-6 DIFFERENT racers (no duplicates). Choose racers for diversity across scenarios; do not reuse the same few racers everywhere.
-- Every non-trivial test gets a 1-2 sentence docstring saying what is tested and why (the edge case or interaction). Skip it only for trivial, basic tests whose name already says it all. Applies to scenarios in `test_scenarios.py` too.
-- Cover edge cases: ties, first/last place, finished or eliminated racers, tripped racers, no valid target, once-per-turn/race limits, interaction with modifiers.
+- Prefer integration tests on real interfaces and real data (`docs/results/*.parquet`). No mocks or monkey patching.
+- Test public behavior and regressions only.
 
 ## Code style
 
-- Read and follow these files before writing code, even if your tooling does not load them automatically:
+- Read and follow before writing code, even if tooling does not load them automatically:
   - `/Users/pschonev/.copilot/instructions/general.instructions.md`
   - `/Users/pschonev/.copilot/instructions/python.instructions.md`
+- Run ruff and the type checker only at the end of a task or milestone.
 - If they conflict with this file, this file wins.
 
 ## Milestones
 
-Implement one milestone at a time from the implementation order in `docs/second_wind_analysis.md`.
+Work one milestone at a time (M0-M6 in the plan).
 
-Before starting a milestone:
-
-1. State what it contains (racers, necessary engine changes).
-2. Analyze whether each engine change is really necessary or whether the racer can be done inside `racers/`.
-3. Ask clarification questions, then wait for answers.
+Before starting: state scope, flag any change outside the allowed folders, ask open questions, wait for answers.
 
 After each milestone, report:
 
-1. Full test results (passed/failed against the baseline).
-2. Number of new tests, with a rough overview of what they test.
-3. What was added or changed (racers, engine changes and why).
+1. Test results against the baseline.
+2. New tests and what they cover.
+3. What changed and why.
 4. A one-line Conventional Commit message.
 
-Then add a ✅ after the milestone ID in the table in `docs/second_wind_analysis.md` (the only allowed edit to `docs/`), e.g. `M1 ✅`.
-
-Stop after the report and wait before starting the next milestone.
+Then mark the milestone with a ✅ in the plan's milestone table. Stop and wait before the next milestone.
