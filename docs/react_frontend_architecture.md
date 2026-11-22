@@ -253,15 +253,17 @@ All work happens on a dedicated branch (e.g., `feat/react-pyodide-frontend`), le
 
 ---
 
-## 8. Open Decisions to Lock In
+## 8. Locked Decisions (Post-M0)
 
-These decisions can be finalized before or immediately after **M0**:
+All open decisions from initial planning are now locked based on the M0 Pyodide + Polars benchmark (`v314.0.8`, Python `3.14.2`, Polars `1.33.1`, `msgspec 0.20.0`, 49,562 races / 239,178 racer results):
 
-| Decision | Options | Current Lean | Target Timing |
-| --- | --- | --- | --- |
-| **Charting Library** | Apache ECharts vs. Vega-Lite (`vega-embed`) | Apache ECharts (richer React interactivity & unified scatter/heatmap/facet support) | Before M5 (confirm in M2/M5) |
-| **Parquet Reader in WASM** | Native Polars Parquet vs. `pyarrow` fallback vs. Arrow IPC (`.ipc`) | Native Polars if M0 proves it works; otherwise compare `pyarrow` vs `.ipc` size | Decided by M0 benchmark |
-| **Local `magsim gui` Mode** | Pyodide everywhere (static server) vs. Dual transport (+ local FastAPI) | Start with Pyodide everywhere behind `EngineClient`; add local HTTP adapter only if dataset size demands it | Before M2 / M6 |
-| **GitHub Pages Deployment** | GitHub Actions (`actions/deploy-pages`) vs. committed `docs/` | GitHub Actions (keeps git clean of built JS/wheels) | Before M6 |
-| **Log Formatting** | Structured JSON events (drop `rich` from WASM) vs. `rich` HTML | Structured JSON events | Before M1 / M3 |
-| **Python Packaging** | `deps=False` wheel install in Pyodide vs. splitting `pyproject.toml` extras | `deps=False` in Pyodide immediately + relax `requires-python` | M0 |
+| Decision | Locked Choice | Rationale / M0 Evidence |
+| --- | --- | --- |
+| **Pyodide Runtime** | `v314.0.8` (Python `3.14.2`, Polars `1.33.1`, `msgspec 0.20.0`) | `magsim` runs deterministically on Python 3.14.2; `v0.29.5` lacks a Polars wheel. `requires-python` relaxed to `>=3.12,<3.15`. |
+| **Dataset Format in WASM** | **Arrow IPC (`zstd`)** for default web datasets (`races.zstd.ipc`, `racer_results.zstd.ipc`); optional lazy-loaded `pyarrow` only for user-uploaded `.parquet` files | Native `pl.read_parquet` is absent in Pyodide Polars `1.33.1` (`PyLazyFrame` lacks `new_from_parquet`). Native `pl.read_ipc` (`zstd`, 9.23 MB) parses both tables in **699 ms** vs **1,713 ms** for `pyarrow.parquet`, while avoiding **+17.53 MB** of `pyarrow`/`pandas`/`numpy` wheels (**~15.9 MB net savings**). |
+| **Python Packaging & Wheel Install** | Direct `pyodide.loadPackage(wheelUrl)` (no `micropip`) + `rich` lazy-imported in `magsim.engine.logging` | Installs `magsim-*.whl` (0.17 MB) in **16 ms** without resolving CLI/DB dependencies (`duckdb-engine`, `cappa`, `tqdm`, `rich`). |
+| **Boot Parallelization & Caching** | Parallel `fetch()` of IPC data + wheels from $t=0$ alongside `loadPyodide()`, plus Cache Storage for the 18.24 MB `polars` wheel | Chromium's HTTP cache skips the single 18.24 MB `polars` wheel; Cache Storage + parallel fetches target **~2.0–2.5 s** warm repeat load and **~3.5–4.5 s** cold load at 100 Mbps. |
+| **Charting Library** | **Apache ECharts** (tree-shaken `echarts/core`) | Native scatter quadrants, diverging bars, heatmaps, and faceted histograms with rich tooltips and cross-chart racer highlighting. |
+| **Local `magsim gui` Mode** | **Pyodide everywhere** behind transport-agnostic `EngineClient` | Single runtime everywhere; `magsim gui` stays lightweight stdlib HTTP server; HTTP backend remains drop-in if ever needed later. |
+| **GitHub Pages Deployment** | **GitHub Actions** (`actions/deploy-pages`) | Keeps git history clean of built JS/CSS/wheels; builds `magsim` wheel, `.zstd.ipc` exports, and Vite SPA in CI. |
+| **Log Formatting** | **Structured JSON events** from `magsim.web.simulator_api` | Eliminates `rich` HTML export and iframe scroll hacks; unlocks click-to-jump, client-side filtering, and dark/light theming. |

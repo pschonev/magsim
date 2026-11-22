@@ -5,7 +5,7 @@ description = "A simulator for Magical Athlete"
 authors = [{ name = "Philipp Schoneville", email = "philipp@schoneville.com" }]
 license = "MIT"
 readme = "README.md"
-requires-python = "==3.12.7"
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "rich>=13.7.1",
     "cappa>=0.31.0",
