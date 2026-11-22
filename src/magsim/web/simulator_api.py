@@ -194,7 +194,7 @@ def _extract_board_pieces(engine: GameEngine) -> list[BoardPieceDTO]:
             if isinstance(pos, int):
                 name = getattr(mod, "name", type(mod).__name__)
                 owner_idx = getattr(mod, "owner_idx", None)
-                key = (str(name), pos, owner_idx if isinstance(owner_idx, int) else None)
+                key = (name, pos, owner_idx if isinstance(owner_idx, int) else None)
                 if key not in seen:
                     seen.add(key)
                     pieces.append(
@@ -223,7 +223,7 @@ def _validate_board(board: str) -> BoardName:
     if board not in BOARD_DEFINITIONS:
         msg = f"Unknown board: {board}"
         raise ValueError(msg)
-    return cast("BoardName", board)
+    return board
 
 
 def _validate_twists(twists: list[str]) -> list[TwistName]:
@@ -405,7 +405,7 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
                 ),
                 names=[str(r.name) for r in eng.state.racers],
                 modifiers=[
-                    [str(getattr(m, "name", type(m).__name__)) for m in r.modifiers]
+                    [getattr(m, "name", type(m).__name__) for m in r.modifiers]
                     for r in eng.state.racers
                 ],
                 abilities=[
@@ -437,7 +437,6 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
 
         engine.on_event_processed = on_event
 
-        # Turn 0: initial setup state
         record_snapshot(engine, 0, "InitialState", override_racer=-1, override_roll=0)
 
         max_steps = max(1, req.max_steps)
@@ -513,9 +512,6 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
         logs=collector.entries,
         error=error_message,
     )
-
-
-# --- JSON RPC wrappers for Pyodide worker ---
 
 
 def get_simulator_meta_json() -> str:

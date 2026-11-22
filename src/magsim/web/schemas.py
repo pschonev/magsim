@@ -19,11 +19,6 @@ type TileModifierKindDTO = Literal[
 type RuleValueDTO = int | float | str | bool
 
 
-# ==============================================================================
-# DASHBOARD DTOs
-# ==============================================================================
-
-
 class ComboFilterDTO(msgspec.Struct, frozen=True):
     """Combo filter clause sent from the frontend."""
 
@@ -195,11 +190,6 @@ class RawTablePageDTO(msgspec.Struct, frozen=True):
     columns: list[str]
     frozen_columns: list[str]
     rows: list[dict[str, object]]
-
-
-# ==============================================================================
-# SIMULATOR DTOs
-# ==============================================================================
 
 
 class SimulatorMetaDTO(msgspec.Struct, frozen=True):

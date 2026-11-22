@@ -9,12 +9,12 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-import msgspec
 import polars as pl
 
 from magsim.analysis.filters import (
     AnalysisFilter,
     ComboFilter,
+    FilteredDataset,
     clean_races_df,
     filter_dataset,
     get_automatic_racers,
@@ -288,200 +288,143 @@ def _df_to_environment_matrix(df: pl.DataFrame) -> list[EnvironmentCellDTO]:
     ]
 
 
-@dataclass
-class DashboardSession:
-    """Stateful in-memory session holding loaded and filtered dashboard datasets."""
+@dataclass(frozen=True, slots=True)
+class Dataset:
+    """Loaded races and racer_results tables."""
 
-    df_races: pl.DataFrame | None = None
-    df_results: pl.DataFrame | None = None
-    df_races_filtered: pl.DataFrame | None = None
-    df_results_filtered: pl.DataFrame | None = None
+    races: pl.DataFrame
+    results: pl.DataFrame
 
-    def load_dataframes(
-        self,
-        df_races: pl.DataFrame,
-        df_results: pl.DataFrame,
-    ) -> DatasetMetaDTO:
-        """Store raw DataFrames, normalize races, and return dataset metadata."""
-        cleaned_races = clean_races_df(df_races)
-        self.df_races = cleaned_races
-        self.df_results = df_results
-        self.df_races_filtered = cleaned_races
-        self.df_results_filtered = df_results
-        return self.get_metadata()
 
-    def load_ipc_bytes(
-        self,
-        races_bytes: bytes,
-        results_bytes: bytes,
-    ) -> DatasetMetaDTO:
-        """Load races and racer_results from Arrow IPC payloads."""
-        df_races = pl.read_ipc(io.BytesIO(races_bytes))
-        df_results = pl.read_ipc(io.BytesIO(results_bytes))
-        return self.load_dataframes(df_races, df_results)
+def load_dataframes(df_races: pl.DataFrame, df_results: pl.DataFrame) -> Dataset:
+    """Normalize the races table and wrap both tables as a Dataset."""
+    return Dataset(races=clean_races_df(df_races), results=df_results)
 
-    def load_parquet_bytes(
-        self,
-        races_bytes: bytes,
-        results_bytes: bytes,
-    ) -> DatasetMetaDTO:
-        """Load races and racer_results from Parquet payloads."""
-        df_races = _read_parquet_bytes(races_bytes)
-        df_results = _read_parquet_bytes(results_bytes)
-        return self.load_dataframes(df_races, df_results)
 
-    def _require_loaded(self) -> tuple[pl.DataFrame, pl.DataFrame]:
-        if self.df_races is None or self.df_results is None:
-            msg = "No dataset loaded in DashboardSession."
-            raise RuntimeError(msg)
-        return self.df_races, self.df_results
+def load_ipc(races_bytes: bytes, results_bytes: bytes) -> Dataset:
+    """Load races and racer_results from Arrow IPC payloads."""
+    return load_dataframes(
+        pl.read_ipc(io.BytesIO(races_bytes)),
+        pl.read_ipc(io.BytesIO(results_bytes)),
+    )
 
-    def get_metadata(self) -> DatasetMetaDTO:
-        """Return dataset counts, unique filters, automatic racers, and colors."""
-        df_races, df_results = self._require_loaded()
-        boards = sorted(str(v) for v in df_races["board"].unique().to_list())
-        counts = sorted(int(v) for v in df_races["racer_count"].unique().to_list())
-        racers = sorted(str(v) for v in df_results["racer_name"].unique().to_list())
-        auto_set = get_automatic_racers()
-        automatic_racers = [r for r in racers if r in auto_set]
-        racer_colors = {r: get_racer_color(r) for r in racers}
-        return DatasetMetaDTO(
-            race_count=df_races.height,
-            result_count=df_results.height,
-            boards=boards,
-            counts=counts,
-            racers=racers,
-            automatic_racers=automatic_racers,
-            racer_colors=racer_colors,
-        )
 
-    def analyze(self, flt_dto: AnalysisFilterDTO) -> DashboardAnalysisDTO:
-        """Filter the loaded dataset and compute all dashboard aggregations."""
-        df_races, df_results = self._require_loaded()
-        analysis_filter = AnalysisFilter(
-            racers=tuple(flt_dto.racers),
-            boards=tuple(flt_dto.boards),
-            counts=tuple(flt_dto.counts),
-            combos=tuple(
-                ComboFilter(mode=c.mode, racers=tuple(c.racers))
-                for c in flt_dto.combos
-            ),
-        )
-        filtered = filter_dataset(df_races, df_results, analysis_filter)
-        self.df_races_filtered = filtered.races
-        self.df_results_filtered = filtered.racer_results
+def load_parquet(races_bytes: bytes, results_bytes: bytes) -> Dataset:
+    """Load races and racer_results from Parquet payloads."""
+    return load_dataframes(
+        _read_parquet_bytes(races_bytes),
+        _read_parquet_bytes(results_bytes),
+    )
 
-        if filtered.error is not None or filtered.races.is_empty():
-            return DashboardAnalysisDTO(
-                filtered_race_count=filtered.races.height,
-                filtered_result_count=filtered.racer_results.height,
-                error=filtered.error or "No races match these filters.",
-            )
 
-        result = run_full_analysis(filtered.races, filtered.racer_results)
+def get_metadata(dataset: Dataset) -> DatasetMetaDTO:
+    """Return dataset counts, unique filters, automatic racers, and colors."""
+    boards = sorted(str(v) for v in dataset.races["board"].unique().to_list())
+    counts = sorted(int(v) for v in dataset.races["racer_count"].unique().to_list())
+    racers = sorted(str(v) for v in dataset.results["racer_name"].unique().to_list())
+    auto_set = get_automatic_racers()
+    return DatasetMetaDTO(
+        race_count=dataset.races.height,
+        result_count=dataset.results.height,
+        boards=boards,
+        counts=counts,
+        racers=racers,
+        automatic_racers=[r for r in racers if r in auto_set],
+        racer_colors={r: get_racer_color(r) for r in racers},
+    )
+
+
+def apply_filter(dataset: Dataset, flt_dto: AnalysisFilterDTO) -> FilteredDataset:
+    """Filter the dataset by racer pool, boards, player counts, and combos."""
+    analysis_filter = AnalysisFilter(
+        racers=tuple(flt_dto.racers),
+        boards=tuple(flt_dto.boards),
+        counts=tuple(flt_dto.counts),
+        combos=tuple(
+            ComboFilter(mode=c.mode, racers=tuple(c.racers)) for c in flt_dto.combos
+        ),
+    )
+    return filter_dataset(dataset.races, dataset.results, analysis_filter)
+
+
+def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
+    """Compute all dashboard aggregations over a filtered dataset."""
+    if filtered.error is not None or filtered.races.is_empty():
         return DashboardAnalysisDTO(
             filtered_race_count=filtered.races.height,
             filtered_result_count=filtered.racer_results.height,
-            racer_stats=_df_to_racer_stats(result.racer_stats),
-            abilities=_df_to_abilities(result.abilities),
-            global_dynamics=_df_to_global_dynamics(result.global_dynamics),
-            distributions_global=_df_to_distributions(result.distributions_global),
-            distributions_faceted=_df_to_distributions(result.distributions_faceted),
-            matchup_matrix=_df_to_matchup_matrix(result.matchup_matrix),
-            environment_matrix=_df_to_environment_matrix(result.environment_matrix),
+            error=filtered.error or "No races match these filters.",
         )
 
-    def query_raw_table(self, query: RawTableQueryDTO) -> RawTablePageDTO:
-        """Return a paginated, searchable, sortable view of races or racer_results."""
-        df_races_raw, df_results_raw = self._require_loaded()
+    result = run_full_analysis(filtered.races, filtered.racer_results)
+    return DashboardAnalysisDTO(
+        filtered_race_count=filtered.races.height,
+        filtered_result_count=filtered.racer_results.height,
+        racer_stats=_df_to_racer_stats(result.racer_stats),
+        abilities=_df_to_abilities(result.abilities),
+        global_dynamics=_df_to_global_dynamics(result.global_dynamics),
+        distributions_global=_df_to_distributions(result.distributions_global),
+        distributions_faceted=_df_to_distributions(result.distributions_faceted),
+        matchup_matrix=_df_to_matchup_matrix(result.matchup_matrix),
+        environment_matrix=_df_to_environment_matrix(result.environment_matrix),
+    )
 
-        if query.use_filtered:
-            df_races = (
-                self.df_races_filtered
-                if self.df_races_filtered is not None
-                else df_races_raw
-            )
-            df_results = (
-                self.df_results_filtered
-                if self.df_results_filtered is not None
-                else df_results_raw
-            )
-        else:
-            df_races = df_races_raw
-            df_results = df_results_raw
 
-        if query.table == "races":
-            if query.matrix_view:
-                all_racers = sorted(
-                    str(v) for v in df_results_raw["racer_name"].unique().to_list()
-                )
-                df_view, frozen = _build_races_matrix_df(df_races, all_racers)
-            else:
-                df_view, frozen = _build_races_plain_df(df_races)
-        else:
-            df_view, frozen = _build_results_df(df_results)
+def query_raw_table(
+    dataset: Dataset,
+    query: RawTableQueryDTO,
+    filtered: FilteredDataset | None = None,
+) -> RawTablePageDTO:
+    """Return a paginated, searchable, sortable view of races or racer_results."""
+    use_filtered = query.use_filtered and filtered is not None
+    df_races = filtered.races if use_filtered and filtered else dataset.races
+    df_results = (
+        filtered.racer_results if use_filtered and filtered else dataset.results
+    )
 
-        if query.search.strip():
-            df_view = _apply_table_search(df_view, query.search)
+    if query.table == "races" and query.matrix_view:
+        all_racers = sorted(
+            str(v) for v in dataset.results["racer_name"].unique().to_list()
+        )
+        df_view, frozen = _build_races_matrix_df(df_races, all_racers)
+    elif query.table == "races":
+        df_view, frozen = _build_races_plain_df(df_races)
+    else:
+        df_view, frozen = _build_results_df(df_results)
 
-        if query.sort_by and query.sort_by in df_view.columns:
-            col_dtype = df_view.schema[query.sort_by]
-            if not isinstance(col_dtype, pl.List):
-                df_view = df_view.sort(
-                    query.sort_by,
-                    descending=query.descending,
-                    nulls_last=True,
-                )
+    if query.search.strip():
+        df_view = _apply_table_search(df_view, query.search)
 
-        total_rows = df_view.height
-        offset = max(0, query.offset)
-        limit = max(1, min(query.limit, MAX_PAGE_LIMIT))
-        page_df = df_view.slice(offset, limit)
-        raw_rows: list[dict[str, Any]] = page_df.to_dicts()
-        rows: list[dict[str, object]] = [
-            {k: _sanitize_cell(v) for k, v in row.items()} for row in raw_rows
-        ]
-        return RawTablePageDTO(
-            table=query.table,
-            total_rows=total_rows,
-            offset=offset,
-            limit=limit,
-            columns=list(df_view.columns),
-            frozen_columns=frozen,
-            rows=rows,
+    sortable = query.sort_by in df_view.columns and not isinstance(
+        df_view.schema[query.sort_by],
+        pl.List,
+    )
+    if query.sort_by and sortable:
+        df_view = df_view.sort(
+            query.sort_by,
+            descending=query.descending,
+            nulls_last=True,
         )
 
-    def get_race_by_hash(self, config_hash: str) -> dict[str, object] | None:
-        """Look up a single race row by config_hash for launching in the simulator."""
-        df_races, _ = self._require_loaded()
-        if "config_hash" not in df_races.columns:
-            return None
-        matches = df_races.filter(pl.col("config_hash") == config_hash).head(1)
-        if matches.is_empty():
-            return None
-        row = matches.to_dicts()[0]
-        return {k: _sanitize_cell(v) for k, v in row.items()}
+    offset = max(0, query.offset)
+    limit = max(1, min(query.limit, MAX_PAGE_LIMIT))
+    raw_rows: list[dict[str, Any]] = df_view.slice(offset, limit).to_dicts()
+    return RawTablePageDTO(
+        table=query.table,
+        total_rows=df_view.height,
+        offset=offset,
+        limit=limit,
+        columns=list(df_view.columns),
+        frozen_columns=frozen,
+        rows=[{k: _sanitize_cell(v) for k, v in row.items()} for row in raw_rows],
+    )
 
-    # --- JSON RPC wrappers for Pyodide worker ---
 
-    def load_ipc_bytes_json(self, races_bytes: bytes, results_bytes: bytes) -> str:
-        """Load Arrow IPC bytes and return DatasetMetaDTO serialized as JSON."""
-        return msgspec.json.encode(
-            self.load_ipc_bytes(races_bytes, results_bytes),
-        ).decode("utf-8")
-
-    def load_parquet_bytes_json(self, races_bytes: bytes, results_bytes: bytes) -> str:
-        """Load Parquet bytes and return DatasetMetaDTO serialized as JSON."""
-        return msgspec.json.encode(
-            self.load_parquet_bytes(races_bytes, results_bytes),
-        ).decode("utf-8")
-
-    def analyze_json(self, filter_json: str | bytes) -> str:
-        """Decode AnalysisFilterDTO JSON, run analysis, and return JSON string."""
-        flt = msgspec.json.decode(filter_json, type=AnalysisFilterDTO)
-        return msgspec.json.encode(self.analyze(flt)).decode("utf-8")
-
-    def query_raw_table_json(self, query_json: str | bytes) -> str:
-        """Decode RawTableQueryDTO JSON, return RawTablePageDTO JSON string."""
-        query = msgspec.json.decode(query_json, type=RawTableQueryDTO)
-        return msgspec.json.encode(self.query_raw_table(query)).decode("utf-8")
+def get_race_by_hash(dataset: Dataset, config_hash: str) -> dict[str, object] | None:
+    """Look up a single race row by config_hash for launching in the simulator."""
+    if "config_hash" not in dataset.races.columns:
+        return None
+    matches = dataset.races.filter(pl.col("config_hash") == config_hash).head(1)
+    if matches.is_empty():
+        return None
+    return {k: _sanitize_cell(v) for k, v in matches.to_dicts()[0].items()}

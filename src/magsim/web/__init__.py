@@ -1,6 +1,16 @@
 """Browser-agnostic web DTO facade for Pyodide and HTTP/CLI callers."""
 
-from magsim.web.dashboard_api import DashboardSession
+from magsim.web.dashboard_api import (
+    Dataset,
+    analyze,
+    apply_filter,
+    get_metadata,
+    get_race_by_hash,
+    load_dataframes,
+    load_ipc,
+    load_parquet,
+    query_raw_table,
+)
 from magsim.web.schemas import (
     AbilityBreakdownRowDTO,
     AnalysisFilterDTO,
@@ -44,7 +54,7 @@ __all__ = [
     "ComboFilterDTO",
     "ConfigEncodeResponseDTO",
     "DashboardAnalysisDTO",
-    "DashboardSession",
+    "Dataset",
     "DatasetMetaDTO",
     "DecodedConfigDTO",
     "DistributionBinDTO",
@@ -60,12 +70,20 @@ __all__ = [
     "SimulatorMetaDTO",
     "StepSnapshotDTO",
     "TileModifierDTO",
+    "analyze",
+    "apply_filter",
     "decode_config",
     "decode_config_json",
     "encode_config",
     "encode_config_json",
+    "get_metadata",
+    "get_race_by_hash",
     "get_simulator_meta",
     "get_simulator_meta_json",
+    "load_dataframes",
+    "load_ipc",
+    "load_parquet",
+    "query_raw_table",
     "run_simulation",
     "run_simulation_json",
 ]

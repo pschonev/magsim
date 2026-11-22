@@ -1,11 +1,4 @@
-"""Frozen snapshot of the legacy Marimo notebook analytics (pre-M1 reference).
-
-`calculate_all_data` is extracted VERBATIM from
-`frontend/magical_athlete_analysis.py::_calculate_all_data` (only wrapped in a function
-taking the two filtered DataFrames). The remaining helpers copy the notebook's inline
-global-dynamics / environment / distribution code. Used solely by parity tests; delete
-together with the notebook once the React frontend is cut over.
-"""
+"""Frozen copy of the legacy notebook analytics, used only by parity tests."""
 # ruff: noqa
 # pyright: basic
 import polars as pl

@@ -59,6 +59,7 @@ target-version = "py312"
 [tool.pyrefly]
 preset = "strict"
 project-includes = ["src", "tests"]
+search-path = ["src", "tests"]
 project-excludes = ["tests/reference"]
 python-version = "3.12"
 

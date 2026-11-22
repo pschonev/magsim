@@ -16,7 +16,7 @@ from polars.testing import assert_frame_equal
 
 from magsim.analysis.filters import AnalysisFilter, ComboFilter, filter_dataset
 from magsim.analysis.metrics import AnalysisResult, run_full_analysis
-from tests.reference import notebook_reference as ref
+from reference import notebook_reference as ref
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -53,7 +53,6 @@ def _scenarios(
             counts=(4,),
         ),
     }
-    # Dicemonger/Magician attribution and Inchworm skip costs are the trickiest paths.
     if "Dicemonger" in all_racers:
         scenarios["with_dicemonger"] = AnalysisFilter(
             racers=all_racers,
@@ -123,7 +122,6 @@ def test_racer_stats_match_notebook(
     old_stats = old["stats"]
     comparable = [c for c in old_stats.columns if c in new.racer_stats.columns]
 
-    # The metrics that drive every chart/table must all be carried over.
     required = {
         "mean_vp", "consistency_score", "std_vp_sigma", "pct_1st", "pct_2nd",
         "races_run", "avg_speed_raw", "avg_net_movement", "avg_pos_self",
@@ -154,7 +152,6 @@ def test_abilities_match_notebook(
         },
     )
 
-    # net_benefit_score is computed in the notebook's chart cell; verify the formula.
     expected = old["abilities_df"].with_columns(
         (
             (pl.col("+ Self").abs() + pl.col("- Others").abs())
@@ -167,7 +164,6 @@ def test_abilities_match_notebook(
         ["racer_name"],
         columns={"net_benefit_score": "net_benefit_score"},
     )
-    # Sorted best-first, as the ability-speed chart expects.
     scores = new.abilities["net_benefit_score"].to_list()
     assert scores == sorted(scores, reverse=True)
 
@@ -235,7 +231,6 @@ def test_distributions_match_notebook(
     pipelines: tuple[AnalysisResult, dict[str, pl.DataFrame], pl.DataFrame],
 ) -> None:
     new, old, _ = pipelines
-    # Intermediate race-level table feeding the histograms must be identical.
     old_dist_raw = old["dist_raw"]
     old_global, old_faceted = ref.distributions(old_dist_raw)
 

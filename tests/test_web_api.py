@@ -12,13 +12,20 @@ import polars as pl
 import pytest
 
 from magsim.analysis.export import dataframe_to_ipc_bytes
-from magsim.web.dashboard_api import DashboardSession
+from magsim.web.dashboard_api import (
+    analyze,
+    apply_filter,
+    get_metadata,
+    get_race_by_hash,
+    load_ipc,
+    load_parquet,
+    query_raw_table,
+)
 from magsim.web.schemas import (
     AnalysisFilterDTO,
+    ComboFilterDTO,
     DashboardAnalysisDTO,
-    DatasetMetaDTO,
     DecodedConfigDTO,
-    RawTablePageDTO,
     RawTableQueryDTO,
     SimulationRequestDTO,
     SimulationResponseDTO,
@@ -51,27 +58,28 @@ def sample_ipc_bytes() -> tuple[bytes, bytes]:
     return dataframe_to_ipc_bytes(df_races), dataframe_to_ipc_bytes(df_results)
 
 
-def test_dashboard_session_ipc_analysis_and_raw_tables(
+def test_dashboard_ipc_analysis_and_raw_tables(
     sample_ipc_bytes: tuple[bytes, bytes],
 ) -> None:
-    races_ipc, results_ipc = sample_ipc_bytes
-    session = DashboardSession()
+    """Covers the worker flow: load, filter, analyze, then page raw tables."""
+    dataset = load_ipc(*sample_ipc_bytes)
 
-    meta_json = session.load_ipc_bytes_json(races_ipc, results_ipc)
-    meta = msgspec.json.decode(meta_json, type=DatasetMetaDTO)
+    meta = get_metadata(dataset)
     assert meta.race_count == 150
     assert meta.result_count > 0
     assert len(meta.racers) > 0
     assert set(meta.racer_colors.keys()) == set(meta.racers)
 
-    # Full analysis over JSON RPC
     flt = AnalysisFilterDTO(
         racers=meta.racers,
         boards=meta.boards,
         counts=meta.counts,
     )
-    analysis_json = session.analyze_json(msgspec.json.encode(flt))
-    analysis = msgspec.json.decode(analysis_json, type=DashboardAnalysisDTO)
+    filtered = apply_filter(dataset, flt)
+    analysis = msgspec.json.decode(
+        msgspec.json.encode(analyze(filtered)),
+        type=DashboardAnalysisDTO,
+    )
     assert analysis.error is None
     assert analysis.filtered_race_count > 0
     assert len(analysis.racer_stats) > 0
@@ -79,34 +87,30 @@ def test_dashboard_session_ipc_analysis_and_raw_tables(
     assert len(analysis.matchup_matrix) > 0
     assert len(analysis.environment_matrix) > 0
 
-    # Raw races Matrix View with Has <Racer> columns, timestamp dropped
-    races_page_json = session.query_raw_table_json(
-        msgspec.json.encode(
-            RawTableQueryDTO(
-                table="races",
-                offset=0,
-                limit=10,
-                matrix_view=True,
-                sort_by="total_turns",
-                descending=True,
-            ),
+    races_page = query_raw_table(
+        dataset,
+        RawTableQueryDTO(
+            table="races",
+            offset=0,
+            limit=10,
+            matrix_view=True,
+            sort_by="total_turns",
+            descending=True,
         ),
     )
-    races_page = msgspec.json.decode(races_page_json, type=RawTablePageDTO)
     assert races_page.total_rows == 150
     assert len(races_page.rows) == 10
     assert "timestamp" not in races_page.columns
     assert any(col.startswith("Has ") for col in races_page.columns)
     assert races_page.frozen_columns[:3] == ["board", "racer_count", "total_turns"]
 
-    # Lookup by config_hash works for launching a race in the simulator
     first_hash = str(races_page.rows[0]["config_hash"])
-    race_row = session.get_race_by_hash(first_hash)
+    race_row = get_race_by_hash(dataset, first_hash)
     assert race_row is not None
     assert race_row["config_hash"] == first_hash
 
-    # Raw racer_results view puts config_hash last and supports search
-    results_page = session.query_raw_table(
+    results_page = query_raw_table(
+        dataset,
         RawTableQueryDTO(
             table="racer_results",
             offset=0,
@@ -114,17 +118,48 @@ def test_dashboard_session_ipc_analysis_and_raw_tables(
             search=first_hash[:12],
             use_filtered=True,
         ),
+        filtered,
     )
     assert results_page.columns[-1] == "config_hash"
     assert results_page.total_rows > 0
     assert all(row["config_hash"] == first_hash for row in results_page.rows)
 
 
-def test_dashboard_session_parquet_load() -> None:
-    session = DashboardSession()
-    races_bytes = RACES_PARQUET.read_bytes()
-    results_bytes = RESULTS_PARQUET.read_bytes()
-    meta = session.load_parquet_bytes(races_bytes, results_bytes)
+def test_raw_table_uses_filtered_rows_only_when_requested(
+    sample_ipc_bytes: tuple[bytes, bytes],
+) -> None:
+    """A restrictive filter shrinks the raw table only if use_filtered is set."""
+    dataset = load_ipc(*sample_ipc_bytes)
+    meta = get_metadata(dataset)
+    excluded_racer = str(dataset.races["racer_names"][0][0])
+    filtered = apply_filter(
+        dataset,
+        AnalysisFilterDTO(
+            racers=meta.racers,
+            boards=meta.boards,
+            counts=meta.counts,
+            combos=[ComboFilterDTO(mode="exclude", racers=[excluded_racer])],
+        ),
+    )
+    assert filtered.races.height < dataset.races.height
+
+    page_all = query_raw_table(
+        dataset,
+        RawTableQueryDTO(table="races", offset=0, limit=1, use_filtered=False),
+        filtered,
+    )
+    page_filtered = query_raw_table(
+        dataset,
+        RawTableQueryDTO(table="races", offset=0, limit=1, use_filtered=True),
+        filtered,
+    )
+    assert page_all.total_rows == dataset.races.height
+    assert page_filtered.total_rows == filtered.races.height
+
+
+def test_parquet_load() -> None:
+    dataset = load_parquet(RACES_PARQUET.read_bytes(), RESULTS_PARQUET.read_bytes())
+    meta = get_metadata(dataset)
     assert meta.race_count > 0
     assert meta.result_count > 0
 
