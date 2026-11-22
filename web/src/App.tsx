@@ -1,142 +1,94 @@
 import { BarChart3, Database, PlayCircle, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { BootScreen } from "./components/BootScreen";
 import { DatasetUploadModal } from "./components/DatasetUploadModal";
 import { PyodideEngineClient } from "./engine/pyodideClient";
-import { DashboardView } from "./features/dashboard/DashboardView";
-import { RawDataView } from "./features/data/RawDataView";
-import { SimulatorView } from "./features/simulator/SimulatorView";
-import type {
-  AnalysisPayloadDTO,
-  BootProgress,
-  BootResult,
-  FilterSpecDTO,
-} from "./types/api";
-import { type AppTab, readUrlState, setUrlState } from "./utils/urlState";
+import type { BootProgress, BootResult } from "./types/api";
+import { type AppTab, readUrlState, updateUrlState } from "./utils/urlState";
 
-const EMPTY_FILTER: FilterSpecDTO = {
-  boards: [],
-  player_counts: [],
-  pool_racers: [],
-  include_combos: [],
-  exclude_combos: [],
+const INITIAL_PROGRESS: BootProgress = {
+  stage: "Starting Pyodide runtime...",
+  percent: 5,
 };
 
-function filtersEqual(a: FilterSpecDTO, b: FilterSpecDTO): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+const TABS: { id: AppTab; label: string; milestone: string; icon: typeof Database }[] = [
+  { id: "dashboard", label: "Dashboard", milestone: "M4-M5", icon: BarChart3 },
+  { id: "simulator", label: "Simulator", milestone: "M3", icon: PlayCircle },
+  { id: "data", label: "Raw Data", milestone: "M4", icon: Database },
+];
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 export function App() {
-  const clientRef = useRef<PyodideEngineClient | null>(null);
-  if (!clientRef.current) {
-    clientRef.current = new PyodideEngineClient();
-  }
-  const client = clientRef.current;
-
-  const initialUrl = useMemo(() => readUrlState(), []);
-  const [activeTab, setActiveTab] = useState<AppTab>(initialUrl.tab);
-  const [incomingSimConfig, setIncomingSimConfig] = useState<string | null>(
-    initialUrl.config,
-  );
-
-  // Boot state
-  const [bootProgress, setBootProgress] = useState<BootProgress>({
-    stage: "Starting Pyodide runtime...",
-    percent: 5,
-  });
+  const [attempt, setAttempt] = useState(0);
+  const [client, setClient] = useState<PyodideEngineClient | null>(null);
+  const [progress, setProgress] = useState<BootProgress>(INITIAL_PROGRESS);
   const [bootResult, setBootResult] = useState<BootResult | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<AppTab>(
+    () => readUrlState().tab ?? "dashboard",
+  );
   const [uploadOpen, setUploadOpen] = useState(false);
 
-  // Dashboard state
-  const [draftFilter, setDraftFilter] = useState<FilterSpecDTO>(EMPTY_FILTER);
-  const [appliedFilter, setAppliedFilter] =
-    useState<FilterSpecDTO>(EMPTY_FILTER);
-  const [analysis, setAnalysis] = useState<AnalysisPayloadDTO | null>(null);
-  const [analysisVersion, setAnalysisVersion] = useState(0);
-  const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [selectedRacer, setSelectedRacer] = useState<string | null>(null);
-
-  const runAnalysis = useCallback(
-    async (spec: FilterSpecDTO) => {
-      setAnalysisLoading(true);
-      setAnalysisError(null);
-      try {
-        const res = await client.runAnalysis(spec);
-        setAnalysis(res);
-        setAppliedFilter(spec);
-        setAnalysisVersion((v) => v + 1);
-      } catch (err) {
-        setAnalysisError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setAnalysisLoading(false);
-      }
-    },
-    [client],
-  );
-
-  const startBoot = useCallback(async () => {
-    setBootError(null);
-    setBootResult(null);
-    setBootProgress({ stage: "Starting Pyodide runtime...", percent: 5 });
-    try {
-      const res = await client.boot((p) => setBootProgress(p));
-      setBootResult(res);
-      await runAnalysis(EMPTY_FILTER);
-    } catch (err) {
-      setBootError(err instanceof Error ? err.message : String(err));
-    }
-  }, [client, runAnalysis]);
-
   useEffect(() => {
-    void startBoot();
-  }, [startBoot]);
+    const worker = new PyodideEngineClient();
+    let cancelled = false;
+    setClient(worker);
+    setBootResult(null);
+    setBootError(null);
+    setProgress(INITIAL_PROGRESS);
+    worker
+      .init((p) => {
+        if (!cancelled) setProgress(p);
+      })
+      .then((result) => {
+        if (!cancelled) setBootResult(result);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setBootError(errorMessage(err));
+      });
+    return () => {
+      cancelled = true;
+      worker.dispose();
+    };
+  }, [attempt]);
 
-  const handleTabChange = (next: AppTab) => {
-    setActiveTab(next);
-    setUrlState({ tab: next, config: next === "simulator" ? undefined : null });
+  const selectTab = (tab: AppTab) => {
+    setActiveTab(tab);
+    updateUrlState({ tab });
   };
 
-  const handleOpenInSimulator = (configStr: string) => {
-    setIncomingSimConfig(configStr);
-    setActiveTab("simulator");
-    setUrlState({ tab: "simulator", config: configStr });
-  };
-
-  const handleUploadDataset = async (
+  const uploadDataset = async (
     racesBytes: Uint8Array,
     resultsBytes: Uint8Array,
     format: "ipc" | "parquet",
   ) => {
-    const newMeta = await client.loadDatasetBytes(
+    if (!client) return;
+    const datasetMeta = await client.loadDatasetBytes(
       racesBytes,
       resultsBytes,
       format,
     );
-    setBootResult((prev) =>
-      prev ? { ...prev, datasetMeta: newMeta } : prev,
-    );
-    setDraftFilter(EMPTY_FILTER);
-    setSelectedRacer(null);
-    await runAnalysis(EMPTY_FILTER);
+    setBootResult((prev) => (prev ? { ...prev, datasetMeta } : prev));
   };
 
   if (!bootResult) {
     return (
       <BootScreen
-        progress={bootProgress}
+        progress={progress}
         error={bootError}
-        onRetry={() => void startBoot()}
+        onRetry={() => setAttempt((n) => n + 1)}
       />
     );
   }
 
-  const isStale = !filtersEqual(draftFilter, appliedFilter);
+  const { datasetMeta } = bootResult;
+  const tab = TABS.find((t) => t.id === activeTab) ?? TABS[0];
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
-      {/* Top Navigation Bar */}
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-4">
@@ -149,31 +101,28 @@ export function App() {
                   Magical Athlete
                 </h1>
                 <p className="text-[10px] text-slate-400">
-                  {bootResult.datasetMeta.total_races.toLocaleString()} races ·{" "}
+                  {datasetMeta.race_count.toLocaleString()} races ·{" "}
                   {(bootResult.bootMs / 1000).toFixed(2)}s boot
                 </p>
               </div>
             </div>
 
             <nav className="flex items-center gap-1 rounded-lg bg-slate-900 p-1">
-              <NavButton
-                active={activeTab === "dashboard"}
-                onClick={() => handleTabChange("dashboard")}
-                icon={<BarChart3 className="h-3.5 w-3.5" />}
-                label="Dashboard"
-              />
-              <NavButton
-                active={activeTab === "simulator"}
-                onClick={() => handleTabChange("simulator")}
-                icon={<PlayCircle className="h-3.5 w-3.5" />}
-                label="Simulator"
-              />
-              <NavButton
-                active={activeTab === "data"}
-                onClick={() => handleTabChange("data")}
-                icon={<Database className="h-3.5 w-3.5" />}
-                label="Raw Data"
-              />
+              {TABS.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => selectTab(id)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    id === activeTab
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
             </nav>
           </div>
 
@@ -188,78 +137,44 @@ export function App() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="mx-auto w-full max-w-[1600px] flex-1 p-4">
-        {activeTab === "dashboard" && (
-          <DashboardView
-            meta={bootResult.datasetMeta}
-            draftFilter={draftFilter}
-            onDraftFilterChange={setDraftFilter}
-            isStale={isStale}
-            loading={analysisLoading}
-            analysis={analysis}
-            error={analysisError}
-            onRunAnalysis={() => void runAnalysis(draftFilter)}
-            onResetFilters={() => {
-              setDraftFilter(EMPTY_FILTER);
-              void runAnalysis(EMPTY_FILTER);
-            }}
-            selectedRacer={selectedRacer}
-            onSelectRacer={setSelectedRacer}
-          />
-        )}
-
-        {activeTab === "simulator" && (
-          <SimulatorView
-            client={client}
-            simMeta={bootResult.simulatorMeta}
-            incomingConfigStr={incomingSimConfig}
-            onConsumedIncomingConfig={() => setIncomingSimConfig(null)}
-          />
-        )}
-
-        {activeTab === "data" && (
-          <RawDataView
-            client={client}
-            analysisVersion={analysisVersion}
-            onOpenInSimulator={handleOpenInSimulator}
-          />
-        )}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+          <h2 className="text-base font-semibold text-white">{tab.label}</h2>
+          <p className="mt-1 text-xs text-slate-400">
+            Arrives in {tab.milestone}. The runtime is booted and the dataset is
+            loaded.
+          </p>
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+            <Stat label="Races" value={datasetMeta.race_count.toLocaleString()} />
+            <Stat
+              label="Racer results"
+              value={datasetMeta.result_count.toLocaleString()}
+            />
+            <Stat label="Racers" value={String(datasetMeta.racers.length)} />
+            <Stat label="Boards" value={datasetMeta.boards.join(", ")} />
+            <Stat label="Python" value={bootResult.pythonVersion} />
+            <Stat label="Polars" value={bootResult.polarsVersion} />
+          </dl>
+        </section>
       </main>
 
       <DatasetUploadModal
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
-        onUpload={handleUploadDataset}
+        onUpload={uploadDataset}
       />
     </div>
   );
 }
 
-function NavButton({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-        active
-          ? "bg-indigo-600 text-white shadow-sm"
-          : "text-slate-400 hover:bg-slate-800 hover:text-white"
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
+    <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+      <dt className="text-[10px] uppercase tracking-wide text-slate-500">
+        {label}
+      </dt>
+      <dd className="mt-0.5 font-mono text-slate-200">{value}</dd>
+    </div>
   );
 }
 
