@@ -141,7 +141,7 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
 
             if will_trip:
                 score -= 3.5
-            else: # Coach probably left by the time we roll if we trip on arrival
+            else:  # Coach probably left by the time we roll if we trip on arrival
                 if any("CoachAura" in r.abilities for r in racers):
                     score += 1.0
 
@@ -153,8 +153,7 @@ class ThirdWheelIntrusion(Ability, SelectionDecisionMixin[int]):
                 candidates.append(ScoredTarget(score, pos))
 
         if not candidates:
-             return None
+            return None
 
         # Return the position of the highest score
         return max(candidates, key=lambda x: x.score).position
-

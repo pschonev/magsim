@@ -286,7 +286,12 @@ def test_mole_tunnelling_onto_hotel_without_vp_is_tripped(
     a replaced main move still triggers landing effects.
     """
     game = scenario(
-        [r(0, "Mole"), r(1, "Hotel", 6), r(2, "Suckerfish", 12), r(3, "Alchemist", 20)],
+        [
+            r(0, "Mole", smart=True),
+            r(1, "Hotel", 6),
+            r(2, "Suckerfish", 12),
+            r(3, "Alchemist", 20),
+        ],
         dice_rolls=[1],
     )
 

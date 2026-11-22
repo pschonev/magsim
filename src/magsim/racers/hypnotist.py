@@ -102,9 +102,12 @@ class HypnotistTrance(Ability, SelectionDecisionMixin[ActiveRacerState]):
         if (me := engine.get_active_racer(ctx.source_racer_idx)) is None:
             return None
 
-
         # 1. Safety Filter: Strictly ban hazards
-        abilities_to_avoid: set[AbilityName] = {"MouthSwallow", "BabaYagaTrip"}
+        abilities_to_avoid: set[AbilityName] = {
+            "MouthSwallow",
+            "BabaYagaTrip",
+            "StunnerStopTraffic",
+        }
         candidates = [
             r
             for r in ctx.options

@@ -167,4 +167,8 @@ class AbilityMastermindPredict(Ability, SelectionDecisionMixin[ActiveRacerState]
             candidates,
             key=lambda r: r.winrate,
         ).racer_name
-        return next(r for r in ctx.options if get_effective_racer_name(r) == highest_winrate_racer)
+        return next(
+            r
+            for r in ctx.options
+            if get_effective_racer_name(r) == highest_winrate_racer
+        )

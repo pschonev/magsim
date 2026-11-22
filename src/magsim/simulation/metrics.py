@@ -157,6 +157,7 @@ def calculate_aggregated_racer_stats(df_results: pl.DataFrame) -> pl.DataFrame:
             [
                 pl.col("sum_dice_rolled").fill_null(0),
                 pl.col("pos_self_ability_movement").fill_null(0),
+                pl.col("rolling_turns").fill_null(0),
                 pl.col("turns_taken").fill_null(0),
                 pl.col("recovery_turns").fill_null(0),
                 pl.col("skipped_main_moves").fill_null(0),
@@ -174,19 +175,26 @@ def calculate_aggregated_racer_stats(df_results: pl.DataFrame) -> pl.DataFrame:
         )
         .with_columns(
             [
-                # Calculate Speed: (Dice + Ability) / Active Turns
+                # Override rolls log no dice, so active turns without a roll count as 3.5
                 (
-                    (pl.col("sum_dice_rolled") + pl.col("pos_self_ability_movement"))
-                    / pl.col("active_turns_count").replace(0, 1)  # Avoid div/0
-                ).alias("raw_speed_per_active_turn"),
+                    (
+                        pl.col("sum_dice_rolled")
+                        + pl.col("pos_self_ability_movement")
+                        + 3.5
+                        * (pl.col("active_turns_count") - pl.col("rolling_turns")).clip(
+                            lower_bound=0,
+                        )
+                    )
+                    / pl.col("turns_taken").replace(0, 1)  # Avoid div/0
+                ).alias("raw_speed_per_turn"),
             ],
         )
     )
 
     return df_aug.group_by("racer_name").agg(
         [
-            # Speed: Average of the per-race speeds
-            pl.col("raw_speed_per_active_turn").mean().round(3).alias("speed"),
+            # Speed: Average of the per-race speeds (movement per turn taken)
+            pl.col("raw_speed_per_turn").mean().round(3).alias("speed"),
             (pl.col("finish_position").eq(1).sum() / pl.count())
             .round(3)
             .alias("winrate"),

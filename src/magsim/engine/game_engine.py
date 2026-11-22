@@ -628,9 +628,10 @@ class GameEngine:
         racer = self.get_racer(skipped_racer_idx)
         if not racer.main_move_consumed:
             racer.main_move_consumed = True
-            self.log_info(
-                f"{racer.repr} has their main move skipped (Source: {source}).",
-            )
+            if not traded:
+                self.log_info(
+                    f"{racer.repr} has their main move skipped (Source: {source}).",
+                )
             self.push_event(
                 MainMoveSkippedEvent(
                     responsible_racer_idx=responsible_racer_idx,

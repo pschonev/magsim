@@ -73,24 +73,34 @@ class MagicalAthleteFlexomancy(Ability, SelectionDecisionMixin[ActiveRacerState]
         ):
             return "skip_trigger"
 
-        engine.log_info(f"{owner.repr} rolled a {event.dice_value}.")
         match event.dice_value:
             case 1:
-                self._replace_with_main_move(owner, engine, SEVEN_MOVE)
+                self._replace_with_main_move(owner, engine, 1, SEVEN_MOVE)
             case 2:
                 self._warp_last_to_owner(owner, engine)
             case 3:
                 self._flex_to_target(event, owner, engine, agent)
             case 4:
-                self._replace_with_main_move(owner, engine, FOUR_MOVE)
+                self._replace_with_main_move(
+                    owner,
+                    engine,
+                    4,
+                    FOUR_MOVE,
+                    " and takes an extra turn",
+                )
                 engine.state.next_turn_override = owner.idx
-                engine.log_info(f"{owner.repr} takes another turn after this move.")
                 self._report_skipped_turns(owner, engine)
             case 5:
                 self._push_back_leaders(owner, engine)
             case 6:
                 self.tripping_pass = True
-                self._replace_with_main_move(owner, engine, SIX_MOVE)
+                self._replace_with_main_move(
+                    owner,
+                    engine,
+                    6,
+                    SIX_MOVE,
+                    " and trips every racer passed",
+                )
         return "skip_trigger"
 
     def _skip_main_move(self, owner: ActiveRacerState, engine: GameEngine) -> None:
@@ -105,9 +115,11 @@ class MagicalAthleteFlexomancy(Ability, SelectionDecisionMixin[ActiveRacerState]
         self,
         owner: ActiveRacerState,
         engine: GameEngine,
+        roll: int,
         distance: int,
+        effect: str = "",
     ) -> None:
-        engine.log_info(f"{owner.repr} flexes: fixed main move of {distance}.")
+        engine.log_info(f"{owner.repr} rolled a {roll}: moves {distance}{effect}.")
         self._skip_main_move(owner, engine)
         push_move(
             engine,
@@ -151,8 +163,6 @@ class MagicalAthleteFlexomancy(Ability, SelectionDecisionMixin[ActiveRacerState]
             or not event.is_main
         ):
             return
-        passed = engine.get_racer(event.passed_racer_idx)
-        engine.log_info(f"{owner.repr} trips passed racer {passed.repr}.")
         push_trip(
             engine,
             event.phase,
@@ -166,12 +176,14 @@ class MagicalAthleteFlexomancy(Ability, SelectionDecisionMixin[ActiveRacerState]
         racers = engine.get_active_racers()
         last_pos = min(r.position for r in racers)
         if owner.position == last_pos:
-            engine.log_info(f"{owner.repr} is last: nothing happens.")
+            engine.log_info(
+                f"{owner.repr} rolled a 2: is already last, nothing happens.",
+            )
             return
         pulled = [r for r in racers if r.position == last_pos]
         engine.log_info(
-            f"{owner.repr} pulls the last racers to tile {owner.position}: "
-            f"{', '.join(r.repr for r in pulled)}.",
+            f"{owner.repr} rolled a 2: warps last place {', '.join(r.repr for r in pulled)} "
+            f"to tile {owner.position}.",
         )
         push_simultaneous_warp(
             engine,
@@ -193,7 +205,7 @@ class MagicalAthleteFlexomancy(Ability, SelectionDecisionMixin[ActiveRacerState]
     ) -> None:
         others = engine.get_active_racers(except_racer_idx=owner.idx)
         if not others:
-            engine.log_info(f"{owner.repr} has nobody to warp to.")
+            engine.log_info(f"{owner.repr} rolled a 3: nobody to warp to.")
             return
         target = agent.make_selection_decision(
             engine,
@@ -209,14 +221,14 @@ class MagicalAthleteFlexomancy(Ability, SelectionDecisionMixin[ActiveRacerState]
             ),
         )
         if target is None:
-            engine.log_info(f"{owner.repr} decided not to use {self.name}.")
+            engine.log_info(f"{owner.repr} rolled a 3: chooses not to warp.")
             return
 
         destination = target.position
         victims = engine.get_racers_at_position(destination, except_racer_idx=owner.idx)
         engine.log_info(
-            f"{owner.repr} warps to {target.repr} on tile {destination} "
-            f"and trips: {', '.join(r.repr for r in victims)}.",
+            f"{owner.repr} rolled a 3: warps to tile {destination} "
+            f"and trips {', '.join(r.repr for r in victims)}.",
         )
         self._skip_main_move(owner, engine)
         push_warp(
@@ -244,8 +256,8 @@ class MagicalAthleteFlexomancy(Ability, SelectionDecisionMixin[ActiveRacerState]
         lead_pos = max(r.position for r in racers)
         leaders = [r for r in racers if r.position == lead_pos]
         engine.log_info(
-            f"{owner.repr} pushes the leaders back {-LEADER_PUSHBACK}: "
-            f"{', '.join(r.repr for r in leaders)}.",
+            f"{owner.repr} rolled a 5: pushes leader {', '.join(r.repr for r in leaders)} "
+            f"back {-LEADER_PUSHBACK}.",
         )
         push_simultaneous_move(
             engine,

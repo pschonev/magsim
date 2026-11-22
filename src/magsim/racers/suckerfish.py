@@ -185,12 +185,19 @@ class SuckerfishRide(Ability, BooleanDecisionMixin):
             "ThirdWheelJoin",
             "SisyphusCurse",
             "HugeBabyPush",
+            "DivaSwap",
+            "TailWarp",
+            "SoulmateWarp",
         }
 
         # Define Good Abilities (Drivers to prefer)
         GOOD_DRIVER_ABILITIES: set[AbilityName] = {
             "ScoochStep",
             "RomanticMove",
+            "PenguinTummyTime",
+            "NemesisGrudgeMatch",
+            "HecklerHeckle",
+            "DicemongerDeal",
         }
 
         driver_abilities = driver.abilities

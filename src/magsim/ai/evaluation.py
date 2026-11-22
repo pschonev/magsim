@@ -51,12 +51,16 @@ def get_hazard_at(engine: GameEngine, pos: int) -> str | None:
     ):
         return back.display_name
 
-    # 2. Racer Hazards (Baba Yaga Ability)
-    # We check if ANY racer on this tile has the 'BabaYagaTrip' ability.
-    racers = engine.get_racers_at_position(pos)
-    for r in racers:
-        if "BabaYagaTrip" in r.abilities:
+    # 2. Racer Hazards
+    for r in engine.get_active_racers():
+        if "BabaYagaTrip" in r.abilities and r.position == pos:
             return f"{r.name} (Baba Yaga Power)"
+        if "HotelMonopolize" in r.abilities and r.position == pos:
+            return f"{r.name} (Hotel Power)"
+        if "StunnerStopTraffic" in r.abilities and abs(r.position - pos) <= 1:
+            return f"{r.name} (Stunner Power)"
+        if "NullVoid" in r.abilities and r.position < pos:
+            return f"{r.name} (Null Power)"
 
     return None
 
@@ -85,14 +89,12 @@ def get_current_modifiers(engine: GameEngine, racer_idx: int) -> int:
     # Check if ANY racer on my tile (including myself!) has "CoachAura"
     # (Coach buffs himself too, so this logic holds)
     is_coached = any(
-        "CoachAura" in r.abilities
-        for r in engine.get_racers_at_position(me.position)
+        "CoachAura" in r.abilities for r in engine.get_racers_at_position(me.position)
     )
     if is_coached:
         total_mod += 1
 
     return total_mod
-
 
 
 def is_turn_between(start_idx: int, end_idx: int, target_idx: int) -> bool:
@@ -110,14 +112,18 @@ def is_turn_between(start_idx: int, end_idx: int, target_idx: int) -> bool:
     # Wrap Case: [Target ... End ... Start] OR [End ... Start ... Target]
     return target_idx > start_idx or target_idx < end_idx
 
+
 def get_effective_racer_name(racer: ActiveRacerState) -> RacerName:
     """
-    Returns the true identity of a racer. 
-    If the racer is Egg, Twin, or Copycat, this returns the name of the racer 
+    Returns the true identity of a racer.
+    If the racer is Egg, Twin, or Copycat, this returns the name of the racer
     they are currently copying. Otherwise, returns their own name.
     """
     for ability in racer.active_abilities:
-        if isinstance(ability, CopyAbilityProtocol) and ability.copied_racer is not None:
+        if (
+            isinstance(ability, CopyAbilityProtocol)
+            and ability.copied_racer is not None
+        ):
             return ability.copied_racer
 
     return racer.name
