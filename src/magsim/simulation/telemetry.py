@@ -14,6 +14,7 @@ from magsim.core.events import (
     RollResultEvent,
     TripRecoveryEvent,
 )
+from magsim.core.state import is_active
 from magsim.racers.hog_knight import HOG_BONUS
 from magsim.racers.party_pooper import REJECTED_VALUE
 from magsim.racers.stunner import AURA_RANGE, FORCED_VALUE
@@ -444,8 +445,8 @@ class MetricsAggregator:
         """Movement that comes from how a racer's dice are rolled, measured against an average d6."""
         roller = event.target_racer_idx
         dice = event.dice_values
-        if len(dice) == 1 and dice[0] == FORCED_VALUE:
-            roller_state = engine.get_racer(roller)
+        roller_state = engine.get_racer(roller)
+        if is_active(roller_state) and len(dice) == 1 and dice[0] == FORCED_VALUE:
             stunner_idx = next(
                 (
                     r.idx

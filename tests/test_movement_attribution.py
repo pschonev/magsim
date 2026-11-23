@@ -1,4 +1,5 @@
 from magsim.ai.baseline_agent import BaselineAgent
+from magsim.core.events import RollResultEvent
 from magsim.engine.scenario import GameScenario, RacerConfig
 from magsim.simulation.db.models import RacerResult
 from magsim.simulation.telemetry import MetricsAggregator
@@ -135,3 +136,28 @@ def test_stunner_does_not_affect_far_away_rolls(scenario: type[GameScenario]):
     stunner = play_turns(game, 1)[1]
 
     assert stunner.neg_other_ability_movement == 0
+
+
+def test_eliminated_roller_next_to_nobody_does_not_crash_the_stunner_check(
+    scenario: type[GameScenario],
+):
+    game = scenario([dummy(0, 5), RacerConfig(1, "Stunner", start_pos=6)], dice_rolls=[1])
+    engine = game.engine
+    aggregator = MetricsAggregator(config_hash="test")
+    aggregator.initialize_racers(engine)
+    engine.get_racer(0).eliminate()
+
+    aggregator.on_event(
+        RollResultEvent(
+            target_racer_idx=0,
+            responsible_racer_idx=0,
+            source="System",
+            dice_value=1,
+            dice_values=(1,),
+            base_value=1,
+            final_value=1,
+        ),
+        engine,
+    )
+
+    assert aggregator.results[1].neg_other_ability_movement == 0
