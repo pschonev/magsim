@@ -148,6 +148,18 @@ class EnvironmentCellDTO(msgspec.Struct, frozen=True):
     games_count: int
 
 
+type SummaryCellDTO = str | int | float | None
+
+
+class SummaryTableDTO(msgspec.Struct, frozen=True):
+    """One per-racer summary table with notebook column labels and rounded values."""
+
+    id: str
+    title: str
+    columns: list[str]
+    rows: list[list[SummaryCellDTO]]
+
+
 class DashboardAnalysisDTO(msgspec.Struct, frozen=True):
     """Complete dashboard analysis bundle returned to the frontend."""
 
@@ -165,6 +177,7 @@ class DashboardAnalysisDTO(msgspec.Struct, frozen=True):
     )
     matchup_matrix: list[MatchupCellDTO] = msgspec.field(default_factory=list)
     environment_matrix: list[EnvironmentCellDTO] = msgspec.field(default_factory=list)
+    summary_tables: list[SummaryTableDTO] = msgspec.field(default_factory=list)
 
 
 class RawTableQueryDTO(msgspec.Struct, frozen=True):

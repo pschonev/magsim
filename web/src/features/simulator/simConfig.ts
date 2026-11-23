@@ -82,3 +82,39 @@ export function toRequest(config: SimConfig): SimulationRequestDTO {
     forced_twists: config.forced_twists,
   };
 }
+
+export interface IncomingRace {
+  encoded: string | null;
+  racers: string[];
+  seed: number;
+  board: string;
+}
+
+export function incomingFromRow(row: Record<string, unknown>): IncomingRace | null {
+  const names = row.racer_names;
+  if (!Array.isArray(names) || names.length === 0 || !names.every((n) => typeof n === "string")) {
+    return null;
+  }
+  const seed = Number(row.seed);
+  return {
+    encoded: typeof row.config_encoded === "string" ? row.config_encoded : null,
+    racers: names,
+    seed: Number.isFinite(seed) ? Math.trunc(seed) : 42,
+    board: typeof row.board === "string" ? row.board : "Standard",
+  };
+}
+
+export function fromIncoming(race: IncomingRace): SimConfig {
+  return {
+    racers: race.racers,
+    board: race.board,
+    seed: race.seed,
+    start_positions: race.racers.map(() => 0),
+    use_scripted_dice: false,
+    dice_text: "",
+    debug_mode: false,
+    forced_twists: [],
+    exclude_twists: [],
+    rules: {},
+  };
+}

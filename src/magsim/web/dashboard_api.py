@@ -20,6 +20,7 @@ from magsim.analysis.filters import (
     get_automatic_racers,
 )
 from magsim.analysis.metrics import run_full_analysis
+from magsim.analysis.tables import SUMMARY_TABLE_TITLES
 from magsim.core.palettes import get_racer_color
 from magsim.web.schemas import (
     AbilityBreakdownRowDTO,
@@ -33,15 +34,16 @@ from magsim.web.schemas import (
     RacerStatRowDTO,
     RawTablePageDTO,
     RawTableQueryDTO,
+    SummaryTableDTO,
 )
 
 RACE_PRIORITY_COLUMNS: tuple[str, ...] = (
+    "roster_display",
     "board",
     "racer_count",
+    "seed",
+    "error_code",
     "total_turns",
-    "racer_names",
-    "config_encoded",
-    "config_hash",
 )
 MAX_PAGE_LIMIT = 500
 
@@ -89,11 +91,27 @@ def _sanitize_cell(value: object) -> object:
     return value
 
 
+def _with_roster_display(df: pl.DataFrame) -> pl.DataFrame:
+    return df.with_columns(pl.col("racer_names").list.join(", ").alias("roster_display"))
+
+
+def _df_to_summary_tables(tables: dict[str, pl.DataFrame]) -> list[SummaryTableDTO]:
+    return [
+        SummaryTableDTO(
+            id=table_id,
+            title=SUMMARY_TABLE_TITLES[table_id],
+            columns=list(df.columns),
+            rows=[[_sanitize_cell(v) for v in row] for row in df.iter_rows()],
+        )
+        for table_id, df in tables.items()
+    ]
+
+
 def _build_races_matrix_df(
     df_races: pl.DataFrame,
     all_racers: list[str],
 ) -> tuple[pl.DataFrame, list[str]]:
-    df_clean = df_races.drop("timestamp", strict=False)
+    df_clean = _with_roster_display(df_races.drop("timestamp", strict=False))
     has_exprs = [
         pl.col("racer_names").list.contains(racer).alias(f"Has {racer}")
         for racer in all_racers
@@ -107,7 +125,7 @@ def _build_races_matrix_df(
 
 
 def _build_races_plain_df(df_races: pl.DataFrame) -> tuple[pl.DataFrame, list[str]]:
-    df_clean = df_races.drop("timestamp", strict=False)
+    df_clean = _with_roster_display(df_races.drop("timestamp", strict=False))
     priority = [col for col in RACE_PRIORITY_COLUMNS if col in df_clean.columns]
     others = [col for col in df_clean.columns if col not in priority]
     return df_clean.select([*priority, *others]), priority
@@ -122,8 +140,7 @@ def _build_results_df(df_results: pl.DataFrame) -> tuple[pl.DataFrame, list[str]
         cols = [col for col in ordered.columns if col != "config_hash"]
         cols.append("config_hash")
         ordered = ordered.select(cols)
-    frozen = [col for col in ("racer_name", "racer_id") if col in ordered.columns]
-    return ordered, frozen
+    return ordered, []
 
 
 def _apply_table_search(df: pl.DataFrame, search: str) -> pl.DataFrame:
@@ -367,6 +384,7 @@ def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
         distributions_faceted=_df_to_distributions(result.distributions_faceted),
         matchup_matrix=_df_to_matchup_matrix(result.matchup_matrix),
         environment_matrix=_df_to_environment_matrix(result.environment_matrix),
+        summary_tables=_df_to_summary_tables(result.summary_tables),
     )
 
 

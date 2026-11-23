@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -14,10 +16,13 @@ PYODIDE_VERSION = "314.0.8"
 
 
 def build_wheel(repo_root: Path, wheels_dir: Path) -> Path:
-    """Build a fresh magsim wheel into wheels_dir and return its path."""
+    """Build a fresh magsim wheel into wheels_dir/<content hash>/ and return its path."""
     wheels_dir.mkdir(parents=True, exist_ok=True)
     for old_wheel in wheels_dir.glob("magsim-*.whl"):
         old_wheel.unlink()
+    for old_dir in wheels_dir.iterdir():
+        if old_dir.is_dir():
+            shutil.rmtree(old_dir)
 
     subprocess.run(
         ["uv", "build", "--wheel", "--out-dir", str(wheels_dir)],
@@ -28,7 +33,11 @@ def build_wheel(repo_root: Path, wheels_dir: Path) -> Path:
     if not wheels:
         msg = f"No magsim wheel produced in {wheels_dir}"
         raise RuntimeError(msg)
-    return wheels[-1]
+    wheel = wheels[-1]
+    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()[:12]
+    hashed_dir = wheels_dir / digest
+    hashed_dir.mkdir()
+    return wheel.replace(hashed_dir / wheel.name)
 
 
 def export_ipc_if_needed(src_parquet: Path, dst_ipc: Path, *, force: bool) -> None:
@@ -76,7 +85,7 @@ def prepare_web_assets(
     )
 
     manifest = {
-        "wheel": f"wheels/{wheel_path.name}",
+        "wheel": wheel_path.relative_to(target_public).as_posix(),
         "races": f"results/{races_ipc.name}",
         "racerResults": f"results/{results_ipc.name}",
         "pyodideVersion": PYODIDE_VERSION,

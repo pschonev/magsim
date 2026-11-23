@@ -11,10 +11,12 @@ import { RaceTrackSVG } from "./RaceTrackSVG";
 import { SimulatorConfigPanel } from "./SimulatorConfigPanel";
 import { createLogHighlighter } from "./logFormat";
 import {
+  type IncomingRace,
   type SimConfig,
   defaultConfig,
   diceError,
   fromDecoded,
+  fromIncoming,
   toRequest,
 } from "./simConfig";
 
@@ -22,6 +24,8 @@ interface SimulatorViewProps {
   client: EngineClient;
   simMeta: SimulatorMetaDTO;
   active: boolean;
+  incoming: IncomingRace | null;
+  onIncomingConsumed: () => void;
 }
 
 const AUTO_RUN_DELAY_MS = 250;
@@ -30,7 +34,13 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export function SimulatorView({ client, simMeta, active }: SimulatorViewProps) {
+export function SimulatorView({
+  client,
+  simMeta,
+  active,
+  incoming,
+  onIncomingConsumed,
+}: SimulatorViewProps) {
   const [config, setConfig] = useState<SimConfig>(() => defaultConfig(simMeta));
   const [ready, setReady] = useState(false);
   const [result, setResult] = useState<SimulationResponseDTO | null>(null);
@@ -40,6 +50,7 @@ export function SimulatorView({ client, simMeta, active }: SimulatorViewProps) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latestRun = useRef(0);
+  const urlHandled = useRef(false);
 
   const highlighter = useMemo(() => createLogHighlighter(simMeta), [simMeta]);
   const configDiceError = diceError(config);
@@ -76,15 +87,38 @@ export function SimulatorView({ client, simMeta, active }: SimulatorViewProps) {
   );
 
   useEffect(() => {
-    const encoded = readUrlState().config;
-    if (!encoded) {
-      setReady(true);
-      return;
-    }
-    importEncoded(encoded)
-      .catch((err: unknown) => setError(errorMessage(err)))
-      .finally(() => setReady(true));
-  }, [importEncoded]);
+    let cancelled = false;
+    const load = async () => {
+      try {
+        if (incoming) {
+          if (incoming.encoded) {
+            try {
+              await importEncoded(incoming.encoded);
+            } catch {
+              setConfig(fromIncoming(incoming));
+            }
+          } else {
+            setConfig(fromIncoming(incoming));
+          }
+        } else if (!urlHandled.current) {
+          const encoded = readUrlState().config;
+          if (encoded) await importEncoded(encoded);
+        }
+      } catch (err) {
+        setError(errorMessage(err));
+      } finally {
+        if (!cancelled) {
+          urlHandled.current = true;
+          setReady(true);
+          if (incoming) onIncomingConsumed();
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [incoming, importEncoded, onIncomingConsumed]);
 
   useEffect(() => {
     if (!ready || configDiceError) return;

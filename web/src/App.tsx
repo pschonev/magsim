@@ -1,8 +1,11 @@
 import { BarChart3, Database, PlayCircle, Upload } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BootScreen } from "./components/BootScreen";
 import { DatasetUploadModal } from "./components/DatasetUploadModal";
 import { PyodideEngineClient } from "./engine/pyodideClient";
+import { DashboardView } from "./features/dashboard/DashboardView";
+import { RawDataView } from "./features/data/RawDataView";
+import { type IncomingRace, incomingFromRow } from "./features/simulator/simConfig";
 import { SimulatorView } from "./features/simulator/SimulatorView";
 import type { BootProgress, BootResult } from "./types/api";
 import { type AppTab, readUrlState, updateUrlState } from "./utils/urlState";
@@ -12,10 +15,10 @@ const INITIAL_PROGRESS: BootProgress = {
   percent: 5,
 };
 
-const TABS: { id: AppTab; label: string; milestone: string; icon: typeof Database }[] = [
-  { id: "dashboard", label: "Dashboard", milestone: "M4-M5", icon: BarChart3 },
-  { id: "simulator", label: "Simulator", milestone: "M3", icon: PlayCircle },
-  { id: "data", label: "Raw Data", milestone: "M4", icon: Database },
+const TABS: { id: AppTab; label: string; icon: typeof Database }[] = [
+  { id: "dashboard", label: "Dashboard", icon: BarChart3 },
+  { id: "simulator", label: "Simulator", icon: PlayCircle },
+  { id: "data", label: "Raw Data", icon: Database },
 ];
 
 function errorMessage(err: unknown): string {
@@ -31,9 +34,10 @@ export function App() {
   const [activeTab, setActiveTab] = useState<AppTab>(
     () => readUrlState().tab ?? "dashboard",
   );
-  const [simulatorMounted, setSimulatorMounted] = useState(
-    activeTab === "simulator",
+  const [visited, setVisited] = useState<Set<AppTab>>(
+    () => new Set<AppTab>([activeTab]),
   );
+  const [incoming, setIncoming] = useState<IncomingRace | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
 
   useEffect(() => {
@@ -59,11 +63,23 @@ export function App() {
     };
   }, [attempt]);
 
-  const selectTab = (tab: AppTab) => {
+  const selectTab = useCallback((tab: AppTab) => {
     setActiveTab(tab);
-    if (tab === "simulator") setSimulatorMounted(true);
+    setVisited((prev) => new Set(prev).add(tab));
     updateUrlState({ tab });
-  };
+  }, []);
+
+  const openRace = useCallback(
+    (row: Record<string, unknown>) => {
+      const race = incomingFromRow(row);
+      if (!race) return;
+      setIncoming(race);
+      selectTab("simulator");
+    },
+    [selectTab],
+  );
+
+  const clearIncoming = useCallback(() => setIncoming(null), []);
 
   const uploadDataset = async (
     racesBytes: Uint8Array,
@@ -71,15 +87,11 @@ export function App() {
     format: "ipc" | "parquet",
   ) => {
     if (!client) return;
-    const datasetMeta = await client.loadDatasetBytes(
-      racesBytes,
-      resultsBytes,
-      format,
-    );
+    const datasetMeta = await client.loadDatasetBytes(racesBytes, resultsBytes, format);
     setBootResult((prev) => (prev ? { ...prev, datasetMeta } : prev));
   };
 
-  if (!bootResult) {
+  if (!bootResult || !client) {
     return (
       <BootScreen
         progress={progress}
@@ -90,7 +102,6 @@ export function App() {
   }
 
   const { datasetMeta } = bootResult;
-  const tab = TABS.find((t) => t.id === activeTab) ?? TABS[0];
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
@@ -107,7 +118,8 @@ export function App() {
                 </h1>
                 <p className="text-[10px] text-slate-400">
                   {datasetMeta.race_count.toLocaleString()} races ·{" "}
-                  {(bootResult.bootMs / 1000).toFixed(2)}s boot
+                  {(bootResult.bootMs / 1000).toFixed(2)}s boot · Python{" "}
+                  {bootResult.pythonVersion} · Polars {bootResult.polarsVersion}
                 </p>
               </div>
             </div>
@@ -143,34 +155,24 @@ export function App() {
       </header>
 
       <main className="mx-auto w-full max-w-[1600px] flex-1 p-4">
-        {simulatorMounted && client && (
+        <div hidden={activeTab !== "dashboard"}>
+          <DashboardView client={client} meta={datasetMeta} />
+        </div>
+        {visited.has("data") && (
+          <div hidden={activeTab !== "data"}>
+            <RawDataView client={client} meta={datasetMeta} onOpenRace={openRace} />
+          </div>
+        )}
+        {visited.has("simulator") && (
           <div hidden={activeTab !== "simulator"}>
             <SimulatorView
               client={client}
               simMeta={bootResult.simulatorMeta}
               active={activeTab === "simulator"}
+              incoming={incoming}
+              onIncomingConsumed={clearIncoming}
             />
           </div>
-        )}
-        {activeTab !== "simulator" && (
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-          <h2 className="text-base font-semibold text-white">{tab.label}</h2>
-          <p className="mt-1 text-xs text-slate-400">
-            Arrives in {tab.milestone}. The runtime is booted and the dataset is
-            loaded.
-          </p>
-          <dl className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-            <Stat label="Races" value={datasetMeta.race_count.toLocaleString()} />
-            <Stat
-              label="Racer results"
-              value={datasetMeta.result_count.toLocaleString()}
-            />
-            <Stat label="Racers" value={String(datasetMeta.racers.length)} />
-            <Stat label="Boards" value={datasetMeta.boards.join(", ")} />
-            <Stat label="Python" value={bootResult.pythonVersion} />
-            <Stat label="Polars" value={bootResult.polarsVersion} />
-          </dl>
-        </section>
         )}
       </main>
 
@@ -179,17 +181,6 @@ export function App() {
         onClose={() => setUploadOpen(false)}
         onUpload={uploadDataset}
       />
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-      <dt className="text-[10px] uppercase tracking-wide text-slate-500">
-        {label}
-      </dt>
-      <dd className="mt-0.5 font-mono text-slate-200">{value}</dd>
     </div>
   );
 }

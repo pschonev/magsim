@@ -124,6 +124,15 @@ export interface EnvironmentCellDTO {
   games_count: number;
 }
 
+export type SummaryCellDTO = string | number | null;
+
+export interface SummaryTableDTO {
+  id: string;
+  title: string;
+  columns: string[];
+  rows: SummaryCellDTO[][];
+}
+
 export interface DashboardAnalysisDTO {
   filtered_race_count: number;
   filtered_result_count: number;
@@ -135,6 +144,7 @@ export interface DashboardAnalysisDTO {
   distributions_faceted: DistributionBinDTO[];
   matchup_matrix: MatchupCellDTO[];
   environment_matrix: EnvironmentCellDTO[];
+  summary_tables: SummaryTableDTO[];
 }
 
 export interface RawTableQueryDTO {

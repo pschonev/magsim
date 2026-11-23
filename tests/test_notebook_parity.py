@@ -246,3 +246,24 @@ def test_distributions_match_notebook(
         ["board", "racer_count", "series_type", "bin_index"],
         columns={"bin_label": "bin_label", "pct": "pct", "direction": "direction"},
     )
+
+
+def test_summary_tables_match_notebook(
+    pipelines: tuple[AnalysisResult, dict[str, pl.DataFrame], pl.DataFrame],
+) -> None:
+    new, old, _ = pipelines
+    expected = ref.summary_tables(old["stats"])
+
+    assert list(new.summary_tables) == list(expected)
+    for table_id, notebook_df in expected.items():
+        mine = new.summary_tables[table_id]
+        assert mine.columns == notebook_df.columns
+        assert_frame_equal(
+            mine.sort("Racer"),
+            notebook_df.sort("Racer"),
+            check_dtypes=False,
+            rel_tol=REL_TOL,
+            abs_tol=ABS_TOL,
+        )
+        avg_vp = new.racer_stats.sort("mean_vp", descending=True)["racer_name"].to_list()
+        assert mine["Racer"].to_list() == avg_vp

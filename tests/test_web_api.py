@@ -102,7 +102,17 @@ def test_dashboard_ipc_analysis_and_raw_tables(
     assert len(races_page.rows) == 10
     assert "timestamp" not in races_page.columns
     assert any(col.startswith("Has ") for col in races_page.columns)
-    assert races_page.frozen_columns[:3] == ["board", "racer_count", "total_turns"]
+    priority = ["roster_display", "board", "racer_count", "seed", "error_code", "total_turns"]
+    assert races_page.frozen_columns == priority
+    assert races_page.columns[: len(priority)] == priority
+    first_flag = next(i for i, c in enumerate(races_page.columns) if c.startswith("Has "))
+    assert first_flag == len(priority)
+    flags = [c for c in races_page.columns if c.startswith("Has ")]
+    assert flags == sorted(flags)
+    rest = races_page.columns[first_flag + len(flags) :]
+    assert rest[0] == "config_hash"
+    assert "racer_names" in rest
+    assert "roster_display" not in rest
 
     first_hash = str(races_page.rows[0]["config_hash"])
     race_row = get_race_by_hash(dataset, first_hash)

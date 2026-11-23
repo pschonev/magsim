@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import polars as pl
 
+from magsim.analysis.tables import build_summary_tables
 from magsim.analysis.interactions import (
     compute_environment_matrix,
     compute_matchup_matrix,
@@ -55,6 +56,7 @@ class AnalysisResult:
     distributions_faceted: pl.DataFrame
     matchup_matrix: pl.DataFrame
     environment_matrix: pl.DataFrame
+    summary_tables: dict[str, pl.DataFrame]
 
 
 def prepare_metrics_data(
@@ -601,4 +603,5 @@ def run_full_analysis(
         distributions_faceted=dist_faceted,
         matchup_matrix=matchup_matrix,
         environment_matrix=environment_matrix,
+        summary_tables=build_summary_tables(racer_stats),
     )
