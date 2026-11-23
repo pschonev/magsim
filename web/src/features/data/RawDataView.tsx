@@ -138,8 +138,8 @@ export function RawDataView({ client, meta, onOpenRace }: RawDataViewProps) {
               onClick={() => selectTab(tab.id)}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 tab.id === query.table
-                  ? "bg-indigo-600 text-white"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                  ? "bg-indigo-600 text-on-accent"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-50"
               }`}
             >
               {tab.label}

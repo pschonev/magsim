@@ -7,16 +7,21 @@ from magsim.core.events import (
     AbilityTriggeredEvent,
     BaseValueModificationEvent,
     MainMoveSkippedEvent,
+    PerformMainRollEvent,
     PostMoveEvent,
     PostWarpEvent,
+    RollModificationWindowEvent,
     RollResultEvent,
     TripRecoveryEvent,
 )
+from magsim.racers.hog_knight import HOG_BONUS
+from magsim.racers.party_pooper import REJECTED_VALUE
+from magsim.racers.stunner import AURA_RANGE, FORCED_VALUE
 from magsim.simulation.db.models import RacerResult
 
 if TYPE_CHECKING:
     from magsim.core.events import GameEvent
-    from magsim.core.types import AbilityName, ModifierName
+    from magsim.core.types import AbilityName, ModifierName, Source
     from magsim.engine.game_engine import GameEngine
 
 
@@ -175,6 +180,18 @@ class TurnRecord:
     dice_roll: int
 
 
+SYSTEM_SOURCES: tuple[Source, ...] = ("Board", "System")
+PARTY_POOPER_COMPLAINT: AbilityName = "PartyPooperNoiseComplaint"
+NEMESIS_MATCH: AbilityName = "NemesisGrudgeMatch"
+HOG_MODIFIER: ModifierName = "HogKnightHog"
+HOG_KNIGHT_ABILITY: AbilityName = "HogKnightPiggyback"
+SHOW_OFF_ABILITY: AbilityName = "ShowOffGuysWatch"
+MR_DICE_GUY_ABILITY: AbilityName = "MrDiceGuyMore"
+STUNNER_ABILITY: AbilityName = "StunnerStopTraffic"
+NEPO_BABY_START: AbilityName = "NepoBabyStart"
+EXPECTED_D6 = 3.5
+
+
 @dataclass(slots=True)
 class MetricsAggregator:
     """
@@ -188,6 +205,14 @@ class MetricsAggregator:
     turn_history: list[TurnRecord] = field(default_factory=list)
     race_one_turns: dict[int, int] = field(default_factory=dict)
     race_one_finish: dict[int, int | None] = field(default_factory=dict)
+
+    # Re-roll accounting: a re-roll moves the rolled racer by (new - old) on behalf of its source.
+    window_value: dict[int, int] = field(default_factory=dict)
+    reroll_source: Source | None = None
+    reroll_owner: int | None = None
+    last_single_die: dict[int, int] = field(default_factory=dict)
+    pooper_rejections: set[tuple[int, int]] = field(default_factory=set)
+    window_sources: dict[int, list[tuple[str, int]]] = field(default_factory=dict)
 
     # COLUMNAR BUFFER: Dict of Lists
     position_logs: PositionLogColumns = field(
@@ -211,6 +236,27 @@ class MetricsAggregator:
                 racer_id=racer.idx,
                 racer_name=racer.name,
             )
+            if self._has_ability(engine, racer.idx, NEPO_BABY_START):
+                self._record_movement_bucket(racer.idx, racer.idx, racer.position)
+
+    @staticmethod
+    def _ability_owner(engine: GameEngine, ability_name: str) -> int | None:
+        """Index of the first racer holding the ability, if any."""
+        return next(
+            (
+                r.idx
+                for r in engine.state.racers
+                if any(a.name == ability_name for a in r.active_abilities)
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _has_ability(engine: GameEngine, racer_idx: int, ability_name: str) -> bool:
+        return any(
+            a.name == ability_name
+            for a in engine.get_racer(racer_idx).active_abilities
+        )
 
     def _get_result(self, racer_idx: int) -> RacerResult:
         return self.results[racer_idx]
@@ -264,32 +310,92 @@ class MetricsAggregator:
                     )
 
             # --- 3. DICE MODIFIERS (Hare / Gunk) ---
+            case PerformMainRollEvent():
+                self.reroll_source = (
+                    None if event.source in SYSTEM_SOURCES else event.source
+                )
+                self.reroll_owner = None
+
+            case RollModificationWindowEvent():
+                self.window_sources[event.target_racer_idx] = list(
+                    event.modifier_breakdown,
+                )
+                previous = self.window_value.get(event.target_racer_idx)
+                self.window_value[event.target_racer_idx] = event.current_roll_val
+                if (
+                    self.reroll_owner is not None
+                    and previous is not None
+                    and event.source == self.reroll_source
+                ):
+                    self._record_movement_bucket(
+                        responsible_idx=self.reroll_owner,
+                        target_idx=event.target_racer_idx,
+                        delta=event.current_roll_val - previous,
+                    )
+                    self.reroll_owner = None
+
             case RollResultEvent():
+                if len(event.dice_values) == 1:
+                    self.last_single_die[event.target_racer_idx] = event.dice_values[0]
                 stats = self._get_result(event.target_racer_idx)
                 if event.dice_value is not None:
                     stats.sum_dice_rolled += event.dice_value
                     stats.rolling_turns += 1
 
+                hog_owner = (
+                    self._ability_owner(engine, HOG_KNIGHT_ABILITY)
+                    if any(
+                        source == HOG_MODIFIER
+                        for source, _ in self.window_sources.get(
+                            event.target_racer_idx,
+                            [],
+                        )
+                    )
+                    else None
+                )
                 for roll_modifier in event.modifier_breakdown:
+                    responsible_idx = roll_modifier.rolling_racer_idx
+                    if (
+                        hog_owner is not None
+                        and responsible_idx == event.target_racer_idx
+                        and roll_modifier.delta == HOG_BONUS
+                    ):
+                        # The hog's bonus belongs to Hog Knight, not to the current rider
+                        responsible_idx = hog_owner
+                        hog_owner = None
                     # Treat dice modification as movement
                     self._record_movement_bucket(
-                        responsible_idx=roll_modifier.rolling_racer_idx,
+                        responsible_idx=responsible_idx,
                         target_idx=event.target_racer_idx,
                         delta=roll_modifier.delta,
                     )
+                self._record_dice_ability_movement(event, engine)
 
             # --- 4. ABILITY TRIGGERS ---
             case AbilityTriggeredEvent():
-                stats = self._get_result(event.responsible_racer_idx)
+                responsible_idx = event.responsible_racer_idx
+                if event.source == HOG_MODIFIER:
+                    # The hog is ridden by whoever took it, but its owner is Hog Knight
+                    hog_owner_idx = self._ability_owner(engine, HOG_KNIGHT_ABILITY)
+                    if hog_owner_idx is not None:
+                        responsible_idx = hog_owner_idx
+                if event.source == self.reroll_source:
+                    self.reroll_owner = responsible_idx
+                if event.source == PARTY_POOPER_COMPLAINT:
+                    self.pooper_rejections.add(
+                        (responsible_idx, engine.state.current_racer_idx),
+                    )
+                stats = self._get_result(responsible_idx)
                 stats.ability_trigger_count += 1
-                if event.responsible_racer_idx == event.target_racer_idx:
+                if responsible_idx == event.target_racer_idx:
                     stats.ability_self_target_count += 1
-                if event.responsible_racer_idx == engine.state.current_racer_idx:
+                if responsible_idx == engine.state.current_racer_idx:
                     stats.ability_own_turn_count += 1
 
-                if event.target_racer_idx is not None:
+                # Nemesis also pushes a real move, which is recorded as a move event
+                if event.target_racer_idx is not None and event.source != NEMESIS_MATCH:
                     self._record_movement_bucket(
-                        responsible_idx=event.responsible_racer_idx,
+                        responsible_idx=responsible_idx,
                         target_idx=event.target_racer_idx,
                         delta=event.movement_distance,
                     )
@@ -330,6 +436,39 @@ class MetricsAggregator:
             case _:
                 pass
 
+    def _record_dice_ability_movement(
+        self,
+        event: RollResultEvent,
+        engine: GameEngine,
+    ) -> None:
+        """Movement that comes from how a racer's dice are rolled, measured against an average d6."""
+        roller = event.target_racer_idx
+        dice = event.dice_values
+        if len(dice) == 1 and dice[0] == FORCED_VALUE:
+            roller_state = engine.get_racer(roller)
+            stunner_idx = next(
+                (
+                    r.idx
+                    for r in engine.get_active_racers()
+                    if r.idx != roller
+                    and any(a.name == STUNNER_ABILITY for a in r.active_abilities)
+                    and abs(roller_state.position - r.position) <= AURA_RANGE
+                ),
+                None,
+            )
+            if stunner_idx is not None:
+                self._record_movement_bucket(
+                    stunner_idx,
+                    roller,
+                    FORCED_VALUE - EXPECTED_D6,
+                )
+        if len(dice) < 2 or event.base_value <= 0:
+            return
+        if self._has_ability(engine, roller, SHOW_OFF_ABILITY):
+            self._record_movement_bucket(roller, roller, event.base_value - dice[0])
+        if self._has_ability(engine, roller, MR_DICE_GUY_ABILITY):
+            self._record_movement_bucket(roller, roller, event.base_value - EXPECTED_D6)
+
     def on_turn_end(
         self,
         engine: GameEngine,
@@ -342,6 +481,16 @@ class MetricsAggregator:
             if active_racer_idx is not None
             else engine.state.current_racer_idx
         )
+
+        for owner_idx, roller_idx in self.pooper_rejections:
+            if (die := self.last_single_die.get(roller_idx)) is not None:
+                self._record_movement_bucket(
+                    responsible_idx=owner_idx,
+                    target_idx=roller_idx,
+                    delta=die - REJECTED_VALUE,
+                )
+        self.pooper_rejections.clear()
+        self.last_single_die.clear()
 
         # 1. Standard Stats (unchanged)
         if 0 <= racer_idx < len(engine.state.racers):

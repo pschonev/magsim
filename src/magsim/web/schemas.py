@@ -134,6 +134,27 @@ class MatchupCellDTO(msgspec.Struct, frozen=True):
     games_together: int
 
 
+class TriggerInductionCellDTO(msgspec.Struct, frozen=True):
+    """How much `racer_name`'s ability triggers more or less when `opponent_name` is in the race."""
+
+    racer_name: str
+    opponent_name: str
+    avg_triggers_with: float
+    baseline_triggers: float
+    relative_shift: float
+    games_together: int
+
+
+class TriggerPullRowDTO(msgspec.Struct, frozen=True):
+    """How much other racers' abilities trigger in this racer's races, and how long they last."""
+
+    racer_name: str
+    color: str
+    others_trigger_ratio: float
+    avg_turns: float
+    races_run: int
+
+
 class EnvironmentCellDTO(msgspec.Struct, frozen=True):
     """Single cell in the racer-vs-environment adaptability matrix."""
 
@@ -145,7 +166,12 @@ class EnvironmentCellDTO(msgspec.Struct, frozen=True):
     racer_global_avg_vp: float
     relative_shift: float
     absolute_shift: float
+    env_mean_relative_shift: float
+    env_mean_absolute_shift: float
+    adjusted_relative_shift: float
+    adjusted_absolute_shift: float
     games_count: int
+    twist: str | None = None
 
 
 type SummaryCellDTO = str | int | float | None
@@ -177,6 +203,10 @@ class DashboardAnalysisDTO(msgspec.Struct, frozen=True):
     )
     matchup_matrix: list[MatchupCellDTO] = msgspec.field(default_factory=list)
     environment_matrix: list[EnvironmentCellDTO] = msgspec.field(default_factory=list)
+    trigger_induction: list[TriggerInductionCellDTO] = msgspec.field(
+        default_factory=list,
+    )
+    trigger_pull: list[TriggerPullRowDTO] = msgspec.field(default_factory=list)
     summary_tables: list[SummaryTableDTO] = msgspec.field(default_factory=list)
 
 

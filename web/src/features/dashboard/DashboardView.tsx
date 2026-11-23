@@ -1,6 +1,7 @@
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import type { DatasetMetaDTO, EngineClient } from "../../types/api";
+import { AnalysisPanel } from "./AnalysisPanel";
 import { FilterPanel } from "./FilterPanel";
-import { SummaryTables } from "./SummaryTables";
 import { useDashboard } from "./useDashboard";
 
 interface DashboardViewProps {
@@ -28,20 +29,19 @@ export function DashboardView({ client, meta }: DashboardViewProps) {
 
       {message && (
         <div className="rounded-lg border border-rose-500/40 bg-rose-950/40 p-3 text-xs font-semibold text-rose-300">
-          ⚠ {message}
+          <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+          {message}
         </div>
       )}
 
       {!message && analysis && (
         <>
           <p className="text-xs text-slate-300">
-            ✅ <strong>{analysis.filtered_race_count.toLocaleString()}</strong> races
+            <CheckCircle2 className="mr-1 inline h-3.5 w-3.5 text-emerald-400" />
+            <strong>{analysis.filtered_race_count.toLocaleString()}</strong> races
             analyzed.
           </p>
-          <SummaryTables
-            tables={analysis.summary_tables}
-            racerColors={meta.racer_colors}
-          />
+          <AnalysisPanel analysis={analysis} racerColors={meta.racer_colors} />
         </>
       )}
 

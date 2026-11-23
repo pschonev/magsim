@@ -9,6 +9,9 @@ import polars as pl
 from magsim.analysis.tables import build_summary_tables
 from magsim.analysis.interactions import (
     compute_environment_matrix,
+    compute_trigger_induction,
+    compute_trigger_pull,
+    compute_twist_environment_matrix,
     compute_matchup_matrix,
 )
 
@@ -56,6 +59,9 @@ class AnalysisResult:
     distributions_faceted: pl.DataFrame
     matchup_matrix: pl.DataFrame
     environment_matrix: pl.DataFrame
+    twist_environment_matrix: pl.DataFrame
+    trigger_induction: pl.DataFrame
+    trigger_pull: pl.DataFrame
     summary_tables: dict[str, pl.DataFrame]
 
 
@@ -594,6 +600,16 @@ def run_full_analysis(
     dist_global, dist_faceted = compute_distributions(prepared.dist_raw)
     matchup_matrix = compute_matchup_matrix(prepared.stats_results, racer_stats)
     environment_matrix = compute_environment_matrix(prepared.stats_results, df_races_f)
+    twist_environment_matrix = compute_twist_environment_matrix(
+        prepared.stats_results,
+        df_races_f,
+    )
+    trigger_induction = compute_trigger_induction(prepared.stats_results)
+    trigger_pull = compute_trigger_pull(
+        trigger_induction,
+        prepared.stats_results,
+        df_races_f,
+    )
 
     return AnalysisResult(
         racer_stats=racer_stats,
@@ -603,5 +619,8 @@ def run_full_analysis(
         distributions_faceted=dist_faceted,
         matchup_matrix=matchup_matrix,
         environment_matrix=environment_matrix,
+        twist_environment_matrix=twist_environment_matrix,
+        trigger_induction=trigger_induction,
+        trigger_pull=trigger_pull,
         summary_tables=build_summary_tables(racer_stats),
     )

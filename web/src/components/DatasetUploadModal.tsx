@@ -63,14 +63,14 @@ export function DatasetUploadModal({
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Upload className="h-4 w-4 text-indigo-400" />
-            <h2 className="text-base font-semibold text-white">
+            <h2 className="text-base font-semibold text-slate-50">
               Load Custom Dataset
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-50"
           >
             <X className="h-4 w-4" />
           </button>
@@ -127,7 +127,7 @@ export function DatasetUploadModal({
               type="button"
               onClick={handleSubmit}
               disabled={loading || !racesFile || !resultsFile}
-              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-medium text-on-accent hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Loading dataset..." : "Load Dataset"}
             </button>

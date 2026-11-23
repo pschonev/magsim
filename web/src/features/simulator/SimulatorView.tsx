@@ -131,21 +131,57 @@ export function SimulatorView({
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <SimulatorConfigPanel
-        simMeta={simMeta}
-        config={config}
-        onChange={setConfig}
-        encodedConfig={result?.encoded_config ?? ""}
-        onImportEncoded={importEncoded}
-        onReset={() => {
-          setPlaying(false);
-          setStepIndex(0);
-        }}
-        running={running}
-        diceError={configDiceError}
-      />
+      <div className="flex w-full shrink-0 flex-col gap-3 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:w-80 lg:overflow-y-auto">
+        <SimulatorConfigPanel
+          simMeta={simMeta}
+          config={config}
+          onChange={setConfig}
+          encodedConfig={result?.encoded_config ?? ""}
+          onImportEncoded={importEncoded}
+          onReset={() => {
+            setPlaying(false);
+            setStepIndex(0);
+          }}
+          running={running}
+          diceError={configDiceError}
+        />
 
-      <div className="min-w-0 flex-1 space-y-4">
+        {result && step && (
+          <>
+            <PlaybackBar
+              steps={result.steps}
+              turnMap={result.turn_map}
+              stepIndex={stepIndex}
+              onStepChange={setStepIndex}
+              playing={playing}
+              onPlayingChange={setPlaying}
+              speedMs={speedMs}
+              onSpeedChange={setSpeedMs}
+              keyboardEnabled={active}
+            />
+
+            <div className="grid grid-cols-2 gap-2">
+              {step.names.map((name, idx) => (
+                <RacerCard
+                  key={`${name}-${idx}`}
+                  name={name}
+                  color={result.racer_palettes[name]?.primary ?? "#818cf8"}
+                  isCurrent={step.current_racer === idx}
+                  place={step.finish_positions[idx]}
+                  tile={step.positions[idx]}
+                  vp={step.vp[idx]}
+                  startVp={result.steps[0]?.vp[idx] ?? 0}
+                  tripped={step.tripped[idx]}
+                  eliminated={step.eliminated[idx]}
+                  sidelined={step.sidelined[idx]}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1 space-y-3">
         {error && (
           <div className="rounded-lg border border-rose-500/40 bg-rose-950/50 p-3 text-xs text-rose-200">
             {error}
@@ -159,35 +195,6 @@ export function SimulatorView({
               board={board}
               racerPalettes={result.racer_palettes}
             />
-
-            <PlaybackBar
-              steps={result.steps}
-              turnMap={result.turn_map}
-              stepIndex={stepIndex}
-              onStepChange={setStepIndex}
-              playing={playing}
-              onPlayingChange={setPlaying}
-              speedMs={speedMs}
-              onSpeedChange={setSpeedMs}
-              keyboardEnabled={active}
-            />
-
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
-              {step.names.map((name, idx) => (
-                <RacerCard
-                  key={`${name}-${idx}`}
-                  name={name}
-                  color={result.racer_palettes[name]?.primary ?? "#818cf8"}
-                  isCurrent={step.current_racer === idx}
-                  place={step.finish_positions[idx]}
-                  tile={step.positions[idx]}
-                  vp={step.vp[idx]}
-                  tripped={step.tripped[idx]}
-                  eliminated={step.eliminated[idx]}
-                  sidelined={step.sidelined[idx]}
-                />
-              ))}
-            </div>
 
             <LogViewer
               logs={result.logs}
@@ -218,6 +225,7 @@ interface RacerCardProps {
   place: number | null;
   tile: number | null;
   vp: number;
+  startVp: number;
   tripped: boolean;
   eliminated: boolean;
   sidelined: boolean;
@@ -230,6 +238,7 @@ function RacerCard({
   place,
   tile,
   vp,
+  startVp,
   tripped,
   eliminated,
   sidelined,
@@ -248,7 +257,7 @@ function RacerCard({
             className="h-2.5 w-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: color }}
           />
-          <span className="truncate font-semibold text-white">{name}</span>
+          <span className="truncate font-semibold text-slate-50">{name}</span>
         </div>
         {place !== null && (
           <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
@@ -262,6 +271,11 @@ function RacerCard({
         </span>
         <span>
           VP: <strong className="text-sky-300">{vp}</strong>
+          {startVp > 0 && (
+            <span className="ml-1 text-[10px] text-slate-500" title="VP carried over from earlier races">
+              (+{startVp} start)
+            </span>
+          )}
         </span>
       </div>
       {(tripped || eliminated || sidelined) && (

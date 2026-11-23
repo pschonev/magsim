@@ -18,13 +18,9 @@ dependencies = [
 Repository = "https://github.com/pschonev/magsim"
 Changelog = "https://github.com/pschonev/magsim/blob/main/CHANGELOG.md"
 
-[project.optional-dependencies]
-frontend = ["marimo==0.18.4", "altair==6.0.0", "numpy>=2.4.1"]
-
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
-    "marimo[lsp]",
     "ruff>=0.14.10",
     "poethepoet>=0.40.0",
     "commitizen>=4.11.0",
@@ -89,7 +85,11 @@ clean = "rm -rf dist"
 bump-files = "cz bump --yes --files-only"
 release-prep = "python scripts/release_prep.py"
 
-git-add = "git add pyproject.toml uv.lock CHANGELOG.md docs/ frontend/magical_athlete_analysis.py"
+web-assets = "python scripts/prepare_web_assets.py"
+web-dev = { sequence = ["web-assets", { cmd = "npm run dev", cwd = "web" }] }
+web-build = { sequence = ["web-assets", { cmd = "npm run build", cwd = "web" }] }
+
+git-add = "git add pyproject.toml uv.lock CHANGELOG.md docs/results"
 git-finalize = "python scripts/release_git.py"
 
 release-build = "uv build"

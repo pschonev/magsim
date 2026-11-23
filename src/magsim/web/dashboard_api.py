@@ -35,6 +35,8 @@ from magsim.web.schemas import (
     RawTablePageDTO,
     RawTableQueryDTO,
     SummaryTableDTO,
+    TriggerInductionCellDTO,
+    TriggerPullRowDTO,
 )
 
 RACE_PRIORITY_COLUMNS: tuple[str, ...] = (
@@ -286,7 +288,38 @@ def _df_to_matchup_matrix(df: pl.DataFrame) -> list[MatchupCellDTO]:
     ]
 
 
-def _df_to_environment_matrix(df: pl.DataFrame) -> list[EnvironmentCellDTO]:
+def _df_to_trigger_induction(df: pl.DataFrame) -> list[TriggerInductionCellDTO]:
+    if df.is_empty():
+        return []
+    return [
+        TriggerInductionCellDTO(
+            racer_name=str(row["racer_name"]),
+            opponent_name=str(row["opponent_name"]),
+            avg_triggers_with=_safe_float(row["avg_triggers_with"]),
+            baseline_triggers=_safe_float(row["baseline_triggers"]),
+            relative_shift=_safe_float(row["relative_shift"]),
+            games_together=_safe_int(row["games_together"]),
+        )
+        for row in df.to_dicts()
+    ]
+
+
+def _df_to_trigger_pull(df: pl.DataFrame) -> list[TriggerPullRowDTO]:
+    if df.is_empty():
+        return []
+    return [
+        TriggerPullRowDTO(
+            racer_name=str(row["racer_name"]),
+            color=get_racer_color(str(row["racer_name"])),
+            others_trigger_ratio=_safe_float(row["others_trigger_ratio"]),
+            avg_turns=_safe_float(row["avg_turns"]),
+            races_run=_safe_int(row["races_run"]),
+        )
+        for row in df.to_dicts()
+    ]
+
+
+def _df_to_environment_cells(df: pl.DataFrame) -> list[EnvironmentCellDTO]:
     if df.is_empty():
         return []
     return [
@@ -299,9 +332,24 @@ def _df_to_environment_matrix(df: pl.DataFrame) -> list[EnvironmentCellDTO]:
             racer_global_avg_vp=_safe_float(row["racer_global_avg_vp"]),
             relative_shift=_safe_float(row["relative_shift"]),
             absolute_shift=_safe_float(row["absolute_shift"]),
+            env_mean_relative_shift=_safe_float(row["env_mean_relative_shift"]),
+            env_mean_absolute_shift=_safe_float(row["env_mean_absolute_shift"]),
+            adjusted_relative_shift=_safe_float(row["adjusted_relative_shift"]),
+            adjusted_absolute_shift=_safe_float(row["adjusted_absolute_shift"]),
             games_count=_safe_int(row["games_count"]),
+            twist=row.get("twist"),
         )
         for row in df.to_dicts()
+    ]
+
+
+def _df_to_environment_matrix(
+    environment: pl.DataFrame,
+    twist_environment: pl.DataFrame,
+) -> list[EnvironmentCellDTO]:
+    return [
+        *_df_to_environment_cells(environment),
+        *_df_to_environment_cells(twist_environment),
     ]
 
 
@@ -383,7 +431,12 @@ def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
         distributions_global=_df_to_distributions(result.distributions_global),
         distributions_faceted=_df_to_distributions(result.distributions_faceted),
         matchup_matrix=_df_to_matchup_matrix(result.matchup_matrix),
-        environment_matrix=_df_to_environment_matrix(result.environment_matrix),
+        environment_matrix=_df_to_environment_matrix(
+            result.environment_matrix,
+            result.twist_environment_matrix,
+        ),
+        trigger_induction=_df_to_trigger_induction(result.trigger_induction),
+        trigger_pull=_df_to_trigger_pull(result.trigger_pull),
         summary_tables=_df_to_summary_tables(result.summary_tables),
     )
 

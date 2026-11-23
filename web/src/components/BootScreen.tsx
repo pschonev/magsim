@@ -16,7 +16,7 @@ export function BootScreen({ progress, error, onRetry }: BootScreenProps) {
             <Cpu className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-white">
+            <h1 className="text-lg font-bold tracking-tight text-slate-50">
               Magical Athlete
             </h1>
             <p className="text-xs text-slate-400">
@@ -34,7 +34,7 @@ export function BootScreen({ progress, error, onRetry }: BootScreenProps) {
             <button
               type="button"
               onClick={onRetry}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-on-accent hover:bg-indigo-500"
             >
               <RefreshCw className="h-4 w-4" />
               Retry Runtime Boot

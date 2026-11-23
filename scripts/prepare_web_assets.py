@@ -13,6 +13,9 @@ from pathlib import Path
 from magsim.analysis.export import export_parquet_to_ipc
 
 PYODIDE_VERSION = "314.0.8"
+DATASET_FILES = ("races.parquet", "racer_results.parquet")
+BATCH_RESULTS_DIR = Path("results")
+SNAPSHOT_RESULTS_DIR = Path("docs") / "results"
 
 
 def build_wheel(repo_root: Path, wheels_dir: Path) -> Path:
@@ -40,17 +43,21 @@ def build_wheel(repo_root: Path, wheels_dir: Path) -> Path:
     return wheel.replace(hashed_dir / wheel.name)
 
 
-def export_ipc_if_needed(src_parquet: Path, dst_ipc: Path, *, force: bool) -> None:
-    """Export a Parquet dataset to zstd Arrow IPC if missing or stale."""
+def resolve_results_dir(repo_root: Path, override: Path | None) -> Path:
+    """Explicit dir, else the latest batch output in results/, else the committed docs/results snapshot."""
+    if override is not None:
+        return override
+    batch_dir = repo_root / BATCH_RESULTS_DIR
+    if all((batch_dir / name).exists() for name in DATASET_FILES):
+        return batch_dir
+    return repo_root / SNAPSHOT_RESULTS_DIR
+
+
+def export_ipc(src_parquet: Path, dst_ipc: Path) -> None:
+    """Export a Parquet dataset to zstd Arrow IPC."""
     if not src_parquet.exists():
         msg = f"Missing source dataset: {src_parquet}"
         raise FileNotFoundError(msg)
-    if (
-        not force
-        and dst_ipc.exists()
-        and dst_ipc.stat().st_mtime >= src_parquet.stat().st_mtime
-    ):
-        return
     export_parquet_to_ipc(src_parquet, dst_ipc, compression="zstd")
 
 
@@ -59,11 +66,11 @@ def prepare_web_assets(
     *,
     public_dir: Path | None = None,
     results_source_dir: Path | None = None,
-    force_export: bool = False,
 ) -> dict[str, str]:
     """Build wheel + Arrow IPC assets into web/public and write runtime-manifest.json."""
     target_public = public_dir or (repo_root / "web" / "public")
-    source_results = results_source_dir or (repo_root / "docs" / "results")
+    source_results = resolve_results_dir(repo_root, results_source_dir)
+    print(f"Datasets: {source_results}", file=sys.stderr)
 
     wheels_dir = target_public / "wheels"
     results_dir = target_public / "results"
@@ -73,16 +80,8 @@ def prepare_web_assets(
     races_ipc = results_dir / "races.zstd.ipc"
     results_ipc = results_dir / "racer_results.zstd.ipc"
 
-    export_ipc_if_needed(
-        source_results / "races.parquet",
-        races_ipc,
-        force=force_export,
-    )
-    export_ipc_if_needed(
-        source_results / "racer_results.parquet",
-        results_ipc,
-        force=force_export,
-    )
+    export_ipc(source_results / "races.parquet", races_ipc)
+    export_ipc(source_results / "racer_results.parquet", results_ipc)
 
     manifest = {
         "wheel": wheel_path.relative_to(target_public).as_posix(),
@@ -98,13 +97,16 @@ def prepare_web_assets(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--force-export",
-        action="store_true",
-        help="Re-export .zstd.ipc files even when newer than source .parquet files.",
+        "--results-dir",
+        type=Path,
+        help="Directory with races.parquet and racer_results.parquet (default: results/, else docs/results/).",
     )
     args = parser.parse_args(argv)
     repo_root = Path(__file__).resolve().parent.parent
-    manifest = prepare_web_assets(repo_root, force_export=args.force_export)
+    manifest = prepare_web_assets(
+        repo_root,
+        results_source_dir=args.results_dir,
+    )
     print(json.dumps(manifest, indent=2))
     return 0
 

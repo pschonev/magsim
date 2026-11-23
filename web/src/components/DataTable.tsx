@@ -2,11 +2,9 @@ import {
   columnFilteringFeature,
   createColumnHelper,
   createFilteredRowModel,
-  createPaginatedRowModel,
   createSortedRowModel,
   filterFn_includesString,
   globalFilteringFeature,
-  rowPaginationFeature,
   rowSortingFeature,
   sortFn_alphanumeric,
   sortFn_text,
@@ -25,14 +23,11 @@ const features = tableFeatures({
   rowSortingFeature,
   sortedRowModel: createSortedRowModel(),
   sortFns: { alphanumeric: sortFn_alphanumeric, text: sortFn_text },
-  rowPaginationFeature,
-  paginatedRowModel: createPaginatedRowModel(),
 });
 
 type Row = Record<string, SummaryCellDTO>;
 
 const helper = createColumnHelper<typeof features, Row>();
-const PAGE_SIZE = 50;
 
 interface DataTableProps {
   columns: string[];
@@ -70,16 +65,13 @@ export function DataTable({ columns, rows, racerColors }: DataTableProps) {
     columns: columnDefs,
     data,
     globalFilterFn: "includesString",
-    initialState: { pagination: { pageIndex: 0, pageSize: PAGE_SIZE } },
   });
 
-  const { pageIndex } = table.state.pagination;
-  const total = table.getRowCount();
-  const first = total === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
-  const last = Math.min(total, (pageIndex + 1) * PAGE_SIZE);
+  const total = table.getRowModel().rows.length;
 
   return (
     <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
       <div className="relative w-64">
         <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
         <input
@@ -90,10 +82,12 @@ export function DataTable({ columns, rows, racerColors }: DataTableProps) {
           className="w-full rounded-md border border-slate-700 bg-slate-950 py-1.5 pr-2 pl-7 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
         />
       </div>
+      <span className="text-[11px] text-slate-400">{total.toLocaleString()} rows</span>
+      </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-800">
+      <div className="max-h-[calc(100vh-13rem)] overflow-auto rounded-lg border border-slate-800">
         <table className="w-full border-collapse text-xs">
-          <thead className="bg-slate-900">
+          <thead className="sticky top-0 z-10 bg-slate-900">
             {table.getHeaderGroups().map((group) => (
               <tr key={group.id}>
                 {group.headers.map((header) => {
@@ -101,7 +95,7 @@ export function DataTable({ columns, rows, racerColors }: DataTableProps) {
                   return (
                     <th
                       key={header.id}
-                      className="cursor-pointer border-b border-slate-800 px-3 py-2 text-left font-semibold whitespace-nowrap text-slate-300 select-none hover:text-white"
+                      className="cursor-pointer border-b border-slate-800 px-3 py-2 text-left font-semibold whitespace-nowrap text-slate-300 select-none hover:text-slate-50"
                       onClick={header.column.getToggleSortingHandler()}
                     >
                       <span className="inline-flex items-center gap-1">
@@ -148,30 +142,6 @@ export function DataTable({ columns, rows, racerColors }: DataTableProps) {
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="flex items-center justify-between text-[11px] text-slate-400">
-        <span>
-          {first}-{last} of {total.toLocaleString()}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            disabled={!table.getCanPreviousPage()}
-            onClick={() => table.previousPage()}
-            className="rounded border border-slate-700 px-2 py-1 hover:bg-slate-800 disabled:opacity-40"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={!table.getCanNextPage()}
-            onClick={() => table.nextPage()}
-            className="rounded border border-slate-700 px-2 py-1 hover:bg-slate-800 disabled:opacity-40"
-          >
-            Next
-          </button>
-        </div>
       </div>
     </div>
   );

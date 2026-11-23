@@ -250,8 +250,8 @@ export function InteractionHeatmaps({
             onClick={() => setTab("matchups")}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               tab === "matchups"
-                ? "bg-indigo-600 text-white"
-                : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                ? "bg-indigo-600 text-on-accent"
+                : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-slate-50"
             }`}
           >
             Matchup Interactions
@@ -261,8 +261,8 @@ export function InteractionHeatmaps({
             onClick={() => setTab("environment")}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               tab === "environment"
-                ? "bg-indigo-600 text-white"
-                : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                ? "bg-indigo-600 text-on-accent"
+                : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-slate-50"
             }`}
           >
             Environment Adaptability
@@ -275,7 +275,7 @@ export function InteractionHeatmaps({
             onClick={() => setMode("shift")}
             className={`rounded-md px-2.5 py-1 font-medium ${
               mode === "shift"
-                ? "bg-slate-800 text-white"
+                ? "bg-slate-800 text-slate-50"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
@@ -286,7 +286,7 @@ export function InteractionHeatmaps({
             onClick={() => setMode("absolute")}
             className={`rounded-md px-2.5 py-1 font-medium ${
               mode === "absolute"
-                ? "bg-slate-800 text-white"
+                ? "bg-slate-800 text-slate-50"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >

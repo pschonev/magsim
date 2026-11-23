@@ -5,7 +5,6 @@
 
 <p align="center">
   <a href="#installation"><img alt="Python" src="https://img.shields.io/badge/python-3.12%2B-blue?color=539912&logo=python&logoColor=white" /></a>
-  <a href="https://marimo.io/"><img alt="Marimo" src="https://img.shields.io/badge/marimo-dashboard-blue?color=ee83b3&logo=marimo&logoColor=white" /></a>
   <a href="#development"><img alt="CI" src="https://img.shields.io/badge/tests-pytest-green?color=6ca1d8&logo=githubactions&logoColor=white" /></a>
   <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue?color=f6ae00" /></a>
 </p>
@@ -41,14 +40,14 @@
 `magsim` translates the physical game into a high-performance Python engine. Capable of running 60+ full races per second with complete state logging, it allows you to:
 - **Simulate Races:** Run single game simulations in the command line or UI
 - **Data Generation:** Run high-volume batch simulations to generate datasets for analysis
-- **Visual Analytics:** Visualize races and analyze aggregated data in a reactive `marimo` dashboard
+- **Visual Analytics:** Visualize races and analyze aggregated data in an interactive web dashboard that runs fully in your browser (Pyodide)
 - **A/B Experiments:** Pit Smart AI against Random AI, compare the impact of racers and measure modifying rules changes the balance via the CLI tool
 
 ---
 
 ## Quickstart
 
-The fastest way to use `magsim` is **via the [web-based frontend](LINK)**. The dashboard runs in WASM-mode, expect long loading times.
+The fastest way to use `magsim` is **via the [web app](https://pschonev.github.io/magsim/)**. Python runs in your browser (Pyodide), so the first load downloads the runtime.
 
 To run `magsim` locally, I recommend using `uv` ([Install `uv` here](https://docs.astral.sh/uv/getting-started/installation/)). 
 
@@ -178,10 +177,12 @@ cd magical-athlete-simulator
 magsim batch configs/sim.toml
 ```
 
-**3. Start the dashboard:**
+**3. Build and start the dashboard with your results:**
 ```bash
-uv run marimo run --no-sandbox frontend/magical_athlete_analysis.py
+uv run poe web-build   # uses results/ if present, else the committed docs/results snapshot
+uv run magsim gui      # serves web/dist locally; without a build it opens the hosted app
 ```
+Requires Node.js. During development use `uv run poe web-dev` instead.
 
 ---
 

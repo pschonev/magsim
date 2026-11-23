@@ -100,7 +100,7 @@ export function SimulatorConfigPanel({
   };
 
   return (
-    <aside className="flex w-full shrink-0 flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/80 p-4 lg:w-80">
+    <aside className="flex w-full shrink-0 flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/80 p-4">
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
@@ -156,7 +156,7 @@ export function SimulatorConfigPanel({
                 })
               }
               title="Randomize seed"
-              className="rounded-md border border-slate-700 bg-slate-950 px-2 text-slate-300 hover:bg-slate-800 hover:text-white"
+              className="rounded-md border border-slate-700 bg-slate-950 px-2 text-slate-300 hover:bg-slate-800 hover:text-slate-50"
             >
               <Dices className="h-3.5 w-3.5" />
             </button>
@@ -225,7 +225,7 @@ export function SimulatorConfigPanel({
                   type="button"
                   onClick={() => moveRacer(idx, -1)}
                   disabled={idx === 0}
-                  className="text-slate-400 hover:text-white disabled:opacity-30"
+                  className="text-slate-400 hover:text-slate-50 disabled:opacity-30"
                 >
                   <ArrowUp className="h-3 w-3" />
                 </button>
@@ -233,7 +233,7 @@ export function SimulatorConfigPanel({
                   type="button"
                   onClick={() => moveRacer(idx, 1)}
                   disabled={idx === config.racers.length - 1}
-                  className="text-slate-400 hover:text-white disabled:opacity-30"
+                  className="text-slate-400 hover:text-slate-50 disabled:opacity-30"
                 >
                   <ArrowDown className="h-3 w-3" />
                 </button>

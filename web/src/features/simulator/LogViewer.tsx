@@ -53,7 +53,6 @@ export function LogViewer({
 }: LogViewerProps) {
   const [search, setSearch] = useState("");
   const [racerFilter, setRacerFilter] = useState("");
-  const [showDebug, setShowDebug] = useState(true);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const turnRef = useRef<HTMLDivElement | null>(null);
   const markerRef = useRef<HTMLDivElement | null>(null);
@@ -76,13 +75,12 @@ export function LogViewer({
   const visible = useMemo(() => {
     const query = search.trim().toLowerCase();
     const keep = (entry: LogEntryDTO) =>
-      (showDebug || entry.level !== "DEBUG") &&
       (!racerFilter || mentionsRacer(entry, racerFilter)) &&
       (!query || entry.message.toLowerCase().includes(query));
     return segments
       .map((seg) => ({ ...seg, entries: seg.entries.filter(keep) }))
       .filter((seg) => seg.entries.length > 0 || seg.turn === activeTurn);
-  }, [segments, search, racerFilter, showDebug, activeTurn]);
+  }, [segments, search, racerFilter, activeTurn]);
 
   const total = useMemo(
     () => visible.reduce((n, seg) => n + seg.entries.length, 0),
@@ -104,7 +102,7 @@ export function LogViewer({
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/70 p-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold text-white">
+        <h3 className="text-xs font-semibold text-slate-50">
           Simulation Event Log ({total.toLocaleString()})
         </h3>
         <div className="flex flex-wrap items-center gap-2">
@@ -130,23 +128,14 @@ export function LogViewer({
               </option>
             ))}
           </select>
-          <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-slate-300">
-            <input
-              type="checkbox"
-              checked={showDebug}
-              onChange={(e) => setShowDebug(e.target.checked)}
-              className="h-3 w-3 accent-indigo-500"
-            />
-            Debug
-          </label>
         </div>
       </div>
 
       <div
         ref={containerRef}
-        className="relative max-h-[80vh] overflow-y-auto"
+        className="relative overflow-y-auto"
         style={{
-          height: 750,
+          height: "clamp(220px, calc(54vh - 11rem), 750px)",
           background: BG_COLOR,
           fontFamily: "Menlo, Monaco, 'Courier New', monospace",
           fontSize: 15,

@@ -215,3 +215,33 @@ def test_special_racer_metrics_and_consistency_edge_case() -> None:
     # Inchworm: cost_skip_self = 1*4.6 over 5 turns -> 0.92; cost_skip_other = 1*(4.6 - 2.5) / 5 -> 0.42
     assert stats_by_racer["Inchworm"]["avg_neg_self"] == pytest.approx(0.92)
     assert stats_by_racer["Inchworm"]["avg_neg_other"] == pytest.approx(0.42)
+
+
+def test_environment_adjusted_shift_removes_the_board_and_count_effect() -> None:
+    """Adjusted shifts average to zero per environment; raw shifts keep the board effect."""
+    df_races = pl.read_parquet(RACES_PARQUET)
+    df_results = pl.read_parquet(RESULTS_PARQUET)
+    assert df_races.select(pl.struct("board", "racer_count").n_unique()).item() > 1
+    filtered = filter_dataset(
+        df_races,
+        df_results,
+        AnalysisFilter(
+            racers=tuple(sorted(df_results["racer_name"].unique().to_list())),
+            boards=tuple(sorted(df_races["board"].unique().to_list())),
+            counts=tuple(sorted(df_races["racer_count"].unique().to_list())),
+        ),
+    )
+    env = run_full_analysis(filtered.races, filtered.racer_results).environment_matrix
+
+    per_env = env.group_by(["board", "racer_count"]).agg(
+        (pl.col("adjusted_absolute_shift") * pl.col("games_count")).sum().alias("adj_abs"),
+        (pl.col("adjusted_relative_shift") * pl.col("games_count")).sum().alias("adj_rel"),
+        (pl.col("absolute_shift") * pl.col("games_count")).sum().alias("raw_abs"),
+        pl.col("games_count").sum().alias("games"),
+    )
+    for row in per_env.to_dicts():
+        assert row["adj_abs"] / row["games"] == pytest.approx(0.0, abs=1e-9)
+        assert row["adj_rel"] / row["games"] == pytest.approx(0.0, abs=1e-9)
+
+    assert (env["adjusted_absolute_shift"] - (env["absolute_shift"] - env["env_mean_absolute_shift"])).abs().max() < 1e-9
+    assert env["absolute_shift"].abs().sum() > env["adjusted_absolute_shift"].abs().sum()

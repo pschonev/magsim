@@ -112,6 +112,23 @@ export interface MatchupCellDTO {
   games_together: number;
 }
 
+export interface TriggerInductionCellDTO {
+  racer_name: string;
+  opponent_name: string;
+  avg_triggers_with: number;
+  baseline_triggers: number;
+  relative_shift: number;
+  games_together: number;
+}
+
+export interface TriggerPullRowDTO {
+  racer_name: string;
+  color: string;
+  others_trigger_ratio: number;
+  avg_turns: number;
+  races_run: number;
+}
+
 export interface EnvironmentCellDTO {
   racer_name: string;
   board: string;
@@ -121,7 +138,12 @@ export interface EnvironmentCellDTO {
   racer_global_avg_vp: number;
   relative_shift: number;
   absolute_shift: number;
+  env_mean_relative_shift: number;
+  env_mean_absolute_shift: number;
+  adjusted_relative_shift: number;
+  adjusted_absolute_shift: number;
   games_count: number;
+  twist: string | null;
 }
 
 export type SummaryCellDTO = string | number | null;
@@ -144,6 +166,8 @@ export interface DashboardAnalysisDTO {
   distributions_faceted: DistributionBinDTO[];
   matchup_matrix: MatchupCellDTO[];
   environment_matrix: EnvironmentCellDTO[];
+  trigger_induction: TriggerInductionCellDTO[];
+  trigger_pull: TriggerPullRowDTO[];
   summary_tables: SummaryTableDTO[];
 }
 

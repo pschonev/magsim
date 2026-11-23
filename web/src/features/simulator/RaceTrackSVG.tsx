@@ -121,7 +121,28 @@ interface TileStyle {
   hasDynamic: boolean;
 }
 
-function getTileStyle(index: number, total: number, mods: TileModifierDTO[]): TileStyle {
+interface WarpColor {
+  fill: string;
+  text: string;
+}
+
+const WARP_COLORS: WarpColor[] = [
+  { fill: "#e0291d", text: "#ffffff" },
+  { fill: "#f9c800", text: "#27231b" },
+  { fill: "#2fb145", text: "#ffffff" },
+  { fill: "#9b2fe0", text: "#ffffff" },
+  { fill: "#1e88e5", text: "#ffffff" },
+  { fill: "#f57c00", text: "#ffffff" },
+  { fill: "#d81b60", text: "#ffffff" },
+  { fill: "#00897b", text: "#ffffff" },
+];
+
+function getTileStyle(
+  index: number,
+  total: number,
+  mods: TileModifierDTO[],
+  warpColor: WarpColor | undefined,
+): TileStyle {
   const style: TileStyle = {
     fill: Math.floor(index / 2) % 2 === 0 ? THEME.tile1 : THEME.tile2,
     stroke: THEME.strokeDefault,
@@ -157,9 +178,9 @@ function getTileStyle(index: number, total: number, mods: TileModifierDTO[]): Ti
       });
     } else if (m.kind === "warp") {
       Object.assign(style, {
-        fill: THEME.warpFill,
+        fill: warpColor?.fill ?? THEME.warpFill,
         label: m.target != null ? `→${m.target}` : "W",
-        textFill: THEME.warpText,
+        textFill: warpColor?.text ?? THEME.warpText,
       });
     } else if (m.kind === "blocker") {
       Object.assign(style, {
@@ -200,16 +221,23 @@ export function RaceTrackSVG({ step, board, racerPalettes }: RaceTrackSVGProps) 
     [numSpaces, isMirrored],
   );
 
-  const warpEdges = useMemo(() => {
-    const edges: { from: number; to: number }[] = [];
+  const { warpEdges, warpTileColors } = useMemo(() => {
+    const edges: { from: number; to: number; color: WarpColor }[] = [];
+    const tileColors = new Map<number, WarpColor>();
+    const pairColors = new Map<string, WarpColor>();
     for (const [key, mods] of Object.entries(board.tiles)) {
       for (const m of mods) {
-        if (m.kind === "warp" && m.target != null && m.target < numSpaces) {
-          edges.push({ from: Number(key), to: m.target });
-        }
+        if (m.kind !== "warp" || m.target == null || m.target >= numSpaces) continue;
+        const from = Number(key);
+        const pairKey = `${Math.min(from, m.target)}-${Math.max(from, m.target)}`;
+        const color =
+          pairColors.get(pairKey) ?? WARP_COLORS[pairColors.size % WARP_COLORS.length];
+        pairColors.set(pairKey, color);
+        tileColors.set(from, color);
+        edges.push({ from, to: m.target, color });
       }
     }
-    return edges;
+    return { warpEdges: edges, warpTileColors: tileColors };
   }, [board.tiles, numSpaces]);
 
   const occupancy = useMemo(() => {
@@ -235,7 +263,7 @@ export function RaceTrackSVG({ step, board, racerPalettes }: RaceTrackSVGProps) 
     <div className="relative rounded-xl border border-slate-800 p-3" style={{ background: THEME.background }}>
       <svg
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        className="h-auto w-full select-none"
+        className="mx-auto h-auto max-h-[46vh] w-full select-none"
         role="img"
         aria-label="Magical Athlete Race Track"
       >
@@ -249,12 +277,12 @@ export function RaceTrackSVG({ step, board, racerPalettes }: RaceTrackSVGProps) 
             markerHeight="6"
             orient="auto-start-reverse"
           >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#a78bfa" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" />
           </marker>
         </defs>
 
         <g transform={`translate(${TRANS_X}, ${TRANS_Y}) scale(${SCALE})`}>
-          {warpEdges.map(({ from, to }, idx) => {
+          {warpEdges.map(({ from, to, color }, idx) => {
             const p1 = positions[from];
             const p2 = positions[to];
             if (!p1 || !p2) return null;
@@ -265,18 +293,18 @@ export function RaceTrackSVG({ step, board, racerPalettes }: RaceTrackSVGProps) 
                 key={`${from}-${to}-${idx}`}
                 d={`M ${p1.x} ${p1.y} Q ${cx} ${cy} ${p2.x} ${p2.y}`}
                 fill="none"
-                stroke="#a78bfa"
-                strokeWidth="1.5"
+                stroke={color.fill}
+                strokeWidth="2"
                 strokeDasharray="5 4"
                 markerEnd="url(#warp-arrow)"
-                opacity={0.75}
+                opacity={0.9}
               />
             );
           })}
 
           {positions.map((pos, idx) => {
             const mods = board.tiles[String(idx)] ?? [];
-            const style = getTileStyle(idx, numSpaces, mods);
+            const style = getTileStyle(idx, numSpaces, mods, warpTileColors.get(idx));
             const transform = `rotate(${pos.angle}, ${pos.x}, ${pos.y})`;
             const isTwistGate = hasTwists && idx === board.twist_after_tile;
             const isCorner = hasTwists && (idx === board.first_corner || idx === board.second_turn);
@@ -509,7 +537,7 @@ export function RaceTrackSVG({ step, board, racerPalettes }: RaceTrackSVGProps) 
 
       {tooltip && (
         <div className="pointer-events-none absolute top-3 right-3 max-w-xs rounded-lg border border-slate-700 bg-slate-900/95 px-3 py-2 text-[11px] text-slate-200 shadow-xl">
-          <div className="font-semibold text-white">{tooltip.title}</div>
+          <div className="font-semibold text-slate-50">{tooltip.title}</div>
           {tooltip.lines.map((line, i) => (
             <div key={i} className="text-slate-300">
               {line}

@@ -371,8 +371,8 @@ export function AnalyticsCharts({
               onClick={() => setTab(t.id)}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 tab === t.id
-                  ? "bg-indigo-600 text-white"
-                  : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                  ? "bg-indigo-600 text-on-accent"
+                  : "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-slate-50"
               }`}
             >
               {t.label}

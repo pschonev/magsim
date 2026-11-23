@@ -1,4 +1,4 @@
-import { Pause, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pause, Play } from "lucide-react";
 import { useEffect } from "react";
 import type { StepSnapshotDTO } from "../../types/api";
 
@@ -15,7 +15,7 @@ interface PlaybackBarProps {
 }
 
 const NAV_BUTTON =
-  "rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40";
+  "rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-slate-50 disabled:cursor-not-allowed disabled:opacity-40";
 
 export function PlaybackBar({
   steps,
@@ -73,68 +73,52 @@ export function PlaybackBar({
   });
 
   return (
-    <div className="space-y-2.5 rounded-xl border border-slate-800 bg-slate-900/80 p-3.5">
-      <div className="flex items-center gap-2">
+    <div className="space-y-2.5 rounded-xl border border-slate-800 bg-slate-900/80 p-3">
+      <div className="flex items-center justify-between font-mono text-xs text-slate-300">
+        <strong>Turn {currentTurn}</strong>
+        <span>
+          Step {stepIndex + 1}/{steps.length}
+        </span>
+      </div>
+      <input
+        type="range"
+        aria-label="Turn timeline"
+        min={0}
+        max={maxTurn}
+        value={currentTurn}
+        onChange={(e) => {
+          const target = turnMap[e.target.value];
+          if (target) goTo(target[0]);
+        }}
+        className="w-full accent-indigo-500"
+      />
+
+      <div className="flex items-center justify-between gap-1.5">
         <button
           type="button"
           disabled={currentTurn <= 0}
           onClick={() => goTo(prevTurnSteps?.[0] ?? 0)}
+          title="Previous turn"
+          aria-label="Previous turn"
           className={NAV_BUTTON}
         >
-          ◀◀ Turn
+          <ChevronsLeft className="h-3.5 w-3.5" />
         </button>
-        <input
-          type="range"
-          aria-label="Turn timeline"
-          min={0}
-          max={maxTurn}
-          value={currentTurn}
-          onChange={(e) => {
-            const target = turnMap[e.target.value];
-            if (target) goTo(target[0]);
-          }}
-          className="min-w-0 flex-1 accent-indigo-500"
-        />
-        <button
-          type="button"
-          disabled={!nextTurnSteps}
-          onClick={() => goTo(nextTurnSteps?.at(-1) ?? stepIndex)}
-          className={NAV_BUTTON}
-        >
-          Turn ▶▶
-        </button>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-center gap-3">
         <button
           type="button"
           disabled={stepIndex <= 0}
           onClick={() => goTo(stepIndex - 1)}
           title="Previous step (←)"
+          aria-label="Previous step"
           className={NAV_BUTTON}
         >
-          ◀ Step
+          <ChevronLeft className="h-3.5 w-3.5" />
         </button>
-        <span className="font-mono text-xs text-slate-300">
-          <strong>Turn {currentTurn}</strong> (Step {stepIndex + 1}/{steps.length})
-        </span>
-        <button
-          type="button"
-          disabled={stepIndex >= lastStep}
-          onClick={() => goTo(stepIndex + 1)}
-          title="Next step (→)"
-          className={NAV_BUTTON}
-        >
-          Step ▶
-        </button>
-
-        <span className="mx-1 h-5 w-px bg-slate-700" />
-
         <button
           type="button"
           onClick={() => onPlayingChange(!playing)}
           title="Play / Pause (Space)"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-indigo-500"
         >
           {playing ? (
             <Pause className="h-3.5 w-3.5" />
@@ -143,10 +127,34 @@ export function PlaybackBar({
           )}
           {playing ? "Pause" : "Play"}
         </button>
+        <button
+          type="button"
+          disabled={stepIndex >= lastStep}
+          onClick={() => goTo(stepIndex + 1)}
+          title="Next step (→)"
+          aria-label="Next step"
+          className={NAV_BUTTON}
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          disabled={!nextTurnSteps}
+          onClick={() => goTo(nextTurnSteps?.at(-1) ?? stepIndex)}
+          title="Next turn"
+          aria-label="Next turn"
+          className={NAV_BUTTON}
+        >
+          <ChevronsRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-slate-400">
+        <span>Speed</span>
         <select
           value={speedMs}
           onChange={(e) => onSpeedChange(Number(e.target.value))}
-          className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200"
+          className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200"
         >
           <option value={900}>0.5×</option>
           <option value={450}>1×</option>

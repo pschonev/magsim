@@ -110,7 +110,7 @@ export function ServerTable({
                       ...cellStyle(header.column),
                       zIndex: header.column.getIsPinned() ? 12 : 10,
                     }}
-                    className="cursor-pointer border-b border-slate-800 bg-slate-900 px-3 py-2 text-left font-semibold whitespace-nowrap text-slate-300 select-none hover:text-white"
+                    className="cursor-pointer border-b border-slate-800 bg-slate-900 px-3 py-2 text-left font-semibold whitespace-nowrap text-slate-300 select-none hover:text-slate-50"
                     onClick={() => onSort(header.column.id)}
                   >
                     <span className="inline-flex items-center gap-1">
