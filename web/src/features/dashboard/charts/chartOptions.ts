@@ -4,7 +4,6 @@ import type {
   AbilityBreakdownRowDTO,
   EnvironmentCellDTO,
   GlobalDynamicsRowDTO,
-  FaceEffectDTO,
   MatchupCellDTO,
   TriggerInductionCellDTO,
   ValueShareDTO,
@@ -1118,62 +1117,4 @@ export function environmentCells(
 
 export function sortedNames(names: string[]): string[] {
   return [...new Set(names)].sort();
-}
-
-
-export function buildFaceEffectOption(faces: FaceEffectDTO[], t: ChartTheme): EChartsOption {
-  const baseText = { color: t.text };
-  return {
-    backgroundColor: t.bg,
-    animation: false,
-    grid: { left: 60, right: 20, top: 24, bottom: 50 },
-    xAxis: {
-      type: "category",
-      data: faces.map((f) => String(f.face)),
-      name: "number rolled",
-      nameLocation: "middle",
-      nameGap: 30,
-      nameTextStyle: { ...baseText, fontWeight: "bold" },
-      axisLabel: { ...baseText, fontSize: 14, fontWeight: 600 },
-      axisLine: { lineStyle: { color: t.axisLine } },
-    },
-    yAxis: {
-      type: "value",
-      name: "VP per extra roll",
-      nameLocation: "middle",
-      nameGap: 42,
-      nameTextStyle: { ...baseText, fontWeight: "bold" },
-      axisLabel: { ...baseText, formatter: signed(2) },
-      splitLine: { lineStyle: { color: t.gridLine } },
-    },
-    tooltip: {
-      trigger: "axis",
-      axisPointer: { type: "shadow" },
-      backgroundColor: t.tooltipBg,
-      borderColor: t.tooltipBorder,
-      textStyle: baseText,
-      formatter: (p: unknown) => {
-        const [point] = p as { dataIndex: number }[];
-        const f = faces[point.dataIndex];
-        return `<b>Rolling a ${f.face}</b><br/>${signed(2)(f.vp_per_roll)} VP per extra roll<br/>races with a ${f.face}: ${f.mean_vp_when_rolled.toFixed(2)} VP on average<br/>${percent(f.rolled_share)} of races have one`;
-      },
-    },
-    series: [
-      {
-        type: "bar",
-        barWidth: "55%",
-        data: faces.map((f) => ({
-          value: f.vp_per_roll,
-          itemStyle: { color: f.vp_per_roll >= 0 ? "#6ca1d8" : "#ee83b3" },
-        })),
-        markLine: {
-          silent: true,
-          symbol: "none",
-          label: { show: false },
-          lineStyle: { type: "dashed", color: t.reference },
-          data: [{ yAxis: 0 }],
-        },
-      },
-    ],
-  };
 }

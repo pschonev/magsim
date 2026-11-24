@@ -355,3 +355,8 @@ Not a metric bug. Speed Demon's results do not depend on which numbers he rolls:
 ## Roll sensitivity
 
 The chart you looked at runs on a dataset without per-face counts, so it only sees the average roll and Magical Athlete, Skipper and Speed Demon sit at the typical value there. Skipper reacts to other racers' 1s and Speed Demon to the VP he holds, so even with face counts they stay near typical; Magical Athlete only rises modestly (about 0.07 against 0.03), because each number helps in some races and hurts in others. Racer specials shows the per-number effect for Magical Athlete once the new batch is in.
+
+## Round 9
+
+- Sub-tabs: a bordered pill with a chevron right after the active main tab (dark theme contrast).
+- "Racer specials" became "Fun facts": small fact cards (Magical Athlete's best roll, Bite Mark and Mouth eliminations, best and worst seat behind Stepdad, plus fastest, longest and shortest racers) instead of charts and tables.

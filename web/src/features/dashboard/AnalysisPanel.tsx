@@ -5,6 +5,7 @@ import {
   Footprints,
   Gem,
   Globe,
+  ChevronRight,
   Info,
   Layers,
   Map as MapIcon,
@@ -29,7 +30,7 @@ import { RACER_DESCRIPTIONS } from "../../utils/names";
 import { useNarrow } from "../../utils/useNarrow";
 import { Description, type DescriptionLine } from "./charts/Description";
 import { GlobalCharts, type GlobalPart } from "./charts/GlobalCharts";
-import { RacerSpecials } from "./RacerSpecials";
+import { FunFacts } from "./FunFacts";
 import { TwistComboTable } from "./TwistCombos";
 import {
   type ColorScale,
@@ -131,9 +132,9 @@ const SECTIONS: Section[] = [
   },
   {
     id: "racers",
-    label: "Racer specials",
+    label: "Fun facts",
     icon: Star,
-    views: [{ id: "specials", label: "Racer specials", icon: Star }],
+    views: [{ id: "facts", label: "Fun facts", icon: Star }],
   },
 ];
 
@@ -328,16 +329,17 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
             <Fragment key={sec.id}>
               <TabButton spec={sec} active={active} onSelect={() => setView(sec.views[0].id)} />
               {active && sec.views.length > 1 && (
-                <div className="flex flex-wrap items-center gap-1 rounded-2xl bg-slate-800/70 p-0.5">
+                <div className="flex flex-wrap items-center gap-0.5 rounded-full border border-indigo-400/60 bg-indigo-500/10 py-0.5 pr-1 pl-2">
+                  <ChevronRight className="h-3.5 w-3.5 text-indigo-300" />
                   {sec.views.map((spec) => (
                     <button
                       key={spec.id}
                       type="button"
                       onClick={() => setView(spec.id)}
-                      className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                         spec.id === view
                           ? "bg-slate-50 text-slate-950"
-                          : "text-slate-300 hover:bg-slate-700 hover:text-slate-50"
+                          : "text-indigo-300 hover:bg-indigo-500/20 hover:text-slate-50"
                       }`}
                     >
                       {spec.label}
@@ -376,7 +378,7 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
 
       {view === "global-combos" && <TwistComboTable stats={analysis.twist_combo_stats} />}
 
-      {view === "specials" && <RacerSpecials analysis={analysis} racerColors={racerColors} />}
+      {view === "facts" && <FunFacts analysis={analysis} racerColors={racerColors} />}
 
       {view === "interactions" && (
         <>
