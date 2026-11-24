@@ -213,6 +213,8 @@ export function SimulatorView({
               <RaceTrackSVG
                 step={step}
                 board={board}
+                boardName={result.board_name}
+                stepMessages={result.logs.slice(step.log_start_index, step.log_end_index).map((l) => l.message)}
                 racerPalettes={result.racer_palettes}
               />
             </div>

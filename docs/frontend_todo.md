@@ -331,3 +331,10 @@ Keep: Global small multiples with one shared player-count legend; the big centre
 ## Speed Demon and Roll Sensitivity
 
 Not a metric bug. Speed Demon's results do not depend on which numbers he rolls: his boost comes from the VP he holds and he dies when he is 4 or more spaces ahead at the start of his turn. In 5,000 replayed races he is eliminated in 33 % (VP 0.07 against 1.58 when he survives), plays only about 4 rolls per race and ends with 0 VP in 65 % of them. Face shares of 4 rolls have no signal, and even the raw face counts only explain 7 % (the typical racer 13 %). The chart text now says so.
+
+## Round 7b: track redesign (rounded rectangle)
+
+- Track is now a rounded rectangle of square spaces (rows and columns chosen from the board length), open on the left like the real board: START top left, FINISH (checkered) bottom left, rounded outer corners, a podium arch in the gap that shows 1st and 2nd as they finish.
+- Neutral dark spaces; colour only where a space does something (VP gold, +n green, −n orange, TRIP pink, warp pairs in their own colours, blockers brown). Number or glyph at the top of the space, tokens below it.
+- Middle panel: board name in chunky white letters and a small hand-drawn scene per board (meadow, forest, spirals, ribbons and stars), kept to the bottom strip so the info card stays readable. Info card: die with pips, racer, roll; the die is greyed and crossed with "tripped: stands up, no roll" when the racer recovers from a trip, and "skips the move" for other skipped moves.
+- Mirror World flips the whole board (start top right, podium right).

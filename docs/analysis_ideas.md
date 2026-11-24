@@ -117,7 +117,7 @@ DONE
 - is `Dice Sensitivity` really the correct description of what we are showing? It's a bit weird because for many racers it's more like how much they want HIGH dice and not necessarily if they want specific dice (Speed Demon, Skipper for example are low even though they depend on the correct dice for their ability); meanwhile we decided to mirror Sisyphus so now he shows up as super dice-sensitive (which is definitely correct but I wonder why this doesn't work for the other racers); maybe this metric currently depends too much on the total amount of VP (or VP shift) for racers? Because Sisyphus is a racer that has some of the highest VP while Speed Demon sucks and often gets no VP
 
 
-# Round 3
+## Round 3
 - we need to change the design of the loading bar at the beginning when the whole frontend loads
     - colors more in line with what I have on Github
 ```svg
@@ -157,3 +157,36 @@ DONE
 - `Adjust for opponent average` should be on by default on both heatmaps
 - global filter also needs to be able to force/exclude Twist cards
 - as I said, functional parity is the goal but not necessarily looks. I am open to any idea and we should especially fix how the board looks in the simulation
+
+## Round 4
+- mobile
+    - eliminate horizontal scroll bars on mobile view!
+    - the status display for racers can be much smaller! it's way too big with lots of empty space. And in mobile view it should sit over the board; also remove the horizontal scroll bar on it, that's terrible
+- simulation config
+    - adding racers should have search
+    - re-ordering racer turn order should be drag/drop
+    - the current arrows to change racers in turn order should be used for changing the starting position instead (so remove the mini arrows from the starting space field on each racer)
+    - also add a way to adjust starting VP that defaults to 0 with `-` and `+`
+    - check the real Whirly World for inspiration on how to improve the look of those warp tile connections
+    - bring back the old border colors for racer pieces and don't make everyone white on the border
+    - the finish tile is too busy, make those black/white squares bigger or better keep it the same size but only around the border of the tile
+    - the `Twist` is now written on the bord when it appears: can you add a hover tooltip for what it does? (keep in mind that there can be one or three twists at the same time)
+    - make Twist selection for config collapsible and provide hover tooltip for Twists as well there
+    - Twist trigger gate should be a "gate" between two tiles, not just a dot
+    - corner spaces are clearly not at the corner in your visualization -> you need to shift spaces to the right at the top and to the left at the bottom, adjust goal/finish accordingly and probably elongate 13 and 14 to make it fit the rectangle we got right now
+- Global tab
+    - By board and player count should show a greyed out distribution for the global average in the background of each graph to see the shift
+- Roll sensitivty
+    - there still seems to be something wrong: How are Speed Demon, Magical Athlete or Skipper shown as not caring about their dice at all?
+- new tab: racer specific stats
+    - we can add some interesting stats here that are only interesting for specific racers, for example let's start by showing which rolls give Magical Athlete the highest average VP
+    - find some interesting stat for Bite Mark/Mouth
+    - which racers won most often when sitting behind in turn order of Stepdad (compared to their usual winrate)
+- would be cool to show all the different combinations of Twist cards with `Fans Demand Chaos` on `Global` and `Environment`. But I am not sure if it's (a) too much computation and (b) too many combinations to show on screen. Maybe a paginated view with search functionality? Keep in mind that order matters for these, but order is not always the deciding factor (so maybe a toggle to ignore order and mesh both stats together?). on the `Environments` tab we probably need like a sub-tab to go to these combinations.
+- would be cool if we had a hover tooltip on what a racer does everywhere we have a racer name in labeling of axis as well
+- maybe we should use sub-tabs everywhere in the data analysis part?
+    - 2D scatterplots
+    - ability speed + environments
+    - global (new subtabs for what are now the different sections + new section for Twist cards and Twist card combos)
+    - interactions -> matchups and triggers
+    - aggregated table data
