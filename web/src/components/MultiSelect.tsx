@@ -1,5 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { displayName } from "../utils/names";
 
 interface MultiSelectProps {
   label: string;
@@ -36,7 +37,7 @@ export function MultiSelect({
   const chosen = new Set(selected);
   const needle = query.trim().toLowerCase();
   const shown = needle
-    ? options.filter((o) => o.toLowerCase().includes(needle))
+    ? options.filter((o) => displayName(o).toLowerCase().includes(needle))
     : options;
 
   const toggle = (option: string) => {
@@ -106,7 +107,7 @@ export function MultiSelect({
                   onChange={() => toggle(option)}
                   className="h-3.5 w-3.5 accent-indigo-500"
                 />
-                {option}
+                {displayName(option)}
               </label>
             ))}
             {shown.length === 0 && (

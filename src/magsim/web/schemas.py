@@ -78,6 +78,8 @@ class RacerStatRowDTO(msgspec.Struct, frozen=True):
     ability_move_dependency: float
     start_pos_bias: float
     midgame_bias: float
+    player_count_pref: float = 0.0
+    game_length_pref: float = 0.0
 
 
 class AbilityBreakdownRowDTO(msgspec.Struct, frozen=True):
@@ -109,6 +111,16 @@ class GlobalDynamicsRowDTO(msgspec.Struct, frozen=True):
     midgame_bias: float
 
 
+class ValueShareDTO(msgspec.Struct, frozen=True):
+    """Share of races with an exact game length ("turns") or total VP ("vp") in a board and player count."""
+
+    series: str
+    value: int
+    pct: float
+    board: str | None = None
+    racer_count: int | None = None
+
+
 class DistributionBinDTO(msgspec.Struct, frozen=True):
     """Single histogram bin for game length or total VP distributions."""
 
@@ -132,6 +144,8 @@ class MatchupCellDTO(msgspec.Struct, frozen=True):
     residual_matchup: float
     percentage_shift: float
     games_together: int
+    adjusted_percentage_shift: float = 0.0
+    adjusted_residual_matchup: float = 0.0
 
 
 class TriggerInductionCellDTO(msgspec.Struct, frozen=True):
@@ -143,6 +157,9 @@ class TriggerInductionCellDTO(msgspec.Struct, frozen=True):
     baseline_triggers: float
     relative_shift: float
     games_together: int
+    absolute_shift: float = 0.0
+    adjusted_relative_shift: float = 0.0
+    adjusted_absolute_shift: float = 0.0
 
 
 class EnvironmentCellDTO(msgspec.Struct, frozen=True):
@@ -194,6 +211,7 @@ class DashboardAnalysisDTO(msgspec.Struct, frozen=True):
     distributions_faceted: list[DistributionBinDTO] = msgspec.field(
         default_factory=list,
     )
+    value_distributions: list[ValueShareDTO] = msgspec.field(default_factory=list)
     matchup_matrix: list[MatchupCellDTO] = msgspec.field(default_factory=list)
     environment_matrix: list[EnvironmentCellDTO] = msgspec.field(default_factory=list)
     trigger_induction: list[TriggerInductionCellDTO] = msgspec.field(

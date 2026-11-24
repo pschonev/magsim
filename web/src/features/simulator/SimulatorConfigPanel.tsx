@@ -14,6 +14,7 @@ import { useState } from "react";
 import type { SimulatorMetaDTO } from "../../types/api";
 import { buildConfigShareUrl } from "../../utils/urlState";
 import type { SimConfig } from "./simConfig";
+import { displayName } from "../../utils/names";
 
 interface SimulatorConfigPanelProps {
   simMeta: SimulatorMetaDTO;
@@ -112,7 +113,7 @@ export function SimulatorConfigPanel({
           >
             {simMeta.boards.map((b) => (
               <option key={b} value={b}>
-                {b}
+                {displayName(b)}
               </option>
             ))}
           </select>
@@ -164,7 +165,7 @@ export function SimulatorConfigPanel({
             <option value="">Add racer...</option>
             {availableRacers.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {displayName(r)}
               </option>
             ))}
           </select>
@@ -194,7 +195,7 @@ export function SimulatorConfigPanel({
                   }}
                 />
                 <span className="min-w-0 flex-1 truncate text-slate-200">
-                  {name}
+                  {displayName(name)}
                 </span>
                 <input
                   type="number"

@@ -1,4 +1,4 @@
-import { BarChart, HeatmapChart, ScatterChart } from "echarts/charts";
+import { BarChart, HeatmapChart, LineChart, ScatterChart } from "echarts/charts";
 import {
   DataZoomComponent,
   GraphicComponent,
@@ -17,6 +17,7 @@ import { useEffect, useRef } from "react";
 echarts.use([
   ScatterChart,
   BarChart,
+  LineChart,
   HeatmapChart,
   TitleComponent,
   TooltipComponent,

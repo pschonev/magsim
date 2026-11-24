@@ -1,11 +1,12 @@
+import { displayName } from "../../../utils/names";
 import type { EChartsOption } from "../../../components/EChart";
 import type {
   AbilityBreakdownRowDTO,
-  DistributionBinDTO,
   EnvironmentCellDTO,
   GlobalDynamicsRowDTO,
   MatchupCellDTO,
   TriggerInductionCellDTO,
+  ValueShareDTO,
 } from "../../../types/api";
 import { type ECharts, graphic } from "echarts/core";
 import type { ChartTheme } from "../../../utils/theme";
@@ -21,7 +22,7 @@ export const VP_COLOR = "#D81B60";
 
 export const BOARD_ORDER = ["Standard", "WildWilds", "WhirlyWorld", "TwistyTwirl"];
 const SHORT_BOARDS: Record<string, string> = {
-  Standard: "Standard",
+  Standard: "Mild Mile",
   WildWilds: "Wild",
   WhirlyWorld: "Whirly",
   TwistyTwirl: "Twisty",
@@ -36,6 +37,26 @@ export function sortBoards(names: string[]): string[] {
 }
 
 export const shortBoard = (name: string) => SHORT_BOARDS[name] ?? name;
+
+function luminance(hex: string): number {
+  const channel = (offset: number) => {
+    const v = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+}
+
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+const MIN_LABEL_CONTRAST = 3;
+
+/** The racer's own colour as a label colour, unless it is too close to the background to read. */
+function readableOn(color: string, t: ChartTheme): string {
+  return /^#[0-9a-f]{6}$/i.test(color) && contrast(color, t.bg) >= MIN_LABEL_CONTRAST ? color : t.text;
+}
 
 export const fixed = (digits: number) => (v: number) => v.toFixed(digits);
 export const signed = (digits: number) => (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(digits)}`;
@@ -61,6 +82,7 @@ export interface QuadrantSpec<R extends QuadrantRow> {
   yTitle: string;
   quadLabels: [string, string, string, string];
   reverseX?: boolean;
+  zeroCenter?: boolean;
   extra?: ExtraTooltip<R>[];
 }
 
@@ -107,7 +129,11 @@ function valueAxis(
   };
 }
 
-function absoluteDomain(values: number[]): { domain: [number, number]; mid: number } {
+function absoluteDomain(values: number[], zeroCenter = false): { domain: [number, number]; mid: number } {
+  if (zeroCenter) {
+    const reach = Math.max(0.01, ...values.map(Math.abs)) * 1.15;
+    return { domain: [-reach, reach], mid: 0 };
+  }
   let min = Math.min(...values);
   let max = Math.max(...values);
   if (min === max) {
@@ -134,8 +160,8 @@ export function buildQuadrantOption<R extends QuadrantRow>(
 
   const px = ranked ? rankX.ranks : xs;
   const py = ranked ? rankY.ranks : ys;
-  const absX = absoluteDomain(xs);
-  const absY = absoluteDomain(ys);
+  const absX = absoluteDomain(xs, spec.zeroCenter);
+  const absY = absoluteDomain(ys, spec.zeroCenter);
   const domX: [number, number] = ranked ? [-0.05, 1.05] : absX.domain;
   const domY: [number, number] = ranked ? [-0.05, 1.05] : absY.domain;
   const midX = ranked ? 0.5 : absX.mid;
@@ -170,6 +196,7 @@ export function buildQuadrantOption<R extends QuadrantRow>(
     yAxis: valueAxis(spec.yTitle, domY, false, ranked, ranked ? rankY : null, t),
     dataZoom: [
       { type: "inside", xAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseWheel: false, filterMode: "none" },
+      { type: "inside", yAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseWheel: false, filterMode: "none" },
     ],
     tooltip: {
       trigger: "item",
@@ -180,7 +207,7 @@ export function buildQuadrantOption<R extends QuadrantRow>(
         if (params.seriesIndex !== 0) return "";
         const row = rows[params.dataIndex];
         const lines = [
-          `<b>${row.racer_name}</b>`,
+          `<b>${displayName(row.racer_name)}</b>`,
           `${spec.xTitle}: ${(row[spec.xKey] as number).toFixed(2)}`,
           `${spec.yTitle}: ${(row[spec.yKey] as number).toFixed(2)}`,
           ...(spec.extra ?? []).map((e) => `${e.label}: ${e.format(row[e.key] as number)}`),
@@ -199,9 +226,9 @@ export function buildQuadrantOption<R extends QuadrantRow>(
           itemStyle: { color: r.color, opacity: 0.9 },
           label: {
             show: true,
-            formatter: r.racer_name,
+            formatter: displayName(r.racer_name),
             position: "top",
-            color: t.text,
+            color: readableOn(r.color, t),
             fontSize: 13,
             fontWeight: 700,
             textBorderColor: t.bg,
@@ -239,6 +266,8 @@ export const ABILITY_METRICS = [
   { label: "+ Others", key: "pos_other", side: 1, color: "#FFC107" },
 ] as const;
 
+const ABILITY_GRID_MARGIN = 3;
+
 const ABILITY_LEGEND: Record<string, string> = {
   "+ Self": "moves itself forward",
   "- Others": "moves others back",
@@ -263,25 +292,24 @@ export function buildAbilityOption(
   const minEdge = Math.min(0, ...negativeEdge);
   const domainMin = minEdge < 0 ? minEdge * 1.1 : -1;
   const domainMax = Math.max(0, ...positiveEdge) * 1.05;
+  const plotWidth = 100 - 2 * ABILITY_GRID_MARGIN;
+  const zeroShare = -domainMin / (domainMax - domainMin);
+  const leftCentre = ABILITY_GRID_MARGIN + (plotWidth * zeroShare) / 2;
+  const rightCentre = ABILITY_GRID_MARGIN + (plotWidth * (1 + zeroShare)) / 2;
 
   return {
     backgroundColor: t.bg,
     animation: false,
-    grid: { left: 130, right: 30, top: 96, bottom: 20 },
+    grid: { left: `${ABILITY_GRID_MARGIN}%`, right: `${ABILITY_GRID_MARGIN}%`, top: 96, bottom: 20 },
     graphic: [
-      {
-        type: "text",
-        left: "12%",
-        top: 8,
-        style: { text: "◀ gains: own boosts, taking movement from others", fill: t.text, fontSize: 12, fontWeight: "bold" },
-      },
-      {
-        type: "text",
-        right: 30,
-        top: 8,
-        style: { text: "costs: own setbacks, giving movement to others ▶", fill: t.text, fontSize: 12, fontWeight: "bold", align: "right" },
-      },
-    ],
+      ["◀ gains: own boosts, taking movement from others", leftCentre],
+      ["costs: own setbacks, giving movement to others ▶", rightCentre],
+    ].map(([text, centre]) => ({
+      type: "text",
+      left: `${centre}%`,
+      top: 8,
+      style: { text, fill: t.text, fontSize: 12, fontWeight: "bold", textAlign: "center" },
+    })),
     xAxis: {
       type: "value",
       position: "top",
@@ -322,7 +350,7 @@ export function buildAbilityOption(
       borderColor: t.tooltipBorder,
       textStyle: baseText,
       formatter: (p: { seriesName: string; name: string; value: number }) =>
-        `<b>${p.name}</b><br/>${p.seriesName}: ${Math.abs(p.value).toFixed(2)}`,
+        `<b>${displayName(p.name)}</b><br/>${p.seriesName}: ${Math.abs(p.value).toFixed(2)}`,
     },
     series: [
       ...ABILITY_METRICS.map((m, metricIndex) => ({
@@ -356,7 +384,7 @@ export function buildAbilityOption(
             show: true,
             position: "left" as const,
             distance: 6,
-            formatter: `{dot|●} ${r.racer_name}`,
+            formatter: `{dot|●} ${displayName(r.racer_name)}`,
             color: t.text,
             rich: { dot: { color: racerColors[r.racer_name] ?? t.text, fontSize: 12 } },
             fontWeight: 700,
@@ -434,137 +462,147 @@ export function buildGroupedBarOption(
   };
 }
 
-function binsFor(bins: DistributionBinDTO[], seriesType: string): DistributionBinDTO[] {
-  return bins.filter((b) => b.series_type === seriesType).sort((a, b) => a.bin_index - b.bin_index);
+export const TURNS_SERIES = "turns";
+export const VP_SERIES = "vp";
+
+export interface ValueRange {
+  min: number;
+  max: number;
 }
 
-export const TURNS_SERIES = "Game Length (Turns)";
-export const VP_SERIES = "Total VP";
+export function valueRange(rows: ValueShareDTO[], series: string): ValueRange {
+  const values = rows.filter((r) => r.series === series).map((r) => r.value);
+  return { min: Math.min(...values), max: Math.max(...values) };
+}
 
-export function buildGlobalDistributionOption(
-  bins: DistributionBinDTO[],
-  t: ChartTheme,
-): EChartsOption {
-  const baseText = { color: t.text };
-  const turns = binsFor(bins, TURNS_SERIES);
-  const vp = binsFor(bins, VP_SERIES);
-  const xAxis = (data: string[], gridIndex: number, position: "top" | "bottom", name: string) => ({
+function medianOf(rows: ValueShareDTO[]): number {
+  let total = 0;
+  for (const r of [...rows].sort((x, y) => x.value - y.value)) {
+    total += r.pct;
+    if (total >= 0.5) return r.value;
+  }
+  return rows.at(-1)?.value ?? 0;
+}
+
+const shareAt = (rows: ValueShareDTO[], value: number) => rows.find((r) => r.value === value)?.pct ?? 0;
+
+function exactValueAxis(range: ValueRange, name: string, t: ChartTheme) {
+  return {
     type: "category" as const,
-    gridIndex,
-    position,
-    data,
+    data: Array.from({ length: range.max - range.min + 1 }, (_, i) => String(range.min + i)),
     name,
     nameLocation: "middle" as const,
-    nameGap: 55,
-    nameTextStyle: { ...baseText, fontWeight: "bold" as const },
-    axisLabel: { ...baseText, rotate: 45, interval: 0, fontSize: 10 },
+    nameGap: 28,
+    nameTextStyle: { color: t.text, fontWeight: "bold" as const },
+    axisLabel: { color: t.text, fontSize: 10, hideOverlap: true },
+    axisTick: { alignWithLabel: true },
     axisLine: { lineStyle: { color: t.axisLine } },
-  });
-  const yAxis = (gridIndex: number, inverse: boolean) => ({
+  };
+}
+
+function shareAxis(max: number, t: ChartTheme, showLabels = true) {
+  return {
     type: "value" as const,
-    gridIndex,
-    inverse,
-    axisLabel: { ...baseText, formatter: wholePercent },
+    max,
+    axisLabel: { color: t.text, fontSize: 10, show: showLabels, formatter: wholePercent },
     splitLine: { lineStyle: { color: t.gridLine } },
-  });
+  };
+}
+
+/** One histogram over exact values (game length in turns or total VP), with the median marked. */
+export function buildValueHistogramOption(
+  rows: ValueShareDTO[],
+  range: ValueRange,
+  axisName: string,
+  color: string,
+  t: ChartTheme,
+): EChartsOption {
+  const median = medianOf(rows);
   return {
     backgroundColor: t.bg,
     animation: false,
+    grid: { left: 50, right: 20, top: 40, bottom: 48 },
     title: {
-      text: "Global Distribution: Game Length (Top) vs Total VP (Bottom)",
+      subtext: `median ${median}`,
+      subtextStyle: { color: t.text, fontSize: 12 },
       left: "center",
-      textStyle: { ...baseText, fontSize: 14 },
+      top: 0,
     },
-    grid: [
-      { left: 60, right: 20, top: 110, height: 130 },
-      { left: 60, right: 20, top: 330, height: 130 },
-    ],
-    xAxis: [
-      xAxis(turns.map((b) => b.bin_label), 0, "top", TURNS_SERIES),
-      xAxis(vp.map((b) => b.bin_label), 1, "bottom", VP_SERIES),
-    ],
-    yAxis: [yAxis(0, false), yAxis(1, true)],
+    xAxis: exactValueAxis(range, axisName, t),
+    yAxis: shareAxis(Math.max(...rows.map((r) => r.pct)) * 1.1, t),
     tooltip: {
-      trigger: "item",
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
       backgroundColor: t.tooltipBg,
       borderColor: t.tooltipBorder,
-      textStyle: baseText,
-      formatter: (p: { name: string; value: number }) => `${p.name}: ${percent(p.value)}`,
+      textStyle: { color: t.text },
+      formatter: (p: unknown) => {
+        const [point] = p as { name: string; value: number }[];
+        return `<b>${point.name}</b> ${axisName}<br/>${percent(point.value)} of races`;
+      },
     },
     series: [
       {
         type: "bar",
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        itemStyle: { color: TURNS_COLOR },
-        data: turns.map((b) => b.pct),
-      },
-      {
-        type: "bar",
-        xAxisIndex: 1,
-        yAxisIndex: 1,
-        itemStyle: { color: VP_COLOR },
-        data: vp.map((b) => b.pct),
+        barCategoryGap: "12%",
+        itemStyle: { color },
+        data: Array.from({ length: range.max - range.min + 1 }, (_, i) => shareAt(rows, range.min + i)),
+        markLine: {
+          silent: true,
+          symbol: "none",
+          label: { show: false },
+          lineStyle: { type: "dashed", color: t.reference },
+          data: [{ xAxis: String(median) }],
+        },
       },
     ],
   };
 }
 
-export function buildFacetDistributionOption(
-  bins: DistributionBinDTO[],
+/** Small multiple for one board: one curve per player count, on the shared range and share axis. */
+export function buildBoardCurvesOption(
+  rows: ValueShareDTO[],
+  range: ValueRange,
+  maxShare: number,
+  axisName: string,
+  showAxis: boolean,
   t: ChartTheme,
 ): EChartsOption {
-  const baseText = { color: t.text };
-  const turns = binsFor(bins, TURNS_SERIES);
-  const vp = binsFor(bins, VP_SERIES);
-  const tip = (p: { seriesName: string; name: string; value: number }) =>
-    `${p.seriesName}<br/>${p.name}: ${percent(Math.abs(p.value))}`;
+  const counts = [...new Set(rows.flatMap((r) => (r.racer_count === null ? [] : [r.racer_count])))].sort(
+    (a, b) => a - b,
+  );
   return {
     backgroundColor: t.bg,
     animation: false,
-    grid: { left: 36, right: 6, top: 6, bottom: 6 },
-    xAxis: {
-      type: "category",
-      data: Array.from({ length: Math.max(turns.length, vp.length) }, (_, i) => String(i)),
-      axisLabel: { show: false },
-      axisTick: { show: false },
-      axisLine: { show: false },
-    },
-    yAxis: {
-      type: "value",
-      min: -0.3,
-      max: 0.3,
-      axisLabel: { show: false },
-      splitLine: { show: false },
-    },
+    grid: { left: 44, right: 12, top: 10, bottom: showAxis ? 40 : 12 },
+    xAxis: { ...exactValueAxis(range, axisName, t), axisLabel: { color: t.text, fontSize: 10, hideOverlap: true, show: showAxis } },
+    yAxis: shareAxis(maxShare, t),
     tooltip: {
-      trigger: "item",
+      trigger: "axis",
       backgroundColor: t.tooltipBg,
       borderColor: t.tooltipBorder,
-      textStyle: baseText,
-      formatter: tip,
+      textStyle: { color: t.text },
+      formatter: (p: unknown) => {
+        const points = p as { name: string; seriesName: string; value: number }[];
+        return `<b>${points[0].name}</b> ${axisName}<br/>${points
+          .map((point) => `${point.seriesName} players: ${percent(point.value)}`)
+          .join("<br/>")}`;
+      },
     },
-    series: [
-      {
-        type: "bar",
-        name: TURNS_SERIES,
-        itemStyle: { color: TURNS_COLOR },
-        data: turns.map((b) => ({ value: b.pct, name: b.bin_label })),
-        markLine: {
-          silent: true,
-          symbol: "none",
-          label: { show: false },
-          lineStyle: { color: "#fff", opacity: 0.3 },
-          data: [{ yAxis: 0 }],
-        },
-      },
-      {
-        type: "bar",
-        name: VP_SERIES,
-        itemStyle: { color: VP_COLOR },
-        data: vp.map((b) => ({ value: -b.pct, name: b.bin_label })),
-      },
-    ],
+    series: counts.map((count, i) => {
+      const own = rows.filter((r) => r.racer_count === count);
+      const color = PLAYER_COUNT_COLORS[i % PLAYER_COUNT_COLORS.length];
+      return {
+        type: "line" as const,
+        name: String(count),
+        smooth: 0.2,
+        showSymbol: false,
+        lineStyle: { color, width: 2 },
+        itemStyle: { color },
+        areaStyle: { color, opacity: 0.12 },
+        data: Array.from({ length: range.max - range.min + 1 }, (_, k) => shareAt(own, range.min + k)),
+      };
+    }),
   };
 }
 
@@ -600,13 +638,15 @@ export interface ColorScale {
 export const PERCENT_SCALE: ColorScale = { neutral: 0.1, strong: 0.35 };
 export const VP_SCALE: ColorScale = { neutral: 0.15, strong: 0.5 };
 export const TRIGGER_SCALE: ColorScale = { neutral: 0.15, strong: 0.6 };
+export const TRIGGER_COUNT_SCALE: ColorScale = { neutral: 0.5, strong: 3 };
 
 export function plainAxis(names: string[]): HeatmapAxis {
-  return { keys: names, labels: names, stagger: true, groups: [] };
+  return { keys: names, labels: names.map(displayName), stagger: true, groups: [] };
 }
 
 const STAGGER_SLOTS = 6;
 const STAGGER_ROW_HEIGHT = 12;
+const ROTATED_LABEL_HEIGHT = 90;
 
 /** Maps a shift to [-1, 1]: a grey zone up to `neutral`, saturated colours from `strong` on. */
 function scaled(value: number, { neutral, strong }: ColorScale): number {
@@ -626,19 +666,22 @@ export function buildHeatmapOption(
   cells: HeatmapCell[],
   t: ChartTheme,
   scale: ColorScale,
+  narrow = false,
 ): EChartsOption {
   const baseText = { color: t.text };
   const xIndex = new Map(axis.keys.flatMap((k, i) => (k === null ? [] : [[k, i] as const])));
   const yIndex = new Map(ys.map((y, i) => [y, i]));
-  const staggerHeight = (STAGGER_SLOTS / 2) * STAGGER_ROW_HEIGHT;
+  const rotate = narrow && axis.stagger;
+  const staggerHeight = rotate ? ROTATED_LABEL_HEIGHT : (STAGGER_SLOTS / 2) * STAGGER_ROW_HEIGHT;
   const groupHeight = axis.groups.reduce((sum, g) => sum + g.offset, 0);
   const chrome = axis.stagger ? 24 + staggerHeight + (axis.groups.length > 0 ? groupHeight + 20 : 0) : 60 + groupHeight;
+  const bottomChrome = rotate ? (axis.groups.length > 0 ? groupHeight + 30 : 12) : chrome;
   const mainLabel = { ...baseText, rotate: 0, interval: 0, fontSize: 11 };
   const groupAxis = (group: HeatmapGroup, position: "top" | "bottom") => ({
     type: "category" as const,
     data: group.labels,
     position,
-    offset: group.offset + (axis.stagger ? staggerHeight : 0),
+    offset: group.offset + (axis.stagger && (!rotate || position === "top") ? staggerHeight : 0),
     triggerEvent: true,
     axisTick: { show: false },
     axisLine: { show: false },
@@ -677,7 +720,18 @@ export function buildHeatmapOption(
       rich: { accent: { color: t.accent, fontSize: 9.5, fontWeight: "bold" as const } },
     },
   });
-  const xAxes = axis.stagger
+  const rotatedAxis = {
+    type: "category" as const,
+    data: axis.labels,
+    position: "top" as const,
+    triggerEvent: true,
+    axisTick: { show: false },
+    axisLine: { show: false },
+    axisLabel: { ...baseText, rotate: 90, interval: 0, fontSize: 9, margin: 4 },
+  };
+  const xAxes = rotate
+    ? [rotatedAxis, ...axis.groups.map((g) => groupAxis(g, "bottom")), ...axis.groups.map((g) => groupAxis(g, "top"))]
+    : axis.stagger
     ? [
         ...[1, 0, 2, 3, 4, 5].map(staggeredAxis),
         ...axis.groups.map((g) => groupAxis(g, "bottom")),
@@ -696,23 +750,27 @@ export function buildHeatmapOption(
         ...axis.groups.map((g) => groupAxis(g, "bottom")),
         ...axis.groups.map((g) => groupAxis(g, "top")),
       ];
-  const sideAxisLabel = { ...baseText, interval: 0, fontSize: 10 };
+  const sideAxisLabel = { ...baseText, interval: 0, fontSize: 10, formatter: displayName };
   return {
     backgroundColor: t.bg,
     animation: false,
-    grid: { left: 110, right: 110, top: chrome, bottom: chrome },
+    grid: { left: narrow ? 84 : 110, right: narrow ? 10 : 110, top: chrome, bottom: bottomChrome },
     xAxis: xAxes,
     yAxis: [
       { type: "category", data: ys, inverse: true, position: "left", axisLabel: sideAxisLabel },
-      {
-        type: "category",
-        data: ys,
-        inverse: true,
-        position: "right",
-        axisTick: { show: false },
-        axisLine: { show: false },
-        axisLabel: sideAxisLabel,
-      },
+      ...(narrow
+        ? []
+        : [
+            {
+              type: "category" as const,
+              data: ys,
+              inverse: true,
+              position: "right" as const,
+              axisTick: { show: false },
+              axisLine: { show: false },
+              axisLabel: sideAxisLabel,
+            },
+          ]),
     ],
     visualMap: {
       type: "continuous",
@@ -833,22 +891,30 @@ export function attachHeatmapHighlight(
   };
 }
 
-export function matchupCells(rows: MatchupCellDTO[], usePercent: boolean): HeatmapCell[] {
-  return rows.map((r) => ({
-    x: r.opponent_name,
-    y: r.racer_name,
-    value: usePercent ? r.percentage_shift : r.residual_matchup,
-    tip: `<b>${r.racer_name}</b> vs <b>${r.opponent_name}</b><br/>${signedPercent(r.percentage_shift)} (${signed(2)(r.residual_matchup)} VP)<br/>${r.games_together.toLocaleString()} games together`,
-  }));
+export function matchupCells(rows: MatchupCellDTO[], usePercent: boolean, adjusted: boolean): HeatmapCell[] {
+  return rows.map((r) => {
+    const percentShift = adjusted ? r.adjusted_percentage_shift : r.percentage_shift;
+    const vpShift = adjusted ? r.adjusted_residual_matchup : r.residual_matchup;
+    return {
+      x: r.opponent_name,
+      y: r.racer_name,
+      value: usePercent ? percentShift : vpShift,
+      tip: `<b>${displayName(r.racer_name)}</b> vs <b>${displayName(r.opponent_name)}</b><br/>${signedPercent(r.percentage_shift)} (${signed(2)(r.residual_matchup)} VP)<br/>adjusted for the opponent's average: ${signedPercent(r.adjusted_percentage_shift)} (${signed(2)(r.adjusted_residual_matchup)} VP)<br/>${r.games_together.toLocaleString()} games together`,
+    };
+  });
 }
 
-export function triggerCells(rows: TriggerInductionCellDTO[]): HeatmapCell[] {
-  return rows.map((r) => ({
-    x: r.opponent_name,
-    y: r.racer_name,
-    value: r.relative_shift,
-    tip: `<b>${r.racer_name}</b> triggers ${signedPercent(r.relative_shift)} when <b>${r.opponent_name}</b> is in the race<br/>${r.avg_triggers_with.toFixed(2)} vs ${r.baseline_triggers.toFixed(2)} triggers per race on average<br/>${r.games_together.toLocaleString()} games together`,
-  }));
+export function triggerCells(rows: TriggerInductionCellDTO[], usePercent: boolean, adjusted: boolean): HeatmapCell[] {
+  return rows.map((r) => {
+    const percentShift = adjusted ? r.adjusted_relative_shift : r.relative_shift;
+    const countShift = adjusted ? r.adjusted_absolute_shift : r.absolute_shift;
+    return {
+      x: r.opponent_name,
+      y: r.racer_name,
+      value: usePercent ? percentShift : countShift,
+      tip: `<b>${displayName(r.racer_name)}</b> triggers ${signedPercent(r.relative_shift)} (${signed(2)(r.absolute_shift)} per race) when <b>${displayName(r.opponent_name)}</b> is in the race<br/>${r.avg_triggers_with.toFixed(2)} vs ${r.baseline_triggers.toFixed(2)} triggers per race on average<br/>adjusted for the opponent's average: ${signedPercent(r.adjusted_relative_shift)}<br/>${r.games_together.toLocaleString()} games together`,
+    };
+  });
 }
 
 const PLAIN_BOARD_ORDER = ["Standard", "WildWilds", "WhirlyWorld", "TwistyTwirl"];
@@ -873,7 +939,7 @@ function environmentKey(count: number | null, name: string): string {
 
 function environmentTitle(r: EnvironmentCellDTO): string {
   const players = r.racer_count === null ? "all player counts" : `${r.racer_count} players`;
-  const place = r.twist ?? r.board ?? "all boards";
+  const place = displayName(r.twist ?? r.board ?? "all boards");
   return `${place} · ${players}`;
 }
 
@@ -939,9 +1005,9 @@ export function environmentAxis(
       const names = [...boards, ...twists].filter((name) => count === null || countsOf(name).has(count));
       names.forEach((name, i) => {
         if (i > 0 && twists.includes(name) && !twists.includes(names[i - 1])) addGap();
-        addColumn(environmentKey(count, name), name, twists.includes(name));
+        addColumn(environmentKey(count, name), displayName(name), twists.includes(name));
       });
-      addColumn(environmentKey(count, ALL), TOTAL_LABEL, false);
+      if (count !== null) addColumn(environmentKey(count, ALL), TOTAL_LABEL, false);
       nameGroup(blockStart, count === null ? "All player counts" : `${count} players`);
     }
     return {
@@ -958,10 +1024,10 @@ export function environmentAxis(
     if (keys.length > 0) addGap();
     const start = keys.length;
     for (const count of counts) addColumn(environmentKey(count, name), String(count), false);
-    addColumn(environmentKey(null, name), TOTAL_LABEL, false);
+    if (name !== ALL) addColumn(environmentKey(null, name), TOTAL_LABEL, false);
     nameGroup(start, display);
   };
-  for (const board of boards) addGroup(board, [...countsOf(board)].sort((a, b) => a - b), board);
+  for (const board of boards) addGroup(board, [...countsOf(board)].sort((a, b) => a - b), displayName(board));
   const boardsEnd = keys.length - 1;
   if (twists.length > 0 && keys.length > 0) addGap();
   const twistStart = keys.length + 1;
@@ -1013,7 +1079,7 @@ export function environmentCells(
       : usePercent
         ? r.relative_shift
         : r.absolute_shift,
-    tip: `<b>${r.racer_name}</b><br/>${environmentTitle(r)}<br/>raw ${signedPercent(r.relative_shift)} · env average ${signedPercent(r.env_mean_relative_shift)}<br/>adjusted ${signedPercent(r.adjusted_relative_shift)}<br/>${r.games_count.toLocaleString()} games`,
+    tip: `<b>${displayName(r.racer_name)}</b><br/>${environmentTitle(r)}<br/>raw ${signedPercent(r.relative_shift)} · env average ${signedPercent(r.env_mean_relative_shift)}<br/>adjusted ${signedPercent(r.adjusted_relative_shift)}<br/>${r.games_count.toLocaleString()} games`,
   }));
 }
 

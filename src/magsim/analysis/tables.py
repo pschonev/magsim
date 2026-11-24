@@ -65,7 +65,7 @@ def with_racer_extras(
     trigger_pull: pl.DataFrame,
     extras: pl.DataFrame,
 ) -> dict[str, pl.DataFrame]:
-    """Add the extra per-racer columns and move Avg Game Len from Dynamics to Overview."""
+    """Add the extra per-racer columns and move columns between tables (see the dashboard to-do list)."""
     result = dict(tables)
     if not trigger_pull.is_empty():
         caused = trigger_pull.select(
@@ -75,13 +75,17 @@ def with_racer_extras(
         result["abilities"] = result["abilities"].join(caused, on="Racer", how="left")
     if extras.is_empty():
         return result
-    result["movement"] = result["movement"].join(
-        extras.select(
-            pl.col("racer_name").alias("Racer"),
-            (pl.col("elimination_rate") * 100).round(1).alias("Eliminated %"),
-        ),
-        on="Racer",
-        how="left",
+    eliminated = extras.select(
+        pl.col("racer_name").alias("Racer"),
+        (pl.col("elimination_rate") * 100).round(1).alias("Eliminated %"),
+    )
+    movement, abilities = result["movement"], result["abilities"]
+    other_movement = abilities.select("Racer", "Abil +Other", "Abil -Other")
+    result["movement"] = movement.drop("Rolling Turns %").join(other_movement, on="Racer", how="left")
+    result["abilities"] = (
+        abilities.drop("Abil +Other", "Abil -Other")
+        .join(movement.select("Racer", "Rolling Turns %"), on="Racer", how="left")
+        .join(eliminated, on="Racer", how="left")
     )
     game_length = result["dynamics"].select("Racer", "Avg Game Len")
     overview = result["overview"].join(game_length, on="Racer", how="left")

@@ -1,18 +1,23 @@
 import type { ReactNode } from "react";
 import { EChart } from "../../../components/EChart";
 import type { DashboardAnalysisDTO } from "../../../types/api";
+import { displayName } from "../../../utils/names";
 import { useTheme } from "../../../utils/ThemeProvider";
 import { Description } from "./Description";
 import {
   GLOBAL_METRICS_A,
   GLOBAL_METRICS_B,
   PLAYER_COUNT_COLORS,
-  buildFacetDistributionOption,
-  buildGlobalDistributionOption,
+  TURNS_COLOR,
+  TURNS_SERIES,
+  VP_COLOR,
+  VP_SERIES,
+  buildBoardCurvesOption,
   buildGroupedBarOption,
-  shortBoard,
+  buildValueHistogramOption,
   sortBoards,
   sortedCounts,
+  valueRange,
 } from "./chartOptions";
 
 function Card({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
@@ -57,58 +62,81 @@ function MetricGrid({ analysis }: { analysis: DashboardAnalysisDTO }) {
   );
 }
 
-function FacetGrid({ analysis }: { analysis: DashboardAnalysisDTO }) {
+const DISTRIBUTIONS = [
+  { series: TURNS_SERIES, title: "Game length", axisName: "turns", color: TURNS_COLOR },
+  { series: VP_SERIES, title: "Total VP awarded in a race", axisName: "VP", color: VP_COLOR },
+] as const;
+
+function Distributions({ analysis }: { analysis: DashboardAnalysisDTO }) {
   const { chart: theme } = useTheme();
-  const faceted = analysis.distributions_faceted;
-  const boards = sortBoards(faceted.flatMap((b) => (b.board === null ? [] : [b.board])));
-  const counts = [...new Set(faceted.flatMap((b) => (b.racer_count === null ? [] : [b.racer_count])))].sort(
-    (a, b) => a - b,
-  );
+  const rows = analysis.value_distributions;
   return (
-    <div className="overflow-x-auto">
-      <div
-        className="grid min-w-[640px] gap-px bg-slate-800"
-        style={{ gridTemplateColumns: `80px repeat(${counts.length}, minmax(0, 1fr))` }}
-      >
-        <div className="bg-slate-900" />
-        {counts.map((count) => (
-          <div key={count} className="bg-slate-900 py-1.5 text-center text-xs font-medium text-slate-300">
-            {count} players
-          </div>
-        ))}
-        {boards.flatMap((board) => [
-          <div key={board} className="flex items-center bg-slate-900 px-2 text-xs font-semibold text-slate-200">
-            {shortBoard(board)}
-          </div>,
-          ...counts.map((count) => (
+    <div className="grid gap-px bg-slate-800 md:grid-cols-2">
+      {DISTRIBUTIONS.map((d) => {
+        const own = rows.filter((r) => r.series === d.series && r.board === null);
+        return (
+          <div key={d.series} className="bg-slate-900">
+            <h4 className="px-3 pt-2 text-xs font-semibold text-slate-200">{d.title}</h4>
             <EChart
-              key={`${board}-${count}`}
-              height={190}
-              option={buildFacetDistributionOption(
-                faceted.filter((b) => b.board === board && b.racer_count === count),
-                theme,
-              )}
+              height={300}
+              option={buildValueHistogramOption(own, valueRange(rows, d.series), d.axisName, d.color, theme)}
             />
-          )),
-        ])}
-      </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function BoardCurves({ analysis }: { analysis: DashboardAnalysisDTO }) {
+  const { chart: theme } = useTheme();
+  const rows = analysis.value_distributions;
+  const boards = sortBoards(rows.flatMap((r) => (r.board === null ? [] : [r.board])));
+  return (
+    <div className="space-y-px bg-slate-800">
+      {DISTRIBUTIONS.map((d) => {
+        const own = rows.filter((r) => r.series === d.series && r.board !== null);
+        const maxShare = Math.max(...own.map((r) => r.pct)) * 1.1;
+        return (
+          <div key={d.series} className="bg-slate-900">
+            <h4 className="px-3 pt-2 text-xs font-semibold text-slate-200">{d.title}</h4>
+            <div className="grid grid-cols-2 gap-px lg:grid-cols-4">
+              {boards.map((board) => (
+                <div key={board}>
+                  <div className="px-3 pt-1 text-center text-xs text-slate-300">{displayName(board)}</div>
+                  <EChart
+                    height={190}
+                    option={buildBoardCurvesOption(
+                      own.filter((r) => r.board === board),
+                      valueRange(rows, d.series),
+                      maxShare,
+                      d.axisName,
+                      true,
+                      theme,
+                    )}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 export function GlobalCharts({ analysis }: { analysis: DashboardAnalysisDTO }) {
-  const { chart: theme } = useTheme();
   const counts = sortedCounts(analysis.global_dynamics);
   return (
     <div className="space-y-4">
       <Card title="Dynamics by board and player count" aside={<Legend counts={counts} />}>
         <MetricGrid analysis={analysis} />
       </Card>
-      <Card title="Game length and total VP">
-        <EChart height={440} option={buildGlobalDistributionOption(analysis.distributions_global, theme)} />
+      <Card title="How long races last and how many VP they hand out">
+        <Distributions analysis={analysis} />
       </Card>
-      <Card title="Game length and total VP by board and player count">
-        <FacetGrid analysis={analysis} />
+      <Card title="By board and player count" aside={<Legend counts={counts} />}>
+        <BoardCurves analysis={analysis} />
       </Card>
       <Description
         lines={[
@@ -117,6 +145,7 @@ export function GlobalCharts({ analysis }: { analysis: DashboardAnalysisDTO }) {
           { bold: "Ability Dep:", text: " Correlation between net movement from abilities and final Victory Points." },
           { bold: "Trip Rate:", text: " Percentage of total turns spent recovering from trips across the race." },
           { bold: "Abilities Triggered:", text: " Average total ability triggers per race, scaled by player count." },
+          { bold: "Distributions:", text: " One bar per exact value; the dashed line is the median. The most extreme 1 % of races are cut off at the ends." },
         ]}
       />
     </div>

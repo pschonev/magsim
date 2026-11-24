@@ -12,6 +12,7 @@ import {
   Swords,
   Target,
   Trophy,
+  Users,
   Waves,
   Zap,
 } from "lucide-react";
@@ -22,6 +23,7 @@ import { Switch } from "../../components/Switch";
 import type { DashboardAnalysisDTO } from "../../types/api";
 import { useTheme } from "../../utils/ThemeProvider";
 import { useChartHeight } from "../../utils/useChartHeight";
+import { useNarrow } from "../../utils/useNarrow";
 import { Description, type DescriptionLine } from "./charts/Description";
 import { GlobalCharts } from "./charts/GlobalCharts";
 import {
@@ -29,6 +31,7 @@ import {
   type HeatmapAxis,
   type HeatmapCell,
   PERCENT_SCALE,
+  TRIGGER_COUNT_SCALE,
   TRIGGER_SCALE,
   VP_SCALE,
   attachHeatmapHighlight,
@@ -64,6 +67,7 @@ const SCATTER_VIEWS: ViewSpec[] = [
   { id: "momentum", label: "Momentum", icon: Waves },
   { id: "excitement", label: "Excitement", icon: Flame },
   { id: "engine", label: "Engine", icon: Cog },
+  { id: "preferences", label: "Preferences", icon: Users },
 ];
 
 const CHART_VIEWS: ViewSpec[] = [
@@ -87,6 +91,7 @@ const DEFAULT_VIEW = SCATTER_VIEWS[0].id;
 const ABILITY_ROW_HEIGHT = 15;
 const HEATMAP_ROW_HEIGHT = 13;
 const HEATMAP_CHROME_HEIGHT = 220;
+const NARROW_COLUMN_WIDTH = 11;
 
 const TRIGGER_DESCRIPTION: DescriptionLine[] = [
   {
@@ -121,7 +126,7 @@ function TabButton({
     <button
       type="button"
       onClick={onSelect}
-      className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+      className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
         active
           ? "bg-indigo-600 text-on-accent"
           : "text-slate-400 hover:bg-slate-800 hover:text-slate-50"
@@ -140,8 +145,6 @@ interface HeatmapProps {
   legendFormat: (v: number) => string;
   height: number;
   scale: ColorScale;
-  rowTitle: string;
-  columnTitle: string;
 }
 
 function HeatmapLegend({ scale, legendFormat }: { scale: ColorScale; legendFormat: (v: number) => string }) {
@@ -149,9 +152,9 @@ function HeatmapLegend({ scale, legendFormat }: { scale: ColorScale; legendForma
   const stops = heatmapColors(theme);
   const gradient = `linear-gradient(90deg, ${stops.map((c, i) => `${c} ${(i / (stops.length - 1)) * 100}%`).join(", ")})`;
   return (
-    <div className="flex items-center gap-2 text-[11px] text-slate-400">
+    <div className="hidden items-center gap-2 text-[11px] text-slate-400 md:flex">
       <span>≤ {legendFormat(-scale.strong)}</span>
-      <div className="relative h-2.5 w-48 rounded-full" style={{ background: gradient }}>
+      <div className="relative h-2.5 w-40 rounded-full" style={{ background: gradient }}>
         <span className="absolute -bottom-4 left-1/2 -translate-x-1/2">0</span>
       </div>
       <span>≥ {legendFormat(scale.strong)}</span>
@@ -160,8 +163,9 @@ function HeatmapLegend({ scale, legendFormat }: { scale: ColorScale; legendForma
   );
 }
 
-function Heatmap({ axis, ys, cells, legendFormat, height, scale, rowTitle, columnTitle }: HeatmapProps) {
+function Heatmap({ axis, ys, cells, height, scale }: Omit<HeatmapProps, "legendFormat">) {
   const { chart: theme } = useTheme();
+  const narrow = useNarrow();
   const attach = attachHeatmapHighlight(
     axis.keys.length,
     ys.length,
@@ -169,21 +173,15 @@ function Heatmap({ axis, ys, cells, legendFormat, height, scale, rowTitle, colum
     axis.descriptions,
   );
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pb-2 text-xs text-slate-300">
-        <span>
-          <strong className="text-slate-100">Rows:</strong> {rowTitle}
-          <span className="mx-2 text-slate-600">·</span>
-          <strong className="text-slate-100">Columns:</strong> {columnTitle}
-        </span>
-        <HeatmapLegend scale={scale} legendFormat={legendFormat} />
+    <div className="overflow-x-auto">
+      <div style={{ minWidth: narrow ? axis.keys.length * NARROW_COLUMN_WIDTH + 100 : undefined }}>
+        <EChart
+          key={`${axis.keys.length}x${ys.length}${narrow}`}
+          height={height}
+          onChartReady={attach}
+          option={buildHeatmapOption(axis, ys, cells, theme, scale, narrow)}
+        />
       </div>
-      <EChart
-        key={`${axis.keys.length}x${ys.length}`}
-        height={height}
-        onChartReady={attach}
-        option={buildHeatmapOption(axis, ys, cells, theme, scale)}
-      />
     </div>
   );
 }
@@ -202,7 +200,7 @@ function InfoTip({ lines }: { lines: DescriptionLine[] }) {
       </button>
       <span
         role="tooltip"
-        className="absolute top-full right-0 z-30 mt-1 hidden w-[28rem] max-w-[90vw] rounded-md border border-slate-700 bg-slate-900 p-3 text-left shadow-lg group-focus-within:block group-hover:block"
+        className="absolute top-full left-0 z-30 mt-1 hidden w-[28rem] max-w-[90vw] rounded-md border border-slate-700 bg-slate-900 p-3 text-left shadow-lg group-focus-within:block group-hover:block"
       >
         <Description lines={lines} />
       </span>
@@ -210,14 +208,26 @@ function InfoTip({ lines }: { lines: DescriptionLine[] }) {
   );
 }
 
-function ViewToolbar({ info, children }: { info: DescriptionLine[]; children?: ReactNode }) {
+interface ViewToolbarProps {
+  info: DescriptionLine[];
+  children?: ReactNode;
+  trailing?: ReactNode;
+}
+
+function ViewToolbar({ info, children, trailing }: ViewToolbarProps) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex flex-wrap items-center gap-6">{children}</div>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       {info.length > 0 && <InfoTip lines={info} />}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">{children}</div>
+      {trailing && <div className="ml-auto">{trailing}</div>}
     </div>
   );
 }
+
+const axisInfo = (rows: string, columns: string): DescriptionLine[] => [
+  { bold: "Rows:", text: ` ${rows}` },
+  { bold: "Columns:", text: ` ${columns}` },
+];
 
 interface AnalysisPanelProps {
   analysis: DashboardAnalysisDTO;
@@ -231,6 +241,8 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
   const [rankView, setRankView] = useState(false);
   const [usePercent, setUsePercent] = useState(true);
   const [adjustEnvironment, setAdjustEnvironment] = useState(true);
+  const [adjustMatchups, setAdjustMatchups] = useState(false);
+  const [adjustTriggers, setAdjustTriggers] = useState(false);
   const [swapTriggerAxes, setSwapTriggerAxes] = useState(true);
   const [playersFirst, setPlayersFirst] = useState(false);
 
@@ -244,13 +256,17 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
   const triggerRows = triggers.map((c) => (swapTriggerAxes ? c.opponent_name : c.racer_name));
   const triggerColumns = triggers.map((c) => (swapTriggerAxes ? c.racer_name : c.opponent_name));
   const percentScale = usePercent ? PERCENT_SCALE : VP_SCALE;
+  const triggerScale = usePercent ? TRIGGER_SCALE : TRIGGER_COUNT_SCALE;
   const info = descriptionFor(view);
+  const legend = (scale: ColorScale, format: (v: number) => string) => (
+    <HeatmapLegend scale={scale} legendFormat={format} />
+  );
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-slate-900 p-1">
+      <div className="flex items-center gap-x-3 gap-y-2 overflow-x-auto rounded-lg bg-slate-900 p-1 sm:flex-wrap">
         {NAV_GROUPS.map((group, index) => (
-          <div key={group[0].id} className="flex flex-wrap items-center gap-1">
+          <div key={group[0].id} className="flex shrink-0 items-center gap-1 sm:flex-wrap">
             {index > 0 && <span className="mr-1 hidden h-5 w-px bg-slate-700 sm:block" />}
             {group.map((spec) => (
               <TabButton
@@ -290,43 +306,63 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
 
       {view === "interactions" && (
         <>
-          <ViewToolbar info={info}>
+          <ViewToolbar
+            info={[...info, ...axisInfo("the racer whose result is measured", "the opponent in the same race")]}
+            trailing={legend(percentScale, usePercent ? signedPercent : signed(2))}
+          >
             <Switch label="Show Percentage Shift" checked={usePercent} onChange={setUsePercent} />
+            <Switch label="Adjust for opponent average" checked={adjustMatchups} onChange={setAdjustMatchups} />
           </ViewToolbar>
           <Heatmap
             axis={plainAxis(sortedNames(matchups.map((m) => m.opponent_name)))}
             ys={sortedNames(matchups.map((m) => m.racer_name))}
-            cells={matchupCells(matchups, usePercent)}
-            legendFormat={usePercent ? signedPercent : signed(2)}
+            cells={matchupCells(matchups, usePercent, adjustMatchups)}
             height={heatmapHeight}
             scale={percentScale}
-            rowTitle="racer whose result is measured"
-            columnTitle="opponent in the same race"
           />
         </>
       )}
 
       {view === "triggers" && (
         <>
-          <ViewToolbar info={info}>
+          <ViewToolbar
+            info={[
+              ...info,
+              ...axisInfo(
+                swapTriggerAxes ? "the racer in the race" : "the racer whose ability triggers",
+                swapTriggerAxes ? "the racer whose ability triggers" : "the racer in the race",
+              ),
+            ]}
+            trailing={legend(triggerScale, usePercent ? signedPercent : signed(2))}
+          >
+            <Switch label="Show Percentage Shift" checked={usePercent} onChange={setUsePercent} />
+            <Switch label="Adjust for opponent average" checked={adjustTriggers} onChange={setAdjustTriggers} />
             <Switch label="Swap axes" checked={swapTriggerAxes} onChange={setSwapTriggerAxes} />
           </ViewToolbar>
           <Heatmap
             axis={plainAxis(sortedNames(triggerColumns))}
             ys={sortedNames(triggerRows)}
-            cells={triggerCells(triggers).map((cell) => (swapTriggerAxes ? swapCell(cell) : cell))}
-            legendFormat={signedPercent}
+            cells={triggerCells(triggers, usePercent, adjustTriggers).map((cell) =>
+              swapTriggerAxes ? swapCell(cell) : cell,
+            )}
             height={heatmapHeight}
-            scale={TRIGGER_SCALE}
-            rowTitle={swapTriggerAxes ? "racer in the race" : "racer whose ability triggers"}
-            columnTitle={swapTriggerAxes ? "racer whose ability triggers" : "racer in the race"}
+            scale={triggerScale}
           />
         </>
       )}
 
       {view === "environments" && (
         <>
-          <ViewToolbar info={info}>
+          <ViewToolbar
+            info={[
+              ...info,
+              ...axisInfo(
+                "the racer",
+                playersFirst ? "player count, then board / twist card" : "board / twist card, then player count",
+              ),
+            ]}
+            trailing={legend(percentScale, usePercent ? wholePercent : signed(2))}
+          >
             <Switch label="Show Percentage Shift" checked={usePercent} onChange={setUsePercent} />
             <Switch
               label="Group by player count first"
@@ -343,11 +379,8 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
             axis={environmentAxis(environments, playersFirst ? "players" : "board", TWIST_DESCRIPTIONS)}
             ys={sortedNames(environments.map((e) => e.racer_name))}
             cells={environmentCells(environments, usePercent, adjustEnvironment)}
-            legendFormat={usePercent ? wholePercent : signed(2)}
             height={heatmapHeight}
             scale={percentScale}
-            rowTitle="racer"
-            columnTitle={playersFirst ? "player count, then board / twist card" : "board / twist card, then player count"}
           />
         </>
       )}

@@ -7,6 +7,7 @@ import type {
   DatasetMetaDTO,
 } from "../../types/api";
 import { COMBO_MODE_LABELS, addCombo, removeCombo } from "./filters";
+import { displayName } from "../../utils/names";
 
 interface FilterPanelProps {
   meta: DatasetMetaDTO;
@@ -38,7 +39,7 @@ export function FilterPanel({
       ? `All ${meta.racers.length} racers`
       : `${draft.racers.length} of ${meta.racers.length} racers`,
     `${draft.counts.join("/")} players`,
-    draft.boards.length === meta.boards.length ? "all boards" : draft.boards.join(", "),
+    draft.boards.length === meta.boards.length ? "all boards" : draft.boards.map(displayName).join(", "),
     ...(draft.combos.length > 0 ? [`${draft.combos.length} combo filter(s)`] : []),
     ...(analyzedCount !== null ? [`${analyzedCount.toLocaleString()} races analyzed`] : []),
   ].join(" · ");
@@ -190,7 +191,7 @@ export function FilterPanel({
                       ) : (
                         <Ban className="h-3 w-3" />
                       )}
-                      {combo.racers.join(", ")}
+                      {combo.racers.map(displayName).join(", ")}
                       <X className="h-3 w-3 opacity-60" />
                     </button>
                   ))}

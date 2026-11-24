@@ -64,6 +64,8 @@ export interface RacerStatRowDTO {
   ability_move_dependency: number;
   start_pos_bias: number;
   midgame_bias: number;
+  player_count_pref: number;
+  game_length_pref: number;
 }
 
 export interface AbilityBreakdownRowDTO {
@@ -91,6 +93,14 @@ export interface GlobalDynamicsRowDTO {
   midgame_bias: number;
 }
 
+export interface ValueShareDTO {
+  series: string;
+  value: number;
+  pct: number;
+  board: string | null;
+  racer_count: number | null;
+}
+
 export interface DistributionBinDTO {
   bin_index: number;
   bin_label: string;
@@ -110,6 +120,8 @@ export interface MatchupCellDTO {
   residual_matchup: number;
   percentage_shift: number;
   games_together: number;
+  adjusted_percentage_shift: number;
+  adjusted_residual_matchup: number;
 }
 
 export interface TriggerInductionCellDTO {
@@ -119,6 +131,9 @@ export interface TriggerInductionCellDTO {
   baseline_triggers: number;
   relative_shift: number;
   games_together: number;
+  absolute_shift: number;
+  adjusted_relative_shift: number;
+  adjusted_absolute_shift: number;
 }
 
 export interface EnvironmentCellDTO {
@@ -156,6 +171,7 @@ export interface DashboardAnalysisDTO {
   global_dynamics: GlobalDynamicsRowDTO[];
   distributions_global: DistributionBinDTO[];
   distributions_faceted: DistributionBinDTO[];
+  value_distributions: ValueShareDTO[];
   matchup_matrix: MatchupCellDTO[];
   environment_matrix: EnvironmentCellDTO[];
   trigger_induction: TriggerInductionCellDTO[];

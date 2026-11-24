@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   EngineClient,
@@ -19,6 +20,7 @@ import {
   fromIncoming,
   toRequest,
 } from "./simConfig";
+import { displayName } from "../../utils/names";
 
 interface SimulatorViewProps {
   client: EngineClient;
@@ -42,6 +44,7 @@ export function SimulatorView({
   onIncomingConsumed,
 }: SimulatorViewProps) {
   const [config, setConfig] = useState<SimConfig>(() => defaultConfig(simMeta));
+  const [setupOpen, setSetupOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [result, setResult] = useState<SimulationResponseDTO | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
@@ -130,19 +133,35 @@ export function SimulatorView({
   const board = result && step ? result.board_states[step.board_state_idx] : null;
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <div className="flex w-full shrink-0 flex-col gap-3 lg:w-80">
-        <SimulatorConfigPanel
-          simMeta={simMeta}
-          config={config}
-          onChange={setConfig}
-          encodedConfig={result?.encoded_config ?? ""}
-          onImportEncoded={importEncoded}
-          diceError={configDiceError}
-        />
+    <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:gap-4">
+      <div className="contents lg:flex lg:w-80 lg:shrink-0 lg:flex-col lg:gap-3">
+        <div className="max-lg:order-5">
+          <button
+            type="button"
+            aria-expanded={setupOpen}
+            onClick={() => setSetupOpen((open) => !open)}
+            className="flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-xs font-medium text-slate-200 lg:hidden"
+          >
+            <span>
+              Setup · {displayName(config.board)} · {config.racers.length} racers · seed {config.seed}
+            </span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${setupOpen ? "rotate-180" : ""}`} />
+          </button>
+          <div className={setupOpen ? "mt-2 lg:mt-0" : "hidden lg:block"}>
+            <SimulatorConfigPanel
+              simMeta={simMeta}
+              config={config}
+              onChange={setConfig}
+              encodedConfig={result?.encoded_config ?? ""}
+              onImportEncoded={importEncoded}
+              diceError={configDiceError}
+            />
+          </div>
+        </div>
 
         {result && step && (
           <>
+            <div className="max-lg:order-2">
             <PlaybackBar
               steps={result.steps}
               turnMap={result.turn_map}
@@ -158,8 +177,9 @@ export function SimulatorView({
                 setStepIndex(0);
               }}
             />
+            </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex gap-2 overflow-x-auto max-lg:order-3 lg:grid lg:grid-cols-2">
               {step.names.map((name, idx) => (
                 <RacerCard
                   key={`${name}-${idx}`}
@@ -180,7 +200,7 @@ export function SimulatorView({
         )}
       </div>
 
-      <div className="min-w-0 flex-1 space-y-3 lg:sticky lg:top-20">
+      <div className="contents lg:block lg:min-w-0 lg:flex-1 lg:space-y-3 lg:sticky lg:top-20">
         {error && (
           <div className="rounded-lg border border-rose-500/40 bg-rose-950/50 p-3 text-xs text-rose-200">
             {error}
@@ -189,23 +209,28 @@ export function SimulatorView({
 
         {result && step && board ? (
           <>
-            <RaceTrackSVG
-              step={step}
-              board={board}
-              racerPalettes={result.racer_palettes}
-            />
+            <div className="max-lg:order-1">
+              <RaceTrackSVG
+                step={step}
+                board={board}
+                racerPalettes={result.racer_palettes}
+              />
+            </div>
 
+            <div className="max-lg:order-4">
             <LogViewer
               logs={result.logs}
               steps={result.steps}
               activeStepIndex={stepIndex}
               racerNames={step.names}
               highlighter={highlighter}
+              showMeta={config.debug_mode}
               onJumpToStep={(index) => {
                 setPlaying(false);
                 setStepIndex(index);
               }}
             />
+            </div>
           </>
         ) : (
           <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-12 text-center text-xs text-slate-400">
@@ -244,7 +269,7 @@ function RacerCard({
 }: RacerCardProps) {
   return (
     <div
-      className={`rounded-lg border p-2.5 text-xs ${
+      className={`rounded-lg border p-2 text-xs max-lg:w-36 max-lg:shrink-0 lg:p-2.5 ${
         isCurrent
           ? "border-amber-400/70 bg-amber-950/20"
           : "border-slate-800 bg-slate-900/70"
@@ -256,7 +281,7 @@ function RacerCard({
             className="h-2.5 w-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: color }}
           />
-          <span className="truncate font-semibold text-slate-50">{name}</span>
+          <span className="truncate font-semibold text-slate-50">{displayName(name)}</span>
         </div>
         {place !== null && (
           <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">

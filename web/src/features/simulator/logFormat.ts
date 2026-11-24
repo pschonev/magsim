@@ -52,7 +52,7 @@ function wordAlternation(names: string[]): RegExp | null {
 }
 
 export interface LogHighlighter {
-  highlight(prefix: string, message: string): LogSpan[];
+  highlight(prefix: string, message: string, showPrefix: boolean): LogSpan[];
 }
 
 export function createLogHighlighter(meta: SimulatorMetaDTO): LogHighlighter {
@@ -94,9 +94,9 @@ export function createLogHighlighter(meta: SimulatorMetaDTO): LogHighlighter {
   );
 
   return {
-    highlight(prefix, message) {
-      const head = prefix.padEnd(PREFIX_WIDTH);
-      const text = `${head}  ${message}`;
+    highlight(prefix, message, showPrefix) {
+      const head = showPrefix ? `${prefix.padEnd(PREFIX_WIDTH)}  ` : "";
+      const text = `${head}${message}`;
       const colors: (string | null)[] = new Array<string | null>(text.length).fill(
         null,
       );

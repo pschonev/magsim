@@ -9,6 +9,7 @@ interface LogViewerProps {
   activeStepIndex: number;
   racerNames: string[];
   highlighter: LogHighlighter;
+  showMeta: boolean;
   onJumpToStep: (stepIndex: number) => void;
 }
 
@@ -49,6 +50,7 @@ export function LogViewer({
   activeStepIndex,
   racerNames,
   highlighter,
+  showMeta,
   onJumpToStep,
 }: LogViewerProps) {
   const [search, setSearch] = useState("");
@@ -174,6 +176,7 @@ export function LogViewer({
                   <LogRow
                     entry={entry}
                     highlighter={highlighter}
+                    showMeta={showMeta}
                     onClick={() =>
                       onJumpToStep(
                         logToStep[entry.index] >= 0
@@ -213,22 +216,25 @@ function Marker({ markerRef }: { markerRef: React.RefObject<HTMLDivElement | nul
 interface LogRowProps {
   entry: LogEntryDTO;
   highlighter: LogHighlighter;
+  showMeta: boolean;
   onClick: () => void;
 }
 
-function LogRow({ entry, highlighter, onClick }: LogRowProps) {
+function LogRow({ entry, highlighter, showMeta, onClick }: LogRowProps) {
   const spans = useMemo(
-    () => highlighter.highlight(entry.prefix, entry.message),
-    [highlighter, entry.prefix, entry.message],
+    () => highlighter.highlight(entry.prefix, entry.message, showMeta),
+    [highlighter, entry.prefix, entry.message, showMeta],
   );
   return (
     <div className="flex cursor-pointer items-start hover:bg-white/5" onClick={onClick}>
-      <span
-        className="shrink-0 whitespace-pre"
-        style={{ color: LEVEL_COLORS[entry.level] ?? "#c0c0c0", width: "9ch" }}
-      >
-        {entry.level.padEnd(8)}
-      </span>
+      {showMeta && (
+        <span
+          className="shrink-0 whitespace-pre"
+          style={{ color: LEVEL_COLORS[entry.level] ?? "#c0c0c0", width: "9ch" }}
+        >
+          {entry.level.padEnd(8)}
+        </span>
+      )}
       <span className="min-w-0 flex-1 whitespace-pre-wrap break-words" style={{ color: "#eee" }}>
         {spans.map((span, i) => (
           <span

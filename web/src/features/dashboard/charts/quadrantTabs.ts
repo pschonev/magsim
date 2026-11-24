@@ -74,7 +74,7 @@ export const QUADRANT_TABS: QuadrantTab<RacerStatRowDTO>[] = [
     spec: {
       xKey: "dice_sensitivity",
       yKey: "trigger_dependency",
-      xTitle: "Dice Sensitivity",
+      xTitle: "Roll Sensitivity",
       yTitle: "Ability Efficacy",
       quadLabels: ["Technician", "Unstable", "Independent", "Gambler"],
     },
@@ -84,8 +84,37 @@ export const QUADRANT_TABS: QuadrantTab<RacerStatRowDTO>[] = [
         text: " Correlation between using abilities and VP. High = Ability trigger counts strongly decide how many VP are earned.",
       },
       {
-        bold: "X-Axis (Dice Sensitivity):",
-        text: " Absolute correlation between rolls and VP. High = Needs specifically high OR specifically low rolls to earn VP (Highly dependent on dice luck/mechanics).",
+        bold: "X-Axis (Roll Sensitivity):",
+        text: " How strongly the racer's average roll per turn predicts its VP, in either direction (absolute correlation). High: results follow the dice. Sisyphus and Icarus want LOW rolls, Streaker wants HIGH ones. A typical racer sits near 0.13, because rolling higher gets everyone further.",
+      },
+      {
+        bold: "Limit:",
+        text: " Only the average roll is measured. Powers that depend on specific numbers (Speed Demon, Skipper) can still show low values.",
+      },
+    ],
+  },
+  {
+    id: "preferences",
+    spec: {
+      xKey: "player_count_pref",
+      yKey: "game_length_pref",
+      xTitle: "Player Count Preference",
+      yTitle: "Game Length Preference",
+      quadLabels: ["Small Marathon", "Big Marathon", "Small Sprint", "Big Sprint"],
+      zeroCenter: true,
+    },
+    description: [
+      {
+        bold: "X-Axis (Player Count Preference):",
+        text: " Right = does better with more players, left = better with fewer.",
+      },
+      {
+        bold: "Y-Axis (Game Length Preference):",
+        text: " Top = does better in long games, bottom = better in short games.",
+      },
+      {
+        bold: "Method:",
+        text: " Correlation of the racer's VP with the player count and with the game length, both compared with the average racer in the same board and player count.",
       },
     ],
   },

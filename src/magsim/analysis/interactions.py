@@ -41,6 +41,22 @@ def compute_matchup_matrix(
             .otherwise(0.0)
             .alias("percentage_shift"),
         )
+        .with_columns(
+            _env_weighted_mean("percentage_shift", ["opponent_name"], "games_together").alias(
+                "opponent_mean_percentage_shift",
+            ),
+            _env_weighted_mean("residual_matchup", ["opponent_name"], "games_together").alias(
+                "opponent_mean_residual",
+            ),
+        )
+        .with_columns(
+            (pl.col("percentage_shift") - pl.col("opponent_mean_percentage_shift")).alias(
+                "adjusted_percentage_shift",
+            ),
+            (pl.col("residual_matchup") - pl.col("opponent_mean_residual")).alias(
+                "adjusted_residual_matchup",
+            ),
+        )
         .fill_nan(0.0)
         .sort(["racer_name", "opponent_name"])
     )
@@ -51,10 +67,10 @@ TWISTY_BOARD = "TwistyTwirl"
 FANS_DEMAND_CHAOS = "Fans Demand Chaos"
 
 
-def _env_weighted_mean(column: str, over: list[str]) -> pl.Expr:
+def _env_weighted_mean(column: str, over: list[str], weight: str = "games_count") -> pl.Expr:
     """Games-weighted mean of a shift over all racers in the same environment."""
-    weighted = pl.col(column) * pl.col("games_count")
-    return weighted.sum().over(over) / pl.col("games_count").sum().over(over)
+    weighted = pl.col(column) * pl.col(weight)
+    return weighted.sum().over(over) / pl.col(weight).sum().over(over)
 
 
 def _environment_shifts(
@@ -192,6 +208,23 @@ def compute_trigger_induction(stats_results: pl.DataFrame) -> pl.DataFrame:
             .then(pl.col("avg_triggers_with") / pl.col("baseline_triggers") - 1)
             .otherwise(0.0)
             .alias("relative_shift"),
+            (pl.col("avg_triggers_with") - pl.col("baseline_triggers")).alias("absolute_shift"),
+        )
+        .with_columns(
+            _env_weighted_mean("relative_shift", ["opponent_name"], "games_together").alias(
+                "opponent_mean_relative_shift",
+            ),
+            _env_weighted_mean("absolute_shift", ["opponent_name"], "games_together").alias(
+                "opponent_mean_absolute_shift",
+            ),
+        )
+        .with_columns(
+            (pl.col("relative_shift") - pl.col("opponent_mean_relative_shift")).alias(
+                "adjusted_relative_shift",
+            ),
+            (pl.col("absolute_shift") - pl.col("opponent_mean_absolute_shift")).alias(
+                "adjusted_absolute_shift",
+            ),
         )
         .fill_nan(0.0)
         .sort(["racer_name", "opponent_name"])

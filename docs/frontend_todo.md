@@ -281,3 +281,29 @@ Keep: Global small multiples with one shared player-count legend; the big centre
 **Done:** upright track text; racer names in the theme text color (charts: halo in the background color; track: light text with a dark outline; Ability Speed: color dot plus name); heatmaps: "Rows / Columns" captions and an HTML legend (low end, 0, high end, grey band) above the grid, neutral grey middle in dark mode; Ability Speed: axis, legend and side headers at the top; "Player counts" filter label; right-aligned, tabular numbers in tables; "step N of M" in the playback bar.
 
 **Proposal:** `docs/design_direction.html` (open in a browser): badge palette, type, controls, redrawn race track, event log, plan and open decisions. Not implemented yet.
+
+# Round 6 (items from `analysis_ideas.md`, Round 2 list)
+
+## Done (checked in headless Chrome, dark and light, desktop and 390 px)
+
+- Phone: one-row header (logo, Dashboard, Simulator, theme toggle; Raw Data and Upload hidden below `sm`), nav pills scroll sideways, tables show 3 stat columns per page (‹ 1/3 ›), heatmaps scroll sideways with 90° column labels and no right-hand label column, Simulator order on phones: board, controls, racer strip, log, collapsed "Setup" bar. Reset moved next to the transport buttons, Speed next to the turn label (all sizes).
+- Global: histograms over exact turn counts and exact total VP (median marked), one curve per player count for each board (small multiples). Needs the new `value_distributions` field (`analysis/distributions.py`); the old binned fields stay for notebook parity.
+- Environments: no grand-total column any more (Σ per board / per player count stays). Players-first order is Mild Mile, Wild Wilds, Whirly World.
+- Interactions and Triggers: "Adjust for opponent average" (off by default; subtracts what the opponent does to the average racer), Triggers also has "Show Percentage Shift" (off: triggers per race).
+- Heatmap toolbar: info icon first, legend on the right; the Rows/Columns caption moved into the info text.
+- Scatter: racer names in their dot colour (falls back to the text colour when the colour is too close to the background), new Preferences tab (player count preference vs game length preference, centred on 0), wheel zoom on both axes.
+- Tables: Eliminated % and Rolling Turns % moved to Abilities, Abil +Other / Abil -Other moved to Movement, hover texts with bold and line breaks, equal decimals per column.
+- Display names everywhere (Speed Demon, Flip Flop, Doppelgängster, Show-Off, Re-Runner, Mild Mile ...); internal names stay the keys. The simulator log text still shows internal names.
+- Ability Speed: the two side headers are centred over their halves.
+- Log: level and time prefix only in debug mode.
+
+## Data questions
+
+- **Cheatah** is weak by construction. The right-hand neighbour is modelled as a perfect (equilibrium) guesser, so he is guessed in about a third of his turns (Rolling Turns 66.7 % against about 92 %) and gains about 0.3 tiles less than a normal roll even before that. Switching the solver from rank utilities to distance utilities changes nothing (3,000 Cheatah races each: 0.84 vs 0.80 VP). Human guessers are biased, which the simulation does not model.
+- **Mr Dice Guy**: implementation matches the card; the no-duplicate case is only 1.6 % of turns. The negative part of his bar is not a cost. Bars are measured against an average roll of 3.5, and in 32 % of his turns the highest duplicate is 3 or less (analytic: +1.08 above, -0.46 below, net +0.62 per rolling turn; measured net +0.43 per own turn).
+- **Dice Sensitivity** is the absolute correlation between a racer's average roll and its VP. It does not depend on VP size, but it only sees the average roll: Sisyphus and Icarus are high because they want low rolls, Speed Demon and Skipper are low because they need specific numbers. A typical racer sits near 0.13. Renamed to "Roll Sensitivity" in the chart and hover text; the table column keeps "Dice Sens" for notebook parity. A real measure of "needs specific numbers" needs per-face roll counts in the batch output (not stored today).
+
+## Open
+
+- Colours for the new racers (manual).
+- Design redesign (docs/design_direction.html), waiting for the four decisions.

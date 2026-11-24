@@ -1,3 +1,5 @@
+import { RichText } from "../../../components/RichText";
+
 export interface DescriptionLine {
   bold?: string;
   text: string;
@@ -9,7 +11,7 @@ export function Description({ lines }: { lines: DescriptionLine[] }) {
       {lines.map((line, i) => (
         <p key={i}>
           {line.bold && <strong className="text-slate-200">{line.bold}</strong>}
-          {line.text}
+          <RichText text={line.text} />
         </p>
       ))}
     </div>

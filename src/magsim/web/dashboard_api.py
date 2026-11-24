@@ -36,6 +36,7 @@ from magsim.web.schemas import (
     RawTableQueryDTO,
     SummaryTableDTO,
     TriggerInductionCellDTO,
+    ValueShareDTO,
 )
 
 RACE_PRIORITY_COLUMNS: tuple[str, ...] = (
@@ -175,7 +176,9 @@ def _apply_table_search(df: pl.DataFrame, search: str) -> pl.DataFrame:
     return df.filter(combined.fill_null(value=False))
 
 
-def _df_to_racer_stats(df: pl.DataFrame) -> list[RacerStatRowDTO]:
+def _df_to_racer_stats(df: pl.DataFrame, extras: pl.DataFrame) -> list[RacerStatRowDTO]:
+    preferences = extras.select("racer_name", "player_count_pref", "game_length_pref")
+    df = df.join(preferences, on="racer_name", how="left")
     return [
         RacerStatRowDTO(
             racer_name=str(row["racer_name"]),
@@ -206,6 +209,8 @@ def _df_to_racer_stats(df: pl.DataFrame) -> list[RacerStatRowDTO]:
             ability_move_dependency=_safe_float(row["ability_move_dependency"]),
             start_pos_bias=_safe_float(row["start_pos_bias"]),
             midgame_bias=_safe_float(row["midgame_bias"]),
+            player_count_pref=_safe_float(row["player_count_pref"]),
+            game_length_pref=_safe_float(row["game_length_pref"]),
         )
         for row in df.to_dicts()
     ]
@@ -241,6 +246,19 @@ def _df_to_global_dynamics(df: pl.DataFrame) -> list[GlobalDynamicsRowDTO]:
             ability_dep=_safe_float(row["ability_dep"]),
             start_bias=_safe_float(row["start_bias"]),
             midgame_bias=_safe_float(row["midgame_bias"]),
+        )
+        for row in df.to_dicts()
+    ]
+
+
+def _df_to_value_distributions(df: pl.DataFrame) -> list[ValueShareDTO]:
+    return [
+        ValueShareDTO(
+            series=str(row["series"]),
+            value=_safe_int(row["value"]),
+            pct=_safe_float(row["pct"]),
+            board=None if row["board"] is None else str(row["board"]),
+            racer_count=None if row["racer_count"] is None else _safe_int(row["racer_count"]),
         )
         for row in df.to_dicts()
     ]
@@ -282,6 +300,8 @@ def _df_to_matchup_matrix(df: pl.DataFrame) -> list[MatchupCellDTO]:
             residual_matchup=_safe_float(row["residual_matchup"]),
             percentage_shift=_safe_float(row["percentage_shift"]),
             games_together=_safe_int(row["games_together"]),
+            adjusted_percentage_shift=_safe_float(row["adjusted_percentage_shift"]),
+            adjusted_residual_matchup=_safe_float(row["adjusted_residual_matchup"]),
         )
         for row in df.to_dicts()
     ]
@@ -298,6 +318,9 @@ def _df_to_trigger_induction(df: pl.DataFrame) -> list[TriggerInductionCellDTO]:
             baseline_triggers=_safe_float(row["baseline_triggers"]),
             relative_shift=_safe_float(row["relative_shift"]),
             games_together=_safe_int(row["games_together"]),
+            absolute_shift=_safe_float(row["absolute_shift"]),
+            adjusted_relative_shift=_safe_float(row["adjusted_relative_shift"]),
+            adjusted_absolute_shift=_safe_float(row["adjusted_absolute_shift"]),
         )
         for row in df.to_dicts()
     ]
@@ -411,11 +434,12 @@ def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
     return DashboardAnalysisDTO(
         filtered_race_count=filtered.races.height,
         filtered_result_count=filtered.racer_results.height,
-        racer_stats=_df_to_racer_stats(result.racer_stats),
+        racer_stats=_df_to_racer_stats(result.racer_stats, result.racer_extras),
         abilities=_df_to_abilities(result.abilities),
         global_dynamics=_df_to_global_dynamics(result.global_dynamics),
         distributions_global=_df_to_distributions(result.distributions_global),
         distributions_faceted=_df_to_distributions(result.distributions_faceted),
+        value_distributions=_df_to_value_distributions(result.value_distributions),
         matchup_matrix=_df_to_matchup_matrix(result.matchup_matrix),
         environment_matrix=_df_to_environment_matrix(
             result.environment_matrix,

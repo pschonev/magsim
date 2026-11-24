@@ -36,7 +36,7 @@ export const TABLE_TABS: TabSpec[] = [
       },
       {
         bold: "Σ:",
-        text: " totals. Each board and twist card has a Σ column over all player counts, and the All group combines all boards per player count. The grand total is always 0, because shifts are measured against the racer's own overall average.",
+        text: " totals. Each board and twist card has a Σ column over all player counts, and the All group combines all boards per player count. There is no grand total: it is always 0, because shifts are measured against the racer's own overall average.",
       },
     ],
   },
@@ -54,12 +54,12 @@ export const TABLE_TABS: TabSpec[] = [
         text: " Net movement advantage gained purely through abilities, normalized against the race duration.",
       },
       {
-        bold: "Rolling Turns (%):",
-        text: " The percentage of a racer's turns where they actively rolled the dice (not tripped or skipping).",
+        bold: "Abil +Self / Abil -Self:",
+        text: " Normalized positive and negative movement caused by a racer's own abilities.",
       },
       {
-        bold: "Abil Self / Abil -Self:",
-        text: " Normalized positive and negative movement caused by a racer's own abilities.",
+        bold: "Abil +Other / Abil -Other:",
+        text: " Net movement (positive or negative) given to or taken from other racers.",
       },
     ],
   },
@@ -86,8 +86,12 @@ export const TABLE_TABS: TabSpec[] = [
         text: " Total triggers that only fire on the racer's active turn.",
       },
       {
-        bold: "Abil Other / Abil -Other:",
-        text: " Net movement (positive or negative) inflicted on or granted to other racers.",
+        bold: "Rolling Turns (%):",
+        text: " The percentage of a racer's turns where they actively rolled the dice (not tripped or skipping).",
+      },
+      {
+        bold: "Eliminated %:",
+        text: " Share of the racer's races in which it was eliminated.",
       },
     ],
   },

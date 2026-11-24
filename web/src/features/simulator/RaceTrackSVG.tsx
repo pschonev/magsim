@@ -5,6 +5,7 @@ import type {
   StepSnapshotDTO,
   TileModifierDTO,
 } from "../../types/api";
+import { displayName } from "../../utils/names";
 
 interface RaceTrackSVGProps {
   step: StepSnapshotDTO;
@@ -48,8 +49,7 @@ const FALLBACK_PALETTE: RacerPaletteDTO = {
   outline: "#000000",
 };
 
-const VIEW_W = 950;
-const VIEW_H = 400;
+const VIEW_BOX = "20 20 900 365";
 const SCALE = 1.45;
 const TRANS_X = 40;
 const TRANS_Y = -160;
@@ -266,9 +266,9 @@ export function RaceTrackSVG({ step, board, racerPalettes }: RaceTrackSVGProps) 
     : null;
 
   return (
-    <div className="relative rounded-xl border border-slate-800 p-3" style={{ background: THEME.background }}>
+    <div className="relative rounded-xl border border-slate-800 p-1.5 sm:p-3" style={{ background: THEME.background }}>
       <svg
-        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        viewBox={VIEW_BOX}
         className="mx-auto h-auto max-h-[46vh] w-full select-none"
         role="img"
         aria-label="Magical Athlete Race Track"
@@ -472,7 +472,7 @@ export function RaceTrackSVG({ step, board, racerPalettes }: RaceTrackSVGProps) 
                     strokeWidth="4"
                     paintOrder="stroke"
                   >
-                    {name}
+                    {displayName(name)}
                   </text>
                   {isTripped && (
                     <text x={cx} y={cy} dy={5} fill="#ff0000" fontWeight="bold" fontSize="14" textAnchor="middle">
@@ -536,7 +536,7 @@ export function RaceTrackSVG({ step, board, racerPalettes }: RaceTrackSVGProps) 
               key={r.idx}
               className="rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-300"
             >
-              {r.name} — {step.eliminated[r.idx] ? "Eliminated" : "Not placed"} ({r.vp} VP)
+              {displayName(r.name)} — {step.eliminated[r.idx] ? "Eliminated" : "Not placed"} ({r.vp} VP)
             </span>
           ))}
         </div>

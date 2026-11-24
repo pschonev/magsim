@@ -108,17 +108,17 @@ export function App() {
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-black text-on-accent">
                 m
               </span>
               <div>
-                <h1 className="text-lg font-black leading-tight tracking-tight text-slate-50">
+                <h1 className="hidden text-lg font-black leading-tight tracking-tight text-slate-50 min-[420px]:block">
                   magsim
                 </h1>
-                <p className="text-[10px] text-slate-400">
+                <p className="hidden text-[10px] text-slate-400 sm:block">
                   {datasetMeta.race_count.toLocaleString()} races
                   {import.meta.env.DEV &&
                     ` · ${(bootResult.bootMs / 1000).toFixed(2)}s boot · Python ${bootResult.pythonVersion} · Polars ${bootResult.polarsVersion}`}
@@ -132,7 +132,9 @@ export function App() {
                   key={id}
                   type="button"
                   onClick={() => selectTab(id)}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors sm:px-3 ${
+                    id === "data" ? "hidden sm:inline-flex" : "inline-flex"
+                  } ${
                     id === activeTab
                       ? "bg-indigo-600 text-on-accent shadow-sm"
                       : "text-slate-400 hover:bg-slate-800 hover:text-slate-50"
@@ -158,7 +160,7 @@ export function App() {
           <button
             type="button"
             onClick={() => setUploadOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-indigo-500 hover:bg-slate-800"
+            className="hidden items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-indigo-500 hover:bg-slate-800 sm:inline-flex"
           >
             <Upload className="h-3.5 w-3.5 text-indigo-400" />
             Upload Dataset
@@ -168,7 +170,7 @@ export function App() {
         <div className="h-1 bg-indigo-600" />
       </header>
 
-      <main className="w-full flex-1 p-4">
+      <main className="w-full flex-1 p-2 sm:p-4">
         <div hidden={activeTab !== "dashboard"}>
           <DashboardView client={client} meta={datasetMeta} />
         </div>
