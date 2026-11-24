@@ -187,6 +187,7 @@ PARTY_POOPER_COMPLAINT: AbilityName = "PartyPooperNoiseComplaint"
 NEMESIS_MATCH: AbilityName = "NemesisGrudgeMatch"
 HOG_MODIFIER: ModifierName = "HogKnightHog"
 HOG_KNIGHT = "HogKnight"
+TOTAL_TRACKED = frozenset({"Cheatah", "ShowOff"})
 SHOW_OFF_ABILITY: AbilityName = "ShowOffGuysWatch"
 MR_DICE_GUY_ABILITY: AbilityName = "MrDiceGuyMore"
 STUNNER_ABILITY: AbilityName = "StunnerStopTraffic"
@@ -343,6 +344,8 @@ class MetricsAggregator:
                 if len(event.dice_values) == 1:
                     self.last_single_die[event.target_racer_idx] = event.dice_values[0]
                 stats = self._get_result(event.target_racer_idx)
+                if stats.racer_name in TOTAL_TRACKED:
+                    stats.main_roll_totals = [*(stats.main_roll_totals or []), event.base_value]
                 if event.dice_value is not None:
                     stats.sum_dice_rolled += event.dice_value
                     stats.rolling_turns += 1

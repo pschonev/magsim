@@ -55,7 +55,13 @@ def recompute_aggregates(data_dir: Path) -> None:
 
     tqdm.write("🧮 Computing Metrics via Polars...")
     # HERE IS THE REUSE: We use the exact same function as the simulation loop
-    df_race_stats, df_racer_stats = compute_race_metrics(df_pos_long, df_results)
+    df_race_stats, df_racer_stats = compute_race_metrics(
+        df_pos_long,
+        df_results.filter(pl.col("racer_name") == "Hotel").select(
+            "config_hash",
+            pl.col("racer_id").cast(pl.Int64).alias("hotel_id"),
+        ),
+    )
 
     tqdm.write("💾 Merging and Saving...")
 

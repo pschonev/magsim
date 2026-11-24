@@ -1,4 +1,4 @@
-import { BarChart, HeatmapChart, LineChart, ScatterChart } from "echarts/charts";
+import { BarChart, HeatmapChart, LineChart, PieChart, ScatterChart } from "echarts/charts";
 import {
   DataZoomComponent,
   GraphicComponent,
@@ -20,6 +20,7 @@ echarts.use([
   ScatterChart,
   BarChart,
   LineChart,
+  PieChart,
   HeatmapChart,
   TitleComponent,
   TooltipComponent,

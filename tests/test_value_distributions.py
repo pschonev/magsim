@@ -62,3 +62,12 @@ def test_empty_input_gives_an_empty_frame_with_the_same_columns() -> None:
         "value",
         "pct",
     ]
+
+
+def test_player_counts_stored_as_floats_still_work() -> None:
+    values = compute_value_distributions(
+        RACES.with_columns(pl.col("racer_count").cast(pl.Float64)),
+    )
+
+    assert values["racer_count"].dtype == pl.Int64
+    assert not values.is_empty()

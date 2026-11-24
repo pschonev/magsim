@@ -360,3 +360,45 @@ The chart you looked at runs on a dataset without per-face counts, so it only se
 
 - Sub-tabs: a bordered pill with a chevron right after the active main tab (dark theme contrast).
 - "Racer specials" became "Fun facts": small fact cards (Magical Athlete's best roll, Bite Mark and Mouth eliminations, best and worst seat behind Stepdad, plus fastest, longest and shortest racers) instead of charts and tables.
+
+# Round 10: scatterplots reworked (see the analysis in the chat)
+
+New set (all scale-free, VP relative to the race average, field effect subtracted where it applies):
+- Reliability: Avg VP x Swinginess (VP spread divided by the field's spread at the same average).
+- Dice vs Power: Roll Sensitivity x Ability Speed (racers with under one real roll per race are hidden).
+- Power profile: Fires when behind x Ability payoff, with the field's trend line.
+- Momentum: Seat lift x Lead lift. Mid-Game Bias had a unit bug (snapshot at about 14 % of the race instead of 66 %); fixed in `simulation/metrics.py`. The position log counts every racer's turn, so 66 % is now 66 % of the last logged turn.
+- Excitement and Preferences unchanged.
+- Tables: Overview has Swinginess instead of Consist%; VP has Roll Sens %, Seat Lift, Lead Lift; Abilities has Ability Payoff and Fires When Behind.
+- New stored column `avg_rank_frac` (mean rank over the race, 0 = leading). `racer_results.parquet` of the finished batch was recomputed with `recompute_aggregates` (backup of the old files in /tmp/audit/backup); `simulation.duckdb` still has the old values until the next batch run.
+- Not done: the Cheatah and Legs roll sensitivity is hidden rather than fixed; Nepo Baby and Re-Runner have no Power profile point (they never trigger).
+
+## Round 10b
+
+- Power profile: no trend line; plain-language axis titles ("Power fires more often when… ahead / behind", "Extra VP when the power fires a lot"); table columns Going-First Bonus, Lead Bonus, Extra VP When Active, Triggers When Behind.
+- Roll Sensitivity now uses how often each number came up (counts) instead of its share of the rolls. For racers that one roll can eliminate (Icarus) the share depends on how long the racer survived, so Icarus was under-measured (0.17, now 0.34; Sisyphus 0.29, now 0.37). The R² itself is independent of the VP scale. A typical racer is now around 10 %.
+- Ability Speed headers are centred over their halves again (titles instead of free-floating text) and shortened on phones.
+
+## Round 11: fun facts as small graphics
+
+Eight cards, each a different chart type: Mouth vs Bite Mark (bars; Bite Mark minus its transformation trigger), Stepdad's top 5 (bars), Speed Demon and Icarus (two donuts), Hog Knight's hog for himself vs others (split bar), Magical Athlete per number (columns), Sisyphus final VP (histogram), Mr Dice Guy's chosen number (dice with bars), most annoying powers (lollipops, triggers per turn).
+
+Added from the position logs and trigger counts, no new batch: Blunderdog and Diva forward/backward (share of own turns that began in last place; new columns turns_started_last / turns_started_ahead), Hotel's customers (stops on Hotel's space, column hotel_stops; recomputed into the finished batch with `recompute_aggregates`), Mastermind's calls (a second trigger means the prediction was right, the predicted racer is the winner).
+
+Still open: Cheatah's chosen number and Show-Off's roll totals (per-turn movement also contains tile effects, trips and guessed turns), Doppelgängster's victims (several eliminations per race, the dive turn is not in the position log). These need the exact events, either from a replay of the affected races with extra counters or from telemetry in the next batch.
+
+## Round 12
+
+- Seat lift, lead lift and ability payoff are now divided by the racer's own average VP (floor 0.25) and shown as "% of avg VP" (tables: Going-First Bonus %, Lead Bonus %, Extra VP When Active %). Spoilsport and Lovable Loser are now about equally extreme on Momentum.
+- Power profile x-axis flipped: behind on the left, ahead on the right (quadrants Comeback / Snowball / Consolation / Costly).
+- Spoilsport's Roll Sensitivity is about 0 by design: his power needs every other racer 5+ tiles ahead, which depends on turn order and the others' rolls, not on his own numbers (Dice vs Power note added).
+- Fun facts: Stepdad card is now "Does Stepdad help?" (usual win rate vs win rate after Stepdad); Sisyphus histogram has a y-axis in %, hover share and a label on the tallest bar; Mr Dice Guy has a seventh crossed-out die for turns with nothing to pick (face 0, shares over all turns); Mastermind splits 2nd place into "by prediction" and "the natural way" and shows one decimal.
+- Open: "eliminated by" can be derived from race_positions (racer whose turn it was when a position turned null; 163k mid-race eliminations, 79k by the racer itself), needs new racer_results columns plus `recompute_aggregates`, no re-simulation. Cheatah / Show-Off final dice total needs a telemetry column and a re-simulation.
+
+## Round 13
+
+- Roll Sensitivity predictors are now the six face counts plus the six per-roll shares. Spoilsport's power needs him to trail everyone by 5+ tiles, so low rolls do matter (games with 7+ rolls: trigger rate 14 % for an average roll under 3, 5.5 % for 4-5), but counts alone were blind to it because the race ends at the trigger. His score is now ~5 %, still small since the others' positions dominate.
+- Fun facts: "Head to head" card bundles Blunderdog, Diva, Hog Knight and the Stepdad stepkid win rate as 100 % bars; Spoilsport joins Speed Demon and Icarus (race cancelled); Favourite meals (Mouth and Bite Mark, share of shared games in which the eater ate that racer); Cheatah's numbers and Show-Off's dice total (need the new columns, cards stay hidden until the next batch).
+- New batch columns: `eliminated_by` (racer_id of whoever's turn it was in the first turn the racer is missing from the position log; computed in `compute_race_metrics`, so `recompute_aggregates` fills it for old batches) and `main_roll_totals` (INTEGER[], base value of every main roll, only for Cheatah and Show-Off, set in telemetry; needs a new batch). Cheatah's guessed turns have no roll event; they are counted from `skipped_self_main_move` as face 0.
+
+- Boot: the first dashboard analysis now runs behind the loading screen (boot is 0-90 %, the analysis fills the rest), and `DashboardView` starts with that result, so the "Aggregating data..." placeholder no longer shows on first load. A failed first analysis falls back to the old path and shows its error in the dashboard.

@@ -24,11 +24,13 @@ function errorMessage(err: unknown): string {
 export function useDashboard(
   client: EngineClient,
   meta: DatasetMetaDTO,
+  seed: DashboardAnalysisDTO | null,
 ): DashboardState {
   const initial = useMemo(() => defaultFilter(meta), [meta]);
+  const seeded = useRef({ meta, analysis: seed });
   const [draft, setDraft] = useState(initial);
-  const [applied, setApplied] = useState<AnalysisFilterDTO | null>(null);
-  const [analysis, setAnalysis] = useState<DashboardAnalysisDTO | null>(null);
+  const [applied, setApplied] = useState<AnalysisFilterDTO | null>(seed === null ? null : initial);
+  const [analysis, setAnalysis] = useState<DashboardAnalysisDTO | null>(seed);
   const [running, setRunning] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const latestRun = useRef(0);
@@ -54,8 +56,13 @@ export function useDashboard(
 
   useEffect(() => {
     setDraft(initial);
+    if (seeded.current.analysis !== null && seeded.current.meta === meta) {
+      setApplied(initial);
+      setAnalysis(seeded.current.analysis);
+      return;
+    }
     void runWith(initial);
-  }, [initial, runWith]);
+  }, [initial, meta, runWith]);
 
   return {
     draft,

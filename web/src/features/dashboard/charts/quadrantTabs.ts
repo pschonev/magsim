@@ -1,6 +1,6 @@
 import type { DescriptionLine } from "./Description";
 import type { RacerStatRowDTO } from "../../../types/api";
-import { type QuadrantSpec, fixed, percent } from "./chartOptions";
+import { type QuadrantSpec, fixed, signedWholePercent } from "./chartOptions";
 
 export interface QuadrantTab<R extends { racer_name: string; color: string }> {
   id: string;
@@ -10,42 +10,76 @@ export interface QuadrantTab<R extends { racer_name: string; color: string }> {
 
 export const QUADRANT_TABS: QuadrantTab<RacerStatRowDTO>[] = [
   {
-    id: "consistency",
+    id: "reliability",
     spec: {
-      xKey: "consistency_score",
-      yKey: "mean_vp",
-      xTitle: "Stability",
-      yTitle: "Avg VP",
-      quadLabels: ["Wildcard", "Reliable Winner", "Erratic", "Reliable Loser"],
-      extra: [{ key: "std_vp_sigma", label: "std_vp_sigma", format: fixed(2) }],
+      xKey: "mean_vp",
+      yKey: "swinginess",
+      xTitle: "Avg VP",
+      yTitle: "Swinginess",
+      quadLabels: ["Lottery Ticket", "Boom or Bust", "Steady Underdog", "Reliable Winner"],
+      midY: 1,
+      extra: [{ key: "std_vp_sigma", label: "VP spread (sigma)", format: fixed(2) }],
     },
     description: [
-      { bold: "Y-Axis (Avg VP):", text: " How many points they score on average." },
-      {
-        bold: "X-Axis (Stability):",
-        text: " How reliably they hit that average, measured by % of games where they are scored close to their average VP.",
-      },
+      { bold: "X-Axis (Avg VP):", text: " How many VP the racer scores per race." },
+      { bold: "Y-Axis (Swinginess):", text: " How all-or-nothing its results are. Top: big wins and big flops. Bottom: steady results race after race." },
+      { bold: "Note:", text: " Swinginess is compared with racers that score the same on average." },
+    ],
+  },
+  {
+    id: "dicepower",
+    spec: {
+      xKey: "roll_dependence",
+      yKey: "avg_net_movement",
+      xTitle: "Roll Sensitivity",
+      yTitle: "Ability Speed",
+      quadLabels: ["Engine", "Supercharged", "Schemer", "Dice Rider"],
+      midX: "median",
+      midY: 0,
+      extra: [{ key: "avg_speed_raw", label: "Speed (raw)", format: fixed(2) }],
+    },
+    description: [
+      { bold: "X-Axis (Roll Sensitivity):", text: " How much the racer's results depend on which numbers it rolls. Right: its dice make or break the race." },
+      { bold: "Y-Axis (Ability Speed):", text: " How many extra tiles per turn its power gives it. Top: the power carries it far ahead. Bottom: the power costs it movement." },
+      { bold: "Note:", text: " Racers that pick or fix their own number (Cheatah, Legs) are left out. Powers that earn VP instead of moving are in Power profile. Racers whose power depends on other racers' positions or on turn order, not on their own numbers (Spoilsport), sit near zero." },
+    ],
+  },
+  {
+    id: "powerprofile",
+    spec: {
+      xKey: "fires_when_behind",
+      yKey: "ability_payoff",
+      xTitle: "Power fires more often when…  ◀ racer is behind   ·   racer is ahead ▶",
+      yTitle: "Extra VP when the power fires a lot (% of avg VP)",
+      quadLabels: ["Comeback", "Snowball", "Consolation", "Costly"],
+      reverseX: true,
+      midX: "median",
+      midY: 0,
+      yFormat: signedWholePercent,
+    },
+    description: [
+      { bold: "X-Axis (when the power fires):", text: " Left: the power fires mostly while the racer is behind. Right: mostly while it is ahead." },
+      { bold: "Y-Axis (extra VP):", text: " How much more the racer scores in races where its power fires a lot than in races where it hardly fires, as a share of its usual VP. Top: the power seems to pay off. Bottom: it doesn't." },
+      { bold: "Note:", text: " Powers that fire when behind often look worse, because they fire in races that are going badly anyway. Nepo Baby and Re-Runner never trigger." },
     ],
   },
   {
     id: "momentum",
     spec: {
-      xKey: "start_pos_bias",
-      yKey: "midgame_bias",
-      xTitle: "Start Pos Bias",
-      yTitle: "Mid-Game Bias",
-      quadLabels: ["Late Bloomer", "Snowballer", "Comeback King", "Frontrunner"],
-      extra: [
-        { key: "pct_1st", label: "pct_1st", format: percent },
-        { key: "mean_vp", label: "mean_vp", format: fixed(2) },
-      ],
+      xKey: "seat_lift",
+      yKey: "lead_lift",
+      xTitle: "Going-first bonus (% of avg VP)",
+      yTitle: "Mid-race lead bonus (% of avg VP per tile)",
+      quadLabels: ["Lead Converter", "Front-runner", "Comeback Artist", "Early Bird"],
+      midX: 0,
+      midY: 0,
+      xFormat: signedWholePercent,
+      yFormat: signedWholePercent,
     },
     description: [
-      { bold: "Start Bias:", text: " Does starting earlier help them win more VP?" },
-      {
-        bold: "Mid-Game Bias:",
-        text: " How many VPs do they gain from a leading position after 2/3 of the race.",
-      },
+      { bold: "X-Axis (going-first bonus):", text: " How much more the racer scores from the first turn-order seat than from the last, as a share of its own average VP. Right: it wants to go first." },
+      { bold: "Y-Axis (mid-race lead bonus):", text: " How much each tile of lead at two thirds of the race adds, as a share of its own average VP. Top: a lead in the middle of the race turns into extra VP." },
+      { bold: "Note:", text: " Both are compared with what the average racer gains, so strong and weak racers are on the same scale." },
     ],
   },
   {
@@ -59,38 +93,8 @@ export const QUADRANT_TABS: QuadrantTab<RacerStatRowDTO>[] = [
       reverseX: true,
     },
     description: [
-      {
-        bold: "Tightness:",
-        text: " How close the racers are together throughout the race (Right = Smaller distance/Tighter packs).",
-      },
-      {
-        bold: "Volatility:",
-        text: " How frequently the lead changes hands (Top = More chaotic lead changes).",
-      },
-    ],
-  },
-  {
-    id: "engine",
-    spec: {
-      xKey: "roll_dependence",
-      yKey: "trigger_dependency",
-      xTitle: "Roll Sensitivity",
-      yTitle: "Ability Efficacy",
-      quadLabels: ["Technician", "Unstable", "Independent", "Gambler"],
-    },
-    description: [
-      {
-        bold: "Y-Axis (Ability Sensitivity):",
-        text: " Correlation between using abilities and VP. High = Ability trigger counts strongly decide how many VP are earned.",
-      },
-      {
-        bold: "X-Axis (Roll Sensitivity):",
-        text: " Share of the racer's VP variation that is explained by which numbers it rolled (0 = none, 1 = all). High: results follow the dice. Sisyphus and Icarus want specific rolls. Magical Athlete's power depends on the exact number, but each number helps in some races and hurts in others, so it only shows modestly (see Racer specials). Skipper reacts to other racers' 1s, not to his own rolls, and Speed Demon to the VP he holds, so both sit near a typical racer's 0.03.",
-      },
-      {
-        bold: "Note:",
-        text: " Needs per-face roll counts from the batch. Older datasets only have the average roll, which misses powers that need exact numbers. Cheatah's chosen number is not a roll.",
-      },
+      { bold: "X-Axis (Tightness):", text: " How close the racers stay together in races with this racer. Right: tight packs." },
+      { bold: "Y-Axis (Volatility):", text: " How often the order changes. Top: lots of overtaking." },
     ],
   },
   {
@@ -104,18 +108,9 @@ export const QUADRANT_TABS: QuadrantTab<RacerStatRowDTO>[] = [
       zeroCenter: true,
     },
     description: [
-      {
-        bold: "X-Axis (Player Count Preference):",
-        text: " Right = does better with more players, left = better with fewer.",
-      },
-      {
-        bold: "Y-Axis (Game Length Preference):",
-        text: " Top = does better in long games, bottom = better in short games.",
-      },
-      {
-        bold: "Method:",
-        text: " Correlation of the racer's VP with the player count and with the game length, both compared with the average racer in the same board and player count.",
-      },
+      { bold: "X-Axis (Player Count Preference):", text: " Whether the racer does better with more players. Right: more players. Left: fewer." },
+      { bold: "Y-Axis (Game Length Preference):", text: " Whether the racer does better in long games. Top: long games. Bottom: short games." },
+      { bold: "Note:", text: " Compared with the average racer on the same board and player count." },
     ],
   },
 ];

@@ -61,3 +61,4 @@ def test_without_face_counts_only_the_average_roll_is_used() -> None:
 
     assert dependence(frame)["NeedsThrees"] < 0.8
     assert 0.0 <= dependence(frame)["Indifferent"] < 0.05
+

@@ -83,7 +83,12 @@ class RacerStatRowDTO(msgspec.Struct, frozen=True):
     midgame_bias: float
     player_count_pref: float = 0.0
     game_length_pref: float = 0.0
-    roll_dependence: float = 0.0
+    roll_dependence: float | None = None
+    swinginess: float | None = None
+    seat_lift: float | None = None
+    lead_lift: float | None = None
+    ability_payoff: float | None = None
+    fires_when_behind: float | None = None
 
 
 class AbilityBreakdownRowDTO(msgspec.Struct, frozen=True):
@@ -136,25 +141,6 @@ class StepkidRowDTO(msgspec.Struct, frozen=True):
     lift: float
 
 
-class VictimRowDTO(msgspec.Struct, frozen=True):
-    """How much more often a racer is eliminated when an eliminating racer is in the race."""
-
-    racer_name: str
-    games: int
-    rate_with: float
-    rate_without: float
-    lift: float
-
-
-class EliminatorDTO(msgspec.Struct, frozen=True):
-    """Elimination statistics for one eliminating racer (Bite Mark, Mouth)."""
-
-    racer_name: str
-    eliminated_with: float
-    eliminated_without: float
-    victims: list[VictimRowDTO]
-
-
 class FaceEffectDTO(msgspec.Struct, frozen=True):
     """VP effect of rolling one face, for one racer."""
 
@@ -164,11 +150,72 @@ class FaceEffectDTO(msgspec.Struct, frozen=True):
     rolled_share: float
 
 
+class NamedValueDTO(msgspec.Struct, frozen=True):
+    """A racer and one number."""
+
+    racer_name: str
+    value: float
+
+
+class OutcomeShareDTO(msgspec.Struct, frozen=True):
+    """How a racer's races end, as shares that add up to one."""
+
+    racer_name: str
+    first: float
+    second: float
+    eliminated: float
+    cancelled: float
+    other: float
+
+
+class VpShareDTO(msgspec.Struct, frozen=True):
+    """Share of games that end with a given VP."""
+
+    vp: int
+    share: float
+
+
+class EatTargetDTO(msgspec.Struct, frozen=True):
+    """How often an eater eliminated a racer, per game the two shared."""
+
+    eater: str
+    victim: str
+    rate: float
+
+
+class FaceShareDTO(msgspec.Struct, frozen=True):
+    """Share of the rolls that were a given number."""
+
+    face: int
+    share: float
+
+
+class FunFactsDTO(msgspec.Struct, frozen=True):
+    """Small per-racer facts for the Fun facts tab; empty lists when the racer is not in the data."""
+
+    eaten_per_game: list[NamedValueDTO] = msgspec.field(default_factory=list)
+    outcomes: list[OutcomeShareDTO] = msgspec.field(default_factory=list)
+    hog_for_himself: float | None = None
+    hog_for_others: float | None = None
+    sisyphus_vp: list[VpShareDTO] = msgspec.field(default_factory=list)
+    mr_dice_guy_faces: list[FaceShareDTO] = msgspec.field(default_factory=list)
+    eat_targets: list[EatTargetDTO] = msgspec.field(default_factory=list)
+    cheatah_numbers: list[FaceShareDTO] = msgspec.field(default_factory=list)
+    show_off_totals: list[FaceShareDTO] = msgspec.field(default_factory=list)
+    triggers_per_turn: list[NamedValueDTO] = msgspec.field(default_factory=list)
+    blunderdog_forward: float | None = None
+    diva_forward: float | None = None
+    hotel_customers: list[NamedValueDTO] = msgspec.field(default_factory=list)
+    mastermind_hits: list[NamedValueDTO] = msgspec.field(default_factory=list)
+    mastermind_first: float | None = None
+    mastermind_second: float | None = None
+    mastermind_second_predicted: float | None = None
+
+
 class RacerSpecificDTO(msgspec.Struct, frozen=True):
     """Statistics that only matter for a few racers."""
 
     stepkid_wins: list[StepkidRowDTO] = msgspec.field(default_factory=list)
-    eliminators: list[EliminatorDTO] = msgspec.field(default_factory=list)
     magical_athlete_faces: list[FaceEffectDTO] = msgspec.field(default_factory=list)
 
 
@@ -274,6 +321,7 @@ class DashboardAnalysisDTO(msgspec.Struct, frozen=True):
     )
     value_distributions: list[ValueShareDTO] = msgspec.field(default_factory=list)
     racer_specific: RacerSpecificDTO = msgspec.field(default_factory=RacerSpecificDTO)
+    fun_facts: FunFactsDTO = msgspec.field(default_factory=FunFactsDTO)
     twist_combo_stats: list[TwistComboStatDTO] = msgspec.field(default_factory=list)
     matchup_matrix: list[MatchupCellDTO] = msgspec.field(default_factory=list)
     environment_matrix: list[EnvironmentCellDTO] = msgspec.field(default_factory=list)

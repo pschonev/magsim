@@ -87,18 +87,35 @@ def with_racer_extras(
         .join(movement.select("Racer", "Rolling Turns %"), on="Racer", how="left")
         .join(eliminated, on="Racer", how="left")
     )
-    roll_sensitivity = extras.select(
+    profile = extras.select(
         pl.col("racer_name").alias("Racer"),
         (pl.col("roll_dependence") * 100).round(1).alias("Roll Sens %"),
+        pl.col("swinginess").round(2).alias("Swinginess"),
+        (pl.col("seat_lift") * 100).round(1).alias("Going-First Bonus %"),
+        (pl.col("lead_lift") * 100).round(1).alias("Lead Bonus %"),
+        (pl.col("ability_payoff") * 100).round(1).alias("Extra VP When Active %"),
+        pl.col("fires_when_behind").round(2).alias("Triggers When Behind"),
     )
-    vp = result["vp"].join(roll_sensitivity, on="Racer", how="left")
-    result["vp"] = vp.select(
-        *("Roll Sens %" if column == "Dice Sens" else column for column in result["vp"].columns),
+    vp = result["vp"].join(profile.select("Racer", "Roll Sens %", "Going-First Bonus %", "Lead Bonus %"), on="Racer", how="left")
+    result["vp"] = vp.select("Racer", "Avg VP", "Roll Sens %", "Going-First Bonus %", "Lead Bonus %")
+    result["abilities"] = result["abilities"].join(
+        profile.select("Racer", "Extra VP When Active %", "Triggers When Behind"),
+        on="Racer",
+        how="left",
     )
     game_length = result["dynamics"].select("Racer", "Avg Game Len")
-    overview = result["overview"].join(game_length, on="Racer", how="left")
-    columns = [c for c in overview.columns if c not in ("Avg Game Len", "# Races")]
-    result["overview"] = overview.select(*columns, "Avg Game Len", "# Races")
+    overview = (
+        result["overview"]
+        .join(game_length, on="Racer", how="left")
+        .join(profile.select("Racer", "Swinginess"), on="Racer", how="left")
+    )
+    columns = [c for c in overview.columns if c not in ("Avg Game Len", "# Races", "Consist%")]
+    result["overview"] = overview.select(*columns, "Avg Game Len", "# Races").select(
+        "Racer",
+        "Avg VP",
+        "Swinginess",
+        pl.exclude("Racer", "Avg VP", "Swinginess"),
+    )
     result["dynamics"] = (
         result["dynamics"]
         .drop("Avg Game Len")

@@ -40,7 +40,7 @@ def _twist_values(dist_raw: pl.DataFrame, column: str) -> pl.DataFrame:
         .filter(pl.col("twist").is_not_null())
         .select(
             "twist",
-            "racer_count",
+            pl.col("racer_count").cast(pl.Int64),
             pl.col(column).round(0).cast(pl.Int64).alias("value"),
         )
         .group_by("twist", "racer_count", "value")
@@ -65,7 +65,7 @@ def compute_value_distributions(dist_raw: pl.DataFrame) -> pl.DataFrame:
     for series, column in SERIES_COLUMNS.items():
         values = dist_raw.select(
             "board",
-            "racer_count",
+            pl.col("racer_count").cast(pl.Int64),
             pl.col(column).round(0).cast(pl.Int64).alias("value"),
         )
         twisted = _twist_values(dist_raw, column)

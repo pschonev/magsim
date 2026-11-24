@@ -15,7 +15,7 @@ def prepare_position_data(df_pos_wide: pl.DataFrame) -> pl.DataFrame:
     Handles the unpivot and strict type casting for racer IDs.
 
     Args:
-        df_pos_wide: DataFrame with columns [config_hash, turn_index, pos_r0, pos_r1...]
+        df_pos_wide: DataFrame with columns [config_hash, turn_index, current_racer_id, pos_r0, pos_r1...]
 
     Returns:
         DataFrame in long format [config_hash, turn_index, racer_id, position]
@@ -25,7 +25,7 @@ def prepare_position_data(df_pos_wide: pl.DataFrame) -> pl.DataFrame:
 
     return (
         df_pos_wide.unpivot(
-            index=["config_hash", "turn_index"],
+            index=["config_hash", "turn_index", "current_racer_id"],
             on=pos_cols,
             variable_name="racer_slot",
             value_name="position",
@@ -34,25 +34,26 @@ def prepare_position_data(df_pos_wide: pl.DataFrame) -> pl.DataFrame:
             pl.col("racer_slot").str.extract(r"(\d+)").cast(pl.Int64).alias("racer_id"),
         )
         .filter(pl.col("position").is_not_null())
-        .select(["config_hash", "turn_index", "racer_id", "position"])
+        .select(["config_hash", "turn_index", "current_racer_id", "racer_id", "position"])
     )
 
 
 def compute_race_metrics(
     df_positions: pl.DataFrame,
-    df_results: pl.DataFrame,
+    df_hotels: pl.DataFrame,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """
-    Computes complex race metrics from position logs and results.
+    Computes complex race metrics from position logs.
 
     Args:
         df_positions: Long-format DataFrame (see prepare_position_data)
-        df_results: DataFrame with columns [config_hash, racer_id, turns_taken, rank]
+        df_hotels: [config_hash, hotel_id] of the Hotel racers (empty if there is none)
 
     Returns:
         tuple containing:
         1. df_race_metrics: [config_hash, tightness_score, volatility_score]
-        2. df_racer_metrics: [config_hash, racer_id, midgame_relative_pos]
+        2. df_racer_metrics: [config_hash, racer_id, midgame_relative_pos, avg_rank_frac,
+           turns_started_last, turns_started_ahead, hotel_stops, eliminated_by]
     """
     # -------------------------------------------------------------------------
     # 1. Race Tightness
@@ -104,25 +105,17 @@ def compute_race_metrics(
 
     # -------------------------------------------------------------------------
     # 3. Midgame Relative Position
-    # Metric: Distance from the median position at 66% of the winner's turn count.
+    # Metric: Distance from the median position at 66% of the race. The position log has one row
+    # per turn of any racer, so 66% of the race is 66% of the last logged turn.
     # -------------------------------------------------------------------------
-    winner_turns = (
-        df_results.filter(pl.col("finish_position") == 1)
-        .group_by("config_hash")
-        .agg(pl.col("turns_taken").min().alias("winner_turns"))
+    snapshot_targets = df_positions.group_by("config_hash").agg(
+        (pl.col("turn_index").max() * 0.66).floor().cast(pl.Int64).alias("snapshot_turn"),
     )
 
-    # Calculate target turn index (66% of winner's time)
-    snapshot_targets = winner_turns.with_columns(
-        (pl.col("winner_turns") * 0.66).floor().cast(pl.Int64).alias("snapshot_turn"),
-    )
-
-    # Filter positions to just that one turn per race
     df_snapshot = df_positions.join(snapshot_targets, on="config_hash").filter(
         pl.col("turn_index") == pl.col("snapshot_turn"),
     )
 
-    # Calculate Median at that snapshot
     snapshot_medians = df_snapshot.group_by("config_hash").agg(
         pl.col("position").median().alias("median_pos"),
     )
@@ -133,6 +126,76 @@ def compute_race_metrics(
             (pl.col("position") - pl.col("median_pos")).alias("midgame_relative_pos"),
         )
         .select(["config_hash", "racer_id", "midgame_relative_pos"])
+    )
+
+    # -------------------------------------------------------------------------
+    # 4. Average Rank
+    # Metric: mean over all turns of the racer's rank among the racers on the track,
+    # 0 = leading, 1 = last (ties share the average rank).
+    # -------------------------------------------------------------------------
+    average_rank = (
+        df_positions.with_columns(
+            (
+                (
+                    pl.col("position").rank(method="average", descending=True).over(["config_hash", "turn_index"])
+                    - 1
+                )
+                / (pl.len().over(["config_hash", "turn_index"]) - 1).clip(lower_bound=1)
+            ).alias("rank_frac"),
+        )
+        .group_by(["config_hash", "racer_id"])
+        .agg(pl.col("rank_frac").mean().alias("avg_rank_frac"))
+    )
+    midgame_metrics = midgame_metrics.join(average_rank, on=["config_hash", "racer_id"], how="full", coalesce=True)
+
+    # -------------------------------------------------------------------------
+    # 5. Own turns: how many started in last place, and stops on Hotel's space
+    # -------------------------------------------------------------------------
+    own_turns = (
+        df_positions.sort(["config_hash", "racer_id", "turn_index"])
+        .with_columns(
+            pl.col("position").shift(1).over(["config_hash", "racer_id"]).alias("start_pos"),
+        )
+        .with_columns(
+            pl.col("start_pos").min().over(["config_hash", "turn_index"]).alias("last_start_pos"),
+        )
+        .filter((pl.col("racer_id") == pl.col("current_racer_id")) & pl.col("start_pos").is_not_null())
+    )
+    turn_facts = own_turns.group_by(["config_hash", "racer_id"]).agg(
+        (pl.col("start_pos") <= pl.col("last_start_pos")).sum().alias("turns_started_last"),
+        (pl.col("start_pos") > pl.col("last_start_pos")).sum().alias("turns_started_ahead"),
+    )
+    hotel_positions = df_hotels.join(
+        df_positions.select("config_hash", "turn_index", pl.col("racer_id").alias("hotel_id"), pl.col("position").alias("hotel_pos")),
+        on=["config_hash", "hotel_id"],
+    )
+    hotel_stops = (
+        own_turns.filter(pl.col("position") != pl.col("start_pos"))
+        .join(hotel_positions, on=["config_hash", "turn_index"])
+        .filter((pl.col("position") == pl.col("hotel_pos")) & (pl.col("racer_id") != pl.col("hotel_id")))
+        .group_by(["config_hash", "racer_id"])
+        .agg(pl.len().alias("hotel_stops"))
+    )
+    # -------------------------------------------------------------------------
+    # 6. Eliminated by: an eliminated racer disappears from the position log; whoever's turn it
+    # was in the first turn without it is credited (eliminations in the last logged turn are
+    # unknown, the elimination happened after the final snapshot).
+    # -------------------------------------------------------------------------
+    race_end = df_positions.group_by("config_hash").agg(pl.col("turn_index").max().alias("race_end"))
+    turn_owners = df_positions.select("config_hash", "turn_index", "current_racer_id").unique()
+    eliminated_by = (
+        df_positions.group_by(["config_hash", "racer_id"])
+        .agg((pl.col("turn_index").max() + 1).alias("turn_index"))
+        .join(race_end, on="config_hash")
+        .filter(pl.col("turn_index") <= pl.col("race_end"))
+        .join(turn_owners, on=["config_hash", "turn_index"])
+        .select("config_hash", "racer_id", pl.col("current_racer_id").alias("eliminated_by"))
+    )
+    midgame_metrics = (
+        midgame_metrics.join(turn_facts, on=["config_hash", "racer_id"], how="left")
+        .join(hotel_stops, on=["config_hash", "racer_id"], how="left")
+        .join(eliminated_by, on=["config_hash", "racer_id"], how="left")
+        .with_columns(pl.col("hotel_stops").fill_null(0))
     )
 
     # -------------------------------------------------------------------------

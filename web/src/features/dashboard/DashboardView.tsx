@@ -1,5 +1,5 @@
 import { AlertTriangle } from "lucide-react";
-import type { DatasetMetaDTO, EngineClient } from "../../types/api";
+import type { DashboardAnalysisDTO, DatasetMetaDTO, EngineClient } from "../../types/api";
 import { AnalysisPanel } from "./AnalysisPanel";
 import { FilterPanel } from "./FilterPanel";
 import { useDashboard } from "./useDashboard";
@@ -7,12 +7,14 @@ import { useDashboard } from "./useDashboard";
 interface DashboardViewProps {
   client: EngineClient;
   meta: DatasetMetaDTO;
+  initialAnalysis: DashboardAnalysisDTO | null;
 }
 
-export function DashboardView({ client, meta }: DashboardViewProps) {
+export function DashboardView({ client, meta, initialAnalysis }: DashboardViewProps) {
   const { draft, setDraft, analysis, running, failure, isStale, run } = useDashboard(
     client,
     meta,
+    initialAnalysis,
   );
   const message = failure ?? analysis?.error ?? null;
 

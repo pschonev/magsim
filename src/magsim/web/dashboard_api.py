@@ -19,13 +19,22 @@ from magsim.analysis.filters import (
     filter_dataset,
     get_automatic_racers,
 )
-from magsim.analysis.metrics import run_full_analysis
-from magsim.analysis.racer_specific import (
-    compute_eliminated_per_race,
-    compute_roll_effects,
-    compute_stepkid_wins,
-    compute_victims,
+from magsim.analysis.fun_facts import (
+    compute_chosen_faces,
+    compute_eaten_per_game,
+    compute_forward_share,
+    compute_hog_split,
+    compute_hotel_customers,
+    compute_mastermind,
+    compute_outcomes,
+    compute_eaten_targets,
+    compute_cheatah_numbers,
+    compute_show_off_totals,
+    compute_triggers_per_turn,
+    compute_vp_distribution,
 )
+from magsim.analysis.metrics import run_full_analysis
+from magsim.analysis.racer_specific import compute_roll_effects, compute_stepkid_wins
 from magsim.analysis.tables import SUMMARY_TABLE_TITLES, with_racer_extras
 from magsim.core.palettes import get_racer_color
 from magsim.web.schemas import (
@@ -34,11 +43,15 @@ from magsim.web.schemas import (
     DashboardAnalysisDTO,
     DatasetMetaDTO,
     DistributionBinDTO,
-    EliminatorDTO,
     EnvironmentCellDTO,
     FaceEffectDTO,
+    EatTargetDTO,
+    FaceShareDTO,
+    FunFactsDTO,
     GlobalDynamicsRowDTO,
     MatchupCellDTO,
+    NamedValueDTO,
+    OutcomeShareDTO,
     RacerSpecificDTO,
     RacerStatRowDTO,
     RawTablePageDTO,
@@ -48,7 +61,7 @@ from magsim.web.schemas import (
     TriggerInductionCellDTO,
     TwistComboStatDTO,
     ValueShareDTO,
-    VictimRowDTO,
+    VpShareDTO,
 )
 
 RACE_PRIORITY_COLUMNS: tuple[str, ...] = (
@@ -74,6 +87,16 @@ def _read_parquet_bytes(raw: bytes) -> pl.DataFrame:
             msg = "Arrow table did not convert to a Polars DataFrame."
             raise TypeError(msg) from err
         return frame
+
+
+PROFILE_COLUMNS = ("swinginess", "seat_lift", "lead_lift", "ability_payoff", "fires_when_behind")
+
+
+def _optional_float(value: object) -> float | None:
+    """A finite number, or None when the statistic is unknown."""
+    if not isinstance(value, (int, float)) or math.isnan(value) or math.isinf(value):
+        return None
+    return float(value)
 
 
 def _safe_float(value: object, default: float = 0.0) -> float:
@@ -194,6 +217,7 @@ def _df_to_racer_stats(df: pl.DataFrame, extras: pl.DataFrame) -> list[RacerStat
         "player_count_pref",
         "game_length_pref",
         "roll_dependence",
+        *PROFILE_COLUMNS,
     )
     df = df.join(preferences, on="racer_name", how="left")
     return [
@@ -228,7 +252,12 @@ def _df_to_racer_stats(df: pl.DataFrame, extras: pl.DataFrame) -> list[RacerStat
             midgame_bias=_safe_float(row["midgame_bias"]),
             player_count_pref=_safe_float(row["player_count_pref"]),
             game_length_pref=_safe_float(row["game_length_pref"]),
-            roll_dependence=_safe_float(row["roll_dependence"]),
+            roll_dependence=_optional_float(row["roll_dependence"]),
+            swinginess=_optional_float(row["swinginess"]),
+            seat_lift=_optional_float(row["seat_lift"]),
+            lead_lift=_optional_float(row["lead_lift"]),
+            ability_payoff=_optional_float(row["ability_payoff"]),
+            fires_when_behind=_optional_float(row["fires_when_behind"]),
         )
         for row in df.to_dicts()
     ]
@@ -284,7 +313,6 @@ def _df_to_value_distributions(df: pl.DataFrame) -> list[ValueShareDTO]:
 
 
 def _racer_specific(results: pl.DataFrame) -> RacerSpecificDTO:
-    per_race = compute_eliminated_per_race(results)
     return RacerSpecificDTO(
         stepkid_wins=[
             StepkidRowDTO(
@@ -296,24 +324,6 @@ def _racer_specific(results: pl.DataFrame) -> RacerSpecificDTO:
             )
             for r in compute_stepkid_wins(results).to_dicts()
         ],
-        eliminators=[
-            EliminatorDTO(
-                racer_name=name,
-                eliminated_with=per_race[name][0],
-                eliminated_without=per_race[name][1],
-                victims=[
-                    VictimRowDTO(
-                        racer_name=str(r["racer_name"]),
-                        games=_safe_int(r["games"]),
-                        rate_with=_safe_float(r["rate_with"]),
-                        rate_without=_safe_float(r["rate_without"]),
-                        lift=_safe_float(r["lift"]),
-                    )
-                    for r in victims.to_dicts()
-                ],
-            )
-            for name, victims in compute_victims(results).items()
-        ],
         magical_athlete_faces=[
             FaceEffectDTO(
                 face=_safe_int(r["face"]),
@@ -323,6 +333,60 @@ def _racer_specific(results: pl.DataFrame) -> RacerSpecificDTO:
             )
             for r in compute_roll_effects(results).to_dicts()
         ],
+    )
+
+
+def _named_values(df: pl.DataFrame) -> list[NamedValueDTO]:
+    return [
+        NamedValueDTO(racer_name=str(r["racer_name"]), value=_safe_float(r["value"]))
+        for r in df.to_dicts()
+    ]
+
+
+def _face_shares(frame: pl.DataFrame) -> list[FaceShareDTO]:
+    return [
+        FaceShareDTO(face=_safe_int(r["face"]), share=_safe_float(r["share"]))
+        for r in frame.to_dicts()
+    ]
+
+
+def _fun_facts(results: pl.DataFrame) -> FunFactsDTO:
+    hog = compute_hog_split(results)
+    hits, mastermind_first, mastermind_second, mastermind_second_predicted = compute_mastermind(results)
+    return FunFactsDTO(
+        eaten_per_game=_named_values(compute_eaten_per_game(results)),
+        outcomes=[
+            OutcomeShareDTO(
+                racer_name=str(r["racer_name"]),
+                first=_safe_float(r["first"]),
+                second=_safe_float(r["second"]),
+                eliminated=_safe_float(r["eliminated"]),
+                cancelled=_safe_float(r["cancelled"]),
+                other=_safe_float(r["other"]),
+            )
+            for r in compute_outcomes(results).to_dicts()
+        ],
+        hog_for_himself=None if hog.is_empty() else _safe_float(hog["for_himself"][0]),
+        hog_for_others=None if hog.is_empty() else _safe_float(hog["for_others"][0]),
+        sisyphus_vp=[
+            VpShareDTO(vp=_safe_int(r["vp"]), share=_safe_float(r["share"]))
+            for r in compute_vp_distribution(results).to_dicts()
+        ],
+        mr_dice_guy_faces=_face_shares(compute_chosen_faces(results)),
+        eat_targets=[
+            EatTargetDTO(eater=str(r["eater"]), victim=str(r["victim"]), rate=_safe_float(r["rate"]))
+            for r in compute_eaten_targets(results).to_dicts()
+        ],
+        cheatah_numbers=_face_shares(compute_cheatah_numbers(results)),
+        show_off_totals=_face_shares(compute_show_off_totals(results)),
+        triggers_per_turn=_named_values(compute_triggers_per_turn(results)),
+        blunderdog_forward=compute_forward_share(results, "Blunderdog"),
+        diva_forward=compute_forward_share(results, "Diva"),
+        hotel_customers=_named_values(compute_hotel_customers(results)),
+        mastermind_hits=_named_values(hits),
+        mastermind_first=mastermind_first,
+        mastermind_second=mastermind_second,
+        mastermind_second_predicted=mastermind_second_predicted,
     )
 
 
@@ -527,6 +591,7 @@ def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
         distributions_faceted=_df_to_distributions(result.distributions_faceted),
         value_distributions=_df_to_value_distributions(result.value_distributions),
         racer_specific=_racer_specific(filtered.racer_results),
+        fun_facts=_fun_facts(filtered.racer_results),
         twist_combo_stats=_df_to_twist_combo_stats(result.twist_combo_stats),
         matchup_matrix=_df_to_matchup_matrix(result.matchup_matrix),
         environment_matrix=_df_to_environment_matrix(

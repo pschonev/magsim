@@ -61,6 +61,7 @@ function readableOn(color: string, t: ChartTheme): string {
 export const fixed = (digits: number) => (v: number) => v.toFixed(digits);
 export const signed = (digits: number) => (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(digits)}`;
 export const signedPercent = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+export const signedWholePercent = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(0)}%`;
 export const wholePercent = (v: number) => `${(v * 100).toFixed(0)}%`;
 export const percent = (v: number) => `${(v * 100).toFixed(1)}%`;
 
@@ -83,6 +84,13 @@ export interface QuadrantSpec<R extends QuadrantRow> {
   quadLabels: [string, string, string, string];
   reverseX?: boolean;
   zeroCenter?: boolean;
+  /** Where the quadrant line sits: a value, or the median of the racers. Default: middle of the data. */
+  midX?: number | "median";
+  midY?: number | "median";
+  trendLine?: boolean;
+  /** Axis and tooltip number format; default two decimals. */
+  xFormat?: (v: number) => string;
+  yFormat?: (v: number) => string;
   extra?: ExtraTooltip<R>[];
 }
 
@@ -98,6 +106,7 @@ function valueAxis(
   showGrid: boolean,
   rank: RankAxis | null,
   t: ChartTheme,
+  format: (v: number) => string = fixed(2),
 ) {
   const baseText = { color: t.text };
   return {
@@ -116,12 +125,12 @@ function valueAxis(
           customValues: rank.visTicks,
           formatter: (v: number) => {
             const i = rank.visTicks.findIndex((t) => Math.abs(t - v) < 1e-3);
-            return i >= 0 ? rank.ticks[i].toFixed(2) : "";
+            return i >= 0 ? format(rank.ticks[i]) : "";
           },
         }
       : {
           ...baseText,
-          formatter: (v: number) => v.toFixed(2),
+          formatter: format,
           showMinLabel: false,
           showMaxLabel: false,
         },
@@ -144,13 +153,31 @@ function absoluteDomain(values: number[], zeroCenter = false): { domain: [number
   return { domain: [min - pad, max + pad], mid: (min + max) / 2 };
 }
 
+const median = (values: number[]): number => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+};
+
+function leastSquares(xs: number[], ys: number[]): { slope: number; intercept: number } {
+  const mx = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const my = ys.reduce((a, b) => a + b, 0) / ys.length;
+  const sxx = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+  const sxy = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0);
+  const slope = sxx === 0 ? 0 : sxy / sxx;
+  return { slope, intercept: my - slope * mx };
+}
+
 export function buildQuadrantOption<R extends QuadrantRow>(
-  rows: R[],
+  allRows: R[],
   spec: QuadrantSpec<R>,
   rankView: boolean,
   t: ChartTheme,
 ): EChartsOption {
   const baseText = { color: t.text };
+  const rows = allRows.filter(
+    (r) => Number.isFinite(r[spec.xKey] as number) && Number.isFinite(r[spec.yKey] as number),
+  );
   if (rows.length === 0) return {};
   const xs = rows.map((r) => r[spec.xKey] as number);
   const ys = rows.map((r) => r[spec.yKey] as number);
@@ -164,8 +191,13 @@ export function buildQuadrantOption<R extends QuadrantRow>(
   const absY = absoluteDomain(ys, spec.zeroCenter);
   const domX: [number, number] = ranked ? [-0.05, 1.05] : absX.domain;
   const domY: [number, number] = ranked ? [-0.05, 1.05] : absY.domain;
-  const midX = ranked ? 0.5 : absX.mid;
-  const midY = ranked ? 0.5 : absY.mid;
+  const pickMid = (fixed: number | "median" | undefined, values: number[], fallback: number) => {
+    if (fixed === undefined) return fallback;
+    return fixed === "median" ? median(values) : fixed;
+  };
+  const midX = ranked ? 0.5 : pickMid(spec.midX, xs, absX.mid);
+  const midY = ranked ? 0.5 : pickMid(spec.midY, ys, absY.mid);
+  const trend = spec.trendLine && !ranked && rows.length > 2 ? leastSquares(xs, ys) : null;
 
   const padX = (domX[1] - domX[0]) * 0.05;
   const padY = (domY[1] - domY[0]) * 0.05;
@@ -192,8 +224,8 @@ export function buildQuadrantOption<R extends QuadrantRow>(
     backgroundColor: t.bg,
     animation: false,
     grid: { left: 70, right: 30, top: 30, bottom: 70 },
-    xAxis: valueAxis(spec.xTitle, domX, spec.reverseX === true, ranked, ranked ? rankX : null, t),
-    yAxis: valueAxis(spec.yTitle, domY, false, ranked, ranked ? rankY : null, t),
+    xAxis: valueAxis(spec.xTitle, domX, spec.reverseX === true, ranked, ranked ? rankX : null, t, spec.xFormat),
+    yAxis: valueAxis(spec.yTitle, domY, false, ranked, ranked ? rankY : null, t, spec.yFormat),
     dataZoom: [
       { type: "inside", xAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseWheel: false, filterMode: "none" },
       { type: "inside", yAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseWheel: false, filterMode: "none" },
@@ -210,8 +242,8 @@ export function buildQuadrantOption<R extends QuadrantRow>(
         const lines = [
           `<b>${displayName(row.racer_name)}</b>`,
           ...(racerBlurb(row.racer_name) ? [`<i>${racerBlurb(row.racer_name)?.split(" — ")[1]}</i>`] : []),
-          `${spec.xTitle}: ${(row[spec.xKey] as number).toFixed(2)}`,
-          `${spec.yTitle}: ${(row[spec.yKey] as number).toFixed(2)}`,
+          `${spec.xTitle}: ${(spec.xFormat ?? fixed(2))(row[spec.xKey] as number)}`,
+          `${spec.yTitle}: ${(spec.yFormat ?? fixed(2))(row[spec.yKey] as number)}`,
           ...(spec.extra ?? []).map((e) => `${e.label}: ${e.format(row[e.key] as number)}`),
         ];
         return lines.join("<br/>");
@@ -245,6 +277,19 @@ export function buildQuadrantOption<R extends QuadrantRow>(
           data: [{ xAxis: midX }, { yAxis: midY }],
         },
       },
+      ...(trend
+        ? [
+            {
+              type: "line" as const,
+              silent: true,
+              showSymbol: false,
+              z: 2,
+              tooltip: { show: false },
+              lineStyle: { color: t.accent, width: 2, opacity: 0.8 },
+              data: [domX[0], domX[1]].map((x) => [x, trend.intercept + trend.slope * x]),
+            },
+          ]
+        : []),
       {
         type: "scatter",
         symbolSize: 0,
@@ -281,6 +326,7 @@ export function buildAbilityOption(
   rows: AbilityBreakdownRowDTO[],
   racerColors: Record<string, string>,
   t: ChartTheme,
+  narrow = false,
 ): EChartsOption {
   const baseText = { color: t.text };
   const signedValue = (r: AbilityBreakdownRowDTO, m: (typeof ABILITY_METRICS)[number]) =>
@@ -292,32 +338,33 @@ export function buildAbilityOption(
     ABILITY_METRICS.filter((m) => m.side > 0).reduce((s, m) => s + signedValue(r, m), 0),
   );
   const minEdge = Math.min(0, ...negativeEdge);
-  const domainMin = minEdge < 0 ? minEdge * 1.1 : -1;
+  const domainMin = minEdge < 0 ? minEdge * (narrow ? 1.5 : 1.1) : -1;
   const domainMax = Math.max(0, ...positiveEdge) * 1.05;
   const plotWidth = 100 - 2 * ABILITY_GRID_MARGIN;
   const zeroShare = -domainMin / (domainMax - domainMin);
   const leftCentre = ABILITY_GRID_MARGIN + (plotWidth * zeroShare) / 2;
   const rightCentre = ABILITY_GRID_MARGIN + (plotWidth * (1 + zeroShare)) / 2;
+  const headerStyle = { color: t.text, fontSize: 12, fontWeight: "bold" as const };
 
   return {
     backgroundColor: t.bg,
     animation: false,
-    grid: { left: `${ABILITY_GRID_MARGIN}%`, right: `${ABILITY_GRID_MARGIN}%`, top: 96, bottom: 20 },
-    graphic: [
-      ["◀ gains: own boosts, taking movement from others", leftCentre],
-      ["costs: own setbacks, giving movement to others ▶", rightCentre],
-    ].map(([text, centre]) => ({
-      type: "text",
-      left: `${centre}%`,
-      top: 8,
-      style: { text, fill: t.text, fontSize: 12, fontWeight: "bold", textAlign: "center" },
-    })),
+    grid: { left: `${ABILITY_GRID_MARGIN}%`, right: `${ABILITY_GRID_MARGIN}%`, top: narrow ? 120 : 96, bottom: 20 },
+    title: narrow
+      ? [
+          { text: "◀ gains", left: 6, top: 6, textStyle: headerStyle },
+          { text: "costs ▶", right: 6, top: 6, textStyle: headerStyle },
+        ]
+      : [
+          { text: "◀ gains: own boosts, taking movement from others", left: `${leftCentre}%`, textAlign: "center", top: 6, textStyle: headerStyle },
+          { text: "costs: own setbacks, giving movement to others ▶", left: `${rightCentre}%`, textAlign: "center", top: 6, textStyle: headerStyle },
+        ],
     xAxis: {
       type: "value",
       position: "top",
       min: domainMin,
       max: domainMax,
-      name: "tiles per turn",
+      name: narrow ? "" : "tiles per turn",
       nameLocation: "middle",
       nameGap: 22,
       nameTextStyle: { ...baseText, fontWeight: "bold" },

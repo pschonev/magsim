@@ -6,18 +6,26 @@ import polars as pl
 
 FACE_COLUMNS = tuple(f"rolled_{face}" for face in range(1, 7))
 MIN_RACES = 50
+MIN_ROLLS_PER_RACE = 1.0
 MIN_VARIANCE = 1e-12
 
 
-def _face_shares(stats_results: pl.DataFrame) -> list[pl.Expr]:
-    """Predictors per rolling turn: the share of each face (one face is implied by the rest)."""
+def _roll_predictors(stats_results: pl.DataFrame) -> list[pl.Expr]:
+    """How often each number came up in the race, and its share of the racer's rolls.
+
+    Counts alone miss racers whose race ends early (Spoilsport): a short race has few rolls of
+    every number. Shares alone miss racers that one roll can eliminate (Icarus): the share of
+    that number depends on how long the racer survived. Together they cover both.
+    """
     has_faces = all(column in stats_results.columns for column in FACE_COLUMNS)
     if (
         has_faces
         and stats_results.select(pl.col(*FACE_COLUMNS).null_count()).row(0) == (0,) * 6
     ):
+        rolls = pl.sum_horizontal(FACE_COLUMNS)
         return [
-            pl.col(column) / pl.col("rolling_turns") for column in FACE_COLUMNS[:-1]
+            *(pl.col(column) for column in FACE_COLUMNS),
+            *(pl.col(column) / rolls for column in FACE_COLUMNS),
         ]
     return [pl.col("sum_dice_rolled") / pl.col("rolling_turns")]
 
@@ -57,11 +65,11 @@ def _explained_share(row: dict[str, float], predictors: int) -> float:
 
 
 def compute_roll_dependence(stats_results: pl.DataFrame) -> pl.DataFrame:
-    """Per racer: share of the VP variance explained by the share of each face it rolled.
+    """Per racer: share of the VP variance explained by how often each number came up (null for racers with under one real roll per race).
 
     Falls back to the average roll alone when the dataset has no per-face counts.
     """
-    predictors = _face_shares(stats_results)
+    predictors = _roll_predictors(stats_results)
     count = len(predictors)
     rolled = stats_results.filter(pl.col("rolling_turns") > 0).with_columns(
         *(expr.alias(f"x_{i}") for i, expr in enumerate(predictors)),
@@ -79,10 +87,23 @@ def compute_roll_dependence(stats_results: pl.DataFrame) -> pl.DataFrame:
         *cross,
     )
     rows = table.fill_nan(0.0).fill_null(0.0).to_dicts()
-    return pl.DataFrame(
+    rolls_per_race = stats_results.group_by("racer_name").agg(
+        pl.col("rolling_turns").mean().alias("rolls_per_race"),
+    )
+    values = pl.DataFrame(
         {
             "racer_name": [row["racer_name"] for row in rows],
             "roll_dependence": [_explained_share(row, count) for row in rows],
         },
         schema={"racer_name": pl.Utf8, "roll_dependence": pl.Float64},
+    )
+    # Racers whose number is chosen or fixed (Cheatah, Legs) have almost no real rolls to measure
+    return (
+        values.join(rolls_per_race, on="racer_name", how="left")
+        .with_columns(
+            pl.when(pl.col("rolls_per_race") >= MIN_ROLLS_PER_RACE)
+            .then(pl.col("roll_dependence"))
+            .alias("roll_dependence"),
+        )
+        .drop("rolls_per_race")
     )

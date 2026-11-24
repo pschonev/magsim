@@ -81,10 +81,11 @@ const SECTIONS: Section[] = [
     label: "Scatterplots",
     icon: Target,
     views: [
-      { id: "consistency", label: "Consistency", icon: Target },
+      { id: "reliability", label: "Reliability", icon: Target },
+      { id: "dicepower", label: "Dice vs Power", icon: Cog },
+      { id: "powerprofile", label: "Power profile", icon: Zap },
       { id: "momentum", label: "Momentum", icon: Waves },
       { id: "excitement", label: "Excitement", icon: Flame },
-      { id: "engine", label: "Engine", icon: Cog },
       { id: "preferences", label: "Preferences", icon: Users },
     ],
   },
@@ -295,6 +296,7 @@ interface AnalysisPanelProps {
 export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
   const { chart: theme } = useTheme();
   const height = useChartHeight();
+  const narrow = useNarrow();
   const [view, setView] = useState(DEFAULT_VIEW);
   const [rankView, setRankView] = useState(false);
   const [usePercent, setUsePercent] = useState(true);
@@ -369,7 +371,7 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
           <ViewToolbar info={info} />
           <EChart
             height={Math.max(height, analysis.abilities.length * ABILITY_ROW_HEIGHT + 130)}
-            option={buildAbilityOption(analysis.abilities, racerColors, theme)}
+            option={buildAbilityOption(analysis.abilities, racerColors, theme, narrow)}
           />
         </>
       )}

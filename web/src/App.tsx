@@ -7,7 +7,8 @@ import { DashboardView } from "./features/dashboard/DashboardView";
 import { RawDataView } from "./features/data/RawDataView";
 import { type IncomingRace, incomingFromRow } from "./features/simulator/simConfig";
 import { SimulatorView } from "./features/simulator/SimulatorView";
-import type { BootProgress, BootResult } from "./types/api";
+import { defaultFilter } from "./features/dashboard/filters";
+import type { BootProgress, BootResult, DashboardAnalysisDTO } from "./types/api";
 import { useTheme } from "./utils/ThemeProvider";
 import { type AppTab, readUrlState, updateUrlState } from "./utils/urlState";
 
@@ -15,6 +16,9 @@ const INITIAL_PROGRESS: BootProgress = {
   stage: "Starting Pyodide runtime...",
   percent: 5,
 };
+
+const BOOT_SHARE = 90;
+const ANALYSIS_PROGRESS: BootProgress = { stage: "Counting the races...", percent: BOOT_SHARE + 2 };
 
 const TABS: { id: AppTab; label: string; icon: typeof Database }[] = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -32,6 +36,7 @@ export function App() {
   const [client, setClient] = useState<PyodideEngineClient | null>(null);
   const [progress, setProgress] = useState<BootProgress>(INITIAL_PROGRESS);
   const [bootResult, setBootResult] = useState<BootResult | null>(null);
+  const [initialAnalysis, setInitialAnalysis] = useState<DashboardAnalysisDTO | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>(
     () => readUrlState().tab ?? "dashboard",
@@ -47,14 +52,21 @@ export function App() {
     let cancelled = false;
     setClient(worker);
     setBootResult(null);
+    setInitialAnalysis(null);
     setBootError(null);
     setProgress(INITIAL_PROGRESS);
     worker
       .init((p) => {
-        if (!cancelled) setProgress(p);
+        if (!cancelled) setProgress({ ...p, percent: (p.percent * BOOT_SHARE) / 100 });
       })
-      .then((result) => {
-        if (!cancelled) setBootResult(result);
+      .then(async (result) => {
+        if (cancelled) return;
+        setProgress(ANALYSIS_PROGRESS);
+        const analysis = await worker.runAnalysis(defaultFilter(result.datasetMeta)).catch(() => null);
+        if (cancelled) return;
+        setInitialAnalysis(analysis);
+        setProgress({ stage: "Ready", percent: 100 });
+        setBootResult(result);
       })
       .catch((err: unknown) => {
         if (!cancelled) setBootError(errorMessage(err));
@@ -172,7 +184,7 @@ export function App() {
 
       <main className="w-full flex-1 p-2 sm:p-4">
         <div hidden={activeTab !== "dashboard"}>
-          <DashboardView client={client} meta={datasetMeta} />
+          <DashboardView client={client} meta={datasetMeta} initialAnalysis={initialAnalysis} />
         </div>
         {visited.has("data") && (
           <div hidden={activeTab !== "data"}>

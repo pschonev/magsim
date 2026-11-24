@@ -8,8 +8,6 @@ from magsim.analysis.roll_dependence import FACE_COLUMNS, solve_linear_system
 
 MIN_GAMES = 150
 MIN_STEPKID_GAMES = 100
-TOP_ROWS = 12
-ELIMINATORS = ("BiteMark", "Mouth")
 FACES = tuple(range(1, 7))
 
 
@@ -41,67 +39,6 @@ def compute_stepkid_wins(stats_results: pl.DataFrame) -> pl.DataFrame:
         .with_columns((pl.col("win_rate") / pl.col("usual_win_rate")).alias("lift"))
         .sort("lift", descending=True)
     )
-
-
-def compute_victims(stats_results: pl.DataFrame) -> dict[str, pl.DataFrame]:
-    """For each eliminating racer: who is eliminated more often when it is in the race."""
-    if "eliminated" not in stats_results.columns:
-        return {}
-    flags = stats_results.select(
-        "config_hash",
-        "racer_name",
-        pl.col("eliminated").cast(pl.Float64),
-    )
-    result: dict[str, pl.DataFrame] = {}
-    for eliminator in ELIMINATORS:
-        present = flags.filter(pl.col("racer_name") == eliminator).select("config_hash")
-        if present.is_empty():
-            continue
-        with_it = flags.join(present, on="config_hash", how="semi")
-        without = flags.join(present, on="config_hash", how="anti")
-        result[eliminator] = (
-            with_it.filter(pl.col("racer_name") != eliminator)
-            .group_by("racer_name")
-            .agg(
-                pl.len().alias("games"), pl.col("eliminated").mean().alias("rate_with"),
-            )
-            .join(
-                without.group_by("racer_name").agg(
-                    pl.col("eliminated").mean().alias("rate_without"),
-                ),
-                on="racer_name",
-            )
-            .filter((pl.col("games") >= MIN_GAMES) & (pl.col("rate_without") > 0))
-            .with_columns((pl.col("rate_with") / pl.col("rate_without")).alias("lift"))
-            .sort("lift", descending=True)
-        )
-    return result
-
-
-def compute_eliminated_per_race(
-    stats_results: pl.DataFrame,
-) -> dict[str, tuple[float, float]]:
-    """Average number of eliminated racers per race with and without each eliminating racer."""
-    if "eliminated" not in stats_results.columns:
-        return {}
-    per_race = stats_results.group_by("config_hash").agg(
-        pl.col("eliminated").cast(pl.Float64).sum().alias("eliminated"),
-    )
-    out: dict[str, tuple[float, float]] = {}
-    for eliminator in ELIMINATORS:
-        present = stats_results.filter(pl.col("racer_name") == eliminator).select(
-            "config_hash",
-        )
-        if present.is_empty():
-            continue
-        with_it = per_race.join(present, on="config_hash", how="semi")[
-            "eliminated"
-        ].mean()
-        without = per_race.join(present, on="config_hash", how="anti")[
-            "eliminated"
-        ].mean()
-        out[eliminator] = (float(with_it or 0.0), float(without or 0.0))
-    return out
 
 
 def compute_roll_effects(

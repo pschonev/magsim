@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import polars as pl
 
+from magsim.analysis.racer_profile import compute_racer_profile
 from magsim.analysis.roll_dependence import compute_roll_dependence
 
 ENVIRONMENT = ["board", "racer_count"]
@@ -45,8 +46,8 @@ def compute_racer_extras(
         .fill_nan(0.0)
         .fill_null(0.0)
     )
-    return preferences.join(
-        compute_roll_dependence(stats_results),
-        on="racer_name",
-        how="left",
-    ).with_columns(pl.col("roll_dependence").fill_null(0.0)).sort("racer_name")
+    return (
+        preferences.join(compute_roll_dependence(stats_results), on="racer_name", how="left")
+        .join(compute_racer_profile(stats_results, df_races_f), on="racer_name", how="left")
+        .sort("racer_name")
+    )

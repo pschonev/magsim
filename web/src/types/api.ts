@@ -69,7 +69,12 @@ export interface RacerStatRowDTO {
   midgame_bias: number;
   player_count_pref: number;
   game_length_pref: number;
-  roll_dependence: number;
+  roll_dependence: number | null;
+  swinginess: number | null;
+  seat_lift: number | null;
+  lead_lift: number | null;
+  ability_payoff: number | null;
+  fires_when_behind: number | null;
 }
 
 export interface AbilityBreakdownRowDTO {
@@ -114,21 +119,6 @@ export interface StepkidRowDTO {
   lift: number;
 }
 
-export interface VictimRowDTO {
-  racer_name: string;
-  games: number;
-  rate_with: number;
-  rate_without: number;
-  lift: number;
-}
-
-export interface EliminatorDTO {
-  racer_name: string;
-  eliminated_with: number;
-  eliminated_without: number;
-  victims: VictimRowDTO[];
-}
-
 export interface FaceEffectDTO {
   face: number;
   vp_per_roll: number;
@@ -136,9 +126,58 @@ export interface FaceEffectDTO {
   rolled_share: number;
 }
 
+export interface NamedValueDTO {
+  racer_name: string;
+  value: number;
+}
+
+export interface OutcomeShareDTO {
+  racer_name: string;
+  first: number;
+  second: number;
+  eliminated: number;
+  cancelled: number;
+  other: number;
+}
+
+export interface VpShareDTO {
+  vp: number;
+  share: number;
+}
+
+export interface EatTargetDTO {
+  eater: string;
+  victim: string;
+  rate: number;
+}
+
+export interface FaceShareDTO {
+  face: number;
+  share: number;
+}
+
+export interface FunFactsDTO {
+  eaten_per_game: NamedValueDTO[];
+  outcomes: OutcomeShareDTO[];
+  hog_for_himself: number | null;
+  hog_for_others: number | null;
+  sisyphus_vp: VpShareDTO[];
+  mr_dice_guy_faces: FaceShareDTO[];
+  eat_targets: EatTargetDTO[];
+  cheatah_numbers: FaceShareDTO[];
+  show_off_totals: FaceShareDTO[];
+  triggers_per_turn: NamedValueDTO[];
+  blunderdog_forward: number | null;
+  diva_forward: number | null;
+  hotel_customers: NamedValueDTO[];
+  mastermind_hits: NamedValueDTO[];
+  mastermind_first: number | null;
+  mastermind_second: number | null;
+  mastermind_second_predicted: number | null;
+}
+
 export interface RacerSpecificDTO {
   stepkid_wins: StepkidRowDTO[];
-  eliminators: EliminatorDTO[];
   magical_athlete_faces: FaceEffectDTO[];
 }
 
@@ -222,6 +261,7 @@ export interface DashboardAnalysisDTO {
   distributions_faceted: DistributionBinDTO[];
   value_distributions: ValueShareDTO[];
   racer_specific: RacerSpecificDTO;
+  fun_facts: FunFactsDTO;
   twist_combo_stats: TwistComboStatDTO[];
   matchup_matrix: MatchupCellDTO[];
   environment_matrix: EnvironmentCellDTO[];

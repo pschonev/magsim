@@ -9,9 +9,6 @@ export const COLUMN_HELP: Record<string, ColumnHelp> = {
   "Avg VP": {
     text: "**Average victory points per race.**\nVP carried over from earlier races is not counted.",
   },
-  "Consist%": {
-    text: "**How often the racer ends up close to its own average VP.**\n\nHigher: predictable results. Lower: swingy results.",
-  },
   "1st%": { text: "**Share of races won.**" },
   "2nd%": { text: "**Share of races finished second.**" },
   "# Races": { text: "**Races in the current filter that include this racer.**" },
@@ -34,17 +31,23 @@ export const COLUMN_HELP: Record<string, ColumnHelp> = {
   "Abil -Other": {
     text: "**Tiles per other-racer turn that the racer's abilities take from other racers.**\n\nPushes, trips, forced rolls and skipped moves. High: hinders the field.",
   },
+  "Swinginess": {
+    text: "**How all-or-nothing the racer's results are.**\n\nAbove 1.00: bigger swings than racers with the same average VP. Below: steadier.",
+  },
+  "Going-First Bonus %": {
+    text: "**How much more the racer scores from going first instead of last, as a share of its average VP.**\n\nPositive: it wants an early seat in the turn order.",
+  },
+  "Lead Bonus %": {
+    text: "**How much each tile of lead in the middle of the race adds, as a share of the racer's average VP.**\n\nPositive: a lead turns into extra VP.",
+  },
+  "Extra VP When Active %": {
+    text: "**How much more the racer scores in races where its power fires a lot than where it hardly fires, as a share of its average VP.**\n\nPositive: the power seems to pay off.",
+  },
+  "Triggers When Behind": {
+    text: "**Does the power fire more when the racer is behind or ahead?**\n\nPositive: mostly while behind. Negative: mostly while ahead.",
+  },
   "Roll Sens %": {
-    text: "**Share of the racer's VP variation explained by which numbers it rolled.**\n\nHigh: results follow the dice, for example needing 3s or hating 6s. A typical racer is near 3 %. Older datasets only measure the average roll.",
-  },
-  "Ability Trig Sens": {
-    text: "**Correlation between how often the racer's ability triggers and the VP it earns.**\n\nHigh: more triggers, more VP.",
-  },
-  "Start Bias": {
-    text: "**Correlation between starting earlier in the turn order and VP.**\n\nPositive: starting early helps.",
-  },
-  "MidGame Bias": {
-    text: "**Correlation between the position after two thirds of the race and VP.**\n\nHigh: a mid-race lead tends to become VP.",
+    text: "**How much the racer's results depend on which numbers it rolls.**\n\nHigh: its dice make or break the race. A typical racer is around 10 %.",
   },
   "Trig/Turn": { text: "**Ability triggers per own turn.**" },
   "Self-Targ/Turn": { text: "**Triggers per own turn that targeted the racer itself.**" },
