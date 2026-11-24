@@ -81,13 +81,19 @@ def test_tables_get_the_extra_columns_in_the_requested_places() -> None:
     assert tables["dynamics"].columns[-2:] == ["Player Count Pref", "Game Length Pref"]
     assert tables["movement"].columns[-2:] == ["Abil +Other", "Abil -Other"]
     assert "Rolling Turns %" not in tables["movement"].columns
-    assert tables["abilities"].columns[-5:] == [
+    assert tables["abilities"].columns[-3:] == [
         "Triggers Caused",
         "Rolling Turns %",
-        "Eliminated %",
-        "Extra VP When Active %",
         "Triggers When Behind",
     ]
     assert tables["overview"].columns[:3] == ["Racer", "Avg VP", "Swinginess"]
-    assert tables["vp"].columns == ["Racer", "Avg VP", "Roll Sens %", "Going-First Bonus %", "Lead Bonus %"]
+    assert tables["vp"].columns == [
+        "Racer",
+        "Avg VP",
+        "Roll Sens %",
+        "Going-First Bonus %",
+        "Lead Bonus %",
+        "Extra VP When Active %",
+        "Eliminated %",
+    ]
     assert base["overview"].columns[-1] == "# Races"

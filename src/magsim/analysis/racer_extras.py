@@ -47,7 +47,17 @@ def compute_racer_extras(
         .fill_null(0.0)
     )
     return (
-        preferences.join(compute_roll_dependence(stats_results), on="racer_name", how="left")
+        preferences.join(
+            compute_roll_dependence(
+                stats_results.drop("racer_count", "total_turns", strict=False).join(
+                    df_races_f.select("config_hash", "racer_count", "total_turns"),
+                    on="config_hash",
+                    how="inner",
+                ),
+            ),
+            on="racer_name",
+            how="left",
+        )
         .join(compute_racer_profile(stats_results, df_races_f), on="racer_name", how="left")
         .sort("racer_name")
     )

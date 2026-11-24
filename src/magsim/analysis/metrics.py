@@ -284,6 +284,7 @@ def prepare_metrics_data(
 
     race_vp_agg = results_augmented.group_by("config_hash").agg(
         pl.col("final_vp").sum().alias("total_race_vp"),
+        pl.col("ability_trigger_count").sum().alias("total_race_triggers"),
     )
     dist_raw = stats_races.join(race_vp_agg, on="config_hash", how="inner").select(
         "config_hash",
@@ -291,6 +292,7 @@ def prepare_metrics_data(
         "racer_count",
         "race_global_turns",
         "total_race_vp",
+        "total_race_triggers",
     )
     if "twists" in df_races_f.columns:
         dist_raw = dist_raw.join(

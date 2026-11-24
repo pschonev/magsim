@@ -66,7 +66,11 @@ export const TABLE_TABS: TabSpec[] = [
   {
     id: "vp",
     label: "VP Analysis",
-    description: [{ bold: "VP Analysis:", text: " Correlations to overall success." }],
+    description: [
+      { bold: "VP Analysis:", text: " Correlations to overall success." },
+      { bold: "Extra VP When Active %:", text: " How much more the racer scores in races where its power fires a lot, as a share of its average VP." },
+      { bold: "Eliminated %:", text: " Share of the racer's races in which it was eliminated." },
+    ],
   },
   {
     id: "abilities",
@@ -88,10 +92,6 @@ export const TABLE_TABS: TabSpec[] = [
       {
         bold: "Rolling Turns (%):",
         text: " The percentage of a racer's turns where they actively rolled the dice (not tripped or skipping).",
-      },
-      {
-        bold: "Eliminated %:",
-        text: " Share of the racer's races in which it was eliminated.",
       },
     ],
   },

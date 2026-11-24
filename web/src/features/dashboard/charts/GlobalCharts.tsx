@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { EChart } from "../../../components/EChart";
 import type { DashboardAnalysisDTO, ValueShareDTO } from "../../../types/api";
 import { displayName } from "../../../utils/names";
@@ -9,6 +9,8 @@ import {
   GLOBAL_METRICS_B,
   PLAYER_COUNT_COLORS,
   TURNS_COLOR,
+  TRIGGERS_COLOR,
+  TRIGGERS_SERIES,
   TURNS_SERIES,
   VP_COLOR,
   VP_SERIES,
@@ -63,16 +65,50 @@ function MetricGrid({ analysis }: { analysis: DashboardAnalysisDTO }) {
 }
 
 const DISTRIBUTIONS = [
-  { series: TURNS_SERIES, title: "Game length", axisName: "turns", color: TURNS_COLOR },
-  { series: VP_SERIES, title: "Total VP awarded in a race", axisName: "VP", color: VP_COLOR },
+  { series: TURNS_SERIES, label: "Game length", title: "Game length", axisName: "turns", color: TURNS_COLOR },
+  { series: VP_SERIES, label: "Total VP", title: "Total VP awarded in a race", axisName: "VP", color: VP_COLOR },
+  { series: TRIGGERS_SERIES, label: "Abilities triggered", title: "Abilities triggered in a race", axisName: "triggers", color: TRIGGERS_COLOR },
 ] as const;
+
+type Distribution = (typeof DISTRIBUTIONS)[number];
+
+function availableDistributions(analysis: DashboardAnalysisDTO): Distribution[] {
+  return DISTRIBUTIONS.filter((d) => analysis.value_distributions.some((r) => r.series === d.series));
+}
+
+function MetricSwitch({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly Distribution[];
+  value: string;
+  onChange: (series: string) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-lg bg-slate-800 p-0.5 text-xs">
+      {options.map((o) => (
+        <button
+          key={o.series}
+          type="button"
+          onClick={() => onChange(o.series)}
+          className={`rounded-md px-2.5 py-1 font-display transition-colors ${
+            o.series === value ? "bg-indigo-600 text-on-accent" : "text-slate-300 hover:text-slate-50"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function Distributions({ analysis }: { analysis: DashboardAnalysisDTO }) {
   const { chart: theme } = useTheme();
   const rows = analysis.value_distributions;
   return (
-    <div className="grid gap-px bg-slate-800 md:grid-cols-2">
-      {DISTRIBUTIONS.map((d) => {
+    <div className="grid gap-px bg-slate-800 md:grid-cols-3">
+      {availableDistributions(analysis).map((d) => {
         const own = rows.filter((r) => r.series === d.series && r.board === null && r.twist === null);
         return (
           <div key={d.series} className="bg-slate-900">
@@ -88,7 +124,7 @@ function Distributions({ analysis }: { analysis: DashboardAnalysisDTO }) {
   );
 }
 
-function GroupCurves({ analysis, kind }: { analysis: DashboardAnalysisDTO; kind: "board" | "twist" }) {
+function GroupCurves({ analysis, kind, series }: { analysis: DashboardAnalysisDTO; kind: "board" | "twist"; series: string }) {
   const { chart: theme } = useTheme();
   const rows = analysis.value_distributions;
   const baselineOf = (series: string) =>
@@ -99,7 +135,7 @@ function GroupCurves({ analysis, kind }: { analysis: DashboardAnalysisDTO; kind:
   if (ordered.length === 0) return <p className="p-4 text-xs text-slate-400">No data for this filter.</p>;
   return (
     <div className="space-y-px bg-slate-800">
-      {DISTRIBUTIONS.map((d) => {
+      {DISTRIBUTIONS.filter((d) => d.series === series).map((d) => {
         const own = rows.filter((r) => r.series === d.series && groupOf(r) !== null);
         const maxShare = Math.max(...own.map((r) => r.pct)) * 1.1;
         return (
@@ -131,9 +167,9 @@ function GroupCurves({ analysis, kind }: { analysis: DashboardAnalysisDTO; kind:
   );
 }
 
-export type GlobalPart = "dynamics" | "distributions" | "boards" | "twists";
+export type GlobalPart = "dynamics" | "distributions" | "twists";
 
-const PART_NOTES: Record<GlobalPart, ReactNode> = {
+const PART_NOTES: Record<GlobalPart | "boards", ReactNode> = {
   dynamics: (
     <Description
       lines={[
@@ -170,6 +206,15 @@ const PART_NOTES: Record<GlobalPart, ReactNode> = {
 
 export function GlobalCharts({ analysis, part }: { analysis: DashboardAnalysisDTO; part: GlobalPart }) {
   const counts = sortedCounts(analysis.global_dynamics);
+  const [series, setSeries] = useState<string>(TURNS_SERIES);
+  const options = availableDistributions(analysis);
+  const chosen = options.some((o) => o.series === series) ? series : TURNS_SERIES;
+  const controls = (
+    <div className="flex flex-wrap items-center gap-3">
+      <MetricSwitch options={options} value={chosen} onChange={setSeries} />
+      <Legend counts={counts} />
+    </div>
+  );
   return (
     <div className="space-y-4">
       {part === "dynamics" && (
@@ -178,21 +223,23 @@ export function GlobalCharts({ analysis, part }: { analysis: DashboardAnalysisDT
         </Card>
       )}
       {part === "distributions" && (
-        <Card title="How long races last and how many VP they hand out">
-          <Distributions analysis={analysis} />
-        </Card>
-      )}
-      {part === "boards" && (
-        <Card title="By board and player count" aside={<Legend counts={counts} />}>
-          <GroupCurves analysis={analysis} kind="board" />
-        </Card>
+        <>
+          <Card title="How long races last, how many VP they hand out and how many abilities fire">
+            <Distributions analysis={analysis} />
+          </Card>
+          {PART_NOTES.distributions}
+          <Card title="By board and player count" aside={controls}>
+            <GroupCurves analysis={analysis} kind="board" series={chosen} />
+          </Card>
+          {PART_NOTES.boards}
+        </>
       )}
       {part === "twists" && (
-        <Card title="By Twisty Twirl card and player count" aside={<Legend counts={counts} />}>
-          <GroupCurves analysis={analysis} kind="twist" />
+        <Card title="By Twisty Twirl card and player count" aside={controls}>
+          <GroupCurves analysis={analysis} kind="twist" series={chosen} />
         </Card>
       )}
-      {PART_NOTES[part]}
+      {part !== "distributions" && PART_NOTES[part]}
     </div>
   );
 }

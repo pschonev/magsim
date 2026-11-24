@@ -139,6 +139,7 @@ class StepkidRowDTO(msgspec.Struct, frozen=True):
     win_rate: float
     usual_win_rate: float
     lift: float
+    elsewhere_win_rate: float | None = None
 
 
 class FaceEffectDTO(msgspec.Struct, frozen=True):
@@ -169,8 +170,9 @@ class OutcomeShareDTO(msgspec.Struct, frozen=True):
 
 
 class VpShareDTO(msgspec.Struct, frozen=True):
-    """Share of games that end with a given VP."""
+    """Share of a racer's games that end with a given VP."""
 
+    racer_name: str
     vp: int
     share: float
 
@@ -183,6 +185,16 @@ class EatTargetDTO(msgspec.Struct, frozen=True):
     rate: float
 
 
+class ExtremeComboDTO(msgspec.Struct, frozen=True):
+    """One of the best or worst racer combinations: `kind` is matchup, board or twist, `other` the opponent, board or card."""
+
+    kind: str
+    racer_name: str
+    other: str
+    shift: float
+    games: int
+
+
 class FaceShareDTO(msgspec.Struct, frozen=True):
     """Share of the rolls that were a given number."""
 
@@ -193,18 +205,20 @@ class FaceShareDTO(msgspec.Struct, frozen=True):
 class FunFactsDTO(msgspec.Struct, frozen=True):
     """Small per-racer facts for the Fun facts tab; empty lists when the racer is not in the data."""
 
-    eaten_per_game: list[NamedValueDTO] = msgspec.field(default_factory=list)
+    ability_uses_per_race: list[NamedValueDTO] = msgspec.field(default_factory=list)
     outcomes: list[OutcomeShareDTO] = msgspec.field(default_factory=list)
     hog_for_himself: float | None = None
     hog_for_others: float | None = None
-    sisyphus_vp: list[VpShareDTO] = msgspec.field(default_factory=list)
+    vp_distributions: list[VpShareDTO] = msgspec.field(default_factory=list)
     mr_dice_guy_faces: list[FaceShareDTO] = msgspec.field(default_factory=list)
     eat_targets: list[EatTargetDTO] = msgspec.field(default_factory=list)
+    extremes: list[ExtremeComboDTO] = msgspec.field(default_factory=list)
     cheatah_numbers: list[FaceShareDTO] = msgspec.field(default_factory=list)
     show_off_totals: list[FaceShareDTO] = msgspec.field(default_factory=list)
     triggers_per_turn: list[NamedValueDTO] = msgspec.field(default_factory=list)
     blunderdog_forward: float | None = None
     diva_forward: float | None = None
+    last_place_baseline: float | None = None
     hotel_customers: list[NamedValueDTO] = msgspec.field(default_factory=list)
     mastermind_hits: list[NamedValueDTO] = msgspec.field(default_factory=list)
     mastermind_first: float | None = None
@@ -227,6 +241,7 @@ class TwistComboStatDTO(msgspec.Struct, frozen=True):
     races: int
     avg_turns: float
     avg_total_vp: float
+    avg_triggers: float | None = None
 
 
 class DistributionBinDTO(msgspec.Struct, frozen=True):

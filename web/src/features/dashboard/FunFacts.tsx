@@ -8,6 +8,7 @@ import {
   type BarItem,
   buildBars,
   buildColumns,
+  buildDivergingBars,
   buildDonuts,
   buildRose,
   buildSplitRows,
@@ -25,49 +26,96 @@ const PIPS: Record<number, [number, number][]> = {
   6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]],
 };
 
-function Card({ title, caption, children }: { title: string; caption: string; children: ReactNode }) {
+interface CardProps {
+  title: string;
+  caption?: string;
+  hint?: string;
+  children: ReactNode;
+  wide?: boolean;
+}
+
+function Card({ title, caption, hint, children, wide = false }: CardProps) {
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-3">
-      <h3 className="font-display text-sm text-slate-50">{title}</h3>
-      <p className="mb-1 text-[11px] text-slate-400">{caption}</p>
+    <section className={`rounded-xl border border-slate-800 bg-slate-900 p-3 ${wide ? "sm:col-span-2 xl:col-span-3" : ""}`}>
+      <h3 className={`mb-1 font-display text-sm text-slate-50 ${hint ? "cursor-help" : ""}`} title={hint}>
+        {title}
+      </h3>
+      {caption && <p className="mb-1 text-[11px] text-slate-400">{caption}</p>}
       {children}
     </section>
   );
 }
 
-function Die({ face, share, top }: { face: number; share: number; top: number }) {
+function Fact({ name, uses, caption, children }: { name: string; uses: number | undefined; caption: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-1" title={`${(share * 100).toFixed(1)} %`}>
-      <span className="text-[11px] font-semibold text-slate-200">{(share * 100).toFixed(share < 0.1 ? 1 : 0)}%</span>
-      <div className="flex h-24 items-end">
-        <div className="w-7 rounded-t" style={{ height: `${(share / top) * 100}%`, backgroundColor: share === top ? BADGE.gold : BADGE.blue }} />
-      </div>
-      <div className="relative h-8 w-8 rounded-md border-2 border-black" style={{ backgroundColor: "#ffffff" }} title={face === 0 ? "No pick: all six dice differ" : undefined}>
-        {face === 0 && (
-          <svg viewBox="0 0 32 32" className="absolute inset-0 h-full w-full">
-            <path d="M6 6 L26 26 M26 6 L6 26" stroke="#fd5a10" strokeWidth={4} strokeLinecap="round" />
-          </svg>
-        )}
-        {(PIPS[face] ?? []).map(([x, y]) => (
-          <span key={`${x}-${y}`} className="absolute h-1.5 w-1.5 rounded-full" style={{ left: 4 + x * 8, top: 4 + y * 8, backgroundColor: "#101312" }} />
-        ))}
-      </div>
+    <div className="min-w-0">
+      <h4 className="font-display text-sm text-slate-50">{displayName(name)}</h4>
+      <p className="text-xs text-slate-300">
+        <span className="font-display text-lg text-slate-50">{uses === undefined ? "–" : uses.toFixed(2)}</span> uses per race
+      </p>
+      <p className="mb-1 text-[11px] text-slate-400">{caption}</p>
+      {children}
     </div>
   );
 }
 
-function DiceRow({ faces }: { faces: { face: number; share: number }[] }) {
-  const top = Math.max(...faces.map((f) => f.share));
-  const shares = new Map(faces.map((f) => [f.face, f.share]));
-  const ordered = [1, 2, 3, 4, 5, 6, 0]
-    .filter((face) => face > 0 || shares.has(0))
-    .map((face) => ({ face, share: shares.get(face) ?? 0 }));
+function DieFace({ face }: { face: number }) {
   return (
-    <div className="flex justify-around pt-1">
-      {ordered.map((f) => (
-        <Die key={f.face} face={f.face} share={f.share} top={top} />
+    <div className="relative h-8 w-8 shrink-0 rounded-md border-2 border-black" style={{ backgroundColor: "#ffffff" }}>
+      {face === 0 && (
+        <svg viewBox="0 0 32 32" className="absolute inset-0 h-full w-full">
+          <path d="M6 6 L26 26 M26 6 L6 26" stroke="#fd5a10" strokeWidth={4} strokeLinecap="round" />
+        </svg>
+      )}
+      {(PIPS[face] ?? []).map(([x, y]) => (
+        <span key={`${x}-${y}`} className="absolute h-1.5 w-1.5 rounded-full" style={{ left: 4 + x * 8, top: 4 + y * 8, backgroundColor: "#101312" }} />
       ))}
     </div>
+  );
+}
+
+interface DiceSeries {
+  name: string;
+  color: string;
+  faces: { face: number; share: number }[];
+}
+
+/** One die per number with a bar for each racer growing out of it; face 0 is the crossed-out die. */
+function SharedDice({ series }: { series: DiceSeries[] }) {
+  const top = Math.max(...series.flatMap((s) => s.faces.map((f) => f.share)));
+  const hasZero = series.some((s) => s.faces.some((f) => f.face === 0));
+  const faces = [1, 2, 3, 4, 5, 6, ...(hasZero ? [0] : [])];
+  const opacityOf = (i: number) => (i > 0 && series[i].color === series[i - 1].color ? 0.5 : 1);
+  const shareOf = (s: DiceSeries, face: number) => s.faces.find((f) => f.face === face)?.share ?? 0;
+  return (
+    <>
+      <div className="flex flex-wrap gap-3 pb-1 text-xs text-slate-200">
+        {series.map((s, i) => (
+          <span key={s.name} className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: s.color, opacity: opacityOf(i) }} />
+            {displayName(s.name)}
+          </span>
+        ))}
+      </div>
+      <div className="flex justify-around pt-1">
+        {faces.map((face) => (
+          <div key={face} className="flex flex-col items-center gap-1">
+            <div className="flex h-28 items-end gap-0.5">
+              {series.map((s, i) => {
+                const share = shareOf(s, face);
+                return (
+                  <div key={s.name} className="flex h-full flex-col items-center justify-end" title={`${displayName(s.name)}: ${(share * 100).toFixed(1)}%`}>
+                    <span className="text-[10px] font-semibold text-slate-200">{share === 0 ? "" : (share * 100).toFixed(share < 0.1 ? 1 : 0)}</span>
+                    <div className="w-3 rounded-t" style={{ height: `${(share / top) * 85}%`, backgroundColor: s.color, opacity: opacityOf(i) }} />
+                  </div>
+                );
+              })}
+            </div>
+            <DieFace face={face} />
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -79,13 +127,6 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     rows.map((r) => ({ name: r.racer_name, value: r.value, color: colorOf(r.racer_name) }));
 
   const cards: ReactNode[] = [];
-  if (facts.eaten_per_game.length > 0) {
-    cards.push(
-      <Card key="eat" title="Who eats more?" caption="racers eaten per game">
-        <EChart height={110} option={buildBars(toBars(facts.eaten_per_game), theme, (v) => v.toFixed(2))} />
-      </Card>,
-    );
-  }
   const splits: SplitRow[] = [];
   const both = (a: string, b: string, colors: [string, string]) => (share: number) => [
     { label: a, share, color: colors[0] },
@@ -97,24 +138,37 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     const total = facts.hog_for_himself + facts.hog_for_others;
     if (total > 0) splits.push({ name: "Hog Knight's hog", parts: both("for him", "for others", [BADGE.gold, BADGE.blue])(facts.hog_for_himself / total) });
   }
-  if (specific.stepkid_wins.length > 0) {
-    const games = specific.stepkid_wins.reduce((sum, r) => sum + r.games, 0);
-    const weighted = (pick: (r: (typeof specific.stepkid_wins)[number]) => number) =>
-      specific.stepkid_wins.reduce((sum, r) => sum + pick(r) * r.games, 0) / games;
-    const wins = both("wins", "loses", [BADGE.gold, "#5c6560"]);
-    splits.push({ name: "After Stepdad", parts: wins(weighted((r) => r.win_rate)) });
-    splits.push({ name: "Same racers usually", parts: wins(weighted((r) => r.usual_win_rate)) });
+  const stepkids = specific.stepkid_wins.filter((r) => r.elsewhere_win_rate !== null);
+  if (stepkids.length > 0) {
+    const games = stepkids.reduce((sum, r) => sum + r.games, 0);
+    const inFront = stepkids.reduce((sum, r) => sum + r.win_rate * r.games, 0) / games;
+    const elsewhere = stepkids.reduce((sum, r) => sum + (r.elsewhere_win_rate ?? 0) * r.games, 0) / games;
+    if (elsewhere > 0) {
+      const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
+      splits.push({
+        name: `Stepdad's wins ×${(inFront / elsewhere).toFixed(1)}`,
+        parts: [
+          { label: "in front", share: inFront / (inFront + elsewhere), color: BADGE.gold, text: `in front ${pct(inFront)}` },
+          { label: "elsewhere", share: elsewhere / (inFront + elsewhere), color: BADGE.blue, text: `elsewhere ${pct(elsewhere)}` },
+        ],
+      });
+    }
   }
+  const baselineText = facts.last_place_baseline === null ? "many" : `${Math.round(facts.last_place_baseline * 100)}%`;
   if (splits.length > 0) {
     cards.push(
-      <Card key="h2h" title="Head to head" caption="how each racer's moves split into two outcomes">
+      <Card
+        key="h2h"
+        title="Heads or tails?"
+        hint={`Last place counts ties, so a typical racer starts ${baselineText} of its turns there. Stepdad: how often the racer playing right after him wins, with and without him in front.`}
+      >
         <EChart height={splits.length * 40 + 12} option={buildSplitRows(splits, theme)} />
       </Card>,
     );
   }
   if (facts.outcomes.length > 0) {
     cards.push(
-      <Card key="out" title="How their races end" caption="Speed Demon, Icarus and Spoilsport">
+      <Card key="out" title="How their races end">
         <EChart height={190} option={buildDonuts(facts.outcomes, theme)} />
       </Card>,
     );
@@ -122,28 +176,32 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   if (specific.magical_athlete_faces.length > 0) {
     cards.push(
       <Card key="ma" title="Magical Athlete's lucky numbers" caption="VP per extra roll">
-        <EChart height={150} option={faceEffectColumns(specific.magical_athlete_faces, theme)} />
+        <EChart height={130} option={faceEffectColumns(specific.magical_athlete_faces, theme)} />
+        <div className="grid grid-cols-6 px-1.5">
+          {specific.magical_athlete_faces.map((f) => (
+            <div key={f.face} className="flex justify-center">
+              <DieFace face={f.face} />
+            </div>
+          ))}
+        </div>
       </Card>,
     );
   }
-  if (facts.sisyphus_vp.length > 0) {
+  if (facts.vp_distributions.length > 0) {
     cards.push(
-      <Card key="sis" title="Sisyphus' final score" caption="share of games per VP">
-        <EChart height={150} option={vpHistogram(facts.sisyphus_vp, theme)} />
+      <Card key="sis" title="Final score">
+        <EChart height={180} option={vpHistogram(facts.vp_distributions, colorOf, theme)} />
       </Card>,
     );
   }
-  if (facts.mr_dice_guy_faces.length > 0) {
+  const dice: DiceSeries[] = [
+    { name: "MrDiceGuy", color: colorOf("MrDiceGuy"), faces: facts.mr_dice_guy_faces },
+    { name: "Cheatah", color: colorOf("Cheatah"), faces: facts.cheatah_numbers },
+  ].filter((d) => d.faces.length > 0);
+  if (dice.length > 0) {
     cards.push(
-      <Card key="mdg" title="Mr Dice Guy's pick" caption="the number he moves with (✗ = nothing to pick)">
-        <DiceRow faces={facts.mr_dice_guy_faces} />
-      </Card>,
-    );
-  }
-  if (facts.cheatah_numbers.length > 0) {
-    cards.push(
-      <Card key="cheat" title="Cheatah's numbers" caption="the number he sets (✗ = guessed, no move)">
-        <DiceRow faces={facts.cheatah_numbers} />
+      <Card key="pick" title="Choosy racers" caption="✗ = no pick / guessed">
+        <SharedDice series={dice} />
       </Card>,
     );
   }
@@ -153,7 +211,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     const totals = Array.from({ length: last + 1 }, (_, i) => i);
     const top = Math.max(...facts.show_off_totals.map((f) => f.share));
     cards.push(
-      <Card key="show" title="Show-Off's dice total" caption="total of the dice he rolls (✗ = rolled the same or lower, no move)">
+      <Card key="show" title="Show-Off's dice total" caption="✗ = rolled lower, no move">
         <EChart
           height={160}
           option={buildColumns(
@@ -167,29 +225,10 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
       </Card>,
     );
   }
-  if (facts.eat_targets.length > 0) {
-    const meals = (eater: string): BarItem[] =>
-      facts.eat_targets.filter((t) => t.eater === eater).map((t) => ({ name: t.victim, value: t.rate * 100, color: colorOf(t.victim) }));
-    cards.push(
-      <Card key="meals" title="Favourite meals" caption="share of games with both racers where it ate them">
-        <p className="text-xs font-semibold text-slate-200">{displayName("Mouth")}</p>
-        <EChart height={130} option={buildBars(meals("Mouth"), theme, (v) => `${v.toFixed(1)}%`)} />
-        <p className="text-xs font-semibold text-slate-200">{displayName("BiteMark")}</p>
-        <EChart height={130} option={buildBars(meals("BiteMark"), theme, (v) => `${v.toFixed(1)}%`)} />
-      </Card>,
-    );
-  }
   if (facts.triggers_per_turn.length > 0) {
     cards.push(
       <Card key="annoy" title="Most annoying powers" caption="triggers per turn">
         <EChart height={170} option={buildBars(toBars(facts.triggers_per_turn), theme, (v) => v.toFixed(2), true)} />
-      </Card>,
-    );
-  }
-  if (facts.hotel_customers.length > 0) {
-    cards.push(
-      <Card key="hotel" title="Hotel's best customers" caption="stops on Hotel's space per game">
-        <EChart height={200} option={buildRose(toBars(facts.hotel_customers), theme, (v) => v.toFixed(2))} />
       </Card>,
     );
   }
@@ -201,8 +240,51 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
       { name: "2nd the natural way", value: facts.mastermind_second * 100, color: BADGE.blue },
     ];
     cards.push(
-      <Card key="mind" title="Mastermind's best calls" caption="% of all his games">
+      <Card key="mind" title="Mastermind's best calls" caption="% of his games">
         <EChart height={230} option={buildBars(items, theme, (v) => `${v.toFixed(1)}%`)} />
+      </Card>,
+    );
+  }
+  const extremeCards = [
+    { kind: "matchup", title: "Dream and nightmare matchups", link: "with", hint: "How much a racer's average VP changes when this opponent is in the race, minus what that opponent does to every racer. Only clear effects (4+ standard errors) are shown." },
+    { kind: "board", title: "Best and worst boards", link: "on", hint: "How much a racer's average VP changes on this board, minus what the board does to every racer. Only clear effects (4+ standard errors) are shown." },
+    { kind: "twist", title: "Best and worst twist cards", link: "with", hint: "How much a racer's average VP changes when this Twisty Twirl card is drawn, minus what the card does to every racer. Only clear effects (4+ standard errors) are shown." },
+  ] as const;
+  for (const card of extremeCards) {
+    const rows = facts.extremes.filter((e) => e.kind === card.kind).sort((a, b) => b.shift - a.shift);
+    if (rows.length === 0) continue;
+    cards.push(
+      <Card key={card.kind} title={card.title} caption="VP change, net of the average" hint={card.hint}>
+        <EChart
+          height={rows.length * 24 + 12}
+          option={buildDivergingBars(
+            rows.map((r) => ({ label: `${displayName(r.racer_name)} ${card.link} ${displayName(r.other)}`, value: r.shift })),
+            theme,
+          )}
+        />
+      </Card>,
+    );
+  }
+  const uses = new Map(facts.ability_uses_per_race.map((u) => [u.racer_name, u.value]));
+  const meals = (eater: string): BarItem[] =>
+    facts.eat_targets.filter((t) => t.eater === eater).map((t) => ({ name: t.victim, value: t.rate * 100, color: colorOf(t.victim) }));
+  const mealColumns = ["Mouth", "BiteMark"].filter((name) => uses.has(name));
+  if (uses.has("Hotel") || mealColumns.length > 0) {
+    const percent = (v: number) => `${v.toFixed(1)}%`;
+    cards.push(
+      <Card key="eaters" wide title="Collectors">
+        <div className="grid gap-4 sm:grid-cols-3">
+          {uses.has("Hotel") && (
+            <Fact name="Hotel" uses={uses.get("Hotel")} caption="best customers, stops per game">
+              {facts.hotel_customers.length > 0 && <EChart height={210} option={buildRose(toBars(facts.hotel_customers), theme, (v) => v.toFixed(2))} />}
+            </Fact>
+          )}
+          {mealColumns.map((name) => (
+            <Fact key={name} name={name} uses={uses.get(name)} caption="favourite meals, share of shared games">
+              {meals(name).length > 0 && <EChart height={210} option={buildRose(meals(name), theme, percent)} />}
+            </Fact>
+          ))}
+        </div>
       </Card>,
     );
   }

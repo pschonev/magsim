@@ -21,7 +21,8 @@ from magsim.analysis.filters import (
 )
 from magsim.analysis.fun_facts import (
     compute_chosen_faces,
-    compute_eaten_per_game,
+    compute_ability_uses,
+    compute_extreme_combinations,
     compute_forward_share,
     compute_hog_split,
     compute_hotel_customers,
@@ -31,7 +32,7 @@ from magsim.analysis.fun_facts import (
     compute_cheatah_numbers,
     compute_show_off_totals,
     compute_triggers_per_turn,
-    compute_vp_distribution,
+    compute_vp_distributions,
 )
 from magsim.analysis.metrics import run_full_analysis
 from magsim.analysis.racer_specific import compute_roll_effects, compute_stepkid_wins
@@ -46,6 +47,7 @@ from magsim.web.schemas import (
     EnvironmentCellDTO,
     FaceEffectDTO,
     EatTargetDTO,
+    ExtremeComboDTO,
     FaceShareDTO,
     FunFactsDTO,
     GlobalDynamicsRowDTO,
@@ -321,6 +323,7 @@ def _racer_specific(results: pl.DataFrame) -> RacerSpecificDTO:
                 win_rate=_safe_float(r["win_rate"]),
                 usual_win_rate=_safe_float(r["usual_win_rate"]),
                 lift=_safe_float(r["lift"]),
+                elsewhere_win_rate=_optional_float(r["elsewhere_win_rate"]),
             )
             for r in compute_stepkid_wins(results).to_dicts()
         ],
@@ -350,11 +353,11 @@ def _face_shares(frame: pl.DataFrame) -> list[FaceShareDTO]:
     ]
 
 
-def _fun_facts(results: pl.DataFrame) -> FunFactsDTO:
+def _fun_facts(results: pl.DataFrame, extremes: pl.DataFrame) -> FunFactsDTO:
     hog = compute_hog_split(results)
     hits, mastermind_first, mastermind_second, mastermind_second_predicted = compute_mastermind(results)
     return FunFactsDTO(
-        eaten_per_game=_named_values(compute_eaten_per_game(results)),
+        ability_uses_per_race=_named_values(compute_ability_uses(results)),
         outcomes=[
             OutcomeShareDTO(
                 racer_name=str(r["racer_name"]),
@@ -368,11 +371,25 @@ def _fun_facts(results: pl.DataFrame) -> FunFactsDTO:
         ],
         hog_for_himself=None if hog.is_empty() else _safe_float(hog["for_himself"][0]),
         hog_for_others=None if hog.is_empty() else _safe_float(hog["for_others"][0]),
-        sisyphus_vp=[
-            VpShareDTO(vp=_safe_int(r["vp"]), share=_safe_float(r["share"]))
-            for r in compute_vp_distribution(results).to_dicts()
+        vp_distributions=[
+            VpShareDTO(
+                racer_name=str(r["racer_name"]),
+                vp=_safe_int(r["vp"]),
+                share=_safe_float(r["share"]),
+            )
+            for r in compute_vp_distributions(results).to_dicts()
         ],
         mr_dice_guy_faces=_face_shares(compute_chosen_faces(results)),
+        extremes=[
+            ExtremeComboDTO(
+                kind=str(r["kind"]),
+                racer_name=str(r["racer_name"]),
+                other=str(r["other"]),
+                shift=_safe_float(r["shift"]),
+                games=_safe_int(r["games"]),
+            )
+            for r in extremes.to_dicts()
+        ],
         eat_targets=[
             EatTargetDTO(eater=str(r["eater"]), victim=str(r["victim"]), rate=_safe_float(r["rate"]))
             for r in compute_eaten_targets(results).to_dicts()
@@ -382,6 +399,7 @@ def _fun_facts(results: pl.DataFrame) -> FunFactsDTO:
         triggers_per_turn=_named_values(compute_triggers_per_turn(results)),
         blunderdog_forward=compute_forward_share(results, "Blunderdog"),
         diva_forward=compute_forward_share(results, "Diva"),
+        last_place_baseline=compute_forward_share(results),
         hotel_customers=_named_values(compute_hotel_customers(results)),
         mastermind_hits=_named_values(hits),
         mastermind_first=mastermind_first,
@@ -398,6 +416,7 @@ def _df_to_twist_combo_stats(df: pl.DataFrame) -> list[TwistComboStatDTO]:
             races=_safe_int(r["races"]),
             avg_turns=_safe_float(r["avg_turns"]),
             avg_total_vp=_safe_float(r["avg_total_vp"]),
+            avg_triggers=_optional_float(r["avg_triggers"]),
         )
         for r in df.to_dicts()
     ]
@@ -591,7 +610,14 @@ def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
         distributions_faceted=_df_to_distributions(result.distributions_faceted),
         value_distributions=_df_to_value_distributions(result.value_distributions),
         racer_specific=_racer_specific(filtered.racer_results),
-        fun_facts=_fun_facts(filtered.racer_results),
+        fun_facts=_fun_facts(
+            filtered.racer_results,
+            compute_extreme_combinations(
+                filtered.racer_results,
+                result.matchup_matrix,
+                result.environment_totals,
+            ),
+        ),
         twist_combo_stats=_df_to_twist_combo_stats(result.twist_combo_stats),
         matchup_matrix=_df_to_matchup_matrix(result.matchup_matrix),
         environment_matrix=_df_to_environment_matrix(

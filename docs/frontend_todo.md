@@ -402,3 +402,33 @@ Still open: Cheatah's chosen number and Show-Off's roll totals (per-turn movemen
 - New batch columns: `eliminated_by` (racer_id of whoever's turn it was in the first turn the racer is missing from the position log; computed in `compute_race_metrics`, so `recompute_aggregates` fills it for old batches) and `main_roll_totals` (INTEGER[], base value of every main roll, only for Cheatah and Show-Off, set in telemetry; needs a new batch). Cheatah's guessed turns have no roll event; they are counted from `skipped_self_main_move` as face 0.
 
 - Boot: the first dashboard analysis now runs behind the loading screen (boot is 0-90 %, the analysis fills the rest), and `DashboardView` starts with that result, so the "Aggregating data..." placeholder no longer shows on first load. A failed first analysis falls back to the old path and shows its error in the dashboard.
+
+## Round 14
+
+- Bug fixed: Stepdad's win rates ignored racers without a finish position (Polars `mean` skips nulls), so they were computed among the two finishers only (~50 %); real overall win rate is ~20 %. `compute_stepkid_wins` now counts non-finishers as losses and adds `elsewhere_win_rate` (same racer, Stepdad in the race but not directly in front). Stepdad card: 40.0 % vs 15.9 %, x2.51.
+- Blunderdog and Diva are correct but near 50 %: "last place" includes ties (as in their cards), everyone starts on tile 0, so a typical racer is last 44 % of its turns (shown in the card caption via `last_place_baseline`). Hog Knight's 52/48 follows from the hog being passed around (+2 per ride).
+- "Heads or tails?" card (Blunderdog, Diva, Hog Knight and the Stepdad rows "Stepdad in front" / "Stepdad elsewhere", ratio in the caption), Gunk added to the annoying powers, Sisyphus histogram without y-axis and with one "9+" bar for scores under 1 % each, Hotel / Mouth / Bite Mark in one wide card with power uses per race (`ability_uses_per_race` replaces `eaten_per_game`).
+- Nine cards once the next batch has run: Heads or tails, How their races end, Magical Athlete, Sisyphus, Choosy racers (Mr Dice Guy + Cheatah), Show-Off's dice total, Most annoying powers, Mastermind, Hotel / Mouth / Bite Mark. Show-Off and Cheatah stay hidden until `main_roll_totals` exists.
+
+## Round 15
+
+- Tables: Extra VP When Active % and Eliminated % moved from Abilities to the VP table.
+- Global: "Abilities triggered in a race" is a third distribution (new `total_race_triggers` in `dist_raw`, series "triggers"), shown next to game length and total VP on Distributions. By board and By twist card show one metric at a time, picked with a switch in the card header (Game length / Total VP / Abilities triggered). Twist combos table gets an "Avg abilities triggered" column (no switch, it already shows all metrics).
+
+## Round 16
+
+- Fun facts trimmed: captions removed or cut to a few words (long explanations moved into hover hints on the card title).
+- Stepdad is one row in "Heads or tails?" (bar widths are the win rates with Stepdad in front vs elsewhere, ratio in the label). Mr Dice Guy and Cheatah share the dice with one bar each in their racer colour (lighter if both have the same colour). Magical Athlete shows dice under its columns. "Final score" compares Sisyphus, Lovable Loser and Streaker (`vp_distributions` replaces `sisyphus_vp`, scores under 1 % of games at either end are merged into "≤N" / "N+"). Hotel, Mouth and Bite Mark now use the same rose chart side by side.
+
+## Round 17
+
+- Roll Sensitivity rebuilt: R² of VP on the share of rolls per number (1-5), after taking out race length and player count (`total_turns`, `racer_count`). The old predictors included the six counts, i.e. how many rolls the racer made, which is mostly race length: Lovable Loser 0.17 -> 0.01, Hare 0.13 -> 0.02, Streaker 0.38 -> 0.11, Icarus 0.34 -> 0.17, Sisyphus 0.37 -> 0.28. Typical racer is now ~3 %.
+- Racers with under 0.25 real rolls per race (Cheatah) get 0 instead of no point; Legs rolls 0.55 times per race (only on boards where walking 5 is bad) and is now measured (0.006). Never-triggering powers (Nepo Baby, Re-Runner) sit at 0 in Power profile.
+- Open: Gloth. His 3 VP bonus chance is 54 % with an average roll under 2.5 and 18 % above 4.5, but R² is low (0.03) because the bonus is a coin flip with many other causes. R² understates racers with a noisy yes/no bonus.
+- "Dice Rider" corner renamed "Gambler".
+
+## Round 18
+
+- Global: Distributions and By board share one sub-tab ("Distributions & boards"); the metric switch sits in the By board card.
+- Fun facts: Dream and nightmare matchups, Best and worst boards, Best and worst twist cards (top 5 each way). Shifts are the opponent- or environment-adjusted relative VP shifts from the interaction matrices; only shifts of at least 4 standard errors count (standard error = the racer's overall VP spread / sqrt(games)), otherwise the extremes of ~5000 matchups would be noise. Needs 100+ games per cell.
+- Roll Sensitivity discussion (Lovable Loser): VP by his average roll: 3.05 (under 2.5) -> 2.13 (over 4.5), i.e. -30 %; VP per turn 0.51 -> 0.40. Number of turns explains far more (corr 0.40). Decision on the measure pending.

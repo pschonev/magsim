@@ -91,3 +91,27 @@ def test_twist_combos_keep_or_drop_the_draw_order_and_skip_single_cards() -> Non
     assert unordered.height == 1
     assert unordered["races"].to_list() == [2]
     assert unordered["avg_turns"].to_list() == [25.0]
+
+
+def test_wins_count_races_without_a_finish_as_losses_and_compare_with_stepdad_elsewhere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(racer_specific, "MIN_STEPKID_GAMES", 1)
+    rows = []
+    for h in range(10):
+        stepdad_seat = h % 2
+        order = ["Stepdad", "Hare", "Banana", "Gunk"] if stepdad_seat == 0 else ["Hare", "Stepdad", "Banana", "Gunk"]
+        for seat, name in enumerate(order):
+            first = name == "Hare" and stepdad_seat == 0 and h < 6
+            rows.append((f"h{h}", seat, name, 1 if first else None, False))
+    frame = pl.DataFrame(
+        rows,
+        schema=["config_hash", "racer_id", "racer_name", "finish_position", "eliminated"],
+        orient="row",
+    )
+
+    hare = racer_specific.compute_stepkid_wins(frame).filter(pl.col("racer_name") == "Hare").row(0, named=True)
+
+    assert hare["win_rate"] == 0.6
+    assert hare["elsewhere_win_rate"] == 0.0
+    assert hare["usual_win_rate"] == 0.3

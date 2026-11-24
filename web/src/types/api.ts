@@ -117,6 +117,7 @@ export interface StepkidRowDTO {
   win_rate: number;
   usual_win_rate: number;
   lift: number;
+  elsewhere_win_rate: number | null;
 }
 
 export interface FaceEffectDTO {
@@ -141,6 +142,7 @@ export interface OutcomeShareDTO {
 }
 
 export interface VpShareDTO {
+  racer_name: string;
   vp: number;
   share: number;
 }
@@ -151,24 +153,34 @@ export interface EatTargetDTO {
   rate: number;
 }
 
+export interface ExtremeComboDTO {
+  kind: "matchup" | "board" | "twist";
+  racer_name: string;
+  other: string;
+  shift: number;
+  games: number;
+}
+
 export interface FaceShareDTO {
   face: number;
   share: number;
 }
 
 export interface FunFactsDTO {
-  eaten_per_game: NamedValueDTO[];
+  ability_uses_per_race: NamedValueDTO[];
   outcomes: OutcomeShareDTO[];
   hog_for_himself: number | null;
   hog_for_others: number | null;
-  sisyphus_vp: VpShareDTO[];
+  vp_distributions: VpShareDTO[];
   mr_dice_guy_faces: FaceShareDTO[];
   eat_targets: EatTargetDTO[];
+  extremes: ExtremeComboDTO[];
   cheatah_numbers: FaceShareDTO[];
   show_off_totals: FaceShareDTO[];
   triggers_per_turn: NamedValueDTO[];
   blunderdog_forward: number | null;
   diva_forward: number | null;
+  last_place_baseline: number | null;
   hotel_customers: NamedValueDTO[];
   mastermind_hits: NamedValueDTO[];
   mastermind_first: number | null;
@@ -187,6 +199,7 @@ export interface TwistComboStatDTO {
   races: number;
   avg_turns: number;
   avg_total_vp: number;
+  avg_triggers: number | null;
 }
 
 export interface DistributionBinDTO {

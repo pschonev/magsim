@@ -12,7 +12,11 @@ from magsim.analysis.interactions import (
 
 QUANTILE_LOW = 0.005
 QUANTILE_HIGH = 0.995
-SERIES_COLUMNS = {"turns": "race_global_turns", "vp": "total_race_vp"}
+SERIES_COLUMNS = {
+    "turns": "race_global_turns",
+    "vp": "total_race_vp",
+    "triggers": "total_race_triggers",
+}
 SCHEMA = {
     "board": pl.Utf8,
     "racer_count": pl.Int64,
@@ -63,6 +67,8 @@ def compute_value_distributions(dist_raw: pl.DataFrame) -> pl.DataFrame:
         return pl.DataFrame(schema=SCHEMA)
     frames = []
     for series, column in SERIES_COLUMNS.items():
+        if column not in dist_raw.columns:
+            continue
         values = dist_raw.select(
             "board",
             pl.col("racer_count").cast(pl.Int64),
@@ -99,6 +105,8 @@ def compute_value_distributions(dist_raw: pl.DataFrame) -> pl.DataFrame:
             .with_columns(pl.lit(series).alias("series"))
             .select(*SCHEMA),
         )
+    if not frames:
+        return pl.DataFrame(schema=SCHEMA)
     return pl.concat(frames).sort(
         "series", "board", "twist", "racer_count", "value", nulls_last=False,
     )
@@ -110,6 +118,7 @@ COMBO_SCHEMA = {
     "races": pl.Int64,
     "avg_turns": pl.Float64,
     "avg_total_vp": pl.Float64,
+    "avg_triggers": pl.Float64,
 }
 
 
@@ -120,12 +129,18 @@ def compute_twist_combo_stats(dist_raw: pl.DataFrame) -> pl.DataFrame:
     twisty = dist_raw.filter(
         (pl.col("board") == TWISTY_BOARD) & (pl.col("twists").list.len() > 1),
     )
+    triggers = (
+        pl.col("total_race_triggers").mean()
+        if "total_race_triggers" in dist_raw.columns
+        else pl.lit(None, dtype=pl.Float64)
+    )
     frames = [
         twisty.group_by(twist_combo_expr(ordered=ordered).alias("combo"))
         .agg(
             pl.len().alias("races"),
             pl.col("race_global_turns").mean().alias("avg_turns"),
             pl.col("total_race_vp").mean().alias("avg_total_vp"),
+            triggers.alias("avg_triggers"),
         )
         .with_columns(pl.lit(value=ordered).alias("ordered"))
         .select(*COMBO_SCHEMA)

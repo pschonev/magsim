@@ -19,6 +19,7 @@ const SHIFT_STRONG_GOOD = "#0D47A1";
 export const PLAYER_COUNT_COLORS = ["#40B0A6", "#FFC107", "#D81B60", "#1E88E5", "#9C27B0"];
 export const TURNS_COLOR = "#40B0A6";
 export const VP_COLOR = "#D81B60";
+export const TRIGGERS_COLOR = "#E69F00";
 
 export const BOARD_ORDER = ["Standard", "WildWilds", "WhirlyWorld", "TwistyTwirl"];
 const SHORT_BOARDS: Record<string, string> = {
@@ -516,6 +517,7 @@ export function buildGroupedBarOption(
 
 export const TURNS_SERIES = "turns";
 export const VP_SERIES = "vp";
+export const TRIGGERS_SERIES = "triggers";
 
 export interface ValueRange {
   min: number;

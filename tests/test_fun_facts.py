@@ -4,7 +4,7 @@ import pytest
 from magsim.analysis.fun_facts import (
     compute_chosen_faces,
     compute_cheatah_numbers,
-    compute_eaten_per_game,
+    compute_ability_uses,
     compute_eaten_targets,
     compute_show_off_totals,
     compute_forward_share,
@@ -14,6 +14,7 @@ from magsim.analysis.fun_facts import (
     compute_outcomes,
     compute_triggers_per_turn,
     compute_vp_distribution,
+    compute_vp_distributions,
 )
 from magsim.analysis.roll_dependence import FACE_COLUMNS
 
@@ -34,22 +35,19 @@ def frame(rows: list[dict]) -> pl.DataFrame:
     return pl.DataFrame([{**base, **row} for row in rows], schema=SCHEMA)
 
 
-def test_bite_mark_does_not_count_its_transformation_as_a_meal() -> None:
+def test_ability_uses_are_triggers_per_race_for_hotel_mouth_and_bite_mark() -> None:
     results = frame(
         [
-            {"racer_name": "BiteMark", "ability_trigger_count": 0},
             {"racer_name": "BiteMark", "ability_trigger_count": 1},
             {"racer_name": "BiteMark", "ability_trigger_count": 3},
             {"racer_name": "Mouth", "ability_trigger_count": 2},
+            {"racer_name": "Hare", "ability_trigger_count": 9},
         ],
     )
 
-    eaten = {
-        r["racer_name"]: r["value"] for r in compute_eaten_per_game(results).to_dicts()
-    }
+    uses = {r["racer_name"]: r["value"] for r in compute_ability_uses(results).to_dicts()}
 
-    assert eaten["BiteMark"] == pytest.approx(2 / 3)
-    assert eaten["Mouth"] == 2
+    assert uses == {"BiteMark": 2.0, "Mouth": 2.0}
 
 
 def test_outcomes_add_up_to_one_and_eliminated_wins_over_finish_position() -> None:
@@ -149,7 +147,7 @@ def test_triggers_per_turn_is_total_triggers_over_total_turns_and_skips_other_ra
 def test_racers_that_are_not_in_the_data_give_empty_results() -> None:
     results = frame([{"racer_name": "Hare"}])
 
-    assert compute_eaten_per_game(results).is_empty()
+    assert compute_ability_uses(results).is_empty()
     assert compute_outcomes(results).is_empty()
     assert compute_hog_split(results).is_empty()
     assert compute_vp_distribution(results).is_empty()
@@ -299,3 +297,32 @@ def test_without_recorded_rolls_the_cheatah_and_show_off_facts_are_empty() -> No
 
     assert compute_cheatah_numbers(results).is_empty()
     assert compute_show_off_totals(results).is_empty()
+
+
+def test_the_last_place_baseline_covers_all_racers() -> None:
+    results = with_columns([{"racer_name": "A"}, {"racer_name": "B"}]).with_columns(
+        pl.Series("turns_started_last", [1, 0], dtype=pl.Int64),
+        pl.Series("turns_started_ahead", [1, 2], dtype=pl.Int64),
+    )
+
+    assert compute_forward_share(results) == 0.25
+    assert compute_forward_share(results, "A") == 0.5
+
+
+def test_vp_distributions_cover_sisyphus_lovable_loser_and_streaker_separately() -> None:
+    results = frame(
+        [
+            {"racer_name": "Sisyphus", "final_vp": 3},
+            {"racer_name": "LovableLoser", "final_vp": 1},
+            {"racer_name": "LovableLoser", "final_vp": 2},
+            {"racer_name": "Hare", "final_vp": 9},
+        ],
+    )
+
+    rows = compute_vp_distributions(results).to_dicts()
+
+    assert {(r["racer_name"], r["vp"]): r["share"] for r in rows} == {
+        ("Sisyphus", 3): 1.0,
+        ("LovableLoser", 1): 0.5,
+        ("LovableLoser", 2): 0.5,
+    }

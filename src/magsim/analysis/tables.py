@@ -85,7 +85,6 @@ def with_racer_extras(
     result["abilities"] = (
         abilities.drop("Abil +Other", "Abil -Other")
         .join(movement.select("Racer", "Rolling Turns %"), on="Racer", how="left")
-        .join(eliminated, on="Racer", how="left")
     )
     profile = extras.select(
         pl.col("racer_name").alias("Racer"),
@@ -96,10 +95,16 @@ def with_racer_extras(
         (pl.col("ability_payoff") * 100).round(1).alias("Extra VP When Active %"),
         pl.col("fires_when_behind").round(2).alias("Triggers When Behind"),
     )
-    vp = result["vp"].join(profile.select("Racer", "Roll Sens %", "Going-First Bonus %", "Lead Bonus %"), on="Racer", how="left")
-    result["vp"] = vp.select("Racer", "Avg VP", "Roll Sens %", "Going-First Bonus %", "Lead Bonus %")
+    vp = (
+        result["vp"]
+        .join(profile.select("Racer", "Roll Sens %", "Going-First Bonus %", "Lead Bonus %", "Extra VP When Active %"), on="Racer", how="left")
+        .join(eliminated, on="Racer", how="left")
+    )
+    result["vp"] = vp.select(
+        "Racer", "Avg VP", "Roll Sens %", "Going-First Bonus %", "Lead Bonus %", "Extra VP When Active %", "Eliminated %",
+    )
     result["abilities"] = result["abilities"].join(
-        profile.select("Racer", "Extra VP When Active %", "Triggers When Behind"),
+        profile.select("Racer", "Triggers When Behind"),
         on="Racer",
         how="left",
     )

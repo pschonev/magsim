@@ -102,7 +102,7 @@ def test_statistics_without_their_input_columns_are_null() -> None:
     assert stripped["ability_payoff"].null_count() == 0
 
 
-def test_ability_payoff_is_null_for_a_racer_that_never_triggers() -> None:
+def test_ability_payoff_is_zero_for_a_racer_that_never_triggers() -> None:
     results, races = build()
     quiet = results.with_columns(
         pl.when(pl.col("racer_name") == "Plain")
@@ -115,8 +115,9 @@ def test_ability_payoff_is_null_for_a_racer_that_never_triggers() -> None:
         r["racer_name"]: r for r in compute_racer_profile(quiet, races).to_dicts()
     }
 
-    assert values["Plain"]["ability_payoff"] is None
-    assert values["Reactive"]["ability_payoff"] is not None
+    assert values["Plain"]["ability_payoff"] == 0.0
+    assert values["Plain"]["fires_when_behind"] == 0.0
+    assert values["Reactive"]["ability_payoff"] != 0.0
 
 
 def test_ability_payoff_is_a_share_of_average_vp_between_busiest_and_quietest_races() -> None:
@@ -135,3 +136,4 @@ def test_ability_payoff_is_a_share_of_average_vp_between_busiest_and_quietest_ra
     }
 
     assert values["Plain"]["ability_payoff"] == pytest.approx(0.75, abs=0.3)
+

@@ -20,8 +20,8 @@ export function TwistComboTable({ stats }: { stats: TwistComboStatDTO[] }) {
       ) : (
         <DataTable
           key={String(ignoreOrder)}
-          columns={["Combination", "Races", "Avg turns", "Avg total VP"]}
-          rows={rows.map((r) => [r.combo, r.races, Number(r.avg_turns.toFixed(1)), Number(r.avg_total_vp.toFixed(2))])}
+          columns={["Combination", "Races", "Avg turns", "Avg total VP", "Avg abilities triggered"]}
+          rows={rows.map((r) => [r.combo, r.races, Number(r.avg_turns.toFixed(1)), Number(r.avg_total_vp.toFixed(2)), r.avg_triggers === null ? null : Number(r.avg_triggers.toFixed(1))])}
         />
       )}
     </div>

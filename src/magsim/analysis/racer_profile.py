@@ -126,8 +126,14 @@ def compute_racer_profile(
             "vp_rel",
         ),
     )
+    never_fires = (
+        [(pl.col("ability_trigger_count").sum() == 0).alias("never_fires")]
+        if "ability_trigger_count" in base.columns
+        else []
+    )
     result = base.group_by("racer_name").agg(
         pl.col("final_vp").mean().alias("average_vp"),
+        *never_fires,
     )
     for part in (
         swinginess(base),
@@ -142,6 +148,12 @@ def compute_racer_profile(
         ).alias(c)
         for c in VP_EFFECTS
     ).drop("average_vp")
+    if never_fires:
+        result = result.with_columns(
+            pl.when(pl.col("never_fires")).then(0.0).otherwise(pl.col(c)).alias(c)
+            for c in ("ability_payoff", "fires_when_behind")
+        )
+    result = result.drop("never_fires", strict=False)
     return result.with_columns(
         pl.col(c).fill_nan(None)
         for c in (

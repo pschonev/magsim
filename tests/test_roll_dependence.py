@@ -62,3 +62,35 @@ def test_without_face_counts_only_the_average_roll_is_used() -> None:
     assert dependence(frame)["NeedsThrees"] < 0.8
     assert 0.0 <= dependence(frame)["Indifferent"] < 0.05
 
+
+
+def test_race_length_is_not_mistaken_for_dice_dependence() -> None:
+    rng = random.Random(8)
+    rows = []
+    for _ in range(1500):
+        turns = rng.randint(5, 15)
+        rolls = [rng.randint(1, 6) for _ in range(turns)]
+        counts = Counter(rolls)
+        rows.append(
+            {
+                "racer_name": "PerTurn",
+                "final_vp": turns / 5,
+                "rolling_turns": turns,
+                "sum_dice_rolled": sum(rolls),
+                "total_turns": turns,
+                "racer_count": 4,
+                **{c: counts[f] for f, c in enumerate(FACE_COLUMNS, start=1)},
+            },
+        )
+    frame = pl.DataFrame(rows)
+
+    assert dependence(frame)["PerTurn"] < 0.02
+    assert dependence(frame.drop("total_turns", "racer_count"))["PerTurn"] < 0.1
+
+
+def test_racers_without_real_rolls_get_zero_instead_of_missing() -> None:
+    frame = dataset().with_columns(
+        pl.when(pl.col("racer_name") == "Indifferent").then(0).otherwise(pl.col("rolling_turns")).alias("rolling_turns"),
+    )
+
+    assert dependence(frame)["Indifferent"] == 0.0

@@ -6,12 +6,17 @@ import polars as pl
 
 from magsim.analysis.roll_dependence import FACE_COLUMNS
 
-ANNOYING_RACERS = ("Critic", "Stickler", "PartyPooper", "Null", "Inchworm")
+ANNOYING_RACERS = ("Critic", "Stickler", "PartyPooper", "Null", "Inchworm", "Gunk")
+USE_RACERS = ("Hotel", "Mouth", "BiteMark")
+VP_DISTRIBUTION_RACERS = ("Sisyphus", "LovableLoser", "Streaker")
 OUTCOME_RACERS = ("SpeedDemon", "Icarus", "Spoilsport")
 CANCELLING_RACER = "Spoilsport"
 EATERS = ("Mouth", "BiteMark")
 MIN_COOCCURRENCES = 100
 TARGETS_PER_EATER = 5
+EXTREMES_PER_SIDE = 5
+MIN_COMBINATION_GAMES = 100
+Z_MIN = 4.0
 SHOW_OFF_TOTAL_CAP = 12
 
 
@@ -19,16 +24,13 @@ def _racer(results: pl.DataFrame, name: str) -> pl.DataFrame:
     return results.filter(pl.col("racer_name") == name)
 
 
-def compute_eaten_per_game(results: pl.DataFrame) -> pl.DataFrame:
-    """Racers eaten per game. Bite Mark's first trigger is its transformation, which eats nobody."""
-    rows = []
-    for name, eaten in (
-        ("Mouth", pl.col("ability_trigger_count")),
-        ("BiteMark", (pl.col("ability_trigger_count") - 1).clip(lower_bound=0)),
-    ):
-        own = _racer(results, name)
-        if not own.is_empty():
-            rows.append({"racer_name": name, "value": own.select(eaten.mean()).item()})
+def compute_ability_uses(results: pl.DataFrame) -> pl.DataFrame:
+    """How often Hotel, Mouth and Bite Mark use their power per race (all triggers, Bite Mark's transformation included)."""
+    rows = [
+        {"racer_name": name, "value": own["ability_trigger_count"].mean()}
+        for name in USE_RACERS
+        if not (own := _racer(results, name)).is_empty()
+    ]
     return pl.DataFrame(rows, schema={"racer_name": pl.Utf8, "value": pl.Float64})
 
 
@@ -100,6 +102,15 @@ def compute_vp_distribution(
     )
 
 
+def compute_vp_distributions(results: pl.DataFrame) -> pl.DataFrame:
+    """Final VP shares of the racers whose score distribution is compared (empty frame when none is in the data)."""
+    frames = [
+        compute_vp_distribution(results, racer).with_columns(pl.lit(racer).alias("racer_name"))
+        for racer in VP_DISTRIBUTION_RACERS
+    ]
+    return pl.concat(frames).select("racer_name", "vp", "share")
+
+
 def compute_chosen_faces(results: pl.DataFrame, racer: str = "MrDiceGuy") -> pl.DataFrame:
     """Share of the racer's turns per number its main move was based on; face 0 is a turn without a pick.
 
@@ -133,13 +144,13 @@ def compute_triggers_per_turn(results: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def compute_forward_share(results: pl.DataFrame, racer: str) -> float | None:
-    """Share of the racer's own turns that began in last place.
+def compute_forward_share(results: pl.DataFrame, racer: str | None = None) -> float | None:
+    """Share of a racer's own turns (all racers when None) that began in last place, ties included.
 
     Blunderdog moves forward (tripled) only from last place and Diva swaps with the leader only from
     last place, so this is their share of forward moves and forward swaps.
     """
-    own = _racer(results, racer)
+    own = results if racer is None else _racer(results, racer)
     if own.is_empty() or "turns_started_last" not in own.columns:
         return None
     last = own["turns_started_last"].drop_nulls().sum()
@@ -260,3 +271,71 @@ def compute_show_off_totals(results: pl.DataFrame) -> pl.DataFrame:
     if rolls is None or rolls.is_empty():
         return pl.DataFrame(schema={"face": pl.Int64, "share": pl.Float64})
     return _shares(rolls.clip(upper_bound=SHOW_OFF_TOTAL_CAP))
+
+
+def _extreme_cells(cells: pl.DataFrame, vp_spread: pl.DataFrame, kind: str) -> pl.DataFrame:
+    """Best and worst cells of one kind: only shifts of at least Z_MIN standard errors, ranked by the relative shift."""
+    significant = (
+        cells.join(vp_spread, on="racer_name", how="inner")
+        .filter((pl.col("games") >= MIN_COMBINATION_GAMES) & (pl.col("spread") > 0))
+        .with_columns(
+            (pl.col("vp_shift") / (pl.col("spread") / pl.col("games").sqrt())).alias("z"),
+        )
+        .filter(pl.col("z").abs() >= Z_MIN)
+    )
+    best = significant.filter(pl.col("shift") > 0).sort("shift", descending=True).head(EXTREMES_PER_SIDE)
+    worst = significant.filter(pl.col("shift") < 0).sort("shift").head(EXTREMES_PER_SIDE)
+    return pl.concat([best, worst]).select(
+        pl.lit(kind).alias("kind"), "racer_name", "other", "shift", "games",
+    )
+
+
+def compute_extreme_combinations(
+    results: pl.DataFrame, matchups: pl.DataFrame, environment_totals: pl.DataFrame,
+) -> pl.DataFrame:
+    """The best and worst racer matchups, racer x board and racer x twist card combinations, net of the opponent or environment average.
+
+    A shift only counts when it is at least Z_MIN standard errors away from zero, because the
+    extremes of thousands of noisy combinations would otherwise be pure chance.
+    """
+    schema = {"kind": pl.Utf8, "racer_name": pl.Utf8, "other": pl.Utf8, "shift": pl.Float64, "games": pl.Int64}
+    if matchups.is_empty() and environment_totals.is_empty():
+        return pl.DataFrame(schema=schema)
+    spread = results.group_by("racer_name").agg(pl.col("final_vp").std().alias("spread"))
+    frames = []
+    if not matchups.is_empty():
+        frames.append(
+            _extreme_cells(
+                matchups.select(
+                    "racer_name",
+                    pl.col("opponent_name").alias("other"),
+                    pl.col("adjusted_percentage_shift").alias("shift"),
+                    pl.col("adjusted_residual_matchup").alias("vp_shift"),
+                    pl.col("games_together").cast(pl.Int64).alias("games"),
+                ),
+                spread,
+                "matchup",
+            ),
+        )
+    if not environment_totals.is_empty():
+        totals = environment_totals.filter(pl.col("racer_count").is_null())
+        for kind, scope, column in (
+            ("board", totals.filter(pl.col("board").is_not_null() & pl.col("twist").is_null()), "board"),
+            ("twist", totals.filter(pl.col("twist").is_not_null()), "twist"),
+        ):
+            if scope.is_empty():
+                continue
+            frames.append(
+                _extreme_cells(
+                    scope.select(
+                        "racer_name",
+                        pl.col(column).alias("other"),
+                        pl.col("adjusted_relative_shift").alias("shift"),
+                        pl.col("adjusted_absolute_shift").alias("vp_shift"),
+                        pl.col("games_count").cast(pl.Int64).alias("games"),
+                    ),
+                    spread,
+                    kind,
+                ),
+            )
+    return pl.concat(frames).cast(schema) if frames else pl.DataFrame(schema=schema)

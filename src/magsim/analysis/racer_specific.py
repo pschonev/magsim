@@ -12,27 +12,35 @@ FACES = tuple(range(1, 7))
 
 
 def compute_stepkid_wins(stats_results: pl.DataFrame) -> pl.DataFrame:
-    """Win rate of the racer sitting directly after Stepdad in turn order, against its usual win rate."""
+    """Win rate of the racer sitting directly after Stepdad, against the same racer in races with Stepdad elsewhere (`elsewhere_win_rate`) and in all its races (`usual_win_rate`)."""
     seats = stats_results.select(
         "config_hash", "racer_id", "racer_name", "finish_position",
-    )
+    ).with_columns((pl.col("finish_position") == 1).fill_null(value=False).alias("won"))
     table_size = seats.group_by("config_hash").agg(pl.len().alias("seats"))
     seated = seats.join(table_size, on="config_hash")
     stepdads = seated.filter(pl.col("racer_name") == "Stepdad").select(
         "config_hash",
         ((pl.col("racer_id") + 1) % pl.col("seats")).alias("racer_id"),
+        pl.lit(value=True).alias("stepkid"),
     )
-    usual = seats.group_by("racer_name").agg(
-        (pl.col("finish_position") == 1).mean().alias("usual_win_rate"),
+    usual = seats.group_by("racer_name").agg(pl.col("won").mean().alias("usual_win_rate"))
+    tagged = seats.join(stepdads, on=["config_hash", "racer_id"], how="left")
+    elsewhere = (
+        tagged.join(
+            stepdads.select("config_hash").unique().with_columns(pl.lit(value=True).alias("has_stepdad")),
+            on="config_hash",
+            how="left",
+        )
+        .filter(pl.col("stepkid").is_null() & pl.col("has_stepdad").is_not_null())
+        .group_by("racer_name")
+        .agg(pl.col("won").mean().alias("elsewhere_win_rate"))
     )
     return (
-        seats.join(stepdads, on=["config_hash", "racer_id"], how="inner")
+        tagged.filter(pl.col("stepkid").is_not_null())
         .group_by("racer_name")
-        .agg(
-            pl.len().alias("games"),
-            (pl.col("finish_position") == 1).mean().alias("win_rate"),
-        )
+        .agg(pl.len().alias("games"), pl.col("won").mean().alias("win_rate"))
         .join(usual, on="racer_name")
+        .join(elsewhere, on="racer_name", how="left")
         .filter(
             (pl.col("games") >= MIN_STEPKID_GAMES) & (pl.col("racer_name") != "Stepdad"),
         )

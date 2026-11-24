@@ -104,8 +104,7 @@ const SECTIONS: Section[] = [
     icon: Globe,
     views: [
       { id: "global-dynamics", label: "Dynamics", icon: Activity },
-      { id: "global-distributions", label: "Distributions", icon: Waves },
-      { id: "global-boards", label: "By board", icon: MapIcon },
+      { id: "global-distributions", label: "Distributions & boards", icon: Waves },
       { id: "global-twists", label: "By twist card", icon: Sparkles },
       { id: "global-combos", label: "Twist combos", icon: Layers },
     ],
@@ -144,7 +143,6 @@ const DEFAULT_VIEW = SECTIONS[0].views[0].id;
 const GLOBAL_PARTS: Record<string, GlobalPart> = {
   "global-dynamics": "dynamics",
   "global-distributions": "distributions",
-  "global-boards": "boards",
   "global-twists": "twists",
 };
 const ABILITY_ROW_HEIGHT = 15;
