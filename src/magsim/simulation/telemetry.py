@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol, TypedDict
 
@@ -18,7 +19,7 @@ from magsim.core.state import is_active
 from magsim.racers.hog_knight import HOG_BONUS
 from magsim.racers.party_pooper import REJECTED_VALUE
 from magsim.racers.stunner import AURA_RANGE, FORCED_VALUE
-from magsim.simulation.db.models import RacerResult
+from magsim.simulation.db.models import FACE_COLUMNS, RacerResult
 
 if TYPE_CHECKING:
     from magsim.core.events import GameEvent
@@ -345,6 +346,9 @@ class MetricsAggregator:
                 if event.dice_value is not None:
                     stats.sum_dice_rolled += event.dice_value
                     stats.rolling_turns += 1
+                    if 1 <= event.dice_value <= len(FACE_COLUMNS):
+                        face = FACE_COLUMNS[event.dice_value - 1]
+                        setattr(stats, face, getattr(stats, face) + 1)
 
                 hog_owner = (
                     self._hog_owner(engine, event.target_racer_idx)
@@ -498,8 +502,15 @@ class MetricsAggregator:
             return
         if self._has_ability(engine, roller, SHOW_OFF_ABILITY):
             self._record_movement_bucket(roller, roller, event.base_value - dice[0])
-        if self._has_ability(engine, roller, MR_DICE_GUY_ABILITY):
-            self._record_movement_bucket(roller, roller, event.base_value - EXPECTED_D6)
+        if self._has_ability(engine, roller, MR_DICE_GUY_ABILITY) and (
+            options := [value for value, count in Counter(dice).items() if count > 1]
+        ):
+            # Any single die is as good as the one every racer is stuck with: only the choice counts.
+            self._record_movement_bucket(
+                roller,
+                roller,
+                event.base_value - sum(options) / len(options),
+            )
 
     def on_turn_end(
         self,

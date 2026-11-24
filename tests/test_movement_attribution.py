@@ -99,18 +99,45 @@ def test_show_off_extra_dice_count_as_self_movement(scenario: type[GameScenario]
     assert show_off.pos_self_ability_movement == 5
 
 
-def test_mr_dice_guy_is_credited_the_difference_to_an_average_die(
+def test_mr_dice_guy_gains_nothing_when_only_one_number_is_doubled(
     scenario: type[GameScenario],
 ):
     game = scenario(
         [RacerConfig(0, "MrDiceGuy"), dummy(1)],
-        dice_rolls=[6, 6, 2, 3, 4, 5],
+        dice_rolls=[2, 2, 3, 4, 5, 6],
+    )
+
+    mr_dice_guy = play_turns(game, 1)[0]
+
+    assert game.get_racer(0).position == 2
+    assert mr_dice_guy.pos_self_ability_movement == 0
+    assert mr_dice_guy.neg_self_ability_movement == 0
+
+
+def test_mr_dice_guy_is_credited_the_gap_to_the_average_of_his_options(
+    scenario: type[GameScenario],
+):
+    game = scenario(
+        [RacerConfig(0, "MrDiceGuy"), dummy(1)],
+        dice_rolls=[6, 6, 2, 2, 4, 5],
     )
 
     mr_dice_guy = play_turns(game, 1)[0]
 
     assert game.get_racer(0).position == 6
-    assert mr_dice_guy.pos_self_ability_movement == 2.5
+    assert mr_dice_guy.pos_self_ability_movement == 2
+
+
+def test_main_roll_faces_are_counted_per_face(scenario: type[GameScenario]):
+    game = scenario([dummy(0), dummy(1)], dice_rolls=[3, 3, 5, 1])
+
+    results = play_turns(game, 4)
+
+    assert (results[0].rolled_3, results[0].rolled_5) == (1, 1)
+    assert (results[1].rolled_3, results[1].rolled_1) == (1, 1)
+    assert results[0].rolling_turns == sum(
+        getattr(results[0], f"rolled_{face}") for face in range(1, 7)
+    )
 
 
 def test_stunner_is_credited_with_the_roll_it_takes_from_a_neighbour(

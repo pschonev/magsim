@@ -34,9 +34,8 @@ export const COLUMN_HELP: Record<string, ColumnHelp> = {
   "Abil -Other": {
     text: "**Tiles per other-racer turn that the racer's abilities take from other racers.**\n\nPushes, trips, forced rolls and skipped moves. High: hinders the field.",
   },
-  "Dice Sens": {
-    label: "Roll Sens",
-    text: "**How strongly the racer's average roll predicts its VP** (absolute correlation, either direction).\n\nHigh: results follow the dice, high or low. A typical racer is near 0.13. Powers that need specific numbers are not captured.",
+  "Roll Sens %": {
+    text: "**Share of the racer's VP variation explained by which numbers it rolled.**\n\nHigh: results follow the dice, for example needing 3s or hating 6s. A typical racer is near 3 %. Older datasets only measure the average roll.",
   },
   "Ability Trig Sens": {
     text: "**Correlation between how often the racer's ability triggers and the VP it earns.**\n\nHigh: more triggers, more VP.",

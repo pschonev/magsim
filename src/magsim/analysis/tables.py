@@ -87,6 +87,14 @@ def with_racer_extras(
         .join(movement.select("Racer", "Rolling Turns %"), on="Racer", how="left")
         .join(eliminated, on="Racer", how="left")
     )
+    roll_sensitivity = extras.select(
+        pl.col("racer_name").alias("Racer"),
+        (pl.col("roll_dependence") * 100).round(1).alias("Roll Sens %"),
+    )
+    vp = result["vp"].join(roll_sensitivity, on="Racer", how="left")
+    result["vp"] = vp.select(
+        *("Roll Sens %" if column == "Dice Sens" else column for column in result["vp"].columns),
+    )
     game_length = result["dynamics"].select("Racer", "Avg Game Len")
     overview = result["overview"].join(game_length, on="Racer", how="left")
     columns = [c for c in overview.columns if c not in ("Avg Game Len", "# Races")]

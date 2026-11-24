@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import polars as pl
 
+from magsim.analysis.roll_dependence import compute_roll_dependence
+
 ENVIRONMENT = ["board", "racer_count"]
 
 
@@ -11,7 +13,7 @@ def compute_racer_extras(
     stats_results: pl.DataFrame,
     df_races_f: pl.DataFrame,
 ) -> pl.DataFrame:
-    """Elimination rate and how a racer's VP shift moves with player count and game length.
+    """Elimination rate, roll dependence and how a racer's VP shift moves with player count and game length.
 
     The VP shift and the length shift are measured against the average of all racers in the same
     board and player count, so the board and the player count themselves do not leak into the
@@ -33,7 +35,7 @@ def compute_racer_extras(
             pl.col("eliminated").cast(pl.Float64),
         )
     )
-    return (
+    preferences = (
         shifts.group_by("racer_name")
         .agg(
             pl.col("eliminated").mean().alias("elimination_rate"),
@@ -42,5 +44,9 @@ def compute_racer_extras(
         )
         .fill_nan(0.0)
         .fill_null(0.0)
-        .sort("racer_name")
     )
+    return preferences.join(
+        compute_roll_dependence(stats_results),
+        on="racer_name",
+        how="left",
+    ).with_columns(pl.col("roll_dependence").fill_null(0.0)).sort("racer_name")

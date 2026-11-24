@@ -66,6 +66,7 @@ export interface RacerStatRowDTO {
   midgame_bias: number;
   player_count_pref: number;
   game_length_pref: number;
+  roll_dependence: number;
 }
 
 export interface AbilityBreakdownRowDTO {

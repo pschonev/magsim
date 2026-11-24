@@ -72,7 +72,7 @@ export const QUADRANT_TABS: QuadrantTab<RacerStatRowDTO>[] = [
   {
     id: "engine",
     spec: {
-      xKey: "dice_sensitivity",
+      xKey: "roll_dependence",
       yKey: "trigger_dependency",
       xTitle: "Roll Sensitivity",
       yTitle: "Ability Efficacy",
@@ -85,11 +85,11 @@ export const QUADRANT_TABS: QuadrantTab<RacerStatRowDTO>[] = [
       },
       {
         bold: "X-Axis (Roll Sensitivity):",
-        text: " How strongly the racer's average roll per turn predicts its VP, in either direction (absolute correlation). High: results follow the dice. Sisyphus and Icarus want LOW rolls, Streaker wants HIGH ones. A typical racer sits near 0.13, because rolling higher gets everyone further.",
+        text: " Share of the racer's VP variation that is explained by which numbers it rolled (0 = none, 1 = all). High: results follow the dice. Sisyphus and Icarus want specific rolls, Skipper and Legs depend on exact numbers. A typical racer is near 0.03, because rolling more sixes helps everyone a little.",
       },
       {
-        bold: "Limit:",
-        text: " Only the average roll is measured. Powers that depend on specific numbers (Speed Demon, Skipper) can still show low values.",
+        bold: "Note:",
+        text: " Needs per-face roll counts from the batch. Older datasets only have the average roll, which misses powers that need exact numbers. Cheatah's chosen number is not a roll.",
       },
     ],
   },

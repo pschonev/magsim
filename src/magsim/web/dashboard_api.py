@@ -177,7 +177,12 @@ def _apply_table_search(df: pl.DataFrame, search: str) -> pl.DataFrame:
 
 
 def _df_to_racer_stats(df: pl.DataFrame, extras: pl.DataFrame) -> list[RacerStatRowDTO]:
-    preferences = extras.select("racer_name", "player_count_pref", "game_length_pref")
+    preferences = extras.select(
+        "racer_name",
+        "player_count_pref",
+        "game_length_pref",
+        "roll_dependence",
+    )
     df = df.join(preferences, on="racer_name", how="left")
     return [
         RacerStatRowDTO(
@@ -211,6 +216,7 @@ def _df_to_racer_stats(df: pl.DataFrame, extras: pl.DataFrame) -> list[RacerStat
             midgame_bias=_safe_float(row["midgame_bias"]),
             player_count_pref=_safe_float(row["player_count_pref"]),
             game_length_pref=_safe_float(row["game_length_pref"]),
+            roll_dependence=_safe_float(row["roll_dependence"]),
         )
         for row in df.to_dicts()
     ]

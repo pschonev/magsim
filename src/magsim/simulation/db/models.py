@@ -70,6 +70,9 @@ class Race(msgspec.Struct, array_like=True, gc=False):
         """
 
 
+FACE_COLUMNS: tuple[str, ...] = tuple(f"rolled_{face}" for face in range(1, 7))
+
+
 class RacerResult(msgspec.Struct, array_like=True, gc=False):
     """
     Represents the result of one racer in a specific race.
@@ -116,6 +119,14 @@ class RacerResult(msgspec.Struct, array_like=True, gc=False):
     # --- Metrics ---
     midgame_relative_pos: float = 0.0
 
+    # --- Main-roll face counts (appended last: tables are filled by position) ---
+    rolled_1: int = 0
+    rolled_2: int = 0
+    rolled_3: int = 0
+    rolled_4: int = 0
+    rolled_5: int = 0
+    rolled_6: int = 0
+
     @classmethod
     def get_create_sql(cls) -> str:
         return """
@@ -141,6 +152,12 @@ class RacerResult(msgspec.Struct, array_like=True, gc=False):
             finish_position BIGINT,
             eliminated BOOLEAN,
             midgame_relative_pos DOUBLE,
+            rolled_1 BIGINT,
+            rolled_2 BIGINT,
+            rolled_3 BIGINT,
+            rolled_4 BIGINT,
+            rolled_5 BIGINT,
+            rolled_6 BIGINT,
             PRIMARY KEY (config_hash, racer_id)
         )
         """

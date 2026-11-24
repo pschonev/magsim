@@ -80,6 +80,7 @@ class RacerStatRowDTO(msgspec.Struct, frozen=True):
     midgame_bias: float
     player_count_pref: float = 0.0
     game_length_pref: float = 0.0
+    roll_dependence: float = 0.0
 
 
 class AbilityBreakdownRowDTO(msgspec.Struct, frozen=True):

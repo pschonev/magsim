@@ -22,10 +22,14 @@ def results() -> pl.DataFrame:
     for i, count in enumerate([4] * 4 + [5] * 4 + [6] * 4):
         long_game = i % 2 == 1
         climber = count - 4 + (2 if long_game else 0)
-        rows.append((f"r{i}", "Climber", climber, False))
-        rows.append((f"r{i}", "Plain", 1, i % 4 == 0))
-        rows.append((f"r{i}", "Filler", 4 - climber if climber < 4 else 0, False))
-    return pl.DataFrame(rows, schema=["config_hash", "racer_name", "final_vp", "eliminated"], orient="row")
+        rows.append((f"r{i}", "Climber", climber, False, 10 + i, 3))
+        rows.append((f"r{i}", "Plain", 1, i % 4 == 0, 10 + i, 3))
+        rows.append((f"r{i}", "Filler", 4 - climber if climber < 4 else 0, False, 10 + i, 3))
+    return pl.DataFrame(
+        rows,
+        schema=["config_hash", "racer_name", "final_vp", "eliminated", "sum_dice_rolled", "rolling_turns"],
+        orient="row",
+    )
 
 
 def extras() -> dict[str, dict[str, float]]:

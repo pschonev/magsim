@@ -80,6 +80,9 @@ Found while porting the notebook analytics (M1-M5). "Verified" = checked on `doc
 - fix Mush issue
 > I replayed 4,000 races in two different orders in one process. 3 of them (0.07%) ended differently, all on Twisty Twirl and all containing Mush. This fits the intermittent Mush test failure from earlier. The same config replays identically in a fresh process, so the stored result and the Simulator can disagree for those races. It's engine code, which AGENT.md puts off-limits, so I haven't touched it. I can investigate with your permission.
 
+DONE
+
+
 ## Round 2
 ### frontend
 - fix phone usability
@@ -112,4 +115,45 @@ Found while porting the notebook analytics (M1-M5). "Verified" = checked on `doc
 - is Cheatah really this terrible? His ability is a big net-negative
 - why does Mr Dice Guy have such a big negative self movement? Doesn't he only skip his turn when he does not roll a single duplicate? Meanwhile he should get to choose a high roll quite often. Is his implementation correct? or are we counting that he often chooses lower numbers to avoid hazards?
 - is `Dice Sensitivity` really the correct description of what we are showing? It's a bit weird because for many racers it's more like how much they want HIGH dice and not necessarily if they want specific dice (Speed Demon, Skipper for example are low even though they depend on the correct dice for their ability); meanwhile we decided to mirror Sisyphus so now he shows up as super dice-sensitive (which is definitely correct but I wonder why this doesn't work for the other racers); maybe this metric currently depends too much on the total amount of VP (or VP shift) for racers? Because Sisyphus is a racer that has some of the highest VP while Speed Demon sucks and often gets no VP
-- 
+
+
+# Round 3
+- we need to change the design of the loading bar at the beginning when the whole frontend loads
+    - colors more in line with what I have on Github
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="140" viewBox="0 0 640 140">
+  <defs>
+    <!-- The pill shape mask to keep the track colors perfectly inside -->
+    <clipPath id="track-clip">
+      <rect x="10" y="10" width="620" height="120" rx="60" />
+    </clipPath>
+  </defs>
+
+  <!-- Outer white border of the track -->
+  <rect x="5" y="5" width="630" height="130" rx="65" fill="#ffffff" />
+  <rect x="10" y="10" width="620" height="120" rx="60" fill="#000000" />
+
+  <!-- The 5 colorful track spaces perfectly divided (124px each across 620px) -->
+  <g clip-path="url(#track-clip)">
+    <rect x="-10" y="10" width="134" height="120" fill="#6ca1d8" stroke="#000000" stroke-width="8" /> <!-- Blue -->
+    <rect x="124" y="10" width="124" height="120" fill="#ee83b3" stroke="#000000" stroke-width="8" /> <!-- Pink -->
+    <rect x="248" y="10" width="124" height="120" fill="#f6ae00" stroke="#000000" stroke-width="8" /> <!-- Yellow -->
+    <rect x="372" y="10" width="124" height="120" fill="#539912" stroke="#000000" stroke-width="8" /> <!-- Green -->
+    <rect x="496" y="10" width="154" height="120" fill="#fd5a10" stroke="#000000" stroke-width="8" /> <!-- Orange -->
+  </g>
+
+  <!-- Inner center board (Black box with white border) - adjusted to fit new width -->
+  <rect x="50" y="35" width="540" height="70" rx="10" fill="#000000" stroke="#ffffff" stroke-width="6" />
+
+  <!-- Chunky Text -->
+  <text x="320" y="81" font-family="'Arial Black', Impact, sans-serif" font-size="26" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1">VIEW INTERACTIVE DASHBOARD</text>
+</svg>
+```
+    - don't expose technical details like tech staack and debug info there
+    - instead light hearted messages about racing and loading data
+- the font kinda looks washed out for racer names, maybe cos it's so small but maybe because it's the wrong font/color; it's hard to read sometimes
+- Player Count/Game Length Pref still need to use bold for positive, negative, 0 and line breaks
+- Global should have stats for each Twist card at the bottom for game length and VP "by board (card) and player count"
+- `Adjust for opponent average` should be on by default on both heatmaps
+- global filter also needs to be able to force/exclude Twist cards
+- as I said, functional parity is the goal but not necessarily looks. I am open to any idea and we should especially fix how the board looks in the simulation
