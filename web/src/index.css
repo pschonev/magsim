@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --font-display: "Arial Rounded MT Bold", "Arial Black", "Helvetica Neue", Impact, sans-serif;
+}
+
 /*
  * Theming: the app uses Tailwind's slate scale for neutrals and indigo/rose/emerald/amber for accents.
  * Both are redefined here per theme, so components never branch on the theme.
@@ -103,6 +107,23 @@
   --color-fuchsia-400: #a21caf;
   --color-fuchsia-950: #fae8ff;
   --color-sky-300: #0369a1;
+}
+
+/* Printed-board buttons: a pill with a hard outline; the offset shadow only in the light theme. */
+@utility btn-print {
+  border: 2px solid var(--color-slate-50);
+  border-radius: 9999px;
+  font-family: var(--font-display);
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+:root[data-theme="light"] .btn-print {
+  box-shadow: 3px 3px 0 var(--color-slate-50);
+}
+
+:root[data-theme="light"] .btn-print:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--color-slate-50);
 }
 
 @utility text-on-accent {

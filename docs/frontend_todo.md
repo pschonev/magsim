@@ -307,3 +307,27 @@ Keep: Global small multiples with one shared player-count legend; the big centre
 
 - Colours for the new racers (manual).
 - Design redesign (docs/design_direction.html), waiting for the four decisions.
+
+# Round 7 (analysis_ideas.md, "Round 3")
+
+## Done
+
+- Loading screen: the badge track as the progress bar (five badge colours fill left to right, a token runs along the top), light-hearted messages instead of tech details; errors show a friendly message with the real error behind "Details".
+- Racer names in charts: bolder (600), larger (11 px) and brighter text, UI font instead of the default canvas font.
+- Player Count / Game Length Pref hover: bold Positive / Negative / Near 0 on separate lines.
+- Global: a third block "By Twisty Twirl card and player count" (game length and total VP per card; Fans Demand Chaos is its own group, races with several named cards are skipped, as in Environments).
+- Interactions and Triggers: "Adjust for opponent average" is on by default.
+- Global filter: "Force twist cards" (race must contain all selected) and "Exclude twist cards" (race must contain none). Boards without twists are dropped when a card is forced and kept when one is excluded.
+- Simulator board rebuilt: dark printed board with white rim and black road, checkered finish tile, START and FINISH chips, special tiles in badge colours with large glyphs (VP, +n, −n, TRIP, →n), upright numbers, warp pairs as dotted arcs under the tiles, tokens with unique initials that fan out on shared tiles, pulsing ring and name chip for the current racer, centre board with the die as real pips, the racer, the roll and the twist, and "Across the line" standings once someone finishes.
+- Display font (Arial Rounded / Arial Black stack, no download) for the title, tabs, buttons and chart titles; pill buttons with a hard outline, with the offset shadow in the light theme only.
+
+## Design decisions I took (change if you disagree)
+
+- Display face: the system chunky stack instead of Lilita One (no font download).
+- Track in light theme: always the dark board.
+- Offset shadows: light theme only.
+- Heatmap ends: unchanged.
+
+## Speed Demon and Roll Sensitivity
+
+Not a metric bug. Speed Demon's results do not depend on which numbers he rolls: his boost comes from the VP he holds and he dies when he is 4 or more spaces ahead at the start of his turn. In 5,000 replayed races he is eliminated in 33 % (VP 0.07 against 1.58 when he survives), plays only about 4 rolls per race and ends with 0 VP in 65 % of them. Face shares of 4 rolls have no signal, and even the raw face counts only explain 7 % (the typical racer 13 %). The chart text now says so.

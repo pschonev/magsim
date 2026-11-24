@@ -142,7 +142,7 @@ export function PlaybackBar({
           type="button"
           onClick={() => onPlayingChange(!playing)}
           title="Play / Pause (Space)"
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-indigo-500"
+          className="btn-print inline-flex flex-1 items-center justify-center gap-1.5 bg-indigo-600 px-3 py-1.5 text-xs text-on-accent hover:bg-indigo-500"
         >
           {playing ? (
             <Pause className="h-3.5 w-3.5" />

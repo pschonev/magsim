@@ -67,10 +67,10 @@ export const COLUMN_HELP: Record<string, ColumnHelp> = {
     text: "**Share of the racer's races in which it was eliminated.**",
   },
   "Player Count Pref": {
-    text: "**Does the racer like more or fewer players?**\nCorrelation between the number of players and the racer's VP, compared with the average racer in the same board and player count.\n\nPositive: better with more players. Negative: better with fewer. Near 0: does not care.",
+    text: "**Does the racer like more or fewer players?**\nCorrelation between the number of players and the racer's VP, compared with the average racer in the same board and player count.\n\n**Positive:** does better with more players.\n**Negative:** does better with fewer players.\n**Near 0:** does not care.",
   },
   "Game Length Pref": {
-    text: "**Does the racer like long or short games?**\nCorrelation between game length (compared with the usual length for that board and player count) and the racer's VP.\n\nPositive: benefits from long games. Negative: from short ones.",
+    text: "**Does the racer like long or short games?**\nCorrelation between game length (compared with the usual length for that board and player count) and the racer's VP.\n\n**Positive:** benefits from long games.\n**Negative:** benefits from short games.\n**Near 0:** does not care.",
   },
   "Triggers Caused": {
     text: "**How much the other racers' abilities trigger in this racer's races**, compared with their own average.\n\n1.00 is as usual. An indirect estimate that also reflects game length.",

@@ -67,6 +67,18 @@ TWISTY_BOARD = "TwistyTwirl"
 FANS_DEMAND_CHAOS = "Fans Demand Chaos"
 
 
+def twist_group_expr() -> pl.Expr:
+    """The twist card a Twisty Twirl race belongs to; null when no single card can be named."""
+    return (
+        pl.when(pl.col("twists").list.contains(FANS_DEMAND_CHAOS))
+        .then(pl.lit(FANS_DEMAND_CHAOS))
+        .when(pl.col("twists").list.len() == 1)
+        .then(pl.col("twists").list.first())
+        .otherwise(None)
+        .alias("twist")
+    )
+
+
 def _env_weighted_mean(column: str, over: list[str], weight: str = "games_count") -> pl.Expr:
     """Games-weighted mean of a shift over all racers in the same environment."""
     weighted = pl.col(column) * pl.col(weight)
@@ -150,14 +162,7 @@ def compute_twist_environment_matrix(
     """
     if "twists" not in df_races_f.columns:
         return pl.DataFrame()
-    twist_group = (
-        pl.when(pl.col("twists").list.contains(FANS_DEMAND_CHAOS))
-        .then(pl.lit(FANS_DEMAND_CHAOS))
-        .when(pl.col("twists").list.len() == 1)
-        .then(pl.col("twists").list.first())
-        .otherwise(None)
-        .alias("twist")
-    )
+    twist_group = twist_group_expr()
     race_meta = df_races_f.select("config_hash", "board", "racer_count", twist_group)
     joined_all = stats_results.join(race_meta, on="config_hash", how="inner")
     joined_env = joined_all.filter(

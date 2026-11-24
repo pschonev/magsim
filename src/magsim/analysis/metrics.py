@@ -6,17 +6,17 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from magsim.analysis.tables import build_summary_tables
-from magsim.analysis.racer_extras import compute_racer_extras
 from magsim.analysis.distributions import compute_value_distributions
 from magsim.analysis.interactions import (
     compute_environment_matrix,
     compute_environment_totals,
+    compute_matchup_matrix,
     compute_trigger_induction,
     compute_trigger_pull,
     compute_twist_environment_matrix,
-    compute_matchup_matrix,
 )
+from magsim.analysis.racer_extras import compute_racer_extras
+from magsim.analysis.tables import build_summary_tables
 
 EXPECTED_D6_MEAN = 3.5
 INCHWORM_SKIP_OFFSET = 2.5
@@ -288,6 +288,12 @@ def prepare_metrics_data(
         "race_global_turns",
         "total_race_vp",
     )
+    if "twists" in df_races_f.columns:
+        dist_raw = dist_raw.join(
+            df_races_f.select("config_hash", "twists"),
+            on="config_hash",
+            how="left",
+        )
 
     return PreparedMetricsData(
         stats_results=stats_results,

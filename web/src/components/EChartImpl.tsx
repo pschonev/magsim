@@ -14,6 +14,8 @@ import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { useEffect, useRef } from "react";
 
+const CHART_FONT = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
 echarts.use([
   ScatterChart,
   BarChart,
@@ -84,7 +86,7 @@ export function EChartImpl({
   useEffect(() => {
     const chart = instanceRef.current;
     if (!chart) return;
-    chart.setOption(option, { notMerge: true, lazyUpdate: true });
+    chart.setOption({ textStyle: { fontFamily: CHART_FONT }, ...option }, { notMerge: true, lazyUpdate: true });
     chart.resize();
   }, [option, height]);
 

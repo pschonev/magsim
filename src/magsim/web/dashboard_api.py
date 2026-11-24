@@ -265,6 +265,7 @@ def _df_to_value_distributions(df: pl.DataFrame) -> list[ValueShareDTO]:
             pct=_safe_float(row["pct"]),
             board=None if row["board"] is None else str(row["board"]),
             racer_count=None if row["racer_count"] is None else _safe_int(row["racer_count"]),
+            twist=None if row["twist"] is None else str(row["twist"]),
         )
         for row in df.to_dicts()
     ]
@@ -403,6 +404,14 @@ def get_metadata(dataset: Dataset) -> DatasetMetaDTO:
     counts = sorted(int(v) for v in dataset.races["racer_count"].unique().to_list())
     racers = sorted(str(v) for v in dataset.results["racer_name"].unique().to_list())
     auto_set = get_automatic_racers()
+    twists = (
+        sorted(
+            str(v)
+            for v in dataset.races["twists"].explode().drop_nulls().unique().to_list()
+        )
+        if "twists" in dataset.races.columns
+        else []
+    )
     return DatasetMetaDTO(
         race_count=dataset.races.height,
         result_count=dataset.results.height,
@@ -411,6 +420,7 @@ def get_metadata(dataset: Dataset) -> DatasetMetaDTO:
         racers=racers,
         automatic_racers=[r for r in racers if r in auto_set],
         racer_colors={r: get_racer_color(r) for r in racers},
+        twists=twists,
     )
 
 
@@ -423,6 +433,8 @@ def apply_filter(dataset: Dataset, flt_dto: AnalysisFilterDTO) -> FilteredDatase
         combos=tuple(
             ComboFilter(mode=c.mode, racers=tuple(c.racers)) for c in flt_dto.combos
         ),
+        forced_twists=tuple(flt_dto.forced_twists),
+        excluded_twists=tuple(flt_dto.excluded_twists),
     )
     return filter_dataset(dataset.races, dataset.results, analysis_filter)
 

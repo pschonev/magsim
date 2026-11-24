@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { EChart } from "../../../components/EChart";
-import type { DashboardAnalysisDTO } from "../../../types/api";
+import type { DashboardAnalysisDTO, ValueShareDTO } from "../../../types/api";
 import { displayName } from "../../../utils/names";
 import { useTheme } from "../../../utils/ThemeProvider";
 import { Description } from "./Description";
@@ -24,7 +24,7 @@ function Card({ title, aside, children }: { title: string; aside?: ReactNode; ch
   return (
     <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
       <header className="flex items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
-        <h3 className="text-xs font-semibold text-slate-100">{title}</h3>
+        <h3 className="font-display text-sm text-slate-100">{title}</h3>
         {aside}
       </header>
       {children}
@@ -73,7 +73,7 @@ function Distributions({ analysis }: { analysis: DashboardAnalysisDTO }) {
   return (
     <div className="grid gap-px bg-slate-800 md:grid-cols-2">
       {DISTRIBUTIONS.map((d) => {
-        const own = rows.filter((r) => r.series === d.series && r.board === null);
+        const own = rows.filter((r) => r.series === d.series && r.board === null && r.twist === null);
         return (
           <div key={d.series} className="bg-slate-900">
             <h4 className="px-3 pt-2 text-xs font-semibold text-slate-200">{d.title}</h4>
@@ -88,26 +88,29 @@ function Distributions({ analysis }: { analysis: DashboardAnalysisDTO }) {
   );
 }
 
-function BoardCurves({ analysis }: { analysis: DashboardAnalysisDTO }) {
+function GroupCurves({ analysis, kind }: { analysis: DashboardAnalysisDTO; kind: "board" | "twist" }) {
   const { chart: theme } = useTheme();
   const rows = analysis.value_distributions;
-  const boards = sortBoards(rows.flatMap((r) => (r.board === null ? [] : [r.board])));
+  const groupOf = (r: ValueShareDTO) => (kind === "board" ? (r.twist === null ? r.board : null) : r.twist);
+  const groups = [...new Set(rows.flatMap((r) => groupOf(r) ?? []))];
+  const ordered = kind === "board" ? sortBoards(groups) : groups.sort((a, b) => a.localeCompare(b));
+  if (ordered.length === 0) return <p className="p-4 text-xs text-slate-400">No data for this filter.</p>;
   return (
     <div className="space-y-px bg-slate-800">
       {DISTRIBUTIONS.map((d) => {
-        const own = rows.filter((r) => r.series === d.series && r.board !== null);
+        const own = rows.filter((r) => r.series === d.series && groupOf(r) !== null);
         const maxShare = Math.max(...own.map((r) => r.pct)) * 1.1;
         return (
           <div key={d.series} className="bg-slate-900">
             <h4 className="px-3 pt-2 text-xs font-semibold text-slate-200">{d.title}</h4>
             <div className="grid grid-cols-2 gap-px lg:grid-cols-4">
-              {boards.map((board) => (
-                <div key={board}>
-                  <div className="px-3 pt-1 text-center text-xs text-slate-300">{displayName(board)}</div>
+              {ordered.map((group) => (
+                <div key={group}>
+                  <div className="px-3 pt-1 text-center text-xs text-slate-300">{displayName(group)}</div>
                   <EChart
-                    height={190}
+                    height={170}
                     option={buildBoardCurvesOption(
-                      own.filter((r) => r.board === board),
+                      own.filter((r) => groupOf(r) === group),
                       valueRange(rows, d.series),
                       maxShare,
                       d.axisName,
@@ -136,7 +139,10 @@ export function GlobalCharts({ analysis }: { analysis: DashboardAnalysisDTO }) {
         <Distributions analysis={analysis} />
       </Card>
       <Card title="By board and player count" aside={<Legend counts={counts} />}>
-        <BoardCurves analysis={analysis} />
+        <GroupCurves analysis={analysis} kind="board" />
+      </Card>
+      <Card title="By Twisty Twirl card and player count" aside={<Legend counts={counts} />}>
+        <GroupCurves analysis={analysis} kind="twist" />
       </Card>
       <Description
         lines={[

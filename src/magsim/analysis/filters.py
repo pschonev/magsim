@@ -31,6 +31,8 @@ class AnalysisFilter:
     boards: tuple[str, ...]
     counts: tuple[int, ...]
     combos: tuple[ComboFilter, ...] = ()
+    forced_twists: tuple[str, ...] = ()
+    excluded_twists: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +105,13 @@ def filter_dataset(
             ),
         )
 
+    if (flt.forced_twists or flt.excluded_twists) and "twists" not in df_races.columns:
+        return FilteredDataset(
+            races=empty_races,
+            racer_results=empty_results,
+            error="This dataset has no twist card information.",
+        )
+
     races_clean = clean_races_df(df_races)
     mask: pl.Expr = (
         pl.col("board").is_in(list(flt.boards))
@@ -118,6 +127,11 @@ def filter_dataset(
             [pl.col("racer_names").list.contains(racer) for racer in combo.racers],
         )
         mask = mask & has_all if combo.mode == "include" else mask & (~has_all)
+
+    for twist in flt.forced_twists:
+        mask = mask & pl.col("twists").list.contains(twist).fill_null(value=False)
+    for twist in flt.excluded_twists:
+        mask = mask & ~pl.col("twists").list.contains(twist).fill_null(value=False)
 
     races_bc = races_clean.filter(mask)
     if races_bc.height == 0:

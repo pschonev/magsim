@@ -115,7 +115,7 @@ export function App() {
                 m
               </span>
               <div>
-                <h1 className="hidden text-lg font-black leading-tight tracking-tight text-slate-50 min-[420px]:block">
+                <h1 className="hidden font-display text-xl leading-tight tracking-tight text-slate-50 min-[420px]:block">
                   magsim
                 </h1>
                 <p className="hidden text-[10px] text-slate-400 sm:block">
@@ -132,7 +132,7 @@ export function App() {
                   key={id}
                   type="button"
                   onClick={() => selectTab(id)}
-                  className={`items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors sm:px-3 ${
+                  className={`items-center gap-1.5 rounded-md px-2.5 py-1.5 font-display text-xs transition-colors sm:px-3 ${
                     id === "data" ? "hidden sm:inline-flex" : "inline-flex"
                   } ${
                     id === activeTab

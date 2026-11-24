@@ -126,7 +126,7 @@ function TabButton({
     <button
       type="button"
       onClick={onSelect}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+      className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 font-display text-xs whitespace-nowrap transition-colors ${
         active
           ? "bg-indigo-600 text-on-accent"
           : "text-slate-400 hover:bg-slate-800 hover:text-slate-50"
@@ -241,8 +241,8 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
   const [rankView, setRankView] = useState(false);
   const [usePercent, setUsePercent] = useState(true);
   const [adjustEnvironment, setAdjustEnvironment] = useState(true);
-  const [adjustMatchups, setAdjustMatchups] = useState(false);
-  const [adjustTriggers, setAdjustTriggers] = useState(false);
+  const [adjustMatchups, setAdjustMatchups] = useState(true);
+  const [adjustTriggers, setAdjustTriggers] = useState(true);
   const [swapTriggerAxes, setSwapTriggerAxes] = useState(true);
   const [playersFirst, setPlayersFirst] = useState(false);
 

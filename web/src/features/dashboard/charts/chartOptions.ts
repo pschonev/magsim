@@ -645,7 +645,7 @@ export function plainAxis(names: string[]): HeatmapAxis {
 }
 
 const STAGGER_SLOTS = 6;
-const STAGGER_ROW_HEIGHT = 12;
+const STAGGER_ROW_HEIGHT = 13;
 const ROTATED_LABEL_HEIGHT = 90;
 
 /** Maps a shift to [-1, 1]: a grey zone up to `neutral`, saturated colours from `strong` on. */
@@ -676,7 +676,7 @@ export function buildHeatmapOption(
   const groupHeight = axis.groups.reduce((sum, g) => sum + g.offset, 0);
   const chrome = axis.stagger ? 24 + staggerHeight + (axis.groups.length > 0 ? groupHeight + 20 : 0) : 60 + groupHeight;
   const bottomChrome = rotate ? (axis.groups.length > 0 ? groupHeight + 30 : 12) : chrome;
-  const mainLabel = { ...baseText, rotate: 0, interval: 0, fontSize: 11 };
+  const mainLabel = { ...baseText, rotate: 0, interval: 0, fontSize: 11, fontWeight: 600 };
   const groupAxis = (group: HeatmapGroup, position: "top" | "bottom") => ({
     type: "category" as const,
     data: group.labels,
@@ -713,11 +713,12 @@ export function buildHeatmapOption(
       ...baseText,
       rotate: 0,
       interval: 0,
-      fontSize: 9.5,
+      fontSize: 10.5,
+      fontWeight: 600,
       margin: 4,
       formatter: (value: string, index: number) =>
         value !== "" && axis.accent?.[index] ? `{accent|${value}}` : value,
-      rich: { accent: { color: t.accent, fontSize: 9.5, fontWeight: "bold" as const } },
+      rich: { accent: { color: t.accent, fontSize: 10.5, fontWeight: "bold" as const } },
     },
   });
   const rotatedAxis = {
@@ -750,7 +751,7 @@ export function buildHeatmapOption(
         ...axis.groups.map((g) => groupAxis(g, "bottom")),
         ...axis.groups.map((g) => groupAxis(g, "top")),
       ];
-  const sideAxisLabel = { ...baseText, interval: 0, fontSize: 10, formatter: displayName };
+  const sideAxisLabel = { ...baseText, interval: 0, fontSize: narrow ? 10 : 11, fontWeight: 600, formatter: displayName };
   return {
     backgroundColor: t.bg,
     animation: false,

@@ -54,4 +54,11 @@ def test_empty_input_gives_an_empty_frame_with_the_same_columns() -> None:
     values = compute_value_distributions(RACES.clear())
 
     assert values.is_empty()
-    assert values.columns == ["board", "racer_count", "series", "value", "pct"]
+    assert values.columns == [
+        "board",
+        "racer_count",
+        "twist",
+        "series",
+        "value",
+        "pct",
+    ]

@@ -16,6 +16,8 @@ export function defaultFilter(meta: DatasetMetaDTO): AnalysisFilterDTO {
     boards: meta.boards,
     counts: meta.counts,
     combos: [],
+    forced_twists: [],
+    excluded_twists: [],
   };
 }
 
@@ -34,6 +36,8 @@ export function filtersEqual(a: AnalysisFilterDTO, b: AnalysisFilterDTO): boolea
       sortedUnique(f.boards),
       sortedUnique(f.counts),
       f.combos.map(comboKey).sort(),
+      sortedUnique(f.forced_twists),
+      sortedUnique(f.excluded_twists),
     ]);
   return key(a) === key(b);
 }

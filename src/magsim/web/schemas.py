@@ -33,6 +33,8 @@ class AnalysisFilterDTO(msgspec.Struct, frozen=True):
     boards: list[str]
     counts: list[int]
     combos: list[ComboFilterDTO] = msgspec.field(default_factory=list)
+    forced_twists: list[str] = msgspec.field(default_factory=list)
+    excluded_twists: list[str] = msgspec.field(default_factory=list)
 
 
 class DatasetMetaDTO(msgspec.Struct, frozen=True):
@@ -45,6 +47,7 @@ class DatasetMetaDTO(msgspec.Struct, frozen=True):
     racers: list[str]
     automatic_racers: list[str]
     racer_colors: dict[str, str]
+    twists: list[str] = msgspec.field(default_factory=list)
 
 
 class RacerStatRowDTO(msgspec.Struct, frozen=True):
@@ -120,6 +123,7 @@ class ValueShareDTO(msgspec.Struct, frozen=True):
     pct: float
     board: str | None = None
     racer_count: int | None = None
+    twist: str | None = None
 
 
 class DistributionBinDTO(msgspec.Struct, frozen=True):

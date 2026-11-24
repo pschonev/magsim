@@ -23,6 +23,8 @@ export interface AnalysisFilterDTO {
   boards: string[];
   counts: number[];
   combos: ComboFilterDTO[];
+  forced_twists: string[];
+  excluded_twists: string[];
 }
 
 export interface DatasetMetaDTO {
@@ -33,6 +35,7 @@ export interface DatasetMetaDTO {
   racers: string[];
   automatic_racers: string[];
   racer_colors: Record<string, string>;
+  twists: string[];
 }
 
 export interface RacerStatRowDTO {
@@ -100,6 +103,7 @@ export interface ValueShareDTO {
   pct: number;
   board: string | null;
   racer_count: number | null;
+  twist: string | null;
 }
 
 export interface DistributionBinDTO {

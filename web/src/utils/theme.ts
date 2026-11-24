@@ -19,7 +19,7 @@ export interface ChartTheme {
 export const CHART_THEMES: Record<ThemeMode, ChartTheme> = {
   dark: {
     bg: "#181c1a",
-    text: "#e0e0e0",
+    text: "#f3f5f4",
     axisLine: "#555555",
     gridLine: "#333333",
     outline: "#232826",
@@ -33,7 +33,7 @@ export const CHART_THEMES: Record<ThemeMode, ChartTheme> = {
   },
   light: {
     bg: "#fffdf8",
-    text: "#27231b",
+    text: "#17140f",
     axisLine: "#8f8570",
     gridLine: "#e6dec9",
     outline: "#2b261d",

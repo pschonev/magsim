@@ -41,6 +41,8 @@ export function FilterPanel({
     `${draft.counts.join("/")} players`,
     draft.boards.length === meta.boards.length ? "all boards" : draft.boards.map(displayName).join(", "),
     ...(draft.combos.length > 0 ? [`${draft.combos.length} combo filter(s)`] : []),
+    ...(draft.forced_twists.length > 0 ? [`only ${draft.forced_twists.join(" + ")}`] : []),
+    ...(draft.excluded_twists.length > 0 ? [`without ${draft.excluded_twists.join(", ")}`] : []),
     ...(analyzedCount !== null ? [`${analyzedCount.toLocaleString()} races analyzed`] : []),
   ].join(" · ");
 
@@ -73,10 +75,10 @@ export function FilterPanel({
           title="Click to process data with current filters."
           disabled={running}
           onClick={onRun}
-          className={`inline-flex items-center gap-1.5 rounded-md border px-4 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`inline-flex items-center gap-1.5 px-4 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60 ${
             isStale
-              ? "border-indigo-500 bg-indigo-600 text-on-accent hover:bg-indigo-500"
-              : "border-slate-700 bg-slate-900 text-indigo-300 hover:border-indigo-500"
+              ? "btn-print bg-indigo-600 text-on-accent hover:bg-indigo-500"
+              : "rounded-full border border-slate-700 bg-slate-900 text-indigo-300 hover:border-indigo-500"
           }`}
         >
           <Play className="h-3 w-3" />
@@ -118,6 +120,24 @@ export function FilterPanel({
           onChange={(boards) => onChange({ ...draft, boards })}
           className="w-48"
         />
+        {meta.twists.length > 0 && (
+          <>
+            <MultiSelect
+              label="Force twist cards"
+              options={meta.twists}
+              selected={draft.forced_twists}
+              onChange={(forced_twists) => onChange({ ...draft, forced_twists })}
+              className="w-52"
+            />
+            <MultiSelect
+              label="Exclude twist cards"
+              options={meta.twists}
+              selected={draft.excluded_twists}
+              onChange={(excluded_twists) => onChange({ ...draft, excluded_twists })}
+              className="w-52"
+            />
+          </>
+        )}
       </div>
 
       <div className="rounded-lg border border-slate-800 bg-slate-950/50">
