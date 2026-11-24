@@ -338,3 +338,20 @@ Not a metric bug. Speed Demon's results do not depend on which numbers he rolls:
 - Neutral dark spaces; colour only where a space does something (VP gold, +n green, −n orange, TRIP pink, warp pairs in their own colours, blockers brown). Number or glyph at the top of the space, tokens below it.
 - Middle panel: board name in chunky white letters and a small hand-drawn scene per board (meadow, forest, spirals, ribbons and stars), kept to the bottom strip so the info card stays readable. Info card: die with pips, racer, roll; the die is greyed and crossed with "tripped: stands up, no roll" when the racer recovers from a trip, and "skips the move" for other skipped moves.
 - Mirror World flips the whole board (start top right, podium right).
+
+# Round 8 (analysis_ideas.md, "Round 4")
+
+## Done
+
+- Mobile: hidden scrollbars on every sideways-scrolling area, racer status cards in a compact 3-column grid above the board, much smaller cards (one line for name and status marks, one for tile and VP).
+- Simulator config: racer search (type to filter, Enter or pick to add), drag and drop turn order, the arrows next to each racer now change the start tile (native number spinners removed), starting VP with − and + (request field `start_vps`, applied after the scenario is built; not part of the shared link), collapsible Second Wind Twists section with hover texts.
+- Board: corners now sit in the corners (corner spaces 12 and 15 as the real corners, the START tile is wide, spaces 13 and 14 are stretched over the height of the board, FINISH bottom left), warp pairs as striped ribbons with spiral portals on the tiles, racer pieces with their own outline and second colour again, FINISH as a checkered frame instead of a full checkerboard, the twist trigger gate drawn between the two spaces it separates, hover texts for the twist cards on the board (one to three) and for the gate.
+- Global: sub-tabs Dynamics, Distributions, By board, By twist card, Twist combos; the board and twist charts show the distribution over all races as a grey area.
+- Sub-tabs everywhere: Scatterplots, Ability & Environments (Ability Speed, Environments, Twist combos), Global, Interactions (Matchups, Triggers), Tables, Racer specials.
+- Twist combos (Global: searchable, sortable table; Environments: racer heatmap with search and paging, 18 combinations per page), draw order matters unless "Ignore draw order" is on. Computation is cheap (about 0.3 s for 60,000 races); there are about 100 ordered combinations and 55 unordered ones.
+- Racer specials tab: Magical Athlete (VP per extra roll of each number; needs a batch with face counts), Bite Mark and Mouth (who gets eliminated more often when they are in the race, eliminated racers per race), Stepdad (win rate of the racer seated behind him against its usual win rate).
+- Racer hovers: power text on heatmap axis labels (rows and columns), scatter and ability tooltips, table racer cells and the simulator racer cards (text generated from docs/racers.md by `scripts/generate_racer_texts.py`).
+
+## Roll sensitivity
+
+The chart you looked at runs on a dataset without per-face counts, so it only sees the average roll and Magical Athlete, Skipper and Speed Demon sit at the typical value there. Skipper reacts to other racers' 1s and Speed Demon to the VP he holds, so even with face counts they stay near typical; Magical Athlete only rises modestly (about 0.07 against 0.03), because each number helps in some races and hurts in others. Racer specials shows the per-number effect for Magical Athlete once the new batch is in.

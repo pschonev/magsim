@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import polars as pl
 
-from magsim.analysis.interactions import TWISTY_BOARD, twist_group_expr
+from magsim.analysis.interactions import (
+    TWISTY_BOARD,
+    twist_combo_expr,
+    twist_group_expr,
+)
 
 QUANTILE_LOW = 0.005
 QUANTILE_HIGH = 0.995
@@ -98,3 +102,33 @@ def compute_value_distributions(dist_raw: pl.DataFrame) -> pl.DataFrame:
     return pl.concat(frames).sort(
         "series", "board", "twist", "racer_count", "value", nulls_last=False,
     )
+
+
+COMBO_SCHEMA = {
+    "combo": pl.Utf8,
+    "ordered": pl.Boolean,
+    "races": pl.Int64,
+    "avg_turns": pl.Float64,
+    "avg_total_vp": pl.Float64,
+}
+
+
+def compute_twist_combo_stats(dist_raw: pl.DataFrame) -> pl.DataFrame:
+    """Races, average game length and total VP for every combination of several twist cards on Twisty Twirl."""
+    if "twists" not in dist_raw.columns:
+        return pl.DataFrame(schema=COMBO_SCHEMA)
+    twisty = dist_raw.filter(
+        (pl.col("board") == TWISTY_BOARD) & (pl.col("twists").list.len() > 1),
+    )
+    frames = [
+        twisty.group_by(twist_combo_expr(ordered=ordered).alias("combo"))
+        .agg(
+            pl.len().alias("races"),
+            pl.col("race_global_turns").mean().alias("avg_turns"),
+            pl.col("total_race_vp").mean().alias("avg_total_vp"),
+        )
+        .with_columns(pl.lit(value=ordered).alias("ordered"))
+        .select(*COMBO_SCHEMA)
+        for ordered in (True, False)
+    ]
+    return pl.concat(frames).sort("ordered", "races", descending=[True, True])

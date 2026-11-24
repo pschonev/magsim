@@ -17,6 +17,7 @@ interface Rule {
 }
 
 const PREFIX_WIDTH = 19;
+const ENGINE_ID_WIDTH = 4;
 const GREY = "#808080";
 const NAME_WHITE = "#c0c0c0";
 
@@ -95,7 +96,8 @@ export function createLogHighlighter(meta: SimulatorMetaDTO): LogHighlighter {
 
   return {
     highlight(prefix, message, showPrefix) {
-      const head = showPrefix ? `${prefix.padEnd(PREFIX_WIDTH)}  ` : "";
+      const shown = showPrefix ? prefix : prefix.replace(/^\S+\s+/, "");
+      const head = `${shown.padEnd(showPrefix ? PREFIX_WIDTH : PREFIX_WIDTH - ENGINE_ID_WIDTH)}  `;
       const text = `${head}${message}`;
       const colors: (string | null)[] = new Array<string | null>(text.length).fill(
         null,

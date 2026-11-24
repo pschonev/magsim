@@ -126,6 +126,14 @@
   box-shadow: 1px 1px 0 var(--color-slate-50);
 }
 
+/* Scrollable areas without a visible scrollbar (touch and wheel scrolling still work). */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @utility text-on-accent {
   color: #fff;
 }

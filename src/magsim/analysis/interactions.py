@@ -183,6 +183,14 @@ def compute_twist_environment_matrix(
     )
 
 
+def twist_combo_expr(*, ordered: bool) -> pl.Expr:
+    """Label of the drawn twist cards: in draw order, or as an unordered set."""
+    twists = pl.col("twists")
+    if ordered:
+        return twists.list.join(" → ")
+    return twists.list.sort().list.join(" + ")
+
+
 def compute_trigger_induction(stats_results: pl.DataFrame) -> pl.DataFrame:
     """How much more or less a racer's ability triggers when another racer is in the race.
 

@@ -91,6 +91,8 @@ function Distributions({ analysis }: { analysis: DashboardAnalysisDTO }) {
 function GroupCurves({ analysis, kind }: { analysis: DashboardAnalysisDTO; kind: "board" | "twist" }) {
   const { chart: theme } = useTheme();
   const rows = analysis.value_distributions;
+  const baselineOf = (series: string) =>
+    rows.filter((r) => r.series === series && r.board === null && r.twist === null);
   const groupOf = (r: ValueShareDTO) => (kind === "board" ? (r.twist === null ? r.board : null) : r.twist);
   const groups = [...new Set(rows.flatMap((r) => groupOf(r) ?? []))];
   const ordered = kind === "board" ? sortBoards(groups) : groups.sort((a, b) => a.localeCompare(b));
@@ -116,6 +118,7 @@ function GroupCurves({ analysis, kind }: { analysis: DashboardAnalysisDTO; kind:
                       d.axisName,
                       true,
                       theme,
+                      baselineOf(d.series),
                     )}
                   />
                 </div>
@@ -128,32 +131,68 @@ function GroupCurves({ analysis, kind }: { analysis: DashboardAnalysisDTO; kind:
   );
 }
 
-export function GlobalCharts({ analysis }: { analysis: DashboardAnalysisDTO }) {
+export type GlobalPart = "dynamics" | "distributions" | "boards" | "twists";
+
+const PART_NOTES: Record<GlobalPart, ReactNode> = {
+  dynamics: (
+    <Description
+      lines={[
+        { bold: "Dice Dep:", text: " Correlation between raw dice roll sums and final Victory Points." },
+        { bold: "Ability Dep:", text: " Correlation between net movement from abilities and final Victory Points." },
+        { bold: "Trip Rate:", text: " Percentage of total turns spent recovering from trips across the race." },
+        { bold: "Abilities Triggered:", text: " Average total ability triggers per race, scaled by player count." },
+      ]}
+    />
+  ),
+  distributions: (
+    <Description
+      lines={[
+        { bold: "Distributions:", text: " One bar per exact value; the dashed line is the median. The most extreme 1 % of races are cut off at the ends." },
+      ]}
+    />
+  ),
+  boards: (
+    <Description
+      lines={[
+        { bold: "Grey area:", text: " the distribution over all races, to show how this board and player count shift it." },
+      ]}
+    />
+  ),
+  twists: (
+    <Description
+      lines={[
+        { bold: "Twist cards:", text: " races that drew Fans Demand Chaos form their own group; races with several named cards are skipped here (see Twist combos)." },
+        { bold: "Grey area:", text: " the distribution over all races." },
+      ]}
+    />
+  ),
+};
+
+export function GlobalCharts({ analysis, part }: { analysis: DashboardAnalysisDTO; part: GlobalPart }) {
   const counts = sortedCounts(analysis.global_dynamics);
   return (
     <div className="space-y-4">
-      <Card title="Dynamics by board and player count" aside={<Legend counts={counts} />}>
-        <MetricGrid analysis={analysis} />
-      </Card>
-      <Card title="How long races last and how many VP they hand out">
-        <Distributions analysis={analysis} />
-      </Card>
-      <Card title="By board and player count" aside={<Legend counts={counts} />}>
-        <GroupCurves analysis={analysis} kind="board" />
-      </Card>
-      <Card title="By Twisty Twirl card and player count" aside={<Legend counts={counts} />}>
-        <GroupCurves analysis={analysis} kind="twist" />
-      </Card>
-      <Description
-        lines={[
-          { bold: "Global Metrics", text: "" },
-          { bold: "Dice Dep:", text: " Correlation between raw dice roll sums and final Victory Points." },
-          { bold: "Ability Dep:", text: " Correlation between net movement from abilities and final Victory Points." },
-          { bold: "Trip Rate:", text: " Percentage of total turns spent recovering from trips across the race." },
-          { bold: "Abilities Triggered:", text: " Average total ability triggers per race, scaled by player count." },
-          { bold: "Distributions:", text: " One bar per exact value; the dashed line is the median. The most extreme 1 % of races are cut off at the ends." },
-        ]}
-      />
+      {part === "dynamics" && (
+        <Card title="Dynamics by board and player count" aside={<Legend counts={counts} />}>
+          <MetricGrid analysis={analysis} />
+        </Card>
+      )}
+      {part === "distributions" && (
+        <Card title="How long races last and how many VP they hand out">
+          <Distributions analysis={analysis} />
+        </Card>
+      )}
+      {part === "boards" && (
+        <Card title="By board and player count" aside={<Legend counts={counts} />}>
+          <GroupCurves analysis={analysis} kind="board" />
+        </Card>
+      )}
+      {part === "twists" && (
+        <Card title="By Twisty Twirl card and player count" aside={<Legend counts={counts} />}>
+          <GroupCurves analysis={analysis} kind="twist" />
+        </Card>
+      )}
+      {PART_NOTES[part]}
     </div>
   );
 }

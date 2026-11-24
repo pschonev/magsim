@@ -1,4 +1,6 @@
 export const TWIST_DESCRIPTIONS: Record<string, string> = {
+  "Time Imp":
+    "You Tromped on a Time Imp! The racer whose move crossed from space 13 to 14 is eliminated (the extra racer in the next race is not simulated).",
   "Alchemy Lab":
     "Containment Breach! The W.E.R.E.M.O.U.T.H. starts on the Start and moves after every turn. Any racer it passes is eliminated.",
   Bonkbug: "Bonkbug Infestation at the Finish Line! A racer that stops on one of the last 2 spaces moves back 5.",

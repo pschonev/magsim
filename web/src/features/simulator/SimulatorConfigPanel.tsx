@@ -2,6 +2,8 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  GripVertical,
+  Minus,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -14,7 +16,8 @@ import { useState } from "react";
 import type { SimulatorMetaDTO } from "../../types/api";
 import { buildConfigShareUrl } from "../../utils/urlState";
 import type { SimConfig } from "./simConfig";
-import { displayName } from "../../utils/names";
+import { displayName, racerBlurb } from "../../utils/names";
+import { TWIST_DESCRIPTIONS } from "../dashboard/charts/twistCards";
 
 interface SimulatorConfigPanelProps {
   simMeta: SimulatorMetaDTO;
@@ -25,6 +28,11 @@ interface SimulatorConfigPanelProps {
   diceError: string | null;
 }
 
+const MAX_START_TILE = 29;
+const MAX_START_VP = 20;
+const SPINNER_OFF =
+  "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
 export function SimulatorConfigPanel({
   simMeta,
   config,
@@ -34,6 +42,8 @@ export function SimulatorConfigPanel({
   diceError,
 }: SimulatorConfigPanelProps) {
   const [racerToAdd, setRacerToAdd] = useState("");
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [twistsOpen, setTwistsOpen] = useState(config.forced_twists.length + config.exclude_twists.length > 0);
   const availableRacers = simMeta.racers.filter((r) => !config.racers.includes(r));
   const [rawImport, setRawImport] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
@@ -42,38 +52,55 @@ export function SimulatorConfigPanel({
 
   const isTwisty = config.board.toLowerCase().includes("twisty");
 
-  const addRacer = () => {
-    if (!racerToAdd || config.racers.includes(racerToAdd)) return;
+  const addRacer = (name: string) => {
+    const internal = simMeta.racers.find(
+      (r) => r === name || displayName(r).toLowerCase() === name.trim().toLowerCase(),
+    );
+    if (!internal || config.racers.includes(internal)) return;
     onChange({
       ...config,
-      racers: [...config.racers, racerToAdd],
+      racers: [...config.racers, internal],
       start_positions: [...config.start_positions, 0],
+      start_vps: [...config.start_vps, 0],
     });
     setRacerToAdd("");
   };
 
   const removeRacer = (idx: number) => {
     if (config.racers.length <= 1) return;
+    const without = <T,>(list: T[]) => list.filter((_, i) => i !== idx);
     onChange({
       ...config,
-      racers: config.racers.filter((_, i) => i !== idx),
-      start_positions: config.start_positions.filter((_, i) => i !== idx),
+      racers: without(config.racers),
+      start_positions: without(config.start_positions),
+      start_vps: without(config.start_vps),
     });
   };
 
-  const moveRacer = (idx: number, dir: -1 | 1) => {
-    const target = idx + dir;
-    if (target < 0 || target >= config.racers.length) return;
-    const racers = [...config.racers];
-    const starts = [...config.start_positions];
-    [racers[idx], racers[target]] = [racers[target], racers[idx]];
-    [starts[idx], starts[target]] = [starts[target], starts[idx]];
-    onChange({ ...config, racers, start_positions: starts });
+  const reorder = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= config.racers.length) return;
+    const moved = <T,>(list: T[]) => {
+      const next = [...list];
+      next.splice(to, 0, ...next.splice(from, 1));
+      return next;
+    };
+    onChange({
+      ...config,
+      racers: moved(config.racers),
+      start_positions: moved(config.start_positions),
+      start_vps: moved(config.start_vps),
+    });
+  };
+
+  const adjust = (field: "start_positions" | "start_vps", idx: number, delta: number, max: number) => {
+    const next = [...config[field]];
+    next[idx] = Math.max(0, Math.min(max, (next[idx] ?? 0) + delta));
+    onChange({ ...config, [field]: next });
   };
 
   const updateStartPos = (idx: number, val: number) => {
     const starts = [...config.start_positions];
-    starts[idx] = Math.max(0, Math.min(29, val));
+    starts[idx] = Math.max(0, Math.min(MAX_START_TILE, Number.isFinite(val) ? val : 0));
     onChange({ ...config, start_positions: starts });
   };
 
@@ -153,25 +180,31 @@ export function SimulatorConfigPanel({
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs font-medium text-slate-300">
           <span>Roster ({config.racers.length})</span>
-          <span className="text-[10px] text-slate-500">Start Tile (0–29)</span>
+          <span className="text-[10px] text-slate-500">drag to reorder · VP · start tile</span>
         </div>
 
         <div className="flex gap-1.5">
-          <select
+          <input
+            list="racer-options"
             value={racerToAdd}
-            onChange={(e) => setRacerToAdd(e.target.value)}
+            onChange={(e) => {
+              setRacerToAdd(e.target.value);
+              if (availableRacers.some((r) => displayName(r) === e.target.value)) addRacer(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addRacer(racerToAdd);
+            }}
+            placeholder="Search racers to add..."
             className="min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
-          >
-            <option value="">Add racer...</option>
+          />
+          <datalist id="racer-options">
             {availableRacers.map((r) => (
-              <option key={r} value={r}>
-                {displayName(r)}
-              </option>
+              <option key={r} value={displayName(r)} />
             ))}
-          </select>
+          </datalist>
           <button
             type="button"
-            onClick={addRacer}
+            onClick={() => addRacer(racerToAdd)}
             disabled={!racerToAdd}
             className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -180,48 +213,69 @@ export function SimulatorConfigPanel({
           </button>
         </div>
 
-        <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950/70 p-1.5">
+        <div className="space-y-1 rounded-lg border border-slate-800 bg-slate-950/70 p-1.5">
           {config.racers.map((name, idx) => {
             const palette = simMeta.racer_palettes[name];
             return (
               <div
                 key={`${name}-${idx}`}
-                className="flex items-center gap-1.5 rounded bg-slate-900/80 px-2 py-1 text-xs"
+                draggable
+                onDragStart={() => setDragFrom(idx)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => {
+                  if (dragFrom !== null) reorder(dragFrom, idx);
+                  setDragFrom(null);
+                }}
+                onDragEnd={() => setDragFrom(null)}
+                className={`flex items-center gap-1.5 rounded bg-slate-900/80 px-1.5 py-1 text-xs ${
+                  dragFrom === idx ? "opacity-40" : ""
+                }`}
               >
+                <GripVertical className="h-3.5 w-3.5 shrink-0 cursor-grab text-slate-500" aria-label="Drag to change turn order" />
                 <span
                   className="h-2.5 w-2.5 shrink-0 rounded-full border border-slate-600"
-                  style={{
-                    backgroundColor: palette?.primary ?? "#818cf8",
-                  }}
+                  style={{ backgroundColor: palette?.primary ?? "#818cf8" }}
                 />
-                <span className="min-w-0 flex-1 truncate text-slate-200">
+                <span className="min-w-0 flex-1 truncate text-slate-200" title={racerBlurb(name)}>
                   {displayName(name)}
                 </span>
-                <input
-                  type="number"
-                  min={0}
-                  max={29}
-                  value={config.start_positions[idx] ?? 0}
-                  onChange={(e) => updateStartPos(idx, Number(e.target.value))}
-                  title="Starting tile"
-                  className="w-12 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-center font-mono text-[11px] text-slate-200"
-                />
-                <button
-                  type="button"
-                  onClick={() => moveRacer(idx, -1)}
-                  disabled={idx === 0}
-                  className="text-slate-400 hover:text-slate-50 disabled:opacity-30"
-                >
-                  <ArrowUp className="h-3 w-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveRacer(idx, 1)}
-                  disabled={idx === config.racers.length - 1}
-                  className="text-slate-400 hover:text-slate-50 disabled:opacity-30"
-                >
-                  <ArrowDown className="h-3 w-3" />
-                </button>
+                <span className="flex items-center gap-0.5" title="Starting VP">
+                  <button
+                    type="button"
+                    onClick={() => adjust("start_vps", idx, -1, MAX_START_VP)}
+                    className="rounded border border-slate-700 text-slate-300 hover:text-slate-50"
+                    aria-label="Fewer starting VP"
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <span className="w-8 text-center font-mono text-[11px] text-sky-300">{config.start_vps[idx] ?? 0} VP</span>
+                  <button
+                    type="button"
+                    onClick={() => adjust("start_vps", idx, 1, MAX_START_VP)}
+                    className="rounded border border-slate-700 text-slate-300 hover:text-slate-50"
+                    aria-label="More starting VP"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </span>
+                <span className="flex items-center gap-0.5" title="Starting tile">
+                  <input
+                    type="number"
+                    min={0}
+                    max={MAX_START_TILE}
+                    value={config.start_positions[idx] ?? 0}
+                    onChange={(e) => updateStartPos(idx, Number(e.target.value))}
+                    className={`w-9 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-center font-mono text-[11px] text-slate-200 ${SPINNER_OFF}`}
+                  />
+                  <span className="flex flex-col">
+                    <button type="button" onClick={() => adjust("start_positions", idx, 1, MAX_START_TILE)} className="text-slate-400 hover:text-slate-50" aria-label="Start one tile later">
+                      <ArrowUp className="h-3 w-3" />
+                    </button>
+                    <button type="button" onClick={() => adjust("start_positions", idx, -1, MAX_START_TILE)} className="text-slate-400 hover:text-slate-50" aria-label="Start one tile earlier">
+                      <ArrowDown className="h-3 w-3" />
+                    </button>
+                  </span>
+                </span>
                 <button
                   type="button"
                   onClick={() => removeRacer(idx)}
@@ -239,10 +293,21 @@ export function SimulatorConfigPanel({
       {/* Second Wind Twists */}
       {isTwisty && simMeta.twists.length > 0 && (
         <div className="space-y-2 rounded-lg border border-fuchsia-500/30 bg-fuchsia-950/20 p-2.5">
-          <div className="text-[11px] font-semibold text-fuchsia-300">
+          <button
+            type="button"
+            aria-expanded={twistsOpen}
+            onClick={() => setTwistsOpen((v) => !v)}
+            className="flex w-full items-center justify-between text-[11px] font-semibold text-fuchsia-300"
+          >
             Second Wind Twists
-          </div>
-          <div className="space-y-1">
+            <span className="text-fuchsia-400/70">
+              {config.forced_twists.length + config.exclude_twists.length > 0
+                ? `${config.forced_twists.length} forced · ${config.exclude_twists.length} excluded `
+                : ""}
+              {twistsOpen ? "▾" : "▸"}
+            </span>
+          </button>
+          {twistsOpen && <div className="space-y-1">
             <span className="text-[10px] text-slate-400">Force Twists</span>
             <div className="flex flex-wrap gap-1">
               {simMeta.twists.map((t) => {
@@ -251,6 +316,7 @@ export function SimulatorConfigPanel({
                   <button
                     key={t}
                     type="button"
+                    title={TWIST_DESCRIPTIONS[t]}
                     onClick={() => toggleTwist("forced_twists", t)}
                     className={`rounded border px-1.5 py-0.5 text-[10px] ${
                       active
@@ -263,8 +329,8 @@ export function SimulatorConfigPanel({
                 );
               })}
             </div>
-          </div>
-          <div className="space-y-1">
+          </div>}
+          {twistsOpen && <div className="space-y-1">
             <span className="text-[10px] text-slate-400">Exclude Twists</span>
             <div className="flex flex-wrap gap-1">
               {simMeta.twists.map((t) => {
@@ -273,6 +339,7 @@ export function SimulatorConfigPanel({
                   <button
                     key={t}
                     type="button"
+                    title={TWIST_DESCRIPTIONS[t]}
                     onClick={() => toggleTwist("exclude_twists", t)}
                     className={`rounded border px-1.5 py-0.5 text-[10px] ${
                       active
@@ -285,7 +352,7 @@ export function SimulatorConfigPanel({
                 );
               })}
             </div>
-          </div>
+          </div>}
         </div>
       )}
 

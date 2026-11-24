@@ -1,9 +1,10 @@
-import { displayName } from "../../../utils/names";
+import { displayName, racerBlurb } from "../../../utils/names";
 import type { EChartsOption } from "../../../components/EChart";
 import type {
   AbilityBreakdownRowDTO,
   EnvironmentCellDTO,
   GlobalDynamicsRowDTO,
+  FaceEffectDTO,
   MatchupCellDTO,
   TriggerInductionCellDTO,
   ValueShareDTO,
@@ -203,11 +204,13 @@ export function buildQuadrantOption<R extends QuadrantRow>(
       backgroundColor: t.tooltipBg,
       borderColor: t.tooltipBorder,
       textStyle: baseText,
+      extraCssText: "max-width: 340px; white-space: normal;",
       formatter: (params: { seriesIndex: number; dataIndex: number }) => {
         if (params.seriesIndex !== 0) return "";
         const row = rows[params.dataIndex];
         const lines = [
           `<b>${displayName(row.racer_name)}</b>`,
+          ...(racerBlurb(row.racer_name) ? [`<i>${racerBlurb(row.racer_name)?.split(" — ")[1]}</i>`] : []),
           `${spec.xTitle}: ${(row[spec.xKey] as number).toFixed(2)}`,
           `${spec.yTitle}: ${(row[spec.yKey] as number).toFixed(2)}`,
           ...(spec.extra ?? []).map((e) => `${e.label}: ${e.format(row[e.key] as number)}`),
@@ -349,8 +352,11 @@ export function buildAbilityOption(
       backgroundColor: t.tooltipBg,
       borderColor: t.tooltipBorder,
       textStyle: baseText,
+      extraCssText: "max-width: 340px; white-space: normal;",
       formatter: (p: { seriesName: string; name: string; value: number }) =>
-        `<b>${displayName(p.name)}</b><br/>${p.seriesName}: ${Math.abs(p.value).toFixed(2)}`,
+        `<b>${displayName(p.name)}</b><br/>${p.seriesName}: ${Math.abs(p.value).toFixed(2)}${
+          racerBlurb(p.name) ? `<br/><i>${racerBlurb(p.name)?.split(" — ")[1]}</i>` : ""
+        }`,
     },
     series: [
       ...ABILITY_METRICS.map((m, metricIndex) => ({
@@ -433,7 +439,7 @@ export function buildGroupedBarOption(
     xAxis: {
       type: "category",
       data: boards,
-      axisLabel: { ...baseText, interval: 0, fontSize: 10, formatter: shortBoard },
+      axisLabel: { ...baseText, interval: 0, fontSize: 10, formatter: (v: string) => shortBoard(v).replace(" ", "\n") },
       axisTick: { show: false },
       axisLine: { lineStyle: { color: t.axisLine } },
     },
@@ -567,6 +573,7 @@ export function buildBoardCurvesOption(
   axisName: string,
   showAxis: boolean,
   t: ChartTheme,
+  baseline: ValueShareDTO[] = [],
 ): EChartsOption {
   const counts = [...new Set(rows.flatMap((r) => (r.racer_count === null ? [] : [r.racer_count])))].sort(
     (a, b) => a - b,
@@ -585,11 +592,31 @@ export function buildBoardCurvesOption(
       formatter: (p: unknown) => {
         const points = p as { name: string; seriesName: string; value: number }[];
         return `<b>${points[0].name}</b> ${axisName}<br/>${points
-          .map((point) => `${point.seriesName} players: ${percent(point.value)}`)
+          .map((point) =>
+            point.seriesName === "All races"
+              ? `all races: ${percent(point.value)}`
+              : `${point.seriesName} players: ${percent(point.value)}`,
+          )
           .join("<br/>")}`;
       },
     },
-    series: counts.map((count, i) => {
+    series: [
+      ...(baseline.length > 0
+        ? [
+            {
+              type: "line" as const,
+              name: "All races",
+              silent: true,
+              showSymbol: false,
+              lineStyle: { width: 0 },
+              itemStyle: { color: t.reference },
+              areaStyle: { color: t.reference, opacity: 0.28 },
+              z: 0,
+              data: Array.from({ length: range.max - range.min + 1 }, (_, k) => shareAt(baseline, range.min + k)),
+            },
+          ]
+        : []),
+      ...counts.map((count, i) => {
       const own = rows.filter((r) => r.racer_count === count);
       const color = PLAYER_COUNT_COLORS[i % PLAYER_COUNT_COLORS.length];
       return {
@@ -603,6 +630,7 @@ export function buildBoardCurvesOption(
         data: Array.from({ length: range.max - range.min + 1 }, (_, k) => shareAt(own, range.min + k)),
       };
     }),
+    ],
   };
 }
 
@@ -739,11 +767,12 @@ export function buildHeatmapOption(
         ...axis.groups.map((g) => groupAxis(g, "top")),
       ]
     : [
-        { type: "category" as const, data: axis.labels, position: "bottom" as const, axisTick: { show: false }, axisLabel: mainLabel },
+        { type: "category" as const, data: axis.labels, position: "bottom" as const, triggerEvent: true, axisTick: { show: false }, axisLabel: mainLabel },
         {
           type: "category" as const,
           data: axis.labels,
           position: "top" as const,
+          triggerEvent: true,
           axisTick: { show: false },
           axisLine: { show: false },
           axisLabel: mainLabel,
@@ -758,7 +787,7 @@ export function buildHeatmapOption(
     grid: { left: narrow ? 84 : 110, right: narrow ? 10 : 110, top: chrome, bottom: bottomChrome },
     xAxis: xAxes,
     yAxis: [
-      { type: "category", data: ys, inverse: true, position: "left", axisLabel: sideAxisLabel },
+      { type: "category", data: ys, inverse: true, position: "left", triggerEvent: true, axisLabel: sideAxisLabel },
       ...(narrow
         ? []
         : [
@@ -767,6 +796,7 @@ export function buildHeatmapOption(
               data: ys,
               inverse: true,
               position: "right" as const,
+              triggerEvent: true,
               axisTick: { show: false },
               axisLine: { show: false },
               axisLabel: sideAxisLabel,
@@ -823,7 +853,7 @@ export function attachHeatmapHighlight(
       const text = descriptions[label];
       if (!text || !params.event) return;
       chart.dispatchAction({ type: "hideTip" });
-      tip.innerHTML = `<b>${label}</b><br/>${text}`;
+      tip.innerHTML = `<b>${displayName(label)}</b><br/>${text}`;
       tip.style.left = `${params.event.offsetX + 12}px`;
       tip.style.top = `${params.event.offsetY + 12}px`;
       tip.style.display = "block";
@@ -831,8 +861,10 @@ export function attachHeatmapHighlight(
     const hideLabelTip = () => {
       tip.style.display = "none";
     };
-    chart.on("mouseover", { componentType: "xAxis" }, showLabelTip);
-    chart.on("mouseout", { componentType: "xAxis" }, hideLabelTip);
+    for (const component of ["xAxis", "yAxis"]) {
+      chart.on("mouseover", { componentType: component }, showLabelTip);
+      chart.on("mouseout", { componentType: component }, hideLabelTip);
+    }
     const makeLine = () =>
       new graphic.Rect({
         silent: true,
@@ -1028,7 +1060,7 @@ export function environmentAxis(
     if (name !== ALL) addColumn(environmentKey(null, name), TOTAL_LABEL, false);
     nameGroup(start, display);
   };
-  for (const board of boards) addGroup(board, [...countsOf(board)].sort((a, b) => a - b), displayName(board));
+  for (const board of boards) addGroup(board, [...countsOf(board)].sort((a, b) => a - b), breakWords(displayName(board)));
   const boardsEnd = keys.length - 1;
   if (twists.length > 0 && keys.length > 0) addGap();
   const twistStart = keys.length + 1;
@@ -1086,4 +1118,62 @@ export function environmentCells(
 
 export function sortedNames(names: string[]): string[] {
   return [...new Set(names)].sort();
+}
+
+
+export function buildFaceEffectOption(faces: FaceEffectDTO[], t: ChartTheme): EChartsOption {
+  const baseText = { color: t.text };
+  return {
+    backgroundColor: t.bg,
+    animation: false,
+    grid: { left: 60, right: 20, top: 24, bottom: 50 },
+    xAxis: {
+      type: "category",
+      data: faces.map((f) => String(f.face)),
+      name: "number rolled",
+      nameLocation: "middle",
+      nameGap: 30,
+      nameTextStyle: { ...baseText, fontWeight: "bold" },
+      axisLabel: { ...baseText, fontSize: 14, fontWeight: 600 },
+      axisLine: { lineStyle: { color: t.axisLine } },
+    },
+    yAxis: {
+      type: "value",
+      name: "VP per extra roll",
+      nameLocation: "middle",
+      nameGap: 42,
+      nameTextStyle: { ...baseText, fontWeight: "bold" },
+      axisLabel: { ...baseText, formatter: signed(2) },
+      splitLine: { lineStyle: { color: t.gridLine } },
+    },
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      backgroundColor: t.tooltipBg,
+      borderColor: t.tooltipBorder,
+      textStyle: baseText,
+      formatter: (p: unknown) => {
+        const [point] = p as { dataIndex: number }[];
+        const f = faces[point.dataIndex];
+        return `<b>Rolling a ${f.face}</b><br/>${signed(2)(f.vp_per_roll)} VP per extra roll<br/>races with a ${f.face}: ${f.mean_vp_when_rolled.toFixed(2)} VP on average<br/>${percent(f.rolled_share)} of races have one`;
+      },
+    },
+    series: [
+      {
+        type: "bar",
+        barWidth: "55%",
+        data: faces.map((f) => ({
+          value: f.vp_per_roll,
+          itemStyle: { color: f.vp_per_roll >= 0 ? "#6ca1d8" : "#ee83b3" },
+        })),
+        markLine: {
+          silent: true,
+          symbol: "none",
+          label: { show: false },
+          lineStyle: { type: "dashed", color: t.reference },
+          data: [{ yAxis: 0 }],
+        },
+      },
+    ],
+  };
 }

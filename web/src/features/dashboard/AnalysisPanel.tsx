@@ -6,9 +6,11 @@ import {
   Gem,
   Globe,
   Info,
+  Layers,
   Map as MapIcon,
   Share2,
   Sparkles,
+  Star,
   Swords,
   Target,
   Trophy,
@@ -16,16 +18,19 @@ import {
   Waves,
   Zap,
 } from "lucide-react";
-import { type ComponentType, type ReactNode, useState } from "react";
+import { type ComponentType, Fragment, type ReactNode, useState } from "react";
 import { DataTable } from "../../components/DataTable";
 import { EChart } from "../../components/EChart";
 import { Switch } from "../../components/Switch";
 import type { DashboardAnalysisDTO } from "../../types/api";
 import { useTheme } from "../../utils/ThemeProvider";
 import { useChartHeight } from "../../utils/useChartHeight";
+import { RACER_DESCRIPTIONS } from "../../utils/names";
 import { useNarrow } from "../../utils/useNarrow";
 import { Description, type DescriptionLine } from "./charts/Description";
-import { GlobalCharts } from "./charts/GlobalCharts";
+import { GlobalCharts, type GlobalPart } from "./charts/GlobalCharts";
+import { RacerSpecials } from "./RacerSpecials";
+import { TwistComboTable } from "./TwistCombos";
 import {
   type ColorScale,
   type HeatmapAxis,
@@ -62,32 +67,84 @@ interface ViewSpec {
   icon: IconType;
 }
 
-const SCATTER_VIEWS: ViewSpec[] = [
-  { id: "consistency", label: "Consistency", icon: Target },
-  { id: "momentum", label: "Momentum", icon: Waves },
-  { id: "excitement", label: "Excitement", icon: Flame },
-  { id: "engine", label: "Engine", icon: Cog },
-  { id: "preferences", label: "Preferences", icon: Users },
+interface Section {
+  id: string;
+  label: string;
+  icon: IconType;
+  views: ViewSpec[];
+}
+
+const SECTIONS: Section[] = [
+  {
+    id: "scatter",
+    label: "Scatterplots",
+    icon: Target,
+    views: [
+      { id: "consistency", label: "Consistency", icon: Target },
+      { id: "momentum", label: "Momentum", icon: Waves },
+      { id: "excitement", label: "Excitement", icon: Flame },
+      { id: "engine", label: "Engine", icon: Cog },
+      { id: "preferences", label: "Preferences", icon: Users },
+    ],
+  },
+  {
+    id: "abilityenv",
+    label: "Ability & Environments",
+    icon: Zap,
+    views: [
+      { id: "ability", label: "Ability Speed", icon: Zap },
+      { id: "environments", label: "Environments", icon: MapIcon },
+    ],
+  },
+  {
+    id: "global",
+    label: "Global",
+    icon: Globe,
+    views: [
+      { id: "global-dynamics", label: "Dynamics", icon: Activity },
+      { id: "global-distributions", label: "Distributions", icon: Waves },
+      { id: "global-boards", label: "By board", icon: MapIcon },
+      { id: "global-twists", label: "By twist card", icon: Sparkles },
+      { id: "global-combos", label: "Twist combos", icon: Layers },
+    ],
+  },
+  {
+    id: "interactions",
+    label: "Interactions",
+    icon: Swords,
+    views: [
+      { id: "interactions", label: "Matchups", icon: Swords },
+      { id: "triggers", label: "Triggers", icon: Share2 },
+    ],
+  },
+  {
+    id: "tables",
+    label: "Tables",
+    icon: Trophy,
+    views: [
+      { id: "overview", label: "Overview", icon: Trophy },
+      { id: "movement", label: "Movement", icon: Footprints },
+      { id: "vp", label: "VP", icon: Gem },
+      { id: "abilities", label: "Abilities", icon: Sparkles },
+      { id: "dynamics", label: "Dynamics", icon: Activity },
+    ],
+  },
+  {
+    id: "racers",
+    label: "Racer specials",
+    icon: Star,
+    views: [{ id: "specials", label: "Racer specials", icon: Star }],
+  },
 ];
 
-const CHART_VIEWS: ViewSpec[] = [
-  { id: "ability", label: "Ability Speed", icon: Zap },
-  { id: "global", label: "Global", icon: Globe },
-  { id: "interactions", label: "Interactions", icon: Swords },
-  { id: "triggers", label: "Triggers", icon: Share2 },
-  { id: "environments", label: "Environments", icon: MapIcon },
-];
-
-const TABLE_VIEWS: ViewSpec[] = [
-  { id: "overview", label: "Overview", icon: Trophy },
-  { id: "movement", label: "Movement", icon: Footprints },
-  { id: "vp", label: "VP", icon: Gem },
-  { id: "abilities", label: "Abilities", icon: Sparkles },
-  { id: "dynamics", label: "Dynamics", icon: Activity },
-];
-
-const NAV_GROUPS = [SCATTER_VIEWS, CHART_VIEWS, TABLE_VIEWS];
-const DEFAULT_VIEW = SCATTER_VIEWS[0].id;
+const sectionOf = (view: string) => SECTIONS.find((s) => s.views.some((v) => v.id === view)) ?? SECTIONS[0];
+const DEFAULT_VIEW = SECTIONS[0].views[0].id;
+const GLOBAL_PARTS: Record<string, GlobalPart> = {
+  "global-dynamics": "dynamics",
+  "global-distributions": "distributions",
+  "global-boards": "boards",
+  "global-twists": "twists",
+};
 const ABILITY_ROW_HEIGHT = 15;
 const HEATMAP_ROW_HEIGHT = 13;
 const HEATMAP_CHROME_HEIGHT = 220;
@@ -170,10 +227,10 @@ function Heatmap({ axis, ys, cells, height, scale }: Omit<HeatmapProps, "legendF
     axis.keys.length,
     ys.length,
     (column) => axis.keys[column] === null,
-    axis.descriptions,
+    { ...RACER_DESCRIPTIONS, ...axis.descriptions },
   );
   return (
-    <div className="overflow-x-auto">
+    <div className="no-scrollbar overflow-x-auto">
       <div style={{ minWidth: narrow ? axis.keys.length * NARROW_COLUMN_WIDTH + 100 : undefined }}>
         <EChart
           key={`${axis.keys.length}x${ys.length}${narrow}`}
@@ -258,26 +315,39 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
   const percentScale = usePercent ? PERCENT_SCALE : VP_SCALE;
   const triggerScale = usePercent ? TRIGGER_SCALE : TRIGGER_COUNT_SCALE;
   const info = descriptionFor(view);
+  const section = sectionOf(view);
   const legend = (scale: ColorScale, format: (v: number) => string) => (
     <HeatmapLegend scale={scale} legendFormat={format} />
   );
-
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-x-3 gap-y-2 overflow-x-auto rounded-lg bg-slate-900 p-1 sm:flex-wrap">
-        {NAV_GROUPS.map((group, index) => (
-          <div key={group[0].id} className="flex shrink-0 items-center gap-1 sm:flex-wrap">
-            {index > 0 && <span className="mr-1 hidden h-5 w-px bg-slate-700 sm:block" />}
-            {group.map((spec) => (
-              <TabButton
-                key={spec.id}
-                spec={spec}
-                active={spec.id === view}
-                onSelect={() => setView(spec.id)}
-              />
-            ))}
-          </div>
-        ))}
+      <div className="flex flex-wrap items-center gap-1 rounded-lg bg-slate-900 p-1">
+        {SECTIONS.map((sec) => {
+          const active = sec.id === section.id;
+          return (
+            <Fragment key={sec.id}>
+              <TabButton spec={sec} active={active} onSelect={() => setView(sec.views[0].id)} />
+              {active && sec.views.length > 1 && (
+                <div className="flex flex-wrap items-center gap-1 rounded-2xl bg-slate-800/70 p-0.5">
+                  {sec.views.map((spec) => (
+                    <button
+                      key={spec.id}
+                      type="button"
+                      onClick={() => setView(spec.id)}
+                      className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+                        spec.id === view
+                          ? "bg-slate-50 text-slate-950"
+                          : "text-slate-300 hover:bg-slate-700 hover:text-slate-50"
+                      }`}
+                    >
+                      {spec.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Fragment>
+          );
+        })}
       </div>
 
       {quadrant && (
@@ -302,7 +372,11 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
         </>
       )}
 
-      {view === "global" && <GlobalCharts analysis={analysis} />}
+      {GLOBAL_PARTS[view] && <GlobalCharts analysis={analysis} part={GLOBAL_PARTS[view]} />}
+
+      {view === "global-combos" && <TwistComboTable stats={analysis.twist_combo_stats} />}
+
+      {view === "specials" && <RacerSpecials analysis={analysis} racerColors={racerColors} />}
 
       {view === "interactions" && (
         <>

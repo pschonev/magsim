@@ -20,6 +20,12 @@ from magsim.analysis.filters import (
     get_automatic_racers,
 )
 from magsim.analysis.metrics import run_full_analysis
+from magsim.analysis.racer_specific import (
+    compute_eliminated_per_race,
+    compute_roll_effects,
+    compute_stepkid_wins,
+    compute_victims,
+)
 from magsim.analysis.tables import SUMMARY_TABLE_TITLES, with_racer_extras
 from magsim.core.palettes import get_racer_color
 from magsim.web.schemas import (
@@ -28,15 +34,21 @@ from magsim.web.schemas import (
     DashboardAnalysisDTO,
     DatasetMetaDTO,
     DistributionBinDTO,
+    EliminatorDTO,
     EnvironmentCellDTO,
+    FaceEffectDTO,
     GlobalDynamicsRowDTO,
     MatchupCellDTO,
+    RacerSpecificDTO,
     RacerStatRowDTO,
     RawTablePageDTO,
     RawTableQueryDTO,
+    StepkidRowDTO,
     SummaryTableDTO,
     TriggerInductionCellDTO,
+    TwistComboStatDTO,
     ValueShareDTO,
+    VictimRowDTO,
 )
 
 RACE_PRIORITY_COLUMNS: tuple[str, ...] = (
@@ -271,6 +283,62 @@ def _df_to_value_distributions(df: pl.DataFrame) -> list[ValueShareDTO]:
     ]
 
 
+def _racer_specific(results: pl.DataFrame) -> RacerSpecificDTO:
+    per_race = compute_eliminated_per_race(results)
+    return RacerSpecificDTO(
+        stepkid_wins=[
+            StepkidRowDTO(
+                racer_name=str(r["racer_name"]),
+                games=_safe_int(r["games"]),
+                win_rate=_safe_float(r["win_rate"]),
+                usual_win_rate=_safe_float(r["usual_win_rate"]),
+                lift=_safe_float(r["lift"]),
+            )
+            for r in compute_stepkid_wins(results).to_dicts()
+        ],
+        eliminators=[
+            EliminatorDTO(
+                racer_name=name,
+                eliminated_with=per_race[name][0],
+                eliminated_without=per_race[name][1],
+                victims=[
+                    VictimRowDTO(
+                        racer_name=str(r["racer_name"]),
+                        games=_safe_int(r["games"]),
+                        rate_with=_safe_float(r["rate_with"]),
+                        rate_without=_safe_float(r["rate_without"]),
+                        lift=_safe_float(r["lift"]),
+                    )
+                    for r in victims.to_dicts()
+                ],
+            )
+            for name, victims in compute_victims(results).items()
+        ],
+        magical_athlete_faces=[
+            FaceEffectDTO(
+                face=_safe_int(r["face"]),
+                vp_per_roll=_safe_float(r["vp_per_roll"]),
+                mean_vp_when_rolled=_safe_float(r["mean_vp_when_rolled"]),
+                rolled_share=_safe_float(r["rolled_share"]),
+            )
+            for r in compute_roll_effects(results).to_dicts()
+        ],
+    )
+
+
+def _df_to_twist_combo_stats(df: pl.DataFrame) -> list[TwistComboStatDTO]:
+    return [
+        TwistComboStatDTO(
+            combo=str(r["combo"]),
+            ordered=bool(r["ordered"]),
+            races=_safe_int(r["races"]),
+            avg_turns=_safe_float(r["avg_turns"]),
+            avg_total_vp=_safe_float(r["avg_total_vp"]),
+        )
+        for r in df.to_dicts()
+    ]
+
+
 def _df_to_distributions(df: pl.DataFrame) -> list[DistributionBinDTO]:
     if df.is_empty():
         return []
@@ -458,6 +526,8 @@ def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
         distributions_global=_df_to_distributions(result.distributions_global),
         distributions_faceted=_df_to_distributions(result.distributions_faceted),
         value_distributions=_df_to_value_distributions(result.value_distributions),
+        racer_specific=_racer_specific(filtered.racer_results),
+        twist_combo_stats=_df_to_twist_combo_stats(result.twist_combo_stats),
         matchup_matrix=_df_to_matchup_matrix(result.matchup_matrix),
         environment_matrix=_df_to_environment_matrix(
             result.environment_matrix,

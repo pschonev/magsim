@@ -6,7 +6,10 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from magsim.analysis.distributions import compute_value_distributions
+from magsim.analysis.distributions import (
+    compute_twist_combo_stats,
+    compute_value_distributions,
+)
 from magsim.analysis.interactions import (
     compute_environment_matrix,
     compute_environment_totals,
@@ -61,6 +64,7 @@ class AnalysisResult:
     distributions_global: pl.DataFrame
     distributions_faceted: pl.DataFrame
     value_distributions: pl.DataFrame
+    twist_combo_stats: pl.DataFrame
     matchup_matrix: pl.DataFrame
     environment_matrix: pl.DataFrame
     twist_environment_matrix: pl.DataFrame
@@ -633,6 +637,7 @@ def run_full_analysis(
         distributions_global=dist_global,
         distributions_faceted=dist_faceted,
         value_distributions=compute_value_distributions(prepared.dist_raw),
+        twist_combo_stats=compute_twist_combo_stats(prepared.dist_raw),
         matchup_matrix=matchup_matrix,
         environment_matrix=environment_matrix,
         twist_environment_matrix=twist_environment_matrix,

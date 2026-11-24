@@ -106,6 +106,50 @@ export interface ValueShareDTO {
   twist: string | null;
 }
 
+export interface StepkidRowDTO {
+  racer_name: string;
+  games: number;
+  win_rate: number;
+  usual_win_rate: number;
+  lift: number;
+}
+
+export interface VictimRowDTO {
+  racer_name: string;
+  games: number;
+  rate_with: number;
+  rate_without: number;
+  lift: number;
+}
+
+export interface EliminatorDTO {
+  racer_name: string;
+  eliminated_with: number;
+  eliminated_without: number;
+  victims: VictimRowDTO[];
+}
+
+export interface FaceEffectDTO {
+  face: number;
+  vp_per_roll: number;
+  mean_vp_when_rolled: number;
+  rolled_share: number;
+}
+
+export interface RacerSpecificDTO {
+  stepkid_wins: StepkidRowDTO[];
+  eliminators: EliminatorDTO[];
+  magical_athlete_faces: FaceEffectDTO[];
+}
+
+export interface TwistComboStatDTO {
+  combo: string;
+  ordered: boolean;
+  races: number;
+  avg_turns: number;
+  avg_total_vp: number;
+}
+
 export interface DistributionBinDTO {
   bin_index: number;
   bin_label: string;
@@ -177,6 +221,8 @@ export interface DashboardAnalysisDTO {
   distributions_global: DistributionBinDTO[];
   distributions_faceted: DistributionBinDTO[];
   value_distributions: ValueShareDTO[];
+  racer_specific: RacerSpecificDTO;
+  twist_combo_stats: TwistComboStatDTO[];
   matchup_matrix: MatchupCellDTO[];
   environment_matrix: EnvironmentCellDTO[];
   trigger_induction: TriggerInductionCellDTO[];
@@ -236,6 +282,7 @@ export interface SimulationRequestDTO {
   board: string;
   seed: number;
   start_positions?: number[] | null;
+  start_vps?: number[] | null;
   dice_rolls?: number[] | null;
   debug_mode?: boolean;
   rules?: Record<string, RuleValue>;

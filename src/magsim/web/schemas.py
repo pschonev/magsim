@@ -126,6 +126,62 @@ class ValueShareDTO(msgspec.Struct, frozen=True):
     twist: str | None = None
 
 
+class StepkidRowDTO(msgspec.Struct, frozen=True):
+    """Win rate of a racer seated directly after Stepdad against its usual win rate."""
+
+    racer_name: str
+    games: int
+    win_rate: float
+    usual_win_rate: float
+    lift: float
+
+
+class VictimRowDTO(msgspec.Struct, frozen=True):
+    """How much more often a racer is eliminated when an eliminating racer is in the race."""
+
+    racer_name: str
+    games: int
+    rate_with: float
+    rate_without: float
+    lift: float
+
+
+class EliminatorDTO(msgspec.Struct, frozen=True):
+    """Elimination statistics for one eliminating racer (Bite Mark, Mouth)."""
+
+    racer_name: str
+    eliminated_with: float
+    eliminated_without: float
+    victims: list[VictimRowDTO]
+
+
+class FaceEffectDTO(msgspec.Struct, frozen=True):
+    """VP effect of rolling one face, for one racer."""
+
+    face: int
+    vp_per_roll: float
+    mean_vp_when_rolled: float
+    rolled_share: float
+
+
+class RacerSpecificDTO(msgspec.Struct, frozen=True):
+    """Statistics that only matter for a few racers."""
+
+    stepkid_wins: list[StepkidRowDTO] = msgspec.field(default_factory=list)
+    eliminators: list[EliminatorDTO] = msgspec.field(default_factory=list)
+    magical_athlete_faces: list[FaceEffectDTO] = msgspec.field(default_factory=list)
+
+
+class TwistComboStatDTO(msgspec.Struct, frozen=True):
+    """Race statistics for one combination of twist cards."""
+
+    combo: str
+    ordered: bool
+    races: int
+    avg_turns: float
+    avg_total_vp: float
+
+
 class DistributionBinDTO(msgspec.Struct, frozen=True):
     """Single histogram bin for game length or total VP distributions."""
 
@@ -217,6 +273,8 @@ class DashboardAnalysisDTO(msgspec.Struct, frozen=True):
         default_factory=list,
     )
     value_distributions: list[ValueShareDTO] = msgspec.field(default_factory=list)
+    racer_specific: RacerSpecificDTO = msgspec.field(default_factory=RacerSpecificDTO)
+    twist_combo_stats: list[TwistComboStatDTO] = msgspec.field(default_factory=list)
     matchup_matrix: list[MatchupCellDTO] = msgspec.field(default_factory=list)
     environment_matrix: list[EnvironmentCellDTO] = msgspec.field(default_factory=list)
     trigger_induction: list[TriggerInductionCellDTO] = msgspec.field(
@@ -284,6 +342,7 @@ class SimulationRequestDTO(msgspec.Struct, frozen=True):
     board: str = "Standard"
     seed: int = 42
     start_positions: list[int] | None = None
+    start_vps: list[int] | None = None
     dice_rolls: list[int] | None = None
     debug_mode: bool = False
     rules: dict[str, RuleValueDTO] = msgspec.field(default_factory=dict)

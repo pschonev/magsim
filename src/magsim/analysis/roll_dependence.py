@@ -22,7 +22,7 @@ def _face_shares(stats_results: pl.DataFrame) -> list[pl.Expr]:
     return [pl.col("sum_dice_rolled") / pl.col("rolling_turns")]
 
 
-def _solve(matrix: list[list[float]], vector: list[float]) -> list[float]:
+def solve_linear_system(matrix: list[list[float]], vector: list[float]) -> list[float]:
     """Gaussian elimination with partial pivoting for a small positive-definite system."""
     size = len(vector)
     rows = [[*matrix[i], vector[i]] for i in range(size)]
@@ -49,7 +49,7 @@ def _explained_share(row: dict[str, float], predictors: int) -> float:
     matrix = [[row[f"s_{min(i, j)}_{max(i, j)}"] for j in used] for i in used]
     cross = [row[f"c_{i}"] for i in used]
     try:
-        beta = _solve(matrix, cross)
+        beta = solve_linear_system(matrix, cross)
     except ZeroDivisionError:
         return 0.0
     explained = sum(b * c for b, c in zip(beta, cross, strict=True)) / row["vy"]

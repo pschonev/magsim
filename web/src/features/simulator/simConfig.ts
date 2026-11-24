@@ -10,6 +10,7 @@ export interface SimConfig {
   board: string;
   seed: number;
   start_positions: number[];
+  start_vps: number[];
   use_scripted_dice: boolean;
   dice_text: string;
   debug_mode: boolean;
@@ -26,6 +27,7 @@ export function defaultConfig(meta: SimulatorMetaDTO): SimConfig {
     board: meta.default_board,
     seed: meta.default_seed,
     start_positions: racers.map(() => 0),
+    start_vps: racers.map(() => 0),
     use_scripted_dice: false,
     dice_text: "",
     debug_mode: false,
@@ -41,6 +43,7 @@ export function fromDecoded(decoded: DecodedConfigDTO): SimConfig {
     board: decoded.board,
     seed: decoded.seed,
     start_positions: decoded.racers.map(() => 0),
+    start_vps: decoded.racers.map(() => 0),
     use_scripted_dice: false,
     dice_text: "",
     debug_mode: false,
@@ -75,6 +78,7 @@ export function toRequest(config: SimConfig): SimulationRequestDTO {
     board: config.board,
     seed: config.seed,
     start_positions: config.start_positions,
+    start_vps: config.start_vps,
     dice_rolls: parseDice(config),
     debug_mode: config.debug_mode,
     rules: config.rules,
@@ -110,6 +114,7 @@ export function fromIncoming(race: IncomingRace): SimConfig {
     board: race.board,
     seed: race.seed,
     start_positions: race.racers.map(() => 0),
+    start_vps: race.racers.map(() => 0),
     use_scripted_dice: false,
     dice_text: "",
     debug_mode: false,

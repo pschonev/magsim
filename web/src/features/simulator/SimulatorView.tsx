@@ -20,7 +20,7 @@ import {
   fromIncoming,
   toRequest,
 } from "./simConfig";
-import { displayName } from "../../utils/names";
+import { displayName, racerBlurb } from "../../utils/names";
 
 interface SimulatorViewProps {
   client: EngineClient;
@@ -179,7 +179,7 @@ export function SimulatorView({
             />
             </div>
 
-            <div className="flex gap-2 overflow-x-auto max-lg:order-3 lg:grid lg:grid-cols-2">
+            <div className="grid grid-cols-3 gap-1.5 max-lg:order-0 sm:grid-cols-4 lg:grid-cols-2">
               {step.names.map((name, idx) => (
                 <RacerCard
                   key={`${name}-${idx}`}
@@ -271,58 +271,31 @@ function RacerCard({
 }: RacerCardProps) {
   return (
     <div
-      className={`rounded-lg border p-2 text-xs max-lg:w-36 max-lg:shrink-0 lg:p-2.5 ${
+      className={`rounded-md border px-1.5 py-1 text-xs ${
         isCurrent
           ? "border-amber-400/70 bg-amber-950/20"
           : "border-slate-800 bg-slate-900/70"
       }`}
     >
       <div className="flex items-center justify-between gap-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span
-            className="h-2.5 w-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: color }}
-          />
-          <span className="truncate font-semibold text-slate-50">{displayName(name)}</span>
-        </div>
-        {place !== null && (
-          <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
-            #{place}
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+          <span className="truncate font-semibold text-slate-50" title={racerBlurb(name)}>
+            {displayName(name)}
           </span>
-        )}
-      </div>
-      <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
-        <span>
-          Tile: <strong className="text-slate-200">{tile ?? "—"}</strong>
-        </span>
-        <span>
-          VP: <strong className="text-sky-300">{vp}</strong>
-          {startVp > 0 && (
-            <span className="ml-1 text-[10px] text-slate-500" title="VP carried over from earlier races">
-              (+{startVp} start)
-            </span>
-          )}
-        </span>
-      </div>
-      {(tripped || eliminated || sidelined) && (
-        <div className="mt-1 flex flex-wrap gap-1">
-          {tripped && (
-            <span className="rounded bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-rose-300">
-              TRIPPED
-            </span>
-          )}
-          {eliminated && (
-            <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300">
-              ELIMINATED
-            </span>
-          )}
-          {sidelined && (
-            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-amber-300">
-              SIDELINED
-            </span>
-          )}
         </div>
-      )}
+        <span className="flex shrink-0 items-center gap-0.5 text-[9px] font-bold">
+          {place !== null && <span className="rounded bg-amber-500/25 px-1 text-amber-300">#{place}</span>}
+          {tripped && <span className="rounded bg-rose-500/25 px-1 text-rose-300" title="Tripped">z</span>}
+          {eliminated && <span className="rounded bg-slate-700 px-1 text-slate-300" title="Eliminated">out</span>}
+          {sidelined && <span className="rounded bg-amber-500/25 px-1 text-amber-300" title="Sidelined">side</span>}
+        </span>
+      </div>
+      <div className="text-[10px] text-slate-400">
+        Tile <strong className="text-slate-200">{tile ?? "—"}</strong> ·{" "}
+        <strong className="text-sky-300">{vp}</strong> VP
+        {startVp > 0 && <span className="text-slate-500" title="Starting VP"> (+{startVp})</span>}
+      </div>
     </div>
   );
 }

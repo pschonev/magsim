@@ -85,7 +85,7 @@ export const QUADRANT_TABS: QuadrantTab<RacerStatRowDTO>[] = [
       },
       {
         bold: "X-Axis (Roll Sensitivity):",
-        text: " Share of the racer's VP variation that is explained by which numbers it rolled (0 = none, 1 = all). High: results follow the dice. Sisyphus and Icarus want specific rolls, Skipper and Magical Athlete depend on exact numbers. Racers whose power depends on VP, position or opponents (Speed Demon) sit near 0: they do not care which number comes up. A typical racer is near 0.03, because rolling more sixes helps everyone a little.",
+        text: " Share of the racer's VP variation that is explained by which numbers it rolled (0 = none, 1 = all). High: results follow the dice. Sisyphus and Icarus want specific rolls. Magical Athlete's power depends on the exact number, but each number helps in some races and hurts in others, so it only shows modestly (see Racer specials). Skipper reacts to other racers' 1s, not to his own rolls, and Speed Demon to the VP he holds, so both sit near a typical racer's 0.03.",
       },
       {
         bold: "Note:",

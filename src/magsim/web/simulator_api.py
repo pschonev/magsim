@@ -441,6 +441,9 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
             rules=GameRules.for_play(config.rules),
         )
         engine = scenario.engine
+        for racer, vp in zip(engine.state.racers, req.start_vps or [], strict=False):
+            racer.victory_points = vp
+            racer.starting_vp = vp
         current_turn_ref = [0]
 
         def on_event(eng: GameEngine, event: GameEvent) -> None:

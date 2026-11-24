@@ -15,7 +15,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Search } fr
 import { useMemo, useState } from "react";
 import type { ColumnHelp } from "../features/dashboard/columnHelp";
 import type { SummaryCellDTO } from "../types/api";
-import { displayName } from "../utils/names";
+import { displayName, racerBlurb } from "../utils/names";
 import { useNarrow } from "../utils/useNarrow";
 import { RichText } from "./RichText";
 
@@ -140,7 +140,7 @@ export function DataTable({ columns, rows, racerColors, help }: DataTableProps) 
       )}
       </div>
 
-      <div className="max-h-[calc(100vh-13rem)] overflow-auto rounded-lg border border-slate-800">
+      <div className="max-h-[calc(100vh-13rem)] overflow-auto rounded-lg border border-slate-800 max-sm:no-scrollbar">
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10 bg-slate-900">
             {table.getHeaderGroups().map((group) => (
@@ -210,9 +210,11 @@ export function DataTable({ columns, rows, racerColors, help }: DataTableProps) 
                           style={{ backgroundColor: racerColors[value] }}
                         />
                       )}
-                      {i === 0 && typeof value === "string" && racerColors
-                        ? displayName(value)
-                        : formatCell(value, decimals.get(columns[i]) ?? 0)}
+                      {i === 0 && typeof value === "string" && racerColors ? (
+                        <span title={racerBlurb(value)}>{displayName(value)}</span>
+                      ) : (
+                        formatCell(value, decimals.get(columns[i]) ?? 0)
+                      )}
                     </td>
                   );
                 })}
