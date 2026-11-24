@@ -165,7 +165,7 @@ export function App() {
           </button>
           </div>
         </div>
-        <div className="stripes h-1" />
+        <div className="h-1 bg-indigo-600" />
       </header>
 
       <main className="w-full flex-1 p-4">

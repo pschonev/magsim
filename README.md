@@ -179,7 +179,7 @@ magsim batch configs/sim.toml
 
 **3. Build and start the dashboard with your results:**
 ```bash
-uv run poe web-build   # uses results/ if present, else the committed docs/results snapshot
+uv run poe web-build   # uses results/ if present (error if incomplete), else the committed docs/results snapshot
 uv run magsim gui      # serves web/dist locally; without a build it opens the hosted app
 ```
 Requires Node.js. During development use `uv run poe web-dev` instead.

@@ -11,6 +11,9 @@ export interface ChartTheme {
   tooltipBorder: string;
   reference: string;
   shiftMid: string;
+  shiftBadTint: string;
+  shiftGoodTint: string;
+  accent: string;
 }
 
 export const CHART_THEMES: Record<ThemeMode, ChartTheme> = {
@@ -23,7 +26,10 @@ export const CHART_THEMES: Record<ThemeMode, ChartTheme> = {
     tooltipBg: "#212724",
     tooltipBorder: "#3e4742",
     reference: "#888888",
-    shiftMid: "#3e3b45",
+    shiftMid: "#3a403d",
+    shiftBadTint: "#5a404d",
+    shiftGoodTint: "#3a4c5f",
+    accent: "#c97dff",
   },
   light: {
     bg: "#fffdf8",
@@ -35,6 +41,9 @@ export const CHART_THEMES: Record<ThemeMode, ChartTheme> = {
     tooltipBorder: "#d3c9ad",
     reference: "#8f8570",
     shiftMid: "#ebe3d0",
+    shiftBadTint: "#e9d3d6",
+    shiftGoodTint: "#d2dfeb",
+    accent: "#7a22c4",
   },
 };
 

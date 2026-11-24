@@ -51,6 +51,9 @@ def check_finish(engine: GameEngine, racer: RacerState) -> bool:
 
     # Standard rule: Position >= Board Length
     if racer.position >= engine.state.board.length:
+        if not engine.state.race_active:
+            # Crossed in the same simultaneous move as the last finisher: the race is already over
+            return True
         if _finish_intercepted(engine, racer):
             return True
         mark_finished(engine, racer)

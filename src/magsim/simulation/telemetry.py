@@ -185,7 +185,7 @@ SYSTEM_SOURCES: tuple[Source, ...] = ("Board", "System")
 PARTY_POOPER_COMPLAINT: AbilityName = "PartyPooperNoiseComplaint"
 NEMESIS_MATCH: AbilityName = "NemesisGrudgeMatch"
 HOG_MODIFIER: ModifierName = "HogKnightHog"
-HOG_KNIGHT_ABILITY: AbilityName = "HogKnightPiggyback"
+HOG_KNIGHT = "HogKnight"
 SHOW_OFF_ABILITY: AbilityName = "ShowOffGuysWatch"
 MR_DICE_GUY_ABILITY: AbilityName = "MrDiceGuyMore"
 STUNNER_ABILITY: AbilityName = "StunnerStopTraffic"
@@ -214,6 +214,7 @@ class MetricsAggregator:
     last_single_die: dict[int, int] = field(default_factory=dict)
     pooper_rejections: set[tuple[int, int]] = field(default_factory=set)
     window_sources: dict[int, list[tuple[str, int]]] = field(default_factory=dict)
+    hog_owners: dict[int, int] = field(default_factory=dict)
 
     # COLUMNAR BUFFER: Dict of Lists
     position_logs: PositionLogColumns = field(
@@ -239,17 +240,19 @@ class MetricsAggregator:
             )
             if self._has_ability(engine, racer.idx, NEPO_BABY_START):
                 self._record_movement_bucket(racer.idx, racer.idx, racer.position)
+            # Each hog belongs to whoever started on it (Hog Knight or a copy of him)
+            for mod in racer.modifiers:
+                if mod.name == HOG_MODIFIER:
+                    self.hog_owners[id(mod)] = racer.idx
 
-    @staticmethod
-    def _ability_owner(engine: GameEngine, ability_name: str) -> int | None:
-        """Index of the first racer holding the ability, if any."""
+    def _hog_owner(self, engine: GameEngine, rider_idx: int) -> int:
+        """Owner of the hog the racer rides; a hog changes riders but keeps its owner."""
+        for mod in engine.get_racer(rider_idx).modifiers:
+            if mod.name == HOG_MODIFIER and id(mod) in self.hog_owners:
+                return self.hog_owners[id(mod)]
         return next(
-            (
-                r.idx
-                for r in engine.state.racers
-                if any(a.name == ability_name for a in r.active_abilities)
-            ),
-            None,
+            (r.idx for r in engine.state.racers if r.name == HOG_KNIGHT),
+            rider_idx,
         )
 
     @staticmethod
@@ -344,7 +347,7 @@ class MetricsAggregator:
                     stats.rolling_turns += 1
 
                 hog_owner = (
-                    self._ability_owner(engine, HOG_KNIGHT_ABILITY)
+                    self._hog_owner(engine, event.target_racer_idx)
                     if any(
                         source == HOG_MODIFIER
                         for source, _ in self.window_sources.get(
@@ -359,9 +362,9 @@ class MetricsAggregator:
                     if (
                         hog_owner is not None
                         and responsible_idx == event.target_racer_idx
-                        and roll_modifier.delta == HOG_BONUS
+                        and abs(roll_modifier.delta) == HOG_BONUS
                     ):
-                        # The hog's bonus belongs to Hog Knight, not to the current rider
+                        # The hog's bonus (negative when the move is reversed) belongs to its owner
                         responsible_idx = hog_owner
                         hog_owner = None
                     # Treat dice modification as movement
@@ -377,9 +380,7 @@ class MetricsAggregator:
                 responsible_idx = event.responsible_racer_idx
                 if event.source == HOG_MODIFIER:
                     # The hog is ridden by whoever took it, but its owner is Hog Knight
-                    hog_owner_idx = self._ability_owner(engine, HOG_KNIGHT_ABILITY)
-                    if hog_owner_idx is not None:
-                        responsible_idx = hog_owner_idx
+                    responsible_idx = self._hog_owner(engine, responsible_idx)
                 if event.source == self.reroll_source:
                     self.reroll_owner = responsible_idx
                 if event.source == PARTY_POOPER_COMPLAINT:
@@ -429,6 +430,9 @@ class MetricsAggregator:
 
                 if event.kind == "traded":
                     pass
+                elif event.source == SHOW_OFF_ABILITY:
+                    # A Show-Off bust forfeits the first die, which is recorded with the roll
+                    pass
                 elif event.responsible_racer_idx == event.target_racer_idx:
                     stats_skipped_racer.skipped_self_main_move += 1
                 else:
@@ -436,6 +440,20 @@ class MetricsAggregator:
 
             case _:
                 pass
+
+    def _record_silent_trigger(
+        self,
+        engine: GameEngine,
+        owner_idx: int,
+        target_idx: int,
+    ) -> None:
+        """Count a use of a power that the engine applies without an AbilityTriggeredEvent."""
+        stats = self._get_result(owner_idx)
+        stats.ability_trigger_count += 1
+        if owner_idx == target_idx:
+            stats.ability_self_target_count += 1
+        if owner_idx == engine.state.current_racer_idx:
+            stats.ability_own_turn_count += 1
 
     def _record_dice_ability_movement(
         self,
@@ -463,6 +481,19 @@ class MetricsAggregator:
                     roller,
                     FORCED_VALUE - EXPECTED_D6,
                 )
+                self._record_silent_trigger(engine, stunner_idx, roller)
+        if (
+            event.base_value <= 0
+            and dice
+            and self._has_ability(engine, roller, SHOW_OFF_ABILITY)
+        ):
+            self._record_movement_bucket(roller, roller, -dice[0])
+        uses_dice_power = len(dice) > 1 and (
+            self._has_ability(engine, roller, SHOW_OFF_ABILITY)
+            or self._has_ability(engine, roller, MR_DICE_GUY_ABILITY)
+        )
+        if uses_dice_power:
+            self._record_silent_trigger(engine, roller, roller)
         if len(dice) < 2 or event.base_value <= 0:
             return
         if self._has_ability(engine, roller, SHOW_OFF_ABILITY):

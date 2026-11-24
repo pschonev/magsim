@@ -15,7 +15,6 @@ from magsim.core.agent import (
     SelectionInteractive,
 )
 from magsim.core.events import (
-    AbilityTriggeredEvent,
     AbilityTriggeredEventOrSkipped,
     GameEvent,
     PostMoveEvent,
@@ -166,12 +165,8 @@ class AbilityCopyLead(Ability, SelectionDecisionMixin[ActiveRacerState]):
         # Update
         engine.replace_core_abilities(owner.idx, new_core)
 
-        return AbilityTriggeredEvent(
-            responsible_racer_idx=owner.idx,
-            source=self.name,
-            phase=event.phase,
-            target_racer_idx=target.idx,
-        )
+        # Switching who to copy is not a use of a power; the copied power triggers on its own.
+        return "skip_trigger"
 
     @override
     def get_baseline_selection_decision(

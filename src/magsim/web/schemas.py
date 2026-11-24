@@ -145,22 +145,15 @@ class TriggerInductionCellDTO(msgspec.Struct, frozen=True):
     games_together: int
 
 
-class TriggerPullRowDTO(msgspec.Struct, frozen=True):
-    """How much other racers' abilities trigger in this racer's races, and how long they last."""
-
-    racer_name: str
-    color: str
-    others_trigger_ratio: float
-    avg_turns: float
-    races_run: int
-
-
 class EnvironmentCellDTO(msgspec.Struct, frozen=True):
-    """Single cell in the racer-vs-environment adaptability matrix."""
+    """Single cell in the racer-vs-environment adaptability matrix.
+
+    `racer_count` None covers all player counts, `board` None covers all boards.
+    """
 
     racer_name: str
-    board: str
-    racer_count: int
+    board: str | None
+    racer_count: int | None
     env_label: str
     cond_avg_vp: float
     racer_global_avg_vp: float
@@ -206,7 +199,6 @@ class DashboardAnalysisDTO(msgspec.Struct, frozen=True):
     trigger_induction: list[TriggerInductionCellDTO] = msgspec.field(
         default_factory=list,
     )
-    trigger_pull: list[TriggerPullRowDTO] = msgspec.field(default_factory=list)
     summary_tables: list[SummaryTableDTO] = msgspec.field(default_factory=list)
 
 

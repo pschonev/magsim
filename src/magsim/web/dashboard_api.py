@@ -20,7 +20,7 @@ from magsim.analysis.filters import (
     get_automatic_racers,
 )
 from magsim.analysis.metrics import run_full_analysis
-from magsim.analysis.tables import SUMMARY_TABLE_TITLES
+from magsim.analysis.tables import SUMMARY_TABLE_TITLES, with_racer_extras
 from magsim.core.palettes import get_racer_color
 from magsim.web.schemas import (
     AbilityBreakdownRowDTO,
@@ -36,7 +36,6 @@ from magsim.web.schemas import (
     RawTableQueryDTO,
     SummaryTableDTO,
     TriggerInductionCellDTO,
-    TriggerPullRowDTO,
 )
 
 RACE_PRIORITY_COLUMNS: tuple[str, ...] = (
@@ -229,8 +228,8 @@ def _df_to_abilities(df: pl.DataFrame) -> list[AbilityBreakdownRowDTO]:
 def _df_to_global_dynamics(df: pl.DataFrame) -> list[GlobalDynamicsRowDTO]:
     return [
         GlobalDynamicsRowDTO(
-            board=str(row["board"]),
-            racer_count=_safe_int(row["racer_count"]),
+            board=None if row["board"] is None else str(row["board"]),
+            racer_count=None if row["racer_count"] is None else _safe_int(row["racer_count"]),
             race_count=_safe_int(row["race_count"]),
             avg_turns=_safe_float(row["avg_turns"]),
             tightness=_safe_float(row["tightness"]),
@@ -304,29 +303,14 @@ def _df_to_trigger_induction(df: pl.DataFrame) -> list[TriggerInductionCellDTO]:
     ]
 
 
-def _df_to_trigger_pull(df: pl.DataFrame) -> list[TriggerPullRowDTO]:
-    if df.is_empty():
-        return []
-    return [
-        TriggerPullRowDTO(
-            racer_name=str(row["racer_name"]),
-            color=get_racer_color(str(row["racer_name"])),
-            others_trigger_ratio=_safe_float(row["others_trigger_ratio"]),
-            avg_turns=_safe_float(row["avg_turns"]),
-            races_run=_safe_int(row["races_run"]),
-        )
-        for row in df.to_dicts()
-    ]
-
-
 def _df_to_environment_cells(df: pl.DataFrame) -> list[EnvironmentCellDTO]:
     if df.is_empty():
         return []
     return [
         EnvironmentCellDTO(
             racer_name=str(row["racer_name"]),
-            board=str(row["board"]),
-            racer_count=_safe_int(row["racer_count"]),
+            board=None if row["board"] is None else str(row["board"]),
+            racer_count=None if row["racer_count"] is None else _safe_int(row["racer_count"]),
             env_label=str(row["env_label"]),
             cond_avg_vp=_safe_float(row["cond_avg_vp"]),
             racer_global_avg_vp=_safe_float(row["racer_global_avg_vp"]),
@@ -346,10 +330,12 @@ def _df_to_environment_cells(df: pl.DataFrame) -> list[EnvironmentCellDTO]:
 def _df_to_environment_matrix(
     environment: pl.DataFrame,
     twist_environment: pl.DataFrame,
+    totals: pl.DataFrame,
 ) -> list[EnvironmentCellDTO]:
     return [
         *_df_to_environment_cells(environment),
         *_df_to_environment_cells(twist_environment),
+        *_df_to_environment_cells(totals),
     ]
 
 
@@ -434,10 +420,16 @@ def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
         environment_matrix=_df_to_environment_matrix(
             result.environment_matrix,
             result.twist_environment_matrix,
+            result.environment_totals,
         ),
         trigger_induction=_df_to_trigger_induction(result.trigger_induction),
-        trigger_pull=_df_to_trigger_pull(result.trigger_pull),
-        summary_tables=_df_to_summary_tables(result.summary_tables),
+        summary_tables=_df_to_summary_tables(
+            with_racer_extras(
+                result.summary_tables,
+                result.trigger_pull,
+                result.racer_extras,
+            ),
+        ),
     )
 
 

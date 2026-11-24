@@ -46,6 +46,7 @@ def compute_matchup_matrix(
     )
 
 
+MIN_BASELINE_TRIGGERS = 0.1
 TWISTY_BOARD = "TwistyTwirl"
 FANS_DEMAND_CHAOS = "Fans Demand Chaos"
 
@@ -165,7 +166,8 @@ def compute_trigger_induction(stats_results: pl.DataFrame) -> pl.DataFrame:
     """How much more or less a racer's ability triggers when another racer is in the race.
 
     `relative_shift` compares the racer's average triggers per race with that opponent present to its
-    average over all races; it is an indirect estimate and also reflects game length.
+    average over all races; it is an indirect estimate and also reflects game length. Racers whose
+    ability almost never triggers are left out as the triggering racer, because their shifts are noise.
     """
     subjects = stats_results.select("config_hash", "racer_name", "ability_trigger_count")
     opponents = stats_results.select(
@@ -184,6 +186,7 @@ def compute_trigger_induction(stats_results: pl.DataFrame) -> pl.DataFrame:
             pl.len().alias("games_together"),
         )
         .join(baselines, on="racer_name", how="left")
+        .filter(pl.col("baseline_triggers") >= MIN_BASELINE_TRIGGERS)
         .with_columns(
             pl.when(pl.col("baseline_triggers") != 0)
             .then(pl.col("avg_triggers_with") / pl.col("baseline_triggers") - 1)
@@ -224,3 +227,72 @@ def compute_trigger_pull(
         .fill_nan(0.0)
         .sort("racer_name")
     )
+
+
+def compute_environment_totals(
+    stats_results: pl.DataFrame,
+    df_races_f: pl.DataFrame,
+) -> pl.DataFrame:
+    """Environment shifts summed over player counts and over boards.
+
+    Rows with a null `racer_count` cover all player counts of a board or twist card; rows with a
+    null `board` cover all boards for one player count; the row with both null is the grand total.
+    """
+    has_twists = "twists" in df_races_f.columns
+    twist = (
+        pl.when(pl.col("twists").list.contains(FANS_DEMAND_CHAOS))
+        .then(pl.lit(FANS_DEMAND_CHAOS))
+        .when(pl.col("twists").list.len() == 1)
+        .then(pl.col("twists").list.first())
+        .otherwise(None)
+        if has_twists
+        else pl.lit(None, dtype=pl.String)
+    ).alias("twist")
+    race_meta = df_races_f.select("config_hash", "board", "racer_count", twist)
+    joined = stats_results.join(race_meta, on="config_hash", how="inner").with_columns(
+        pl.lit("all").alias("scope"),
+    )
+    if joined.is_empty():
+        return pl.DataFrame()
+
+    def scoped(frame: pl.DataFrame, env_cols: list[str], label: pl.Expr) -> pl.DataFrame:
+        return _environment_shifts(frame, joined, env_cols, label)
+
+    all_counts = pl.lit("All\n")
+    boards = scoped(joined, ["board"], all_counts + pl.col("board")).with_columns(
+        pl.lit(None, dtype=pl.String).alias("twist"),
+    )
+    twist_rows = joined.filter(
+        (pl.col("board") == TWISTY_BOARD) & pl.col("twist").is_not_null(),
+    )
+    cards = (
+        scoped(twist_rows, ["board", "twist"], all_counts + pl.col("twist"))
+        if not twist_rows.is_empty()
+        else None
+    )
+    counts = scoped(
+        joined,
+        ["scope", "racer_count"],
+        pl.col("racer_count").cast(pl.String) + pl.lit("p\nAll"),
+    )
+    grand = scoped(joined, ["scope"], pl.lit("All\nAll"))
+    columns = [
+        "racer_name", "board", "racer_count", "twist", "env_label", "cond_avg_vp",
+        "racer_global_avg_vp", "relative_shift", "absolute_shift", "env_mean_relative_shift",
+        "env_mean_absolute_shift", "adjusted_relative_shift", "adjusted_absolute_shift",
+        "games_count",
+    ]
+
+    def aligned(frame: pl.DataFrame) -> pl.DataFrame:
+        missing = {
+            "board": pl.String,
+            "racer_count": pl.Int64,
+            "twist": pl.String,
+        }
+        for name, dtype in missing.items():
+            if name not in frame.columns:
+                frame = frame.with_columns(pl.lit(None, dtype=dtype).alias(name))
+        return frame.with_columns(pl.col("racer_count").cast(pl.Int64)).select(columns)
+
+    parts = [boards, counts, grand] if cards is None else [boards, cards, counts, grand]
+    return pl.concat([aligned(p) for p in parts], how="vertical")

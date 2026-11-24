@@ -61,3 +61,18 @@ def test_trigger_pull_is_the_games_weighted_mean_of_opponent_trigger_ratios() ->
     assert abs(ratios["Hare"] - 4 / 3) < 1e-9
     assert abs(ratios["Banana"] - 2 / 3) < 1e-9
     assert abs(ratios["Gunk"] - 1.0) < 1e-9
+
+
+def test_racers_whose_ability_almost_never_triggers_are_not_measured() -> None:
+    quiet = pl.DataFrame(
+        {
+            "config_hash": ["a", "a", "b", "b"],
+            "racer_name": ["Hare", "Stunner", "Hare", "Stunner"],
+            "ability_trigger_count": [4, 0, 2, 0],
+        },
+    )
+
+    induction = compute_trigger_induction(quiet)
+
+    assert induction["racer_name"].unique().to_list() == ["Hare"]
+    assert induction["opponent_name"].to_list() == ["Stunner"]

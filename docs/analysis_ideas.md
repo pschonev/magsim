@@ -69,3 +69,47 @@ Found while porting the notebook analytics (M1-M5). "Verified" = checked on `doc
 - **Heatmap color scale is unverified against the notebook.** Altair's `domainMid=0` with a five-colour range may only use the first three colours. The port uses a symmetric five-stop diverging scale; compare once side by side.
 - **Charts bundle is large.** ECharts takes the JS bundle from about 365 kB to about 1 MB (328 kB gzipped); lazy-load the charts panel.
 - **Sort direction cycle differs by type.** Numeric columns sort descending first, text columns ascending first (TanStack default).
+
+
+# ToDos
+
+## Round 1
+
+- `Environment` heatmap should have extra columns: after each player count, there should be one column `total` that is the combined result of all player counts on that board/twist card and there should be one "extra board" `total` which has the total numbers for each player count (and the total total); same logic for when we reverse the two categories, splitting first by players and then by board/twist card
+- let agent analyze UX, UI and simulation graphics
+- fix Mush issue
+> I replayed 4,000 races in two different orders in one process. 3 of them (0.07%) ended differently, all on Twisty Twirl and all containing Mush. This fits the intermittent Mush test failure from earlier. The same config replays identically in a fresh process, so the stored result and the Simulator can disagree for those races. It's engine code, which AGENT.md puts off-limits, so I haven't touched it. I can investigate with your permission.
+
+## Round 2
+### frontend
+- fix phone usability
+    - heat map 
+        - should not show scale and use fuller width
+        - also needs to rotate labels on such low width or the stack
+        - tables subpages for stats to only show 3 at a time?
+    - simulation
+        - the board is tiny (and this is an issue with the board, it doesn't need so much dead space)
+        - controls and status of racers are huge in comparison and take up too much space (they could probably live side by side)
+        - we need to make it so that controls (forward/backward), the board visualization and the logs are visible at the same time on a phone; we could remove some more unnecessary stuff at the top to get this done like make the top bar narrower, remove upload dataset, don't show `Raw Data` in phone view and move the light/dark button
+- `Global` tab graphs are not that great, ESPECIALLY the distribution graphs for game length and VP at the bottom could be improved
+- when grouping for player count first in `Environments`, board order should be `Standard, Wild Wilds, Whirly World`
+- heatmaps for `Interactions` and `Triggers` should have a toggle like `Adjust for environment averages` that adjusts for racer averages. This toggle should however be off by default
+- `Triggers` should also have the `show percentage shift` control
+- the info circle on graphs should align next to the options on the left
+- choose proper colors for new racers (manual todo by me, not the agent)
+- display proper names of racers, boards and twist cards everywhere instead of the internal ones (e.g. `Speed Demon` instead of `SpeedDemon`, `Flip Flop` instead of `FlipFlop`, `Mild Mile` instead of `Standard` and `Doppelgängster` instead of `Doppelgangster`)
+- `eliminated` stat reads that it shows share of races the racer was eliminated INSTEAD of finishing? It should just be the share of races where the racer was eliminated.
+- swap `eliminated%` and `rollingturn%` with `ability+others` and `ability-others` from the `Ability` tab
+- let's try a scatter plot for player count and game length preference as axis
+- bring back names of racers in the same color as their dots in the 2D scatterplot; it's easier to see which dot belongs to which name
+- the second row with info and scale at the top of heat maps should be integrated into the first row and right-aligned; actually just keep the scale and remove that description, we already have the info on hover
+- table column hover info often lacks formatting (newline and bold)
+- in `Environments` tab, the `all boards` column for total of totals makes no sense actually and will always be 0 for everyone - remove it
+- `costs: own setbacks, giving movement to others` on the ability speed chart is right aligned and does not mirror the left side's description
+- you can remove the `INFO 0:0` from the start from every log line but ONLY if we are not in log debugging mode (the toggle in the config)
+
+### Data
+- is Cheatah really this terrible? His ability is a big net-negative
+- why does Mr Dice Guy have such a big negative self movement? Doesn't he only skip his turn when he does not roll a single duplicate? Meanwhile he should get to choose a high roll quite often. Is his implementation correct? or are we counting that he often chooses lower numbers to avoid hazards?
+- is `Dice Sensitivity` really the correct description of what we are showing? It's a bit weird because for many racers it's more like how much they want HIGH dice and not necessarily if they want specific dice (Speed Demon, Skipper for example are low even though they depend on the correct dice for their ability); meanwhile we decided to mirror Sisyphus so now he shows up as super dice-sensitive (which is definitely correct but I wonder why this doesn't work for the other racers); maybe this metric currently depends too much on the total amount of VP (or VP shift) for racers? Because Sisyphus is a racer that has some of the highest VP while Speed Demon sucks and often gets no VP
+- 

@@ -44,13 +44,24 @@ def build_wheel(repo_root: Path, wheels_dir: Path) -> Path:
 
 
 def resolve_results_dir(repo_root: Path, override: Path | None) -> Path:
-    """Explicit dir, else the latest batch output in results/, else the committed docs/results snapshot."""
+    """Explicit dir, else the batch output in results/, else the committed docs/results snapshot.
+
+    A results/ folder without both parquet files (a batch still running or failed) is an error
+    instead of a silent switch to the older snapshot.
+    """
     if override is not None:
         return override
     batch_dir = repo_root / BATCH_RESULTS_DIR
-    if all((batch_dir / name).exists() for name in DATASET_FILES):
-        return batch_dir
-    return repo_root / SNAPSHOT_RESULTS_DIR
+    if not batch_dir.exists():
+        return repo_root / SNAPSHOT_RESULTS_DIR
+    missing = [name for name in DATASET_FILES if not (batch_dir / name).exists()]
+    if missing:
+        msg = (
+            f"{batch_dir} has no {', '.join(missing)} (batch still running or failed?). "
+            f"Wait for it, or pass --results-dir {SNAPSHOT_RESULTS_DIR} for the committed snapshot."
+        )
+        raise FileNotFoundError(msg)
+    return batch_dir
 
 
 def export_ipc(src_parquet: Path, dst_ipc: Path) -> None:

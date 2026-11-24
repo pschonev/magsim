@@ -158,7 +158,13 @@ class Board:
         moving_racer_idx: int,
         engine: GameEngine,
         event: GameEvent,
+        departing_owners: frozenset[int] = frozenset(),
     ) -> int:
+        """Final tile after approach hooks.
+
+        `departing_owners` are racers leaving their tile in the same simultaneous warp: their
+        space modifiers (e.g. Huge Baby's blocker) move with them and do not block.
+        """
         visited: set[int] = set()
         current = target
 
@@ -170,6 +176,7 @@ class Board:
                 mod
                 for mod in self.get_modifiers_at(current)
                 if isinstance(mod, ApproachHookMixin)
+                and getattr(mod, "owner_idx", None) not in departing_owners
             ):
                 redirected = mod.on_approach(current, moving_racer_idx, engine, event)
                 if redirected != current:

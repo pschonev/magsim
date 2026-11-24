@@ -140,6 +140,7 @@ class GameState:
     board: Board
     rules: GameRules = field(default_factory=GameRules)
     current_racer_idx: int = 0
+    turn_start_position: int | None = None
     next_turn_override: int | None = None
     roll_state: RollState = field(default_factory=RollState)
 

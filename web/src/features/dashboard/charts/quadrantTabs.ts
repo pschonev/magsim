@@ -1,5 +1,5 @@
 import type { DescriptionLine } from "./Description";
-import type { RacerStatRowDTO, TriggerPullRowDTO } from "../../../types/api";
+import type { RacerStatRowDTO } from "../../../types/api";
 import { type QuadrantSpec, fixed, percent } from "./chartOptions";
 
 export interface QuadrantTab<R extends { racer_name: string; color: string }> {
@@ -102,25 +102,3 @@ export const ABILITY_DESCRIPTION: DescriptionLine[] = [
   },
   { bold: "Sorting:", text: " Racers are ordered by Net Benefit (Total Good - Total Cost)." },
 ];
-
-export const GAME_LENGTH_TAB: QuadrantTab<TriggerPullRowDTO> = {
-  id: "gamelength",
-  spec: {
-    xKey: "others_trigger_ratio",
-    yKey: "avg_turns",
-    xTitle: "Triggers Pulled From Others",
-    yTitle: "Avg Game Length (Turns)",
-    quadLabels: ["Slow Burn", "Chain Reaction", "Quick & Quiet", "Spark"],
-    extra: [{ key: "races_run", label: "races_run", format: fixed(0) }],
-  },
-  description: [
-    {
-      bold: "X-Axis (Triggers Pulled):",
-      text: " How often the other racers' abilities trigger in this racer's races, relative to how often each of them triggers on average (1.00 = as usual).",
-    },
-    {
-      bold: "Y-Axis (Game Length):",
-      text: " Average number of turns of the races this racer takes part in.",
-    },
-  ],
-};

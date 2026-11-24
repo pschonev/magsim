@@ -135,3 +135,149 @@ Design palette from the magsim GitHub button: blue `#6ca1d8`, pink `#ee83b3`, ye
 - Nepo Baby +first corner (12) at the start, Show-Off extra dice, Mr Dice Guy's chosen die (versus an average d6), Stunner's forced 1s (versus an average d6).
 - Tests: tests/test_movement_attribution.py (8). A 700-race replay keeps all final VP identical.
 - Show-Off busts and Mr Dice Guy without duplicates already count as a skipped main move at the average roll.
+
+## Round 2: status
+
+**Done** (checked in headless Chrome, 44 checks): Ability Speed names at the bar ends; Interactions hover lines aligned and flicker-free (drawn outside the chart, no redraw), neutral line colour, square-root colour scale; Triggers axis swap; axis labels on all four sides; Environments with Boards vs twist-card sections, double gap and the same scale (far less grey); Game Length axis rename; column explanations on all tables (hover); new Trigger Pull table; Simulator sidebar without scroll bars, Advanced section (dice, debug, copy, paste), Reset beside it, no "Updates automatically"; purple header.
+
+**Waiting for the new batch:** the +0.01 minimum self speed, the Hog Knight trigger outlier, Nemesis speed and the newly tracked dice abilities all come from the telemetry fixes and only show up once the batch has been rerun and the web assets refreshed.
+
+**Not done:** roll-triggered ability chains (Mr Dice Guy helping Inchworm and others).
+
+# Round 3
+
+## Tables and navigation
+
+- No `Trigger Pull` tab. `# Races` already lives in Overview, `Avg Game Len` in Dynamics; `Triggers Caused` goes into the Abilities table.
+- Remove the `Game Length` scatter. It shows the same thing as `Excitement` (tightness correlates with ability triggers, game length with volatility). Keep only `Excitement`.
+- Top navigation gets two splits: 2D scatterplots | heatmaps and global charts | tables.
+- Filters behind a collapsible, collapsed by default, so the first view shows the full chart without scrolling.
+
+## Heatmaps
+
+- Triggers: swap the initial axes. The toggle must look like a toggle, not a checkbox (applies to all switches).
+- Interactions: still hard to tell good from bad matchups.
+  - Grey zone up to about ±10 %.
+  - The colour scale reaches its ends at about ±35 %, so strong matchups become bright blue / bright pink / red. Outliers (190 %) are clamped instead of stretching the scale.
+- Environments needs more grey as well; Triggers a little more (currently the most sensible).
+- X-axis labels: the top ones run in the opposite direction of the bottom ones. Wish: all labels horizontal, alternating between top and bottom (and rows) so they fit next to each other and stay readable.
+- Scatterplot explanations: on top, shown on hover over an info icon (instead of below the chart).
+
+## Simulator
+
+- Playback bar: `Speed` label sits next to the speed selector; the Reset button takes the left side of that row.
+- Share button moves next to `Advanced`.
+- The saved row should keep everything on one screen, even with 6 racers.
+
+## Round 3: status
+
+**Done** (headless Chrome, regression script passes): Trigger Pull tab removed and `Triggers Caused` added to Abilities; Game Length scatter removed; navigation split in three groups on one row; filters collapsed by default with a summary and the Run button in the bar; real toggles for all switches; Triggers heatmap starts swapped; colour scale with a grey zone to ±10 % and full colours from ±35 % (Triggers ±15 % / ±60 %, VP mode ±0.15 / ±0.5 VP); horizontal axis labels staggered over six slots (top and bottom); info icon above every chart; Reset next to Speed, Share next to Advanced, 6 racers fit on one screen.
+
+**Checked on the new data (249,067 races):** grey/mid/saturated shares per heatmap, twist-card columns, and Triggers (racers whose ability almost never triggers are no longer measured; the 6 passive racers made whole columns noise).
+
+# Round 4
+
+## Data oddities
+
+- Racers that trigger far more when Null is in the game (Mr Dice Guy, Nepo Baby, Re-Runner, Show-Off, Spoilsport, Stunner, shifts of +900 %).
+  - Finding: Null is correct. Null strips Hog Knight's ability while he is behind it; the hog fix looked the owner up by "who holds the hog ability", found nobody and fell back to the rider. These passive racers (about 0.002 triggers per race) then got the hog's triggers. Fix: find Hog Knight by racer, not by ability. Needs a batch rerun.
+  - The percent shift is scale-free per racer (each racer is compared to itself), so mixing 1 and 40 triggers per race is fine; the 900 % came from baselines near 0. The six passive racers are already left out as the triggering racer.
+- Show-Off AI (maths, exact): from the first die on, continue if the next die is higher, bust (no move) if equal or lower.
+  - Expected movement: optimal rule 4.653, current rule "continue while last die <= 3" 4.650, "<= 2" 4.472, "<= 1" 4.028, plain die 3.5. Bust chance: <=1 2.8 %, <=2 9.3 %, <=3 20.6 %, <=4 38.2 %.
+  - So the AI is not bad; "only on a 1 or 2" is safer but lower. The measured bust rate is 25.6 % (hazard overrides push it above 20.6 %).
+  - The chart shows only about +0.3 per turn because a bust is charged as an average roll (3.5) although the forfeited die is about 2 (he only continues on low dice). The true gain is about +0.7. Fix in telemetry: charge the first die. Needs the same batch rerun.
+
+## Requests
+
+- Twist card hover: show what the card does when hovering a card label in the Environments heatmap (static table of card texts keyed by name; unknown names get no tooltip).
+- Environments: toggle to group by player count first, then by board / twist card.
+- Dynamics: new stat for each racer, correlation between player count and VP shift (positive: likes more players); same for game length and VP.
+- Move `Avg Game Len` from Dynamics to Overview, second to last.
+- Movement: add the share of games the racer was eliminated in.
+
+## Round 4: status
+
+**Done:** card descriptions on hover over a twist card label in Environments; Environments toggle "Group by player count first"; Player Count Pref and Game Length Pref in Dynamics (correlations of the racer's VP and the game length against its board/player-count average); Avg Game Len moved to Overview (second to last); Eliminated % in Movement. Telemetry fixes for the next batch: Hog Knight is found by racer instead of by ability (Null strips the ability), and a Show-Off bust costs the forfeited first die instead of an average roll (net gain about +0.67 per turn instead of +0.3).
+
+**Needs a batch rerun:** the two telemetry fixes above (the third batch).
+
+**Found, not fixed (engine, off-limits):** a race can end differently depending on which races ran before it in the same process. 3 of 4,000 sampled races (0.07 %) differ between two run orders, all on Twisty Twirl, all with Mush. The same config replays identically in a fresh process, so the stored result and the Simulator can disagree for those races.
+
+# Data audit (2026-11-24)
+
+Method: replayed 5,000 + 4,000 real races with the batch telemetry and attributed every stat change (triggers, the four movement buckets, skips) to the event, the ability and the credited racer; checked movement per trigger against card values; invariant checks over all 249,067 races.
+
+## Fixed in telemetry (needs the next batch)
+
+- Hogs now belong to whoever started on that hog (Hog Knight or a copy of him); a copied hog was credited to its rider (e.g. Mole).
+- Powers the engine applies without an AbilityTriggeredEvent now count as triggers: Mr Dice Guy (each main roll, about 6 per race), Show-Off (each time he rolls extra dice, about 3), Stunner (each forced 1, about 8). They were the "near-silent" racers left out of the Triggers heatmap.
+- Earlier today: Hog Knight found by racer when Null strips him; Show-Off busts charge the lost first die.
+
+## Verified as correct
+
+- No ability credit goes to a racer who does not own the source (0 after the fixes).
+- Movement per trigger matches the cards (Lackey, Romantic, Heckler, Duelist 2; Centaur -2; Inchworm, Leaptoad, Scoocher, Party Pooper, Huge Baby blocker 1; Legs 1.5; Mole 2.5; Alchemist 2.55; Gunk/Null -1; Coach +1; Hare +2; Icarus +3; Stepdad +2).
+- Results per race = racer count; sum of turns = total turns; nobody is both eliminated and finished; dice averages only deviate for racers that change dice (Party Pooper 2.95, Mr Dice Guy 3.95, Dicemonger 4.09, Magician 4.28).
+- VP: on Standard without VP-changing racers only 0/2/4 occur; every negative VP comes from Hotel or a copy of Hotel; Season Finale winners get 6.
+
+## Engine / racer bugs (fixed 2026-11-24, with permission)
+
+- Heckler: turn-start position now lives on the game state (`GameState.turn_start_position`, set in `run_turn`) instead of a class-level dict shared across races. Removes the order dependence (Mush, Copycat, Null) and the stored-vs-Simulator mismatch.
+- Cheerleader / simultaneous moves: racers crossing the line after the race has ended get no rank (`check_finish`).
+- Spoilsport: the trigger is queued before the race ends, so telemetry records it.
+- Copycat: switching who it copies is no longer a trigger (no Scoocher scooch, no trigger count). Changed the expected value in the existing test `tests/racers/test_copycat.py::test_copycat_basic_ability_gain` from 7 to 6 (it pinned the old scooch).
+
+## Open questions added
+
+- Show-Off and Scoocher (is every extra die a power use?); Mr. Dice Guy and Stunner have the same gap.
+- Understudy copying Mastermind, both predicting the winner: two 2nd places.
+
+## Modelling choices to be aware of
+
+- An extra turn (Hopfrog, Genius, Magical Athlete 4) is recorded as every other racer losing a turn, so it shows under "-Others" instead of "+Self". Per-turn normalisation makes the size equal; only the bar differs.
+- Eliminations are deliberately not part of Ability Speed (elimination is not speed).
+- Hog takeovers count as a Hog Knight trigger (about 2.9 of his 7.8 per race).
+
+## Data audit, round 2 (2026-11-24, after the fixes)
+
+Fresh simulations with the fixed engine (8,000 + 6,000 races): 0 foreign ability credits; no finish position above 2; double 2nd place only with Mastermind plus a copy (open question); sum of turns = total turns; run order no longer changes any result (0 of 4,000).
+
+Fixed in this round:
+- Telemetry: a hog's bonus under Le Saboteur's reversal (-2) was charged to the rider; now matched by size, not sign.
+- Suckerfish: its "land on the target tile" override applied to whatever move came first (a Centaur trample carried it forward 8). Now only the ride uses it.
+- Environment heatmap: Σ total column per board / twist card and an "All" group (per player count and grand total); the same in the player-count-first grouping. The grand total is always 0 (shifts are relative to the racer's own average).
+
+Found, not fixed:
+- Flip Flop / Diva swapping with Huge Baby: Huge Baby's blocker treats the simultaneous swap as landing on its space, redirects the swapper and pushes it away, so the swap breaks. The card says a swap is simultaneous and never shares a space. Engine change (simultaneous warp vs Huge Baby), not done yet.
+- Deadlocks: 0.35 % of races hit the 300-turn limit (e.g. Stunner + Gunk + Skipper on the Start: every forced 1 moves 0 and gives Skipper the turn again; Randomness Ceased + Curse Wands). `batch.py` drops these races entirely (loop errors are stored with an error code), so they never appear in the data.
+- Test flakiness: the `scenario` fixture uses an unseeded `random.Random()` for everything except the scripted dice (twist draws, Egg's draw). The "known flaky" tests (Scrying Pool, Soulmate, unforced twist draw) fail at random, not because of engine state. Fix: a default seed in `tests/conftest.py`.
+
+# Round 5: UX review (agent, from 19 screenshots; not yet acted on)
+
+Top issues:
+1. Track text upside down on the bottom straight and left curve (tile numbers and warp labels inherit the tile rotation). Keep text upright (add 180 degrees when the angle is between 90 and 270).
+2. Racer-colored text has poor contrast: light Ability Speed ("Coach" invisible, Third Wheel, Twin, Blimp, Romantic faint), dark (Hypnotist, Legs, Gunk), track labels for dark racers, smudged black halos in the light scatter. Use normal text color plus a color dot, or theme-adjusted colors with 4.5:1 contrast; halo in the panel background color.
+3. Heatmaps: no axis titles (which axis is the racer, which the opponent); the legend sits far right and below the fold (only the top end visible); dark neutral middle is muddy. Add axis titles, a horizontal legend with min/0/max above the grid, panel background as the neutral color.
+4. Ability Speed has no legend, side headers or x-axis units.
+5. Simulator start and finish: names of six racers on tile 0 pile up; the Goal tile overlaps the Start tile at an angle; at race end the centre still shows the last roll; rank badges are tiny. Fan out stacked racers, give the finish its own tile, show a winner card at the end.
+
+Further:
+- Dashboard: 15 similar tabs; add group captions. Dark charts have no card background, light ones do.
+- Overview: right-align numbers with fixed decimals; maybe inline bars.
+- Global: duplicated section and chart titles; histogram x labels above the bars; no hover help for metric names.
+- Environments: board names wrap to 3 lines; "Boards" white vs twist heading purple; Σ columns need a gap or border; ~60 px empty space above; row labels ~9 px.
+- Filters: "Racer count(s): All (3)" reads as 3 racers, rename to "Player counts"; tiny expand arrow on Advanced Combination Filters.
+- Raw Data: no race separator or id; snake_case headers; no sideways-scroll cue; search far from the table.
+- Track: warp tiles show the target instead of their own number; solid vs dashed warp lines unexplained; current-racer ring too subtle; chip and corner markers look alike; track and log stay dark in the light theme (decide on purpose).
+- Event log: "INFO" and the debug prefix waste ~25 % of the width; the red dashed "CURRENT STEP" marker looks like an error; low-contrast dimmed lines; awkward wrapping.
+- Sidebar: "Turn 15 / Step 26/94" is confusing; disabled start-tile arrows look enabled.
+
+Partly inaccurate (reviewer only saw static shots): heatmap columns are all labeled (half of them at the bottom); hovering a cell already shows racer, opponent and value; table headers already show the sort arrow.
+
+Keep: Global small multiples with one shared player-count legend; the big centre dice roll and highlighted racer card; colored warp tiles with matching arcs; the one-line filter summary.
+
+## Round 5: status
+
+**Done:** upright track text; racer names in the theme text color (charts: halo in the background color; track: light text with a dark outline; Ability Speed: color dot plus name); heatmaps: "Rows / Columns" captions and an HTML legend (low end, 0, high end, grey band) above the grid, neutral grey middle in dark mode; Ability Speed: axis, legend and side headers at the top; "Player counts" filter label; right-aligned, tabular numbers in tables; "step N of M" in the playback bar.
+
+**Proposal:** `docs/design_direction.html` (open in a browser): badge palette, type, controls, redrawn race track, event log, plan and open decisions. Not implemented yet.

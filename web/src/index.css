@@ -68,10 +68,6 @@
   --color-amber-900: #403000;
   --color-amber-950: #2a2000;
 
-  --stripe-red: #e0291d;
-  --stripe-yellow: #f9c800;
-  --stripe-green: #2fb145;
-  --stripe-purple: #9b2fe0;
 }
 
 :root[data-theme="light"] {
@@ -111,16 +107,6 @@
 
 @utility text-on-accent {
   color: #fff;
-}
-
-@utility stripes {
-  background: linear-gradient(
-    90deg,
-    var(--stripe-red) 0 25%,
-    var(--stripe-yellow) 25% 50%,
-    var(--stripe-green) 50% 75%,
-    var(--stripe-purple) 75% 100%
-  );
 }
 
 html,

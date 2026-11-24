@@ -182,7 +182,8 @@ class GameEngine:
         self.log_context.start_turn_log(f"{racer.idx}•{racer.name}")
         self.log_info(f"=== START TURN: {racer.repr} ===")
 
-        # --- Pre-Turn Recording (for Heckler) ---
+        # Where the turn started, for powers that compare it at turn end (Heckler)
+        self.state.turn_start_position = racer.position
         self.push_event(
             PreTurnStartEvent(
                 responsible_racer_idx=None,

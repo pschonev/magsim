@@ -121,18 +121,10 @@ export interface TriggerInductionCellDTO {
   games_together: number;
 }
 
-export interface TriggerPullRowDTO {
-  racer_name: string;
-  color: string;
-  others_trigger_ratio: number;
-  avg_turns: number;
-  races_run: number;
-}
-
 export interface EnvironmentCellDTO {
   racer_name: string;
-  board: string;
-  racer_count: number;
+  board: string | null;
+  racer_count: number | null;
   env_label: string;
   cond_avg_vp: number;
   racer_global_avg_vp: number;
@@ -167,7 +159,6 @@ export interface DashboardAnalysisDTO {
   matchup_matrix: MatchupCellDTO[];
   environment_matrix: EnvironmentCellDTO[];
   trigger_induction: TriggerInductionCellDTO[];
-  trigger_pull: TriggerPullRowDTO[];
   summary_tables: SummaryTableDTO[];
 }
 

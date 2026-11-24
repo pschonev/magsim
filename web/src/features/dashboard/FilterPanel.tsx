@@ -1,4 +1,4 @@
-import { AlertTriangle, Ban, Bot, Check, Play, X } from "lucide-react";
+import { AlertTriangle, Ban, Bot, Check, ChevronDown, ChevronRight, Play, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
 import { MultiSelect } from "../../components/MultiSelect";
 import type {
@@ -15,6 +15,7 @@ interface FilterPanelProps {
   isStale: boolean;
   running: boolean;
   onRun: () => void;
+  analyzedCount: number | null;
 }
 
 export function FilterPanel({
@@ -24,22 +25,66 @@ export function FilterPanel({
   isStale,
   running,
   onRun,
+  analyzedCount,
 }: FilterPanelProps) {
   const [comboMode, setComboMode] = useState<ComboMode>("include");
   const [comboRacers, setComboRacers] = useState<string[]>([]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const automatic = meta.racers.filter((r) => meta.automatic_racers.includes(r));
+  const summary = [
+    draft.racers.length === meta.racers.length
+      ? `All ${meta.racers.length} racers`
+      : `${draft.racers.length} of ${meta.racers.length} racers`,
+    `${draft.counts.join("/")} players`,
+    draft.boards.length === meta.boards.length ? "all boards" : draft.boards.join(", "),
+    ...(draft.combos.length > 0 ? [`${draft.combos.length} combo filter(s)`] : []),
+    ...(analyzedCount !== null ? [`${analyzedCount.toLocaleString()} races analyzed`] : []),
+  ].join(" · ");
 
   return (
-    <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
-      <div>
-        <h2 className="text-base font-semibold text-slate-50">Aggregated Dashboard</h2>
-        <p className="text-xs text-slate-400">
-          Filter races by roster, board, and player count.
-        </p>
+    <section className="rounded-xl border border-slate-800 bg-slate-900/70">
+      <div className="flex flex-wrap items-center gap-3 px-3 py-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs font-medium text-slate-200"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+          Filters
+          {open ? (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+          )}
+          <span className="truncate font-normal text-slate-400">{summary}</span>
+        </button>
+        {isStale && (
+          <span className="text-xs text-amber-400">
+            <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+            Filters changed
+          </span>
+        )}
+        <button
+          type="button"
+          title="Click to process data with current filters."
+          disabled={running}
+          onClick={onRun}
+          className={`inline-flex items-center gap-1.5 rounded-md border px-4 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+            isStale
+              ? "border-indigo-500 bg-indigo-600 text-on-accent hover:bg-indigo-500"
+              : "border-slate-700 bg-slate-900 text-indigo-300 hover:border-indigo-500"
+          }`}
+        >
+          <Play className="h-3 w-3" />
+          {running ? "Running analysis..." : "Run Analysis"}
+        </button>
       </div>
 
+      {open && (
+        <div className="space-y-3 border-t border-slate-800 p-4">
       <div className="flex flex-wrap items-end gap-3">
         <MultiSelect
           label="Racers (roster pool)"
@@ -59,7 +104,7 @@ export function FilterPanel({
           Select automatic racers
         </button>
         <MultiSelect
-          label="Racer count(s)"
+          label="Player counts"
           options={meta.counts.map(String)}
           selected={draft.counts.map(String)}
           onChange={(counts) => onChange({ ...draft, counts: counts.map(Number) })}
@@ -156,29 +201,8 @@ export function FilterPanel({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        {isStale && (
-          <span className="text-xs text-amber-400">
-            <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
-            <strong>Filters changed:</strong> the results below are outdated. Click{" "}
-            <strong>Run Analysis</strong> to update.
-          </span>
-        )}
-        <button
-          type="button"
-          title="Click to process data with current filters."
-          disabled={running}
-          onClick={onRun}
-          className={`inline-flex items-center gap-1.5 rounded-md border px-4 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
-            isStale
-              ? "border-indigo-500 bg-indigo-600 text-on-accent hover:bg-indigo-500"
-              : "border-slate-700 bg-slate-900 text-indigo-300 hover:border-indigo-500"
-          }`}
-        >
-          <Play className="h-3 w-3" />
-          {running ? "Running analysis..." : "Run Analysis"}
-        </button>
-      </div>
+        </div>
+      )}
     </section>
   );
 }

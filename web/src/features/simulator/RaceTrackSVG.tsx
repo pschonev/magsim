@@ -74,6 +74,12 @@ const OCCUPANCY_OFFSETS: [number, number][][] = [
   [[-18, -9], [0, -9], [18, -9], [-18, 9], [0, 9], [18, 9]],
 ];
 
+/** Tile angle turned so text never reads upside down. */
+function uprightAngle(angle: number): number {
+  const normalized = ((angle % 360) + 360) % 360;
+  return normalized > 90 && normalized < 270 ? normalized - 180 : normalized;
+}
+
 function generateTrackPositions(numSpaces: number, mirrored: boolean): TilePos[] {
   const perimeter = 2 * STRAIGHT + 2 * Math.PI * RADIUS;
   const stepDist = perimeter / numSpaces;
@@ -306,6 +312,7 @@ export function RaceTrackSVG({ step, board, racerPalettes }: RaceTrackSVGProps) 
             const mods = board.tiles[String(idx)] ?? [];
             const style = getTileStyle(idx, numSpaces, mods, warpTileColors.get(idx));
             const transform = `rotate(${pos.angle}, ${pos.x}, ${pos.y})`;
+            const textTransform = `rotate(${uprightAngle(pos.angle)}, ${pos.x}, ${pos.y})`;
             const isTwistGate = hasTwists && idx === board.twist_after_tile;
             const isCorner = hasTwists && (idx === board.first_corner || idx === board.second_turn);
             return (
@@ -355,7 +362,7 @@ export function RaceTrackSVG({ step, board, racerPalettes }: RaceTrackSVGProps) 
                   fontWeight="bold"
                   textAnchor="middle"
                   fill={style.textFill}
-                  transform={transform}
+                  transform={textTransform}
                 >
                   {style.label}
                 </text>
@@ -460,8 +467,8 @@ export function RaceTrackSVG({ step, board, racerPalettes }: RaceTrackSVGProps) 
                     fontSize="13"
                     fontWeight="900"
                     textAnchor={anchor}
-                    fill={palette.primary}
-                    stroke="#000000"
+                    fill="#f8fafc"
+                    stroke="#0b0d0c"
                     strokeWidth="4"
                     paintOrder="stroke"
                   >

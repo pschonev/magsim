@@ -35,6 +35,6 @@ def test_scoocher_understudy_cascade_on_bonkbug_board_is_aborted():
         seed=2590,
     )
 
-    game.run_turn()
+    game.engine.run_race()
 
     assert game.engine.bug_reason == "CRITICAL_LOOP_DETECTED"

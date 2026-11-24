@@ -7,11 +7,14 @@ import type {
   MatchupCellDTO,
   TriggerInductionCellDTO,
 } from "../../../types/api";
-import type { ECharts } from "echarts/core";
+import { type ECharts, graphic } from "echarts/core";
 import type { ChartTheme } from "../../../utils/theme";
 import { rankTransform } from "./rank";
 
-export const SHIFT_COLORS = ["#AD1457", "#F06292", "#3E3B45", "#42A5F5", "#0D47A1"];
+const SHIFT_STRONG_BAD = "#D32F2F";
+const SHIFT_BAD = "#F06292";
+const SHIFT_GOOD = "#42A5F5";
+const SHIFT_STRONG_GOOD = "#0D47A1";
 export const PLAYER_COUNT_COLORS = ["#40B0A6", "#FFC107", "#D81B60", "#1E88E5", "#9C27B0"];
 export const TURNS_COLOR = "#40B0A6";
 export const VP_COLOR = "#D81B60";
@@ -198,11 +201,10 @@ export function buildQuadrantOption<R extends QuadrantRow>(
             show: true,
             formatter: r.racer_name,
             position: "top",
-            offset: [-14, 0],
-            color: r.color,
-            fontSize: 15,
-            fontWeight: 800,
-            textBorderColor: t.outline,
+            color: t.text,
+            fontSize: 13,
+            fontWeight: 700,
+            textBorderColor: t.bg,
             textBorderWidth: 3,
           },
         })),
@@ -237,6 +239,13 @@ export const ABILITY_METRICS = [
   { label: "+ Others", key: "pos_other", side: 1, color: "#FFC107" },
 ] as const;
 
+const ABILITY_LEGEND: Record<string, string> = {
+  "+ Self": "moves itself forward",
+  "- Others": "moves others back",
+  "- Self": "moves itself back",
+  "+ Others": "moves others forward",
+};
+
 export function buildAbilityOption(
   rows: AbilityBreakdownRowDTO[],
   racerColors: Record<string, string>,
@@ -258,14 +267,29 @@ export function buildAbilityOption(
   return {
     backgroundColor: t.bg,
     animation: false,
-    grid: { left: 130, right: 30, top: 20, bottom: 50 },
+    grid: { left: 130, right: 30, top: 96, bottom: 20 },
+    graphic: [
+      {
+        type: "text",
+        left: "12%",
+        top: 8,
+        style: { text: "◀ gains: own boosts, taking movement from others", fill: t.text, fontSize: 12, fontWeight: "bold" },
+      },
+      {
+        type: "text",
+        right: 30,
+        top: 8,
+        style: { text: "costs: own setbacks, giving movement to others ▶", fill: t.text, fontSize: 12, fontWeight: "bold", align: "right" },
+      },
+    ],
     xAxis: {
       type: "value",
+      position: "top",
       min: domainMin,
       max: domainMax,
-      name: "Movement Impact (Normalized)",
+      name: "tiles per turn",
       nameLocation: "middle",
-      nameGap: 30,
+      nameGap: 22,
       nameTextStyle: { ...baseText, fontWeight: "bold" },
       axisLabel: {
         ...baseText,
@@ -280,23 +304,16 @@ export function buildAbilityOption(
       type: "category",
       inverse: true,
       data: rows.map((r) => r.racer_name),
-      axisLabel: {
-        interval: 0,
-        fontSize: 11,
-        fontWeight: 700,
-        formatter: (name: string) => `{${name}|${name}}`,
-        rich: Object.fromEntries(
-          rows.map((r) => [r.racer_name, { color: racerColors[r.racer_name] ?? t.text }]),
-        ),
-      },
+      axisLabel: { show: false },
       axisTick: { show: false },
       axisLine: { show: false },
     },
     legend: {
-      orient: "vertical",
-      left: 150,
-      bottom: 70,
+      orient: "horizontal",
+      top: 30,
+      left: "center",
       data: ["+ Self", "- Others", "- Self", "+ Others"],
+      formatter: (name: string) => ABILITY_LEGEND[name] ?? name,
       textStyle: baseText,
     },
     tooltip: {
@@ -307,7 +324,8 @@ export function buildAbilityOption(
       formatter: (p: { seriesName: string; name: string; value: number }) =>
         `<b>${p.name}</b><br/>${p.seriesName}: ${Math.abs(p.value).toFixed(2)}`,
     },
-    series: ABILITY_METRICS.map((m, metricIndex) => ({
+    series: [
+      ...ABILITY_METRICS.map((m, metricIndex) => ({
       type: "bar" as const,
       name: m.label,
       stack: "total",
@@ -326,6 +344,27 @@ export function buildAbilityOption(
           }
         : {}),
     })),
+      {
+        type: "scatter" as const,
+        symbolSize: 0,
+        silent: true,
+        tooltip: { show: false },
+        z: 5,
+        data: rows.map((r, i) => ({
+          value: [negativeEdge[i], r.racer_name],
+          label: {
+            show: true,
+            position: "left" as const,
+            distance: 6,
+            formatter: `{dot|●} ${r.racer_name}`,
+            color: t.text,
+            rich: { dot: { color: racerColors[r.racer_name] ?? t.text, fontSize: 12 } },
+            fontWeight: 700,
+            fontSize: 11,
+          },
+        })),
+      },
+    ],
   };
 }
 
@@ -536,141 +575,261 @@ export interface HeatmapCell {
   tip: string;
 }
 
-function quantile(values: number[], q: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor(q * (sorted.length - 1)))];
+export interface HeatmapGroup {
+  labels: string[];
+  fontSize: number;
+  offset: number;
+  accentFrom?: number;
+  accentTo?: number;
 }
 
 export interface HeatmapAxis {
   keys: (string | null)[];
   labels: string[];
-  rotate: boolean;
-  groups: { labels: string[]; fontSize: number; offset: number }[];
+  stagger: boolean;
+  groups: HeatmapGroup[];
+  accent?: boolean[];
+  descriptions?: Record<string, string>;
 }
+
+export interface ColorScale {
+  neutral: number;
+  strong: number;
+}
+
+export const PERCENT_SCALE: ColorScale = { neutral: 0.1, strong: 0.35 };
+export const VP_SCALE: ColorScale = { neutral: 0.15, strong: 0.5 };
+export const TRIGGER_SCALE: ColorScale = { neutral: 0.15, strong: 0.6 };
 
 export function plainAxis(names: string[]): HeatmapAxis {
-  return { keys: names, labels: names, rotate: true, groups: [] };
+  return { keys: names, labels: names, stagger: true, groups: [] };
 }
 
-const HIGHLIGHT_COLOR = "#f9c800";
+const STAGGER_SLOTS = 6;
+const STAGGER_ROW_HEIGHT = 12;
+
+/** Maps a shift to [-1, 1]: a grey zone up to `neutral`, saturated colours from `strong` on. */
+function scaled(value: number, { neutral, strong }: ColorScale): number {
+  const size = Math.abs(value);
+  const sign = Math.sign(value);
+  if (size <= neutral) return (sign * size) / neutral / 3;
+  return sign * Math.min(1, 1 / 3 + ((2 / 3) * (size - neutral)) / (strong - neutral));
+}
+
+export function heatmapColors(t: ChartTheme): string[] {
+  return [SHIFT_STRONG_BAD, SHIFT_BAD, t.shiftBadTint, t.shiftMid, t.shiftGoodTint, SHIFT_GOOD, SHIFT_STRONG_GOOD];
+}
 
 export function buildHeatmapOption(
   axis: HeatmapAxis,
   ys: string[],
   cells: HeatmapCell[],
-  legendFormat: (v: number) => string,
   t: ChartTheme,
-  extentQuantile = 1,
+  scale: ColorScale,
 ): EChartsOption {
   const baseText = { color: t.text };
-  const extent = Math.max(1e-9, quantile(cells.map((c) => Math.abs(c.value)), extentQuantile));
   const xIndex = new Map(axis.keys.flatMap((k, i) => (k === null ? [] : [[k, i] as const])));
   const yIndex = new Map(ys.map((y, i) => [y, i]));
-  const groupAxes = axis.groups.map((group) => ({
+  const staggerHeight = (STAGGER_SLOTS / 2) * STAGGER_ROW_HEIGHT;
+  const groupHeight = axis.groups.reduce((sum, g) => sum + g.offset, 0);
+  const chrome = axis.stagger ? 24 + staggerHeight + (axis.groups.length > 0 ? groupHeight + 20 : 0) : 60 + groupHeight;
+  const mainLabel = { ...baseText, rotate: 0, interval: 0, fontSize: 11 };
+  const groupAxis = (group: HeatmapGroup, position: "top" | "bottom") => ({
     type: "category" as const,
     data: group.labels,
-    position: "bottom" as const,
-    offset: group.offset,
+    position,
+    offset: group.offset + (axis.stagger ? staggerHeight : 0),
+    triggerEvent: true,
     axisTick: { show: false },
     axisLine: { show: false },
     axisLabel: {
-      color: t.text,
       interval: 0,
       fontSize: group.fontSize,
       fontWeight: "bold" as const,
       lineHeight: group.fontSize + 3,
+      formatter: (value: string, index: number) =>
+        value === ""
+          ? ""
+          : `{${group.accentFrom !== undefined && index >= group.accentFrom && index <= (group.accentTo ?? Number.POSITIVE_INFINITY) ? "accent" : "plain"}|${value}}`,
+      rich: {
+        plain: { color: t.text, fontSize: group.fontSize, fontWeight: "bold" as const, lineHeight: group.fontSize + 3 },
+        accent: { color: t.accent, fontSize: group.fontSize, fontWeight: "bold" as const, lineHeight: group.fontSize + 3 },
+      },
     },
-  }));
+  });
+  // Horizontal names alternate between top and bottom and between rows, so neighbours never collide.
+  const staggeredAxis = (slot: number) => ({
+    type: "category" as const,
+    data: axis.labels.map((label, i) => (i % STAGGER_SLOTS === slot ? label : "")),
+    position: slot % 2 === 0 ? ("top" as const) : ("bottom" as const),
+    offset: Math.floor(slot / 2) * STAGGER_ROW_HEIGHT,
+    triggerEvent: true,
+    axisTick: { show: false },
+    axisLine: { show: slot === 1 },
+    axisLabel: {
+      ...baseText,
+      rotate: 0,
+      interval: 0,
+      fontSize: 9.5,
+      margin: 4,
+      formatter: (value: string, index: number) =>
+        value !== "" && axis.accent?.[index] ? `{accent|${value}}` : value,
+      rich: { accent: { color: t.accent, fontSize: 9.5, fontWeight: "bold" as const } },
+    },
+  });
+  const xAxes = axis.stagger
+    ? [
+        ...[1, 0, 2, 3, 4, 5].map(staggeredAxis),
+        ...axis.groups.map((g) => groupAxis(g, "bottom")),
+        ...axis.groups.map((g) => groupAxis(g, "top")),
+      ]
+    : [
+        { type: "category" as const, data: axis.labels, position: "bottom" as const, axisTick: { show: false }, axisLabel: mainLabel },
+        {
+          type: "category" as const,
+          data: axis.labels,
+          position: "top" as const,
+          axisTick: { show: false },
+          axisLine: { show: false },
+          axisLabel: mainLabel,
+        },
+        ...axis.groups.map((g) => groupAxis(g, "bottom")),
+        ...axis.groups.map((g) => groupAxis(g, "top")),
+      ];
+  const sideAxisLabel = { ...baseText, interval: 0, fontSize: 10 };
   return {
     backgroundColor: t.bg,
     animation: false,
-    grid: {
-      left: 110,
-      right: 90,
-      top: 20,
-      bottom: axis.rotate ? 110 : 60 + axis.groups.reduce((sum, g) => sum + g.offset, 0),
-    },
-    xAxis: [
+    grid: { left: 110, right: 110, top: chrome, bottom: chrome },
+    xAxis: xAxes,
+    yAxis: [
+      { type: "category", data: ys, inverse: true, position: "left", axisLabel: sideAxisLabel },
       {
         type: "category",
-        data: axis.labels,
+        data: ys,
+        inverse: true,
+        position: "right",
         axisTick: { show: false },
-        axisLabel: {
-          ...baseText,
-          rotate: axis.rotate ? 90 : 0,
-          interval: 0,
-          fontSize: axis.rotate ? 10 : 11,
-        },
-        splitArea: { show: false },
+        axisLine: { show: false },
+        axisLabel: sideAxisLabel,
       },
-      ...groupAxes,
     ],
-    yAxis: {
-      type: "category",
-      data: ys,
-      inverse: true,
-      axisLabel: { ...baseText, interval: 0, fontSize: 10 },
-    },
     visualMap: {
       type: "continuous",
-      min: -extent,
-      max: extent,
-      right: 10,
-      top: "middle",
-      calculable: false,
-      itemHeight: 220,
-      text: [legendFormat(extent), legendFormat(-extent)],
-      inRange: { color: [SHIFT_COLORS[0], SHIFT_COLORS[1], t.shiftMid, SHIFT_COLORS[3], SHIFT_COLORS[4]] },
-      textStyle: baseText,
+      show: false,
+      min: -1,
+      max: 1,
+      inRange: { color: heatmapColors(t) },
     },
     tooltip: {
       backgroundColor: t.tooltipBg,
       borderColor: t.tooltipBorder,
       textStyle: baseText,
-      formatter: (p: { dataIndex: number }) => cells[p.dataIndex].tip,
+      extraCssText: "max-width: 340px; white-space: normal;",
+      formatter: (p: { dataIndex: number }) => {
+        return cells[p.dataIndex].tip;
+      },
     },
     series: [
       {
-        id: HEATMAP_SERIES_ID,
         type: "heatmap",
-        data: cells.map((c) => [xIndex.get(c.x) ?? 0, yIndex.get(c.y) ?? 0, c.value]),
-        markArea: { silent: true, data: [] },
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: cells.map((c) => [xIndex.get(c.x) ?? 0, yIndex.get(c.y) ?? 0, scaled(c.value, scale)]),
       },
     ],
   };
 }
 
-export const HEATMAP_SERIES_ID = "heat";
-
-function highlightArea(xIdx: number, yIdx: number) {
-  return {
-    silent: true,
-    z: 20,
-    itemStyle: { color: "transparent", borderColor: HIGHLIGHT_COLOR, borderWidth: 2 },
-    data: [
-      [{ xAxis: xIdx - 0.5 }, { xAxis: xIdx + 0.5 }],
-      [{ yAxis: yIdx - 0.5 }, { yAxis: yIdx + 0.5 }],
-    ],
-  };
+function lightThemeActive(): boolean {
+  return document.documentElement.dataset.theme === "light";
 }
 
-export function attachHeatmapHighlight(chart: ECharts): () => void {
-  const show = (params: { value?: unknown }) => {
-    const value = params.value;
-    if (!Array.isArray(value)) return;
-    chart.setOption({
-      series: [{ id: HEATMAP_SERIES_ID, markArea: highlightArea(Number(value[0]), Number(value[1])) }],
-    });
-  };
-  const clear = () => {
-    chart.setOption({ series: [{ id: HEATMAP_SERIES_ID, markArea: { data: [] } }] });
-  };
-  chart.on("mouseover", { seriesIndex: 0 }, show);
-  chart.on("globalout", clear);
-  return () => {
-    chart.off("mouseover", show);
-    chart.off("globalout", clear);
+export function attachHeatmapHighlight(
+  columns: number,
+  rows: number,
+  isGap: (column: number) => boolean,
+  descriptions: Record<string, string> = {},
+): (chart: ECharts) => () => void {
+  return (chart) => {
+    const zr = chart.getZr();
+    const tip = document.createElement("div");
+    tip.style.cssText =
+      "position:absolute;z-index:20;display:none;max-width:320px;padding:8px 10px;border-radius:6px;font-size:12px;line-height:1.4;pointer-events:none;background:var(--color-slate-900);border:1px solid var(--color-slate-700);color:var(--color-slate-100);box-shadow:0 4px 12px rgba(0,0,0,.3)";
+    chart.getDom().appendChild(tip);
+    const showLabelTip = (params: { value?: unknown; event?: { offsetX: number; offsetY: number } }) => {
+      const label = String(params.value ?? "")
+        .replace(/^\{\w+\|([\s\S]*)\}$/, "$1")
+        .replace(/\n/g, " ");
+      const text = descriptions[label];
+      if (!text || !params.event) return;
+      chart.dispatchAction({ type: "hideTip" });
+      tip.innerHTML = `<b>${label}</b><br/>${text}`;
+      tip.style.left = `${params.event.offsetX + 12}px`;
+      tip.style.top = `${params.event.offsetY + 12}px`;
+      tip.style.display = "block";
+    };
+    const hideLabelTip = () => {
+      tip.style.display = "none";
+    };
+    chart.on("mouseover", { componentType: "xAxis" }, showLabelTip);
+    chart.on("mouseout", { componentType: "xAxis" }, hideLabelTip);
+    const makeLine = () =>
+      new graphic.Rect({
+        silent: true,
+        ignore: true,
+        z: 100,
+        shape: { x: 0, y: 0, width: 0, height: 0 },
+        style: { fill: "none", lineWidth: 1.5 },
+      });
+    const column = makeLine();
+    const row = makeLine();
+    zr.add(column);
+    zr.add(row);
+
+    let lastCell = "";
+    const hide = () => {
+      lastCell = "";
+      column.hide();
+      row.hide();
+    };
+    const move = (event: { offsetX: number; offsetY: number }) => {
+      const first = chart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [0, 0]);
+      const last = chart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [columns - 1, rows - 1]);
+      if (columns < 2 || rows < 2 || !Array.isArray(first) || !Array.isArray(last)) return;
+      const bandWidth = (last[0] - first[0]) / (columns - 1);
+      const bandHeight = (last[1] - first[1]) / (rows - 1);
+      const ix = Math.round((event.offsetX - first[0]) / bandWidth);
+      const iy = Math.round((event.offsetY - first[1]) / bandHeight);
+      if (ix < 0 || iy < 0 || ix >= columns || iy >= rows || isGap(ix)) return hide();
+      const cellKey = `${ix}:${iy}`;
+      if (cellKey === lastCell) return;
+      lastCell = cellKey;
+      const stroke = lightThemeActive() ? "#27231b" : "#f4f4f4";
+      const left = first[0] - bandWidth / 2;
+      const top = first[1] - bandHeight / 2;
+      column.attr({
+        shape: { x: left + ix * bandWidth, y: top, width: bandWidth, height: rows * bandHeight },
+        style: { stroke },
+      });
+      row.attr({
+        shape: { x: left, y: top + iy * bandHeight, width: columns * bandWidth, height: bandHeight },
+        style: { stroke },
+      });
+      column.show();
+      row.show();
+    };
+    zr.on("mousemove", move);
+    zr.on("globalout", hide);
+    return () => {
+      zr.off("mousemove", move);
+      zr.off("globalout", hide);
+      chart.off("mouseover", showLabelTip);
+      chart.off("mouseout", hideLabelTip);
+      tip.remove();
+      zr.remove(column);
+      zr.remove(row);
+    };
   };
 }
 
@@ -692,25 +851,6 @@ export function triggerCells(rows: TriggerInductionCellDTO[]): HeatmapCell[] {
   }));
 }
 
-export function environmentCells(
-  rows: EnvironmentCellDTO[],
-  usePercent: boolean,
-  adjusted: boolean,
-): HeatmapCell[] {
-  return visibleEnvironmentRows(rows).map((r) => ({
-    x: r.env_label,
-    y: r.racer_name,
-    value: adjusted
-      ? usePercent
-        ? r.adjusted_relative_shift
-        : r.adjusted_absolute_shift
-      : usePercent
-        ? r.relative_shift
-        : r.absolute_shift,
-    tip: `<b>${r.racer_name}</b><br/>${r.env_label.replace("\n", " ")}<br/>raw ${signedPercent(r.relative_shift)} · env average ${signedPercent(r.env_mean_relative_shift)}<br/>adjusted ${signedPercent(r.adjusted_relative_shift)}<br/>${r.games_count.toLocaleString()} games`,
-  }));
-}
-
 const PLAIN_BOARD_ORDER = ["Standard", "WildWilds", "WhirlyWorld", "TwistyTwirl"];
 const TWISTY_BOARD = "TwistyTwirl";
 const LAST_TWIST_GROUP = "Fans Demand Chaos";
@@ -719,18 +859,43 @@ function breakWords(name: string): string {
   return name.replace(/ /g, "\n");
 }
 
+const ALL = "All";
+const TOTAL_LABEL = "Σ";
+
+/** Name of the board, twist card or ALL (all boards) a cell belongs to. */
+function environmentName(r: EnvironmentCellDTO): string {
+  return r.twist ?? r.board ?? ALL;
+}
+
+function environmentKey(count: number | null, name: string): string {
+  return `${count ?? ALL}|${name}`;
+}
+
+function environmentTitle(r: EnvironmentCellDTO): string {
+  const players = r.racer_count === null ? "all player counts" : `${r.racer_count} players`;
+  const place = r.twist ?? r.board ?? "all boards";
+  return `${place} · ${players}`;
+}
+
 export function visibleEnvironmentRows(rows: EnvironmentCellDTO[]): EnvironmentCellDTO[] {
   if (!rows.some((r) => r.twist !== null)) return rows;
   return rows.filter((r) => r.twist !== null || r.board !== TWISTY_BOARD);
 }
 
-export function environmentAxis(allRows: EnvironmentCellDTO[]): HeatmapAxis {
+export type EnvironmentGrouping = "board" | "players";
+
+export function environmentAxis(
+  allRows: EnvironmentCellDTO[],
+  grouping: EnvironmentGrouping,
+  descriptions: Record<string, string>,
+): HeatmapAxis {
   const rows = visibleEnvironmentRows(allRows);
   const boardCounts = new Map<string, Set<number>>();
   const twistCounts = new Map<string, Set<number>>();
   for (const r of rows) {
+    if (r.racer_count === null || r.board === null) continue;
     const target = r.twist === null ? boardCounts : twistCounts;
-    const name = r.twist ?? r.board;
+    const name = environmentName(r);
     target.set(name, (target.get(name) ?? new Set<number>()).add(r.racer_count));
   }
   const boards = [...boardCounts.keys()].sort((a, b) => {
@@ -741,41 +906,115 @@ export function environmentAxis(allRows: EnvironmentCellDTO[]): HeatmapAxis {
   const twists = [...twistCounts.keys()].sort((a, b) =>
     a === LAST_TWIST_GROUP ? 1 : b === LAST_TWIST_GROUP ? -1 : a.localeCompare(b),
   );
+  const countsOf = (name: string) => boardCounts.get(name) ?? twistCounts.get(name) ?? new Set<number>();
+  const allCounts = [...new Set(rows.flatMap((r) => (r.racer_count === null ? [] : [r.racer_count])))].sort(
+    (a, b) => a - b,
+  );
 
   const keys: (string | null)[] = [];
   const labels: string[] = [];
   const groupNames: string[] = [];
-  const addGroup = (name: string, counts: Set<number>, display: string) => {
-    if (keys.length > 0) {
-      keys.push(null);
-      labels.push("");
-      groupNames.push("");
-    }
-    const sorted = [...counts].sort((a, b) => a - b);
-    sorted.forEach((count, i) => {
-      keys.push(`${count}p\n${name}`);
-      labels.push(String(count));
-      groupNames.push(i === Math.floor((sorted.length - 1) / 2) ? display : "");
-    });
+  const accent: boolean[] = [];
+  const addGap = () => {
+    keys.push(null);
+    labels.push("");
+    groupNames.push("");
+    accent.push(false);
   };
-  for (const board of boards) addGroup(board, boardCounts.get(board) ?? new Set(), board);
+  const addColumn = (key: string, label: string, isCard: boolean) => {
+    keys.push(key);
+    labels.push(label);
+    accent.push(isCard);
+    groupNames.push("");
+  };
+  const nameGroup = (start: number, name: string) => {
+    groupNames[Math.floor((start + keys.length - 1) / 2)] = name;
+  };
+
+  if (grouping === "players") {
+    const blocks: (number | null)[] = [...allCounts, null];
+    for (const count of blocks) {
+      if (keys.length > 0) addGap();
+      const blockStart = keys.length;
+      const names = [...boards, ...twists].filter((name) => count === null || countsOf(name).has(count));
+      names.forEach((name, i) => {
+        if (i > 0 && twists.includes(name) && !twists.includes(names[i - 1])) addGap();
+        addColumn(environmentKey(count, name), name, twists.includes(name));
+      });
+      addColumn(environmentKey(count, ALL), TOTAL_LABEL, false);
+      nameGroup(blockStart, count === null ? "All player counts" : `${count} players`);
+    }
+    return {
+      keys,
+      labels,
+      stagger: true,
+      accent,
+      descriptions,
+      groups: [{ labels: groupNames, fontSize: 14, offset: 6 }],
+    };
+  }
+
+  const addGroup = (name: string, counts: number[], display: string) => {
+    if (keys.length > 0) addGap();
+    const start = keys.length;
+    for (const count of counts) addColumn(environmentKey(count, name), String(count), false);
+    addColumn(environmentKey(null, name), TOTAL_LABEL, false);
+    nameGroup(start, display);
+  };
+  for (const board of boards) addGroup(board, [...countsOf(board)].sort((a, b) => a - b), board);
+  const boardsEnd = keys.length - 1;
+  if (twists.length > 0 && keys.length > 0) addGap();
   const twistStart = keys.length + 1;
-  for (const twist of twists) {
-    addGroup(twist, twistCounts.get(twist) ?? new Set(), breakWords(twist));
-  }
+  for (const twist of twists) addGroup(twist, [...countsOf(twist)].sort((a, b) => a - b), breakWords(twist));
+  const twistEnd = keys.length - 1;
+  addGap();
+  const allStart = keys.length + 1;
+  addGroup(ALL, allCounts, "All boards");
   const sectionNames = keys.map(() => "");
-  if (twists.length > 0) {
-    sectionNames[Math.floor((twistStart + keys.length - 1) / 2)] = "Twisty Twirl";
-  }
+  if (boards.length > 0) sectionNames[Math.floor(boardsEnd / 2)] = "Boards";
+  const twistSection = Math.floor((twistStart + twistEnd) / 2);
+  if (twists.length > 0) sectionNames[twistSection] = "Twisty Twirl: twist cards";
   return {
     keys,
     labels,
-    rotate: false,
+    stagger: false,
+    descriptions,
     groups: [
-      { labels: groupNames, fontSize: 12, offset: 20 },
-      ...(twists.length > 0 ? [{ labels: sectionNames, fontSize: 15, offset: 80 }] : []),
+      {
+        labels: groupNames,
+        fontSize: 12,
+        offset: 20,
+        accentFrom: twists.length > 0 ? twistStart : undefined,
+        accentTo: twists.length > 0 ? allStart - 1 : undefined,
+      },
+      {
+        labels: sectionNames,
+        fontSize: 14,
+        offset: 80,
+        accentFrom: twists.length > 0 ? twistSection : undefined,
+        accentTo: twists.length > 0 ? twistSection : undefined,
+      },
     ],
   };
+}
+
+export function environmentCells(
+  rows: EnvironmentCellDTO[],
+  usePercent: boolean,
+  adjusted: boolean,
+): HeatmapCell[] {
+  return visibleEnvironmentRows(rows).map((r) => ({
+    x: environmentKey(r.racer_count, environmentName(r)),
+    y: r.racer_name,
+    value: adjusted
+      ? usePercent
+        ? r.adjusted_relative_shift
+        : r.adjusted_absolute_shift
+      : usePercent
+        ? r.relative_shift
+        : r.absolute_shift,
+    tip: `<b>${r.racer_name}</b><br/>${environmentTitle(r)}<br/>raw ${signedPercent(r.relative_shift)} · env average ${signedPercent(r.env_mean_relative_shift)}<br/>adjusted ${signedPercent(r.adjusted_relative_shift)}<br/>${r.games_count.toLocaleString()} games`,
+  }));
 }
 
 export function sortedNames(names: string[]): string[] {

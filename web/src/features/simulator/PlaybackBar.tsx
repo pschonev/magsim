@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pause, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pause, Play, RotateCcw } from "lucide-react";
 import { useEffect } from "react";
 import type { StepSnapshotDTO } from "../../types/api";
 
@@ -12,6 +12,7 @@ interface PlaybackBarProps {
   speedMs: number;
   onSpeedChange: (ms: number) => void;
   keyboardEnabled: boolean;
+  onReset: () => void;
 }
 
 const NAV_BUTTON =
@@ -27,6 +28,7 @@ export function PlaybackBar({
   speedMs,
   onSpeedChange,
   keyboardEnabled,
+  onReset,
 }: PlaybackBarProps) {
   const lastStep = Math.max(0, steps.length - 1);
   const currentTurn = steps[stepIndex]?.turn_index ?? 0;
@@ -76,8 +78,8 @@ export function PlaybackBar({
     <div className="space-y-2.5 rounded-xl border border-slate-800 bg-slate-900/80 p-3">
       <div className="flex items-center justify-between font-mono text-xs text-slate-300">
         <strong>Turn {currentTurn}</strong>
-        <span>
-          Step {stepIndex + 1}/{steps.length}
+        <span className="font-sans text-slate-400">
+          step {stepIndex + 1} of {steps.length}
         </span>
       </div>
       <input
@@ -149,18 +151,24 @@ export function PlaybackBar({
         </button>
       </div>
 
-      <div className="flex items-center justify-between text-xs text-slate-400">
-        <span>Speed</span>
-        <select
-          value={speedMs}
-          onChange={(e) => onSpeedChange(Number(e.target.value))}
-          className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200"
-        >
-          <option value={900}>0.5×</option>
-          <option value={450}>1×</option>
-          <option value={220}>2×</option>
-          <option value={90}>4×</option>
-        </select>
+      <div className="flex items-center justify-between gap-2">
+        <button type="button" onClick={onReset} title="Back to the start" className={`${NAV_BUTTON} inline-flex items-center gap-1.5`}>
+          <RotateCcw className="h-3 w-3" />
+          Reset
+        </button>
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          Speed
+          <select
+            value={speedMs}
+            onChange={(e) => onSpeedChange(Number(e.target.value))}
+            className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200"
+          >
+            <option value={900}>0.5×</option>
+            <option value={450}>1×</option>
+            <option value={220}>2×</option>
+            <option value={90}>4×</option>
+          </select>
+        </label>
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
 import { useMemo } from "react";
+import type { ColumnHelp } from "../features/dashboard/columnHelp";
 import type { SummaryCellDTO } from "../types/api";
 
 const features = tableFeatures({
@@ -33,6 +34,7 @@ interface DataTableProps {
   columns: string[];
   rows: SummaryCellDTO[][];
   racerColors?: Record<string, string>;
+  help?: Record<string, ColumnHelp>;
 }
 
 function formatCell(value: SummaryCellDTO): string {
@@ -42,7 +44,7 @@ function formatCell(value: SummaryCellDTO): string {
     : value;
 }
 
-export function DataTable({ columns, rows, racerColors }: DataTableProps) {
+export function DataTable({ columns, rows, racerColors, help }: DataTableProps) {
   const data = useMemo<Row[]>(
     () =>
       rows.map((cells) =>
@@ -68,6 +70,7 @@ export function DataTable({ columns, rows, racerColors }: DataTableProps) {
   });
 
   const total = table.getRowModel().rows.length;
+  const numeric = new Set(columns.filter((_, i) => rows.some((r) => typeof r[i] === "number")));
 
   return (
     <div className="space-y-2">
@@ -95,11 +98,33 @@ export function DataTable({ columns, rows, racerColors }: DataTableProps) {
                   return (
                     <th
                       key={header.id}
-                      className="cursor-pointer border-b border-slate-800 px-3 py-2 text-left font-semibold whitespace-nowrap text-slate-300 select-none hover:text-slate-50"
+                      className={`cursor-pointer border-b border-slate-800 px-3 py-2 font-semibold whitespace-nowrap text-slate-300 select-none hover:text-slate-50 ${
+                        numeric.has(header.column.id) ? "text-right" : "text-left"
+                      }`}
                       onClick={header.column.getToggleSortingHandler()}
                     >
-                      <span className="inline-flex items-center gap-1">
-                        {String(header.column.columnDef.header)}
+                      <span
+                        className={`group relative inline-flex items-center gap-1 ${
+                          numeric.has(header.column.id) ? "flex-row-reverse" : ""
+                        }`}
+                      >
+                        <span
+                          className={
+                            help?.[header.column.id] ? "cursor-help border-b border-dotted border-slate-500" : ""
+                          }
+                        >
+                          {help?.[header.column.id]?.label ?? String(header.column.columnDef.header)}
+                        </span>
+                        {help?.[header.column.id] && (
+                          <span
+                            role="tooltip"
+                            className={`pointer-events-none absolute top-full z-30 mt-1 hidden w-64 rounded-md border border-slate-700 bg-slate-900 p-2 text-left text-[11px] leading-snug font-normal whitespace-normal text-slate-200 shadow-lg group-hover:block ${
+                              header.index > columns.length / 2 ? "right-0" : "left-0"
+                            }`}
+                          >
+                            {help[header.column.id].text}
+                          </span>
+                        )}
                         {sorted === "asc" ? (
                           <ArrowUp className="h-3 w-3" />
                         ) : sorted === "desc" ? (
@@ -120,7 +145,12 @@ export function DataTable({ columns, rows, racerColors }: DataTableProps) {
                 {row.getAllCells().map((cell, i) => {
                   const value = cell.getValue() as SummaryCellDTO;
                   return (
-                    <td key={cell.id} className="px-3 py-1.5 whitespace-nowrap text-slate-200">
+                    <td
+                      key={cell.id}
+                      className={`px-3 py-1.5 whitespace-nowrap text-slate-200 ${
+                        typeof value === "number" ? "text-right tabular-nums" : ""
+                      }`}
+                    >
                       {i === 0 && typeof value === "string" && racerColors?.[value] && (
                         <span
                           className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle"

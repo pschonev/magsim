@@ -58,3 +58,46 @@ def build_summary_tables(racer_stats: pl.DataFrame) -> dict[str, pl.DataFrame]:
             (pl.col("avg_env_trip_rate") * 100).round(1).alias("Race Trip%"),
         ),
     }
+
+
+def with_racer_extras(
+    tables: dict[str, pl.DataFrame],
+    trigger_pull: pl.DataFrame,
+    extras: pl.DataFrame,
+) -> dict[str, pl.DataFrame]:
+    """Add the extra per-racer columns and move Avg Game Len from Dynamics to Overview."""
+    result = dict(tables)
+    if not trigger_pull.is_empty():
+        caused = trigger_pull.select(
+            pl.col("racer_name").alias("Racer"),
+            pl.col("others_trigger_ratio").round(2).alias("Triggers Caused"),
+        )
+        result["abilities"] = result["abilities"].join(caused, on="Racer", how="left")
+    if extras.is_empty():
+        return result
+    result["movement"] = result["movement"].join(
+        extras.select(
+            pl.col("racer_name").alias("Racer"),
+            (pl.col("elimination_rate") * 100).round(1).alias("Eliminated %"),
+        ),
+        on="Racer",
+        how="left",
+    )
+    game_length = result["dynamics"].select("Racer", "Avg Game Len")
+    overview = result["overview"].join(game_length, on="Racer", how="left")
+    columns = [c for c in overview.columns if c not in ("Avg Game Len", "# Races")]
+    result["overview"] = overview.select(*columns, "Avg Game Len", "# Races")
+    result["dynamics"] = (
+        result["dynamics"]
+        .drop("Avg Game Len")
+        .join(
+            extras.select(
+                pl.col("racer_name").alias("Racer"),
+                pl.col("player_count_pref").round(2).alias("Player Count Pref"),
+                pl.col("game_length_pref").round(2).alias("Game Length Pref"),
+            ),
+            on="Racer",
+            how="left",
+        )
+    )
+    return result

@@ -34,6 +34,10 @@ export const TABLE_TABS: TabSpec[] = [
         bold: "Adjusted:",
         text: " subtracts the average shift of all racers in the same board and player count, so the VP level of the board itself does not dominate.",
       },
+      {
+        bold: "Σ:",
+        text: " totals. Each board and twist card has a Σ column over all player counts, and the All group combines all boards per player count. The grand total is always 0, because shifts are measured against the racer's own overall average.",
+      },
     ],
   },
   {
@@ -91,5 +95,15 @@ export const TABLE_TABS: TabSpec[] = [
     id: "dynamics",
     label: "Dynamics",
     description: [{ bold: "Dynamics:", text: " Effects on the game as a whole." }],
+  },
+  {
+    id: "triggerpull",
+    label: "Trigger Pull",
+    description: [
+      {
+        bold: "Trigger Pull:",
+        text: " How much more or less the other racers' abilities trigger in this racer's races, next to the average length of those races.",
+      },
+    ],
   },
 ];

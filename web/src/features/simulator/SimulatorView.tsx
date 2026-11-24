@@ -131,18 +131,13 @@ export function SimulatorView({
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <div className="flex w-full shrink-0 flex-col gap-3 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:w-80 lg:overflow-y-auto">
+      <div className="flex w-full shrink-0 flex-col gap-3 lg:w-80">
         <SimulatorConfigPanel
           simMeta={simMeta}
           config={config}
           onChange={setConfig}
           encodedConfig={result?.encoded_config ?? ""}
           onImportEncoded={importEncoded}
-          onReset={() => {
-            setPlaying(false);
-            setStepIndex(0);
-          }}
-          running={running}
           diceError={configDiceError}
         />
 
@@ -158,6 +153,10 @@ export function SimulatorView({
               speedMs={speedMs}
               onSpeedChange={setSpeedMs}
               keyboardEnabled={active}
+              onReset={() => {
+                setPlaying(false);
+                setStepIndex(0);
+              }}
             />
 
             <div className="grid grid-cols-2 gap-2">
@@ -181,7 +180,7 @@ export function SimulatorView({
         )}
       </div>
 
-      <div className="min-w-0 flex-1 space-y-3">
+      <div className="min-w-0 flex-1 space-y-3 lg:sticky lg:top-20">
         {error && (
           <div className="rounded-lg border border-rose-500/40 bg-rose-950/50 p-3 text-xs text-rose-200">
             {error}

@@ -7,8 +7,10 @@ from dataclasses import dataclass
 import polars as pl
 
 from magsim.analysis.tables import build_summary_tables
+from magsim.analysis.racer_extras import compute_racer_extras
 from magsim.analysis.interactions import (
     compute_environment_matrix,
+    compute_environment_totals,
     compute_trigger_induction,
     compute_trigger_pull,
     compute_twist_environment_matrix,
@@ -60,8 +62,10 @@ class AnalysisResult:
     matchup_matrix: pl.DataFrame
     environment_matrix: pl.DataFrame
     twist_environment_matrix: pl.DataFrame
+    environment_totals: pl.DataFrame
     trigger_induction: pl.DataFrame
     trigger_pull: pl.DataFrame
+    racer_extras: pl.DataFrame
     summary_tables: dict[str, pl.DataFrame]
 
 
@@ -604,12 +608,15 @@ def run_full_analysis(
         prepared.stats_results,
         df_races_f,
     )
+    environment_totals = compute_environment_totals(prepared.stats_results, df_races_f)
     trigger_induction = compute_trigger_induction(prepared.stats_results)
     trigger_pull = compute_trigger_pull(
         trigger_induction,
         prepared.stats_results,
         df_races_f,
     )
+
+    racer_extras = compute_racer_extras(df_racer_results_f, df_races_f)
 
     return AnalysisResult(
         racer_stats=racer_stats,
@@ -620,7 +627,9 @@ def run_full_analysis(
         matchup_matrix=matchup_matrix,
         environment_matrix=environment_matrix,
         twist_environment_matrix=twist_environment_matrix,
+        environment_totals=environment_totals,
         trigger_induction=trigger_induction,
         trigger_pull=trigger_pull,
+        racer_extras=racer_extras,
         summary_tables=build_summary_tables(racer_stats),
     )

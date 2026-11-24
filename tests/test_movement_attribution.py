@@ -161,3 +161,91 @@ def test_eliminated_roller_next_to_nobody_does_not_crash_the_stunner_check(
     )
 
     assert aggregator.results[1].neg_other_ability_movement == 0
+
+
+def test_show_off_bust_costs_the_first_die_not_an_average_roll(scenario: type[GameScenario]):
+    game = scenario(
+        [RacerConfig(0, "ShowOff", agent=BaselineAgent()), dummy(1)],
+        dice_rolls=[2, 1],
+    )
+
+    show_off = play_turns(game, 1)[0]
+
+    assert game.get_racer(0).position == 0
+    assert show_off.neg_self_ability_movement == 2
+    assert show_off.skipped_self_main_move == 0
+
+
+def test_hog_credit_survives_hog_knight_losing_his_abilities(scenario: type[GameScenario]):
+    game = scenario(
+        [dummy(0, 4), RacerConfig(1, "HogKnight", start_pos=5), RacerConfig(2, "Null", start_pos=0)],
+        dice_rolls=[2],
+    )
+    assert not game.get_racer(1).active_abilities
+
+    results = play_turns(game, 1)
+
+    assert game.get_racer(0).position == 5
+    assert results[0].ability_trigger_count == 0
+    assert results[1].ability_trigger_count == 1
+
+
+def test_hog_of_a_copied_hog_knight_belongs_to_the_copier(scenario: type[GameScenario]):
+    game = scenario(
+        [RacerConfig(0, "Understudy", start_pos=0), RacerConfig(1, "HogKnight", start_pos=10)],
+        dice_rolls=[1],
+    )
+
+    results = play_turns(game, 1)
+
+    assert game.get_racer(0).position == 3
+    assert results[0].pos_self_ability_movement == 2
+    assert results[0].ability_trigger_count == 1
+    assert results[1].pos_other_ability_movement == 0
+    assert results[1].ability_trigger_count == 0
+
+
+def test_mr_dice_guy_counts_one_trigger_per_main_roll(scenario: type[GameScenario]):
+    game = scenario([RacerConfig(0, "MrDiceGuy"), dummy(1)], dice_rolls=[6, 6, 2, 3, 4, 5, 1])
+
+    mr_dice_guy = play_turns(game, 3)[0]
+
+    assert mr_dice_guy.ability_trigger_count == 2
+    assert mr_dice_guy.ability_self_target_count == 2
+
+
+def test_show_off_counts_a_trigger_only_when_rolling_extra_dice(scenario: type[GameScenario]):
+    game = scenario(
+        [RacerConfig(0, "ShowOff", agent=BaselineAgent()), dummy(1)],
+        dice_rolls=[2, 5, 1, 6, 3],
+    )
+
+    show_off = play_turns(game, 3)[0]
+
+    assert show_off.ability_trigger_count == 1
+
+
+def test_stunner_counts_a_trigger_per_forced_roll(scenario: type[GameScenario]):
+    game = scenario(
+        [dummy(0, 5), RacerConfig(1, "Stunner", start_pos=6)],
+        dice_rolls=[6],
+    )
+
+    stunner = play_turns(game, 1)[1]
+
+    assert stunner.ability_trigger_count == 1
+    assert stunner.ability_self_target_count == 0
+
+
+def test_reversed_hog_bonus_still_belongs_to_hog_knight(scenario: type[GameScenario]):
+    """Le Saboteur reverses a rolled 3, which turns the hog's +2 into -2; the rider is not charged."""
+    game = scenario(
+        [dummy(0, 4), RacerConfig(1, "HogKnight", start_pos=5), RacerConfig(2, "LeSaboteur", start_pos=20)],
+        dice_rolls=[1, 1, 1, 3],
+    )
+
+    results = play_turns(game, 4)
+
+    rider = results[0]
+    assert rider.neg_self_ability_movement == 0
+    assert results[1].neg_other_ability_movement == 2

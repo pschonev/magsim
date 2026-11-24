@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import type { DatasetMetaDTO, EngineClient } from "../../types/api";
 import { AnalysisPanel } from "./AnalysisPanel";
 import { FilterPanel } from "./FilterPanel";
@@ -25,6 +25,7 @@ export function DashboardView({ client, meta }: DashboardViewProps) {
         isStale={isStale}
         running={running}
         onRun={run}
+        analyzedCount={analysis && !message ? analysis.filtered_race_count : null}
       />
 
       {message && (
@@ -36,11 +37,6 @@ export function DashboardView({ client, meta }: DashboardViewProps) {
 
       {!message && analysis && (
         <>
-          <p className="text-xs text-slate-300">
-            <CheckCircle2 className="mr-1 inline h-3.5 w-3.5 text-emerald-400" />
-            <strong>{analysis.filtered_race_count.toLocaleString()}</strong> races
-            analyzed.
-          </p>
           <AnalysisPanel analysis={analysis} racerColors={meta.racer_colors} />
         </>
       )}
