@@ -19,9 +19,11 @@ from magsim.analysis.filters import (
     filter_dataset,
     get_automatic_racers,
 )
+from magsim.analysis.mush_pairs import mush_rows, pair_table
 from magsim.analysis.fun_facts import (
     compute_chosen_faces,
     compute_collectors,
+    compute_mush_combos,
     compute_extreme_combinations,
     compute_forward_share,
     compute_hog_split,
@@ -51,6 +53,7 @@ from magsim.web.schemas import (
     ExtremeComboDTO,
     FaceShareDTO,
     MastermindCallDTO,
+    MushComboDTO,
     PickDTO,
     RacerFaceShareDTO,
     FunFactsDTO,
@@ -357,10 +360,19 @@ def _face_shares(frame: pl.DataFrame) -> list[FaceShareDTO]:
     ]
 
 
-def _fun_facts(results: pl.DataFrame, extremes: pl.DataFrame) -> FunFactsDTO:
+def _fun_facts(results: pl.DataFrame, extremes: pl.DataFrame, mush_pairs: pl.DataFrame | None) -> FunFactsDTO:
     hog = compute_hog_split(results)
     calls, mastermind_first, mastermind_second, mastermind_second_predicted = compute_mastermind(results)
     return FunFactsDTO(
+        mush_combos=[
+            MushComboDTO(
+                first=str(r["first"]),
+                second=str(r["second"]),
+                average_vp=_safe_float(r["average_vp"]),
+                games=_safe_int(r["games"]),
+            )
+            for r in compute_mush_combos(pair_table(mush_rows(results)) if mush_pairs is None else mush_pairs).to_dicts()
+        ],
         collectors=[
             CollectorDTO(
                 racer_name=str(r["racer_name"]),
@@ -550,22 +562,28 @@ def _df_to_environment_matrix(
 
 @dataclass(frozen=True, slots=True)
 class Dataset:
-    """Loaded races and racer_results tables."""
+    """Loaded races and racer_results tables, plus his power pairs when the dataset ships them."""
 
     races: pl.DataFrame
     results: pl.DataFrame
+    mush_pairs: pl.DataFrame | None = None
 
 
-def load_dataframes(df_races: pl.DataFrame, df_results: pl.DataFrame) -> Dataset:
-    """Normalize the races table and wrap both tables as a Dataset."""
-    return Dataset(races=clean_races_df(df_races), results=df_results)
+def load_dataframes(
+    df_races: pl.DataFrame,
+    df_results: pl.DataFrame,
+    mush_pairs: pl.DataFrame | None = None,
+) -> Dataset:
+    """Normalize the races table and wrap the tables as a Dataset."""
+    return Dataset(races=clean_races_df(df_races), results=df_results, mush_pairs=mush_pairs)
 
 
-def load_ipc(races_bytes: bytes, results_bytes: bytes) -> Dataset:
-    """Load races and racer_results from Arrow IPC payloads."""
+def load_ipc(races_bytes: bytes, results_bytes: bytes, mush_pairs_bytes: bytes | None = None) -> Dataset:
+    """Load races and racer_results (and Mush's games, if given) from Arrow IPC payloads."""
     return load_dataframes(
         pl.read_ipc(io.BytesIO(races_bytes)),
         pl.read_ipc(io.BytesIO(results_bytes)),
+        None if mush_pairs_bytes is None else pl.read_ipc(io.BytesIO(mush_pairs_bytes)),
     )
 
 
@@ -618,7 +636,7 @@ def apply_filter(dataset: Dataset, flt_dto: AnalysisFilterDTO) -> FilteredDatase
     return filter_dataset(dataset.races, dataset.results, analysis_filter)
 
 
-def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
+def analyze(filtered: FilteredDataset, mush_pairs: pl.DataFrame | None = None) -> DashboardAnalysisDTO:
     """Compute all dashboard aggregations over a filtered dataset."""
     if filtered.error is not None or filtered.races.is_empty():
         return DashboardAnalysisDTO(
@@ -627,7 +645,7 @@ def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
             error=filtered.error or "No races match these filters.",
         )
 
-    heavy = ("main_roll_totals", "eliminated_by")
+    heavy = ("main_roll_totals", "eliminated_by", "drawn_powers", "copied_racers", "guessed_rolls")
     result = run_full_analysis(filtered.races, filtered.racer_results.drop(*heavy, strict=False))
     return DashboardAnalysisDTO(
         filtered_race_count=filtered.races.height,
@@ -646,6 +664,7 @@ def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
                 result.matchup_matrix,
                 result.environment_totals,
             ),
+            mush_pairs,
         ),
         twist_combo_stats=_df_to_twist_combo_stats(result.twist_combo_stats),
         matchup_matrix=_df_to_matchup_matrix(result.matchup_matrix),

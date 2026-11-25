@@ -125,6 +125,8 @@ class SimulationConfig(msgspec.Struct):
 
     include_racers: list[RacerName] = msgspec.field(default_factory=list)
     exclude_racers: list[RacerName] = msgspec.field(default_factory=list)
+    # Racers that are in every game; the rest of each team is drawn from the eligible racers
+    required_racers: list[RacerName] = msgspec.field(default_factory=list)
     exclude_twists: list[TwistName] = msgspec.field(default_factory=list)
 
     # Combinations to test

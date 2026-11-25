@@ -10,6 +10,7 @@ from magsim.analysis.roll_dependence import FACE_COLUMNS
 
 ANNOYING_RACERS = ("Critic", "Stickler", "PartyPooper", "Null", "Inchworm", "Gunk", "Stunner", "LeSaboteur")
 MIN_CALL_GAMES = 50
+MIN_COMBO_GAMES = 30
 VP_DISTRIBUTION_RACERS = ("Sisyphus", "LovableLoser", "Streaker")
 OUTCOME_RACERS = ("SpeedDemon", "Icarus", "Spoilsport")
 CANCELLING_RACER = "Spoilsport"
@@ -326,18 +327,18 @@ def compute_dice_totals(results: pl.DataFrame) -> pl.DataFrame:
     return pl.concat(frames).select("racer_name", "face", "share")
 
 
-def _with_scores(cells: pl.DataFrame, group: str) -> pl.DataFrame:
+def _with_scores(cells: pl.DataFrame) -> pl.DataFrame:
     """Add `score`: the shift divided by the robust spread (median absolute deviation) of everything sharing the same opponent, board or card."""
     return (
-        cells.with_columns(pl.col("shift").median().over(group).alias("_median"))
+        cells.with_columns(pl.col("shift").median().over("other").alias("_median"))
         .with_columns((pl.col("shift") - pl.col("_median")).abs().alias("_deviation"))
-        .with_columns(pl.col("_deviation").median().over(group).alias("_mad"))
+        .with_columns(pl.col("_deviation").median().over("other").alias("_mad"))
         .with_columns((pl.col("shift") / (MAD_TO_SIGMA * pl.col("_mad"))).alias("score"))
         .drop("_median", "_deviation", "_mad")
     )
 
 
-def _extreme_cells(cells: pl.DataFrame, vp_spread: pl.DataFrame, kind: str, group: str = "other") -> pl.DataFrame:
+def _extreme_cells(cells: pl.DataFrame, vp_spread: pl.DataFrame, kind: str) -> pl.DataFrame:
     """Best and worst cells of one kind.
 
     Only shifts of at least Z_MIN standard errors and MIN_SHIFT of the racer's average VP count. They are ranked by how many typical
@@ -349,7 +350,6 @@ def _extreme_cells(cells: pl.DataFrame, vp_spread: pl.DataFrame, kind: str, grou
             cells.join(vp_spread, on="racer_name", how="inner").filter(
                 (pl.col("games") >= MIN_COMBINATION_GAMES) & (pl.col("spread") > 0),
             ),
-            group,
         )
         .with_columns(
             (pl.col("vp_shift") / (pl.col("spread") / pl.col("games").sqrt())).alias("z"),
@@ -409,33 +409,21 @@ def compute_extreme_combinations(
                     kind,
                 ),
             )
-    mush = _mush_power_cells(results)
-    if mush is not None:
-        extremes = _extreme_cells(mush, spread, "mush", group="scope")
-        frames.append(extremes.with_columns(pl.col("other").alias("racer_name"), pl.lit("").alias("other")))
     return pl.concat(frames).cast(schema) if frames else pl.DataFrame(schema=schema)
 
 
-def _mush_power_cells(results: pl.DataFrame) -> pl.DataFrame | None:
-    """Mush's VP in the races where it drew a power, against its VP in all races where it drew any power."""
-    own = _racer(results, "Mush")
-    if "copied_racers" not in own.columns or own.is_empty() or not isinstance(own.schema["copied_racers"], pl.List):
-        return None
-    drew = own.filter(pl.col("copied_racers").list.len() > 0)
-    baseline = drew["final_vp"].mean() if not drew.is_empty() else None
-    if not baseline:
-        return None
-    return (
-        drew.select("final_vp", pl.col("copied_racers").list.unique().alias("power"))
-        .explode("power")
-        .group_by("power")
-        .agg(pl.col("final_vp").mean().alias("average"), pl.len().cast(pl.Int64).alias("games"))
-        .select(
-            pl.lit("Mush").alias("racer_name"),
-            pl.lit("Mush").alias("scope"),
-            pl.col("power").alias("other"),
-            ((pl.col("average") - baseline) / baseline).alias("shift"),
-            (pl.col("average") - baseline).alias("vp_shift"),
-            "games",
-        )
+def compute_mush_combos(pairs: pl.DataFrame, per_side: int = EXTREMES_PER_SIDE) -> pl.DataFrame:
+    """The best and the worst pairs of Mush's powers by his average VP, among pairs with enough games.
+
+    `pairs` is the table from `analysis.mush_pairs.pair_table`.
+    """
+    schema = {"first": pl.Utf8, "second": pl.Utf8, "average_vp": pl.Float64, "games": pl.Int64}
+    if pairs.is_empty():
+        return pl.DataFrame(schema=schema)
+    ranked = (
+        pairs.filter(pl.col("games") >= MIN_COMBO_GAMES)
+        .with_columns((pl.col("total_vp") / pl.col("games")).alias("average_vp"))
+        .select("first", "second", "average_vp", "games")
+        .sort("average_vp", descending=True)
     )
+    return pl.concat([ranked.head(per_side), ranked.tail(per_side)]).unique(maintain_order=True)

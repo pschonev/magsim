@@ -85,6 +85,14 @@ clean = "rm -rf dist"
 bump-files = "cz bump --yes --files-only"
 release-prep = "python scripts/release_prep.py"
 
+# One command for a complete new batch: the main batch, the Mush-only games in results_mush/ and Mush's merged power pairs
+batch-main = "magsim batch -f configs/twisty_oversampled.toml"
+batch-mush = "magsim batch -f --seed-offset 10000000 --results-dir results_mush configs/mush_only.toml"
+mush-pairs = "python scripts/prepare_mush_pairs.py"
+batch = { sequence = ["batch-main", "batch-mush", "mush-pairs"] }
+# Only the Mush games (the main batch already exists): `uv run poe mush`, then `uv run poe web-build`
+mush = { sequence = ["batch-mush", "mush-pairs"] }
+
 web-assets = "python scripts/prepare_web_assets.py"
 web-dev = { sequence = ["web-assets", { cmd = "npm run dev", cwd = "web" }] }
 web-build = { sequence = ["web-assets", { cmd = "npm run build", cwd = "web" }] }

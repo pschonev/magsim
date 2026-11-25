@@ -227,6 +227,15 @@ class PickDTO(msgspec.Struct, frozen=True):
     guessed: float
 
 
+class MushComboDTO(msgspec.Struct, frozen=True):
+    """Mush's average VP in the races where he drew both of these powers."""
+
+    first: str
+    second: str
+    average_vp: float
+    games: int
+
+
 class FaceShareDTO(msgspec.Struct, frozen=True):
     """Share of the rolls that were a given number."""
 
@@ -238,6 +247,7 @@ class FunFactsDTO(msgspec.Struct, frozen=True):
     """Small per-racer facts for the Fun facts tab; empty lists when the racer is not in the data."""
 
     collectors: list[CollectorDTO] = msgspec.field(default_factory=list)
+    mush_combos: list[MushComboDTO] = msgspec.field(default_factory=list)
     outcomes: list[OutcomeShareDTO] = msgspec.field(default_factory=list)
     hog_for_himself: float | None = None
     hog_for_others: float | None = None

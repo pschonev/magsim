@@ -188,6 +188,7 @@ NEMESIS_MATCH: AbilityName = "NemesisGrudgeMatch"
 HOG_MODIFIER: ModifierName = "HogKnightHog"
 HOG_KNIGHT = "HogKnight"
 MASTERMIND_PREDICT: AbilityName = "MastermindPredict"
+MUSH = "Mush"
 MUSH_ABILITY: AbilityName = "MushGlobsterMash"
 CHEATAH_ABILITY: AbilityName = "CheatahSleightOfPaw"
 TOTAL_TRACKED = frozenset({"Cheatah", "ShowOff", "Magician", "RocketScientist"})
@@ -243,6 +244,8 @@ class MetricsAggregator:
                 racer_id=racer.idx,
                 racer_name=racer.name,
             )
+            if racer.name == MUSH:
+                self.results[racer.idx].drawn_powers = []
             if self._has_ability(engine, racer.idx, NEPO_BABY_START):
                 self._record_movement_bucket(racer.idx, racer.idx, racer.position)
             # Each hog belongs to whoever started on it (Hog Knight or a copy of him)
@@ -407,6 +410,11 @@ class MetricsAggregator:
                 stats.ability_trigger_count += 1
                 if event.source == MASTERMIND_PREDICT and event.target_racer_idx != responsible_idx:
                     stats.predicted_racer_id = event.target_racer_idx
+                if event.source == MUSH_ABILITY:
+                    # Read now: a racer that finished or was eliminated has lost its abilities by the end
+                    for ability in engine.get_racer(responsible_idx).active_abilities:
+                        if ability.name == MUSH_ABILITY:
+                            stats.drawn_powers = list(getattr(ability, "copied_racers", []))
                 if (
                     event.source == CHEATAH_ABILITY
                     and event.detail is not None
@@ -607,9 +615,6 @@ class MetricsAggregator:
             stats.final_vp = racer.victory_points - racer.starting_vp
             stats.finish_position = racer.finish_position
             stats.eliminated = racer.eliminated
-            for ability in racer.active_abilities:
-                if ability.name == MUSH_ABILITY and (copied := getattr(ability, "copied_racers", None)):
-                    stats.copied_racers = list(copied)
             output.append(stats)
         return output
 

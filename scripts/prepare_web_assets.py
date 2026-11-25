@@ -14,6 +14,7 @@ from magsim.analysis.export import export_parquet_to_ipc
 
 PYODIDE_VERSION = "314.0.8"
 DATASET_FILES = ("races.parquet", "racer_results.parquet")
+MUSH_FILE = "mush_pairs.parquet"
 BATCH_RESULTS_DIR = Path("results")
 SNAPSHOT_RESULTS_DIR = Path("docs") / "results"
 
@@ -100,6 +101,11 @@ def prepare_web_assets(
         "racerResults": f"results/{results_ipc.name}",
         "pyodideVersion": PYODIDE_VERSION,
     }
+    mush_ipc = results_dir / "mush_pairs.zstd.ipc"
+    mush_ipc.unlink(missing_ok=True)
+    if (source_results / MUSH_FILE).exists():
+        export_ipc(source_results / MUSH_FILE, mush_ipc)
+        manifest["mushPairs"] = f"results/{mush_ipc.name}"
     manifest_path = target_public / "runtime-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest

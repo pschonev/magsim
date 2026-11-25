@@ -332,7 +332,6 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     { kind: "matchup", title: "Matchups" },
     { kind: "board", title: "Boards" },
     { kind: "twist", title: "Twist cards" },
-    { kind: "mush", title: "Powers Mush drew" },
   ] as const;
   const extremeSets = extremeColumns
     .map((c) => ({
@@ -379,10 +378,26 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
       const c = collected.get(r.name);
       return { ...r, color: colorOf(r.name), caption: `${(c?.per_race ?? 0).toFixed(2)} ${verbs[r.name]} per race\nnobody in ${((c?.no_one ?? 0) * 100).toFixed(0)}% of races` };
     });
-  if (roses.length > 0) {
+  const combos = [...facts.mush_combos].sort((a, b) => b.average_vp - a.average_vp);
+  const best = combos.slice(0, Math.min(5, Math.ceil(combos.length / 2)));
+  const comboSection = (rows: typeof combos, name: string): RoseSection[] =>
+    rows.length === 0
+      ? []
+      : [
+          {
+            name,
+            color: colorOf("Mush"),
+            caption: "average VP in races\nwith both powers",
+            format: (v: number) => `${v.toFixed(2)} VP`,
+            items: rows.map((c) => ({ name: `${c.first} + ${c.second}`, value: c.average_vp, color: colorOf(c.first), color2: colorOf(c.second), detail: `${c.games} races` })),
+          },
+        ];
+  const mushRoses = [...comboSection(best, "Mush: best pairs"), ...comboSection(combos.slice(best.length), "Mush: worst pairs")];
+  const allRoses = [...roses, ...mushRoses];
+  if (allRoses.length > 0) {
     cards.push(
-      <Card key="collectors" span={2} title="Collectors" hint="Hotel: stops on Hotel's space per game. Mouth and Bite Mark: share of the games with the victim in which they ate it. Bite Mark's transformation is not counted as a meal.">
-        <EChart height={290} option={buildRoses(roses, theme)} />
+      <Card key="collectors" span={mushRoses.length > 0 ? 3 : 2} title="Collectors" hint="Hotel: stops on Hotel's space per game. Mouth and Bite Mark: share of the games with the victim in which they ate it (Bite Mark's transformation is not counted as a meal). Mush: pairs of powers he drew in the same race, with at least 30 races each, from all his games whatever the filters say.">
+        <EChart height={290} option={buildRoses(allRoses, theme)} />
       </Card>,
     );
   }

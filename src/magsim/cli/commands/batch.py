@@ -64,6 +64,11 @@ class BatchCommand:
         cappa.Arg(long="--seed-offset", help="Offset for RNG seeds."),
     ] = 0
 
+    results_dir: Annotated[
+        Path,
+        cappa.Arg(long="--results-dir", help="Where the database and parquet files go."),
+    ] = RESULTS_DIR
+
     force: Annotated[
         bool,
         cappa.Arg(
@@ -80,20 +85,20 @@ class BatchCommand:
             raise cappa.Exit(msg, code=1)
 
         # Confirm Deletion
-        if RESULTS_DIR.exists() and any(RESULTS_DIR.glob("*.parquet")):
+        if self.results_dir.exists() and any(self.results_dir.glob("*.parquet")):
             if self.force:
-                delete_existing_results(RESULTS_DIR)
+                delete_existing_results(self.results_dir)
             else:
                 while True:
                     answer = (
                         input(
-                            f"Delete all .parquet/.duckdb in '{RESULTS_DIR}'? (y/n): ",
+                            f"Delete all .parquet/.duckdb in '{self.results_dir}'? (y/n): ",
                         )
                         .strip()
                         .lower()
                     )
                     if answer in ("y", "yes"):
-                        delete_existing_results(RESULTS_DIR)
+                        delete_existing_results(self.results_dir)
                         break
                     if answer in ("n", "no", ""):
                         tqdm.write("Keeping existing result files.")
@@ -141,10 +146,11 @@ class BatchCommand:
             seed_offset=self.seed_offset,
             filters=sim_config.filters,
             exclude_twists=tuple(sim_config.exclude_twists),
+            required_racers=tuple(sim_config.required_racers),
         )
 
         # Database Setup
-        db = SimulationDatabase(RESULTS_DIR)
+        db = SimulationDatabase(self.results_dir)
         seen_hashes = db.get_known_hashes()
         initial_seen_count = len(seen_hashes)
 
@@ -154,6 +160,7 @@ class BatchCommand:
             boards=sim_config.boards,
             runs_per_combination=runs_per_combo,
             max_total_runs=max_total,
+            required_racers=tuple(sim_config.required_racers),
         )
 
         # Execution Stats

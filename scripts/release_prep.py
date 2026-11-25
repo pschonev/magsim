@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = ROOT / "results"
 SNAPSHOT_DIR = ROOT / "docs" / "results"
 DATASET_FILES = ("races.parquet", "racer_results.parquet")
+OPTIONAL_FILES = ("mush_pairs.parquet",)
 
 
 def sync_results() -> None:
@@ -20,6 +21,10 @@ def sync_results() -> None:
     for name in DATASET_FILES:
         shutil.copy2(RESULTS_DIR / name, SNAPSHOT_DIR / name)
         print(f"Synced {name} -> {SNAPSHOT_DIR}")
+    for name in OPTIONAL_FILES:
+        if (RESULTS_DIR / name).exists():
+            shutil.copy2(RESULTS_DIR / name, SNAPSHOT_DIR / name)
+            print(f"Synced {name} -> {SNAPSHOT_DIR}")
 
 
 if __name__ == "__main__":

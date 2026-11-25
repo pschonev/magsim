@@ -13,6 +13,10 @@ export interface BarItem {
   color: string;
   /** The name is a racer's: write it in the racer's colour. */
   racer?: boolean;
+  /** A second colour: the slice fades from `color` to this one (for pairs of racers). */
+  color2?: string;
+  /** Extra text for the hover. */
+  detail?: string;
 }
 
 interface LabelEntry {
@@ -408,7 +412,8 @@ export function buildRoses(sections: RoseSection[], t: ChartTheme): EChartsOptio
       backgroundColor: t.tooltipBg,
       borderColor: t.tooltipBorder,
       textStyle: { color: t.text, fontSize: 12 },
-      formatter: (p: { seriesIndex: number; name: string; value: number }) => `${p.name}: ${sections[p.seriesIndex].format(p.value)}`,
+      formatter: (p: { seriesIndex: number; name: string; value: number; data: { detail?: string } }) =>
+        `${p.name}: ${sections[p.seriesIndex].format(p.value)}${p.data.detail ? ` (${p.data.detail})` : ""}`,
     },
     title: sections.map((s, i) => ({
       text: displayName(s.name),
@@ -431,8 +436,13 @@ export function buildRoses(sections: RoseSection[], t: ChartTheme): EChartsOptio
       data: s.items.map((it) => ({
         name: displayName(it.name),
         value: it.value,
-        itemStyle: { color: it.color },
-        label: { color: readableOn(it.color, t) },
+        detail: it.detail,
+        itemStyle: {
+          color: it.color2
+            ? { type: "linear", x: 0, y: 0, x2: 1, y2: 1, colorStops: [{ offset: 0, color: it.color }, { offset: 1, color: it.color2 }] }
+            : it.color,
+        },
+        label: { color: t.text },
       })),
     })),
   };

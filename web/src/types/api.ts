@@ -154,7 +154,7 @@ export interface EatTargetDTO {
 }
 
 export interface ExtremeComboDTO {
-  kind: "matchup" | "board" | "twist" | "mush";
+  kind: "matchup" | "board" | "twist";
   racer_name: string;
   other: string;
   shift: number;
@@ -185,6 +185,13 @@ export interface PickDTO {
   guessed: number;
 }
 
+export interface MushComboDTO {
+  first: string;
+  second: string;
+  average_vp: number;
+  games: number;
+}
+
 export interface FaceShareDTO {
   face: number;
   share: number;
@@ -192,6 +199,7 @@ export interface FaceShareDTO {
 
 export interface FunFactsDTO {
   collectors: CollectorDTO[];
+  mush_combos: MushComboDTO[];
   outcomes: OutcomeShareDTO[];
   hog_for_himself: number | null;
   hog_for_others: number | null;
@@ -465,6 +473,8 @@ export interface RuntimeManifest {
   wheel: string;
   races: string;
   racerResults: string;
+  /** Mush's power pairs; older builds have none. */
+  mushPairs?: string;
   pyodideVersion: string;
 }
 

@@ -79,20 +79,3 @@ def test_a_board_that_shakes_everyone_up_does_not_take_every_place() -> None:
     best = found.filter(pl.col("shift") > 0)
     assert ("R0", "Narrow") in set(zip(best["racer_name"], best["other"], strict=True))
 
-
-def test_mush_powers_are_ranked_against_mushs_average_with_any_power() -> None:
-    rng = random.Random(6)
-    powers = ["Kraken", "Hare", "Banana", "Gunk", "Twin", "Mouth"]
-    rows = []
-    for i in range(4000):
-        drawn = rng.sample(powers, 2)
-        vp = rng.gauss(3, 1) + (2.0 if "Kraken" in drawn else 0.0) - (1.5 if "Twin" in drawn else 0.0)
-        rows.append({"racer_name": "Mush", "final_vp": vp, "copied_racers": drawn})
-    results = pl.DataFrame(rows)
-
-    found = compute_extreme_combinations(results, pl.DataFrame(), pl.DataFrame()).filter(pl.col("kind") == "mush")
-
-    best = found.sort("shift", descending=True).row(0, named=True)
-    worst = found.sort("shift").row(0, named=True)
-    assert (best["racer_name"], best["other"]) == ("Kraken", "")
-    assert worst["racer_name"] == "Twin"

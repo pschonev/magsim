@@ -111,7 +111,10 @@ Run high-volume batch simulations driven by a TOML configuration. Saves results 
 | **Max Runs** | `--max` | Override the maximum total runs across the batch. |
 | **Turn Limit** | `--turns` | Override the max turns per race. |
 | **Seed Offset** | `--seed-offset` | Offset for RNG seeds to prevent overlap. *(Default: `0`)* |
-| **Force** | `-f, --force` | Delete existing Parquet/DuckDB files in `results/` without prompting. |
+| **Results Dir** | `--results-dir` | Where the database and Parquet files go. *(Default: `results`)* |
+| **Force** | `-f, --force` | Delete existing Parquet/DuckDB files in the results directory without prompting. |
+
+The config can name `required_racers`: those racers are in every game and the rest of each team is drawn from the pool (see `configs/mush_only.toml`).
 
 **Examples:**
 ```bash
@@ -176,6 +179,12 @@ cd magical-athlete-simulator
 ```bash
 magsim batch configs/sim.toml
 ```
+The dashboard's own dataset takes two runs, which one command does (it replaces `results/` and `results_mush/`):
+```bash
+uv run poe batch   # main batch (configs/twisty_oversampled.toml) + Mush-only games + Mush's merged power pairs
+uv run poe mush    # only the Mush-only games and the pairs, when the main batch already exists
+```
+Mush's power pairs need far more Mush games than a uniform batch holds. The Mush-only games go to `results_mush/` and are never merged into `results/`, because they would make Mush a third of all races and tilt every other statistic. Only a small table of pairs (`results/mush_pairs.parquet`, about 10 KB) is merged and shipped with the dashboard; `poe release-prep` copies it into the committed `docs/results` snapshot next to the two datasets. A dataset you upload in the dashboard has no such table, so its Mush charts use only its own Mush games (and stay empty without enough of them).
 
 **3. Build and start the dashboard with your results:**
 ```bash

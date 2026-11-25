@@ -58,8 +58,9 @@ def get_runtime_versions_json() -> str:
     )
 
 
-def load_ipc_dataset(races_buf: object, results_buf: object) -> str:
-    return _store(web.load_ipc(_to_bytes(races_buf), _to_bytes(results_buf)))
+def load_ipc_dataset(races_buf: object, results_buf: object, mush_buf: object = None) -> str:
+    mush = None if mush_buf is None else _to_bytes(mush_buf)
+    return _store(web.load_ipc(_to_bytes(races_buf), _to_bytes(results_buf), mush))
 
 
 def load_parquet_dataset(races_buf: object, results_buf: object) -> str:
@@ -69,7 +70,7 @@ def load_parquet_dataset(races_buf: object, results_buf: object) -> str:
 def analyze_dashboard(filter_json: str) -> str:
     flt = msgspec.json.decode(filter_json, type=web.AnalysisFilterDTO)
     STATE.filtered = web.apply_filter(_loaded(), flt)
-    return _to_json(web.analyze(STATE.filtered))
+    return _to_json(web.analyze(STATE.filtered, _loaded().mush_pairs))
 
 
 def query_raw_table(query_json: str) -> str:

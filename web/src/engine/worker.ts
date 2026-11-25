@@ -196,6 +196,7 @@ async function handleInit(baseUrl: string): Promise<BootResult> {
   const dataFetchPromise = Promise.all([
     fetchBytes(`${normalizedBase}${manifest.races}`),
     fetchBytes(`${normalizedBase}${manifest.racerResults}`),
+    manifest.mushPairs ? fetchBytes(`${normalizedBase}${manifest.mushPairs}`) : Promise.resolve(undefined),
   ]);
 
   const pyodideMod = (await import(
@@ -221,11 +222,12 @@ async function handleInit(baseUrl: string): Promise<BootResult> {
   }>("get_runtime_versions_json");
 
   postProgress("Decoding Arrow IPC race dataset...", 88);
-  const [racesBytes, resultsBytes] = await dataFetchPromise;
+  const [racesBytes, resultsBytes, mushBytes] = await dataFetchPromise;
   const datasetMeta = callPyJson<DatasetMetaDTO>(
     "load_ipc_dataset",
     racesBytes,
     resultsBytes,
+    mushBytes,
   );
   const simulatorMeta = callPyJson<SimulatorMetaDTO>("simulator_meta");
 

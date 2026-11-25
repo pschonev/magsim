@@ -23,17 +23,20 @@ def compute_total_runs(
     boards: list[BoardName],
     runs_per_combination: int | None,
     max_total_runs: int | None,
+    required_racers: tuple[RacerName, ...] = (),
 ) -> int:
     """
     Computes the total number of simulations that will be run.
     Calculates the exact theoretical universe size and clamps it to the user's limit.
     """
-    n = len(eligible_racers)
+    required = len(required_racers)
+    n = len([r for r in eligible_racers if r not in required_racers])
     if n == 0 or not boards:
         return 0
 
-    # Filter for valid team sizes (e.g., can't have 5-racer team with only 3 eligible racers)
-    valid_ks = {k for k in racer_counts if 0 < k <= n}
+    # Filter for valid team sizes (e.g., can't have 5-racer team with only 3 eligible racers);
+    # the required racers take `required` seats of every team
+    valid_ks = {k for k in racer_counts if required < k <= n + required}
     if not valid_ks:
         return 0
 
@@ -41,7 +44,7 @@ def compute_total_runs(
 
     # Calculate Universe Size: Boards * Seeds * Sum(nCk)
     # math.comb calculates exact combinations efficiently without iterating
-    combinations_sum = sum(math.comb(n, k) for k in valid_ks)
+    combinations_sum = sum(math.comb(n, k - required) for k in valid_ks)
     theoretical_total = len(boards) * seeds * combinations_sum
 
     # If the user wants infinite runs (None), we return the theoretical max.
@@ -120,23 +123,26 @@ def generate_combinations(
     filters: list[CombinationFilter] | None = None,
     seed_offset: int = 0,
     exclude_twists: tuple[TwistName, ...] = (),
+    required_racers: tuple[RacerName, ...] = (),
 ) -> Iterator[GameConfig]:
     """
     Smart generator that guarantees unique combinations even in massive spaces
     by sampling indices instead of racers.
     """
+    required = len(required_racers)
+    eligible_racers = [r for r in eligible_racers if r not in required_racers]
     n_racers = len(eligible_racers)
     n_seeds = runs_per_combination or 1
 
     # 1. Identify all "Buckets" (Map + Player Count pairs)
     #    and calculate the theoretical size of each.
-    valid_counts = [k for k in sorted(set(racer_counts)) if 0 < k <= n_racers]
+    valid_counts = [k for k in sorted(set(racer_counts)) if required < k <= n_racers + required]
     buckets: list[TaskBucket] = []
 
     for board in boards:
         for k in valid_counts:
             # How many unique racer teams exist? (n choose k)
-            unique_teams = math.comb(n_racers, k)
+            unique_teams = math.comb(n_racers, k - required)
             # Total unique games = teams * seeds
             total_possibilities = unique_teams * n_seeds
 
@@ -190,11 +196,12 @@ def generate_combinations(
             # "get_combination_at_index" gives us indices like [0, 5, 12]
             racer_indices = get_combination_at_index(
                 n_racers,
-                bucket.racer_count,
+                bucket.racer_count - required,
                 team_comb_idx,
             )
             selected_racers: list[RacerName] = [
-                eligible_racers[i] for i in racer_indices
+                *required_racers,
+                *(eligible_racers[i] for i in racer_indices),
             ]
 
             # --- FILTER CHECK START ---
