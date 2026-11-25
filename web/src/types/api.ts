@@ -185,11 +185,12 @@ export interface PickDTO {
   guessed: number;
 }
 
-export interface MushComboDTO {
+export interface MushPairDTO {
   first: string;
   second: string;
-  average_vp: number;
   games: number;
+  average_vp: number;
+  top2_rate: number | null;
 }
 
 export interface FaceShareDTO {
@@ -199,7 +200,7 @@ export interface FaceShareDTO {
 
 export interface FunFactsDTO {
   collectors: CollectorDTO[];
-  mush_combos: MushComboDTO[];
+  mush_table: MushPairDTO[];
   outcomes: OutcomeShareDTO[];
   hog_for_himself: number | null;
   hog_for_others: number | null;

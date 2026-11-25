@@ -1,6 +1,5 @@
 import polars as pl
 
-from magsim.analysis.fun_facts import compute_mush_combos
 from magsim.analysis.mush_pairs import build_mush_pairs, mush_rows, pair_table
 
 
@@ -57,26 +56,3 @@ def test_a_batch_from_before_the_draws_were_recorded_adds_nothing() -> None:
     new = batch([("a", "Mush", 3, ["Kraken", "Hotel"])])
 
     assert build_mush_pairs(old, new)["games"].to_list() == [1]
-
-
-def test_the_combos_are_the_best_and_worst_pairs_with_enough_games(monkeypatch) -> None:
-    from magsim.analysis import fun_facts
-
-    monkeypatch.setattr(fun_facts, "MIN_COMBO_GAMES", 3)
-    pairs = pl.DataFrame(
-        {
-            "first": ["A", "A", "A", "A"],
-            "second": ["B", "C", "D", "E"],
-            "games": [3, 3, 3, 2],
-            "total_vp": [15, 4, 9, 40],
-        },
-        schema={"first": pl.Utf8, "second": pl.Utf8, "games": pl.Int64, "total_vp": pl.Int64},
-    )
-
-    rows = compute_mush_combos(pairs, per_side=1).to_dicts()
-
-    assert [(r["second"], r["average_vp"], r["games"]) for r in rows] == [("B", 5.0, 3), ("C", 4 / 3, 3)]
-
-
-def test_the_combos_are_empty_without_pairs() -> None:
-    assert compute_mush_combos(pair_table(batch([]).select("config_hash", "final_vp", "drawn_powers"))).is_empty()

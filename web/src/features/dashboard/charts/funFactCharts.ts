@@ -1,5 +1,5 @@
 import type { EChartsOption } from "../../../components/EChart";
-import type { FaceEffectDTO, OutcomeShareDTO, VpShareDTO } from "../../../types/api";
+import type { FaceEffectDTO, MushPairDTO, OutcomeShareDTO, VpShareDTO } from "../../../types/api";
 import { displayName } from "../../../utils/names";
 import type { ChartTheme } from "../../../utils/theme";
 import { BRAND, DIVERGING, NEUTRAL } from "../../../utils/palette";
@@ -42,13 +42,21 @@ function racerLabels(entries: LabelEntry[], t: ChartTheme, fontSize = 12) {
 
 const base = (t: ChartTheme) => ({ backgroundColor: "transparent", animation: false, textStyle: { color: t.text } });
 
+interface BarOptions {
+  /** Round marks on a thin stick instead of bars. */
+  lollipop?: boolean;
+  /** Smaller text, thinner margins; for narrow cards. */
+  compact?: boolean;
+}
+
 /** Horizontal bars (or lollipops) with the value at the end of each bar; one racer per row. */
-export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) => string, lollipop = false): EChartsOption {
+export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) => string, { lollipop = false, compact = false }: BarOptions = {}): EChartsOption {
   const names = items.map((i) => displayName(i.name));
-  const max = Math.max(...items.map((i) => i.value), 0) * 1.25 || 1;
+  const max = Math.max(...items.map((i) => i.value), 0) * (compact ? 1.2 : 1.25) || 1;
+  const fontSize = compact ? 11 : 12;
   return {
     ...base(t),
-    grid: { left: 8, right: 16, top: 6, bottom: 6, containLabel: true },
+    grid: compact ? { left: 2, right: 6, top: 3, bottom: 3, containLabel: true } : { left: 8, right: 16, top: 6, bottom: 6, containLabel: true },
     xAxis: { type: "value", show: false, min: 0, max },
     yAxis: {
       type: "category",
@@ -56,15 +64,15 @@ export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) =
       data: names,
       axisTick: { show: false },
       axisLine: { show: false },
-      axisLabel: racerLabels(items.map((i) => ({ text: displayName(i.name), color: i.racer ? i.color : undefined })), t),
+      axisLabel: racerLabels(items.map((i) => ({ text: displayName(i.name), color: i.racer ? i.color : undefined })), t, fontSize),
     },
     tooltip: { show: false },
     series: [
       {
         type: "bar",
-        barWidth: lollipop ? 3 : "62%",
+        barWidth: lollipop ? 3 : compact ? "72%" : "62%",
         data: items.map((i) => ({ value: i.value, itemStyle: { color: i.color, borderRadius: lollipop ? 0 : 4 } })),
-        label: lollipop ? { show: false } : { show: true, position: "right", color: t.text, fontWeight: 700, fontSize: 12, formatter: (p: { value: number }) => format(p.value) },
+        label: lollipop ? { show: false } : { show: true, position: "right", color: t.text, fontWeight: 700, fontSize, formatter: (p: { value: number }) => format(p.value) },
       },
       ...(lollipop
         ? [
@@ -336,17 +344,23 @@ export interface DivergingItem {
   value: number;
 }
 
+/** Axis room per side: the longest bar plus its value label; the shorter side keeps at least this share of the longer one for the names. */
+const DIVERGING_ROOM = 1.4;
+const DIVERGING_MIN_SIDE = 0.45;
+
 /**
  * Best combinations on top (bars grow right), worst at the bottom (bars grow left). The names sit
  * next to the centre line, right-aligned above it and left-aligned below it, so no space is wasted.
  */
 export function buildDivergingBars(items: DivergingItem[], t: ChartTheme): EChartsOption {
-  const reach = Math.max(...items.map((i) => Math.abs(i.value))) * 1.5 || 1;
-  const barWidth = "62%";
+  const gain = Math.max(0, ...items.map((i) => i.value)) * DIVERGING_ROOM;
+  const loss = Math.max(0, ...items.map((i) => -i.value)) * DIVERGING_ROOM;
+  const longest = Math.max(gain, loss) || 1;
+  const barWidth = "60%";
   return {
     ...base(t),
-    grid: { left: 8, right: 8, top: 2, bottom: 2 },
-    xAxis: { type: "value", show: false, min: -reach, max: reach },
+    grid: { left: 2, right: 2, top: 1, bottom: 1 },
+    xAxis: { type: "value", show: false, min: -Math.max(loss, DIVERGING_MIN_SIDE * longest), max: Math.max(gain, DIVERGING_MIN_SIDE * longest) },
     yAxis: { type: "category", inverse: true, show: false, data: items.map((i) => `${i.racer} ${i.other}`) },
     tooltip: { show: false },
     series: [
@@ -446,6 +460,38 @@ export function buildRoses(sections: RoseSection[], t: ChartTheme): EChartsOptio
       })),
     })),
   };
+}
+
+export const MIN_PAIR_GAMES = 30;
+const ROSE_PAIRS = 5;
+
+/** Mush's best, worst (by average VP) and best top-2 pairs among pairs with enough races; best and worst never share a pair. */
+export function mushRoses(pairs: MushPairDTO[], colorOf: (racer: string) => string): RoseSection[] {
+  const ranked = pairs.filter((p) => p.games >= MIN_PAIR_GAMES).sort((a, b) => b.average_vp - a.average_vp);
+  const best = ranked.slice(0, Math.min(ROSE_PAIRS, Math.ceil(ranked.length / 2)));
+  const worst = ranked.slice(best.length).slice(-ROSE_PAIRS);
+  const topTwo = ranked
+    .filter((p) => p.top2_rate !== null)
+    .sort((a, b) => (b.top2_rate ?? 0) - (a.top2_rate ?? 0))
+    .slice(0, ROSE_PAIRS);
+  const section = (name: string, rows: MushPairDTO[], caption: string, value: (p: MushPairDTO) => number, format: (v: number) => string): RoseSection[] =>
+    rows.length === 0
+      ? []
+      : [
+          {
+            name,
+            color: colorOf("Mush"),
+            caption,
+            format,
+            items: rows.map((p) => ({ name: `${p.first} + ${p.second}`, value: value(p), color: colorOf(p.first), color2: colorOf(p.second), detail: `${p.games} races` })),
+          },
+        ];
+  const vp = (v: number) => `${v.toFixed(2)} VP`;
+  return [
+    ...section("Best pairs", best, "average VP in races\nwith both powers", (p) => p.average_vp, vp),
+    ...section("Worst pairs", worst, "average VP in races\nwith both powers", (p) => p.average_vp, vp),
+    ...section("Best pairs, top 2", topTwo, "races finished 1st or 2nd\nwith both powers", (p) => (p.top2_rate ?? 0) * 100, (v) => `${v.toFixed(0)}%`),
+  ];
 }
 
 /** A plain pie with the name and share outside each slice. */

@@ -10,7 +10,6 @@ from magsim.analysis.roll_dependence import FACE_COLUMNS
 
 ANNOYING_RACERS = ("Critic", "Stickler", "PartyPooper", "Null", "Inchworm", "Gunk", "Stunner", "LeSaboteur")
 MIN_CALL_GAMES = 50
-MIN_COMBO_GAMES = 30
 VP_DISTRIBUTION_RACERS = ("Sisyphus", "LovableLoser", "Streaker")
 OUTCOME_RACERS = ("SpeedDemon", "Icarus", "Spoilsport")
 CANCELLING_RACER = "Spoilsport"
@@ -410,20 +409,3 @@ def compute_extreme_combinations(
                 ),
             )
     return pl.concat(frames).cast(schema) if frames else pl.DataFrame(schema=schema)
-
-
-def compute_mush_combos(pairs: pl.DataFrame, per_side: int = EXTREMES_PER_SIDE) -> pl.DataFrame:
-    """The best and the worst pairs of Mush's powers by his average VP, among pairs with enough games.
-
-    `pairs` is the table from `analysis.mush_pairs.pair_table`.
-    """
-    schema = {"first": pl.Utf8, "second": pl.Utf8, "average_vp": pl.Float64, "games": pl.Int64}
-    if pairs.is_empty():
-        return pl.DataFrame(schema=schema)
-    ranked = (
-        pairs.filter(pl.col("games") >= MIN_COMBO_GAMES)
-        .with_columns((pl.col("total_vp") / pl.col("games")).alias("average_vp"))
-        .select("first", "second", "average_vp", "games")
-        .sort("average_vp", descending=True)
-    )
-    return pl.concat([ranked.head(per_side), ranked.tail(per_side)]).unique(maintain_order=True)

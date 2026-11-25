@@ -6,8 +6,10 @@ import { useTheme } from "../../utils/ThemeProvider";
 import type { ChartTheme } from "../../utils/theme";
 import { BRAND, NEUTRAL, visibleMark } from "../../utils/palette";
 import { readableOn } from "./charts/chartOptions";
+import { MushTable } from "./MushTable";
 import {
   BADGE,
+  MIN_PAIR_GAMES,
   type BarItem,
   type ColumnSeries,
   type DivergingItem,
@@ -21,6 +23,7 @@ import {
   buildRoses,
   buildSplitRows,
   faceEffectColumns,
+  mushRoses,
   vpHistogram,
 } from "./charts/funFactCharts";
 
@@ -35,7 +38,9 @@ const PIPS: Record<number, [number, number][]> = {
 
 const SPAN: Record<1 | 2 | 3, string> = { 1: "", 2: "sm:col-span-2", 3: "sm:col-span-2 xl:col-span-3" };
 const DICE_TOTAL_CAP = 12;
-const EXTREME_COLUMNS: Record<number, string> = { 3: "xl:grid-cols-3", 4: "xl:grid-cols-4" };
+const EXTREME_COLUMNS: Record<number, string> = { 2: "2xl:grid-cols-2", 3: "2xl:grid-cols-3" };
+const COLLECTORS_PLACEMENT = "xl:col-start-3 xl:row-start-1 xl:row-span-2";
+const ROSE_HEIGHT = 235;
 const MAGICAL_ATHLETE_FACES: Record<number, string> = {
   1: "he moves 7.",
   2: "the last place racer warps to him.",
@@ -51,11 +56,13 @@ interface CardProps {
   hint?: string;
   children: ReactNode;
   span?: 1 | 2 | 3;
+  /** Extra grid placement classes. */
+  placement?: string;
 }
 
-function Card({ title, caption, hint, children, span = 1 }: CardProps) {
+function Card({ title, caption, hint, children, span = 1, placement = "" }: CardProps) {
   return (
-    <section className={`rounded-xl border border-slate-800 bg-slate-900 p-3 ${SPAN[span]}`}>
+    <section className={`rounded-xl border border-slate-800 bg-slate-900 p-3 ${SPAN[span]} ${placement}`}>
       <h3 className={`mb-1 font-display text-sm text-slate-50 ${hint ? "cursor-help" : ""}`} title={hint}>
         {title}
       </h3>
@@ -281,10 +288,12 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     );
   }
 
+  const bottom: ReactNode[] = [];
+
   if (facts.triggers_per_turn.length > 0) {
-    cards.push(
+    bottom.push(
       <Card key="annoy" title="Most annoying powers" caption="triggers per own turn">
-        <EChart height={190} option={buildBars(toBars(facts.triggers_per_turn), theme, (v) => v.toFixed(2), true)} />
+        <EChart height={190} option={buildBars(toBars(facts.triggers_per_turn), theme, (v) => v.toFixed(2), { lollipop: true })} />
       </Card>,
     );
   }
@@ -295,23 +304,24 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     const callBars = (rows: typeof calls) => toBars(rows.map((c) => ({ racer_name: c.racer_name, value: c.rate * 100 })));
     const best = calls.slice(0, Math.min(5, Math.ceil(calls.length / 2)));
     const worst = calls.slice(best.length);
-    cards.push(
-      <Card key="mind" title="Mastermind" span={2} hint="His prediction is right when the racer he predicted wins the race.">
-        <div className="grid gap-3 sm:grid-cols-2">
+    const percent0 = (v: number) => `${v.toFixed(0)}%`;
+    bottom.push(
+      <Card key="mind" title="Mastermind" hint="His prediction is right when the racer he predicted wins the race.">
+        <div className="grid gap-2 2xl:grid-cols-2">
           <div>
             {calls.length > 0 && (
               <>
                 <p className="text-[11px] text-slate-400">the racer he predicted won this often</p>
-                <EChart height={best.length * 24 + 12} option={buildBars(callBars(best), theme, (v) => `${v.toFixed(0)}%`)} />
+                <EChart height={best.length * 20 + 6} option={buildBars(callBars(best), theme, percent0, { compact: true })} />
                 <p className="text-[11px] text-slate-400">…and this rarely</p>
-                <EChart height={worst.length * 24 + 12} option={buildBars(callBars(worst), theme, (v) => `${v.toFixed(0)}%`)} />
+                <EChart height={worst.length * 20 + 6} option={buildBars(callBars(worst), theme, percent0, { compact: true })} />
               </>
             )}
           </div>
           <div>
             <p className="text-[11px] text-slate-400">how his games end</p>
             <EChart
-              height={240}
+              height={200}
               option={buildPie(
                 [
                   { name: "1st", value: facts.mastermind_first, color: BADGE.gold },
@@ -343,19 +353,19 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     }))
     .filter((c) => c.items.length > 0);
   if (extremeSets.length > 0) {
-    cards.push(
+    bottom.push(
       <Card
         key="extremes"
-        span={3}
+        span={2}
         title="Best and worst combinations"
         caption="VP change of the racer, net of what the opponent, board or card does to every racer"
         hint="Only clear effects count: at least 4 standard errors away from zero, with 100 or more games."
       >
-        <div className={`grid gap-4 md:grid-cols-2 ${EXTREME_COLUMNS[extremeSets.length] ?? ""}`}>
+        <div className={`grid gap-2 ${EXTREME_COLUMNS[extremeSets.length] ?? ""}`}>
           {extremeSets.map((c) => (
             <div key={c.kind}>
               <p className="text-xs font-semibold text-slate-200">{c.title}</p>
-              <EChart height={c.items.length * 30 + 8} option={buildDivergingBars(c.items, theme)} />
+              <EChart height={c.items.length * 28 + 4} option={buildDivergingBars(c.items, theme)} />
             </div>
           ))}
         </div>
@@ -378,27 +388,37 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
       const c = collected.get(r.name);
       return { ...r, color: colorOf(r.name), caption: `${(c?.per_race ?? 0).toFixed(2)} ${verbs[r.name]} per race\nnobody in ${((c?.no_one ?? 0) * 100).toFixed(0)}% of races` };
     });
-  const combos = [...facts.mush_combos].sort((a, b) => b.average_vp - a.average_vp);
-  const best = combos.slice(0, Math.min(5, Math.ceil(combos.length / 2)));
-  const comboSection = (rows: typeof combos, name: string): RoseSection[] =>
-    rows.length === 0
-      ? []
-      : [
-          {
-            name,
-            color: colorOf("Mush"),
-            caption: "average VP in races\nwith both powers",
-            format: (v: number) => `${v.toFixed(2)} VP`,
-            items: rows.map((c) => ({ name: `${c.first} + ${c.second}`, value: c.average_vp, color: colorOf(c.first), color2: colorOf(c.second), detail: `${c.games} races` })),
-          },
-        ];
-  const mushRoses = [...comboSection(best, "Mush: best pairs"), ...comboSection(combos.slice(best.length), "Mush: worst pairs")];
-  const allRoses = [...roses, ...mushRoses];
-  if (allRoses.length > 0) {
-    cards.push(
-      <Card key="collectors" span={mushRoses.length > 0 ? 3 : 2} title="Collectors" hint="Hotel: stops on Hotel's space per game. Mouth and Bite Mark: share of the games with the victim in which they ate it (Bite Mark's transformation is not counted as a meal). Mush: pairs of powers he drew in the same race, with at least 30 races each, from all his games whatever the filters say.">
-        <EChart height={290} option={buildRoses(allRoses, theme)} />
+  if (roses.length > 0) {
+    bottom.push(
+      <Card key="collectors" placement={COLLECTORS_PLACEMENT} title="Collectors" hint="Hotel: stops on Hotel's space per game. Mouth and Bite Mark: share of the games with the victim in which they ate it (Bite Mark's transformation is not counted as a meal).">
+        {roses.map((r) => (
+          <EChart key={r.name} height={ROSE_HEIGHT} option={buildRoses([r], theme)} />
+        ))}
       </Card>,
+    );
+  }
+
+  if (facts.mush_table.length > 0) {
+    const textColorOf = (name: string) => readableOn(colorOf(name), theme);
+    bottom.push(
+      <Card key="mush" span={3} title="Mush" hint={`Pairs of powers he drew in the same race, from all his games whatever the filters say. Only pairs with at least ${MIN_PAIR_GAMES} races are ranked in the charts; the table lists every pair.`}>
+        <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_26rem]">
+          <div className="grid gap-2 md:grid-cols-3">
+            {mushRoses(facts.mush_table, colorOf).map((r) => (
+              <EChart key={r.name} height={ROSE_HEIGHT} option={buildRoses([r], theme)} />
+            ))}
+          </div>
+          <MushTable pairs={facts.mush_table} textColorOf={textColorOf} />
+        </div>
+      </Card>,
+    );
+  }
+
+  if (bottom.length > 0) {
+    cards.push(
+      <div key="bottom" className="contents xl:col-span-3 xl:grid xl:grid-cols-3 xl:gap-3">
+        {bottom}
+      </div>,
     );
   }
 

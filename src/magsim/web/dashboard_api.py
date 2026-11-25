@@ -19,11 +19,10 @@ from magsim.analysis.filters import (
     filter_dataset,
     get_automatic_racers,
 )
-from magsim.analysis.mush_pairs import mush_rows, pair_table
+from magsim.analysis.mush_pairs import mush_rows, pair_stats, pair_table
 from magsim.analysis.fun_facts import (
     compute_chosen_faces,
     compute_collectors,
-    compute_mush_combos,
     compute_extreme_combinations,
     compute_forward_share,
     compute_hog_split,
@@ -53,7 +52,7 @@ from magsim.web.schemas import (
     ExtremeComboDTO,
     FaceShareDTO,
     MastermindCallDTO,
-    MushComboDTO,
+    MushPairDTO,
     PickDTO,
     RacerFaceShareDTO,
     FunFactsDTO,
@@ -360,19 +359,26 @@ def _face_shares(frame: pl.DataFrame) -> list[FaceShareDTO]:
     ]
 
 
+def mush_table(results: pl.DataFrame, mush_pairs: pl.DataFrame | None) -> list[MushPairDTO]:
+    """Every pair of Mush's powers, best average VP first; from the shipped table or, without one, from `results`."""
+    pairs = pair_table(mush_rows(results)) if mush_pairs is None else mush_pairs
+    return [
+        MushPairDTO(
+            first=str(r["first"]),
+            second=str(r["second"]),
+            games=_safe_int(r["games"]),
+            average_vp=_safe_float(r["average_vp"]),
+            top2_rate=_optional_float(r["top2_rate"]),
+        )
+        for r in pair_stats(pairs).to_dicts()
+    ]
+
+
 def _fun_facts(results: pl.DataFrame, extremes: pl.DataFrame, mush_pairs: pl.DataFrame | None) -> FunFactsDTO:
     hog = compute_hog_split(results)
     calls, mastermind_first, mastermind_second, mastermind_second_predicted = compute_mastermind(results)
     return FunFactsDTO(
-        mush_combos=[
-            MushComboDTO(
-                first=str(r["first"]),
-                second=str(r["second"]),
-                average_vp=_safe_float(r["average_vp"]),
-                games=_safe_int(r["games"]),
-            )
-            for r in compute_mush_combos(pair_table(mush_rows(results)) if mush_pairs is None else mush_pairs).to_dicts()
-        ],
+        mush_table=mush_table(results, mush_pairs),
         collectors=[
             CollectorDTO(
                 racer_name=str(r["racer_name"]),
