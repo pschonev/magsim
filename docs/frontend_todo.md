@@ -490,6 +490,8 @@ Still open: Cheatah's chosen number and Show-Off's roll totals (per-turn movemen
 - Data: `mush_pairs` gets a `top2` column (games of the pair where Mush's `finish_position` was 1 or 2); it is only written when the results have `finish_position`. New DTO `MushPairDTO` and `FunFactsDTO.mush_table` (all pairs, best average first, `top2_rate` null without the column). `mush_combos` stays in the DTO (the analysis function is still tested) but the frontend no longer uses it.
 - `top2` appears only after the next `uv run poe mush`; until then the Mush top-2 rose and the Top 2 % column are hidden.
 - Removed the unused `mush_combos` DTO (`MushComboDTO`, `compute_mush_combos`, `MIN_COMBO_GAMES` and their tests); the minimum of 30 races now lives only in the frontend (`MIN_PAIR_GAMES`).
+- Mush charts skip pairs whose power already appears higher in the same ranking (Sisyphus filled the whole worst list); synergy ranking was tried and rejected as it mostly surfaces noise (2,400 pairs, ~110 races each; only 7 pairs beyond 4 standard errors).
+- The pairs table has a racer search (either racer's name, case- and space-insensitive; filters before sorting and paging).
 
 ## Round 26: category colours
 

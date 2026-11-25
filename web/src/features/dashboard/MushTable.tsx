@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useState } from "react";
 import type { MushPairDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
@@ -21,6 +21,16 @@ const COLUMNS: { key: SortKey; label: string; numeric: boolean }[] = [
 ];
 
 const pairLabel = (p: MushPairDTO) => `${displayName(p.first)} + ${displayName(p.second)}`;
+
+const squash = (text: string) => text.toLowerCase().replace(/\s+/g, "");
+
+function filterPairs(pairs: MushPairDTO[], query: string): MushPairDTO[] {
+  const needle = squash(query);
+  if (!needle) return pairs;
+  return pairs.filter(
+    (p) => squash(displayName(p.first)).includes(needle) || squash(displayName(p.second)).includes(needle),
+  );
+}
 
 function sortPairs(pairs: MushPairDTO[], { key, descending }: Sort): MushPairDTO[] {
   const sign = descending ? -1 : 1;
@@ -45,9 +55,11 @@ export function MushTable({ pairs, textColorOf }: MushTableProps) {
   const columns = COLUMNS.filter((c) => hasTop2 || c.key !== "top2_rate");
   const [sort, setSort] = useState<Sort>({ key: "average_vp", descending: true });
   const [page, setPage] = useState(0);
-  const pageCount = Math.max(1, Math.ceil(pairs.length / PAGE_SIZE));
+  const [query, setQuery] = useState("");
+  const matching = filterPairs(pairs, query);
+  const pageCount = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
   const current = Math.min(page, pageCount - 1);
-  const rows = sortPairs(pairs, sort).slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
+  const rows = sortPairs(matching, sort).slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
 
   const sortBy = (key: SortKey) => {
     setSort({ key, descending: sort.key === key ? !sort.descending : key !== "pair" });
@@ -60,6 +72,20 @@ export function MushTable({ pairs, textColorOf }: MushTableProps) {
 
   return (
     <div>
+      <div className="relative mb-1.5 w-full sm:w-64">
+        <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPage(0);
+          }}
+          placeholder="Search racer"
+          aria-label="Search racer"
+          className="w-full rounded-md border border-slate-700 bg-slate-950 py-1.5 pr-2 pl-7 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+        />
+      </div>
       <div className="overflow-x-auto rounded-lg border border-slate-800">
         <table className="w-full border-collapse text-xs">
           <thead className="bg-slate-900">
@@ -79,6 +105,13 @@ export function MushTable({ pairs, textColorOf }: MushTableProps) {
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={columns.length} className="px-2 py-3 text-center text-slate-500">
+                  No pairs match
+                </td>
+              </tr>
+            )}
             {rows.map((p) => (
               <tr key={`${p.first}+${p.second}`} className="border-b border-slate-900 hover:bg-slate-900/60">
                 <td className="px-2 py-1 font-semibold whitespace-nowrap">

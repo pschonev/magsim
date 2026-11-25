@@ -465,15 +465,30 @@ export function buildRoses(sections: RoseSection[], t: ChartTheme): EChartsOptio
 export const MIN_PAIR_GAMES = 30;
 const ROSE_PAIRS = 5;
 
-/** Mush's best, worst (by average VP) and best top-2 pairs among pairs with enough races; best and worst never share a pair. */
+/** Walks the candidates in order and keeps up to `limit` pairs whose powers have not appeared in an earlier kept pair. */
+function pickDistinctPowers(candidates: MushPairDTO[], limit: number): MushPairDTO[] {
+  const used = new Set<string>();
+  const picked: MushPairDTO[] = [];
+  for (const p of candidates) {
+    if (picked.length === limit) break;
+    if (used.has(p.first) || used.has(p.second)) continue;
+    used.add(p.first);
+    used.add(p.second);
+    picked.push(p);
+  }
+  return picked;
+}
+
+/** Mush's best, worst (by average VP) and best top-2 pairs among pairs with enough races; each power once per chart, best and worst never share a pair. */
 export function mushRoses(pairs: MushPairDTO[], colorOf: (racer: string) => string): RoseSection[] {
   const ranked = pairs.filter((p) => p.games >= MIN_PAIR_GAMES).sort((a, b) => b.average_vp - a.average_vp);
-  const best = ranked.slice(0, Math.min(ROSE_PAIRS, Math.ceil(ranked.length / 2)));
-  const worst = ranked.slice(best.length).slice(-ROSE_PAIRS);
-  const topTwo = ranked
-    .filter((p) => p.top2_rate !== null)
-    .sort((a, b) => (b.top2_rate ?? 0) - (a.top2_rate ?? 0))
-    .slice(0, ROSE_PAIRS);
+  const best = pickDistinctPowers(ranked, Math.min(ROSE_PAIRS, Math.ceil(ranked.length / 2)));
+  const inBest = new Set(best);
+  const worst = pickDistinctPowers(ranked.filter((p) => !inBest.has(p)).reverse(), ROSE_PAIRS);
+  const topTwo = pickDistinctPowers(
+    ranked.filter((p) => p.top2_rate !== null).sort((a, b) => (b.top2_rate ?? 0) - (a.top2_rate ?? 0)),
+    ROSE_PAIRS,
+  );
   const section = (name: string, rows: MushPairDTO[], caption: string, value: (p: MushPairDTO) => number, format: (v: number) => string): RoseSection[] =>
     rows.length === 0
       ? []
@@ -488,9 +503,9 @@ export function mushRoses(pairs: MushPairDTO[], colorOf: (racer: string) => stri
         ];
   const vp = (v: number) => `${v.toFixed(2)} VP`;
   return [
-    ...section("Best pairs", best, "average VP in races\nwith both powers", (p) => p.average_vp, vp),
-    ...section("Worst pairs", worst, "average VP in races\nwith both powers", (p) => p.average_vp, vp),
-    ...section("Best pairs, top 2", topTwo, "races finished 1st or 2nd\nwith both powers", (p) => (p.top2_rate ?? 0) * 100, (v) => `${v.toFixed(0)}%`),
+    ...section("Best pairs", best, "average VP in races with both powers\neach power once", (p) => p.average_vp, vp),
+    ...section("Worst pairs", worst, "average VP in races with both powers\neach power once", (p) => p.average_vp, vp),
+    ...section("Best pairs, top 2", topTwo, "share of races finishing 1st or 2nd\neach power once", (p) => (p.top2_rate ?? 0) * 100, (v) => `${v.toFixed(0)}%`),
   ];
 }
 
@@ -502,10 +517,10 @@ export function buildPie(items: { name: string; value: number; color: string }[]
     series: [
       {
         type: "pie",
-        radius: ["30%", "60%"],
+        radius: ["24%", "44%"],
         center: ["50%", "50%"],
         itemStyle: { borderColor: t.bg, borderWidth: 2 },
-        label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { name: string; percent: number }) => `${p.name}\n${p.percent.toFixed(0)}%` },
+        label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { name: string; percent: number }) => `${p.name.replace(", ", ",\n")}\n${p.percent.toFixed(0)}%` },
         labelLine: { length: 4, length2: 4 },
         data: items.map((i) => ({ name: i.name, value: i.value, itemStyle: { color: i.color } })),
       },

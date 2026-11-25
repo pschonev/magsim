@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { EChart } from "../../components/EChart";
+import type { CSSProperties, ReactNode } from "react";
+import { EChart, type EChartsOption } from "../../components/EChart";
 import type { DashboardAnalysisDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
 import { useTheme } from "../../utils/ThemeProvider";
@@ -39,8 +39,19 @@ const PIPS: Record<number, [number, number][]> = {
 const SPAN: Record<1 | 2 | 3, string> = { 1: "", 2: "sm:col-span-2", 3: "sm:col-span-2 xl:col-span-3" };
 const DICE_TOTAL_CAP = 12;
 const EXTREME_COLUMNS: Record<number, string> = { 2: "2xl:grid-cols-2", 3: "2xl:grid-cols-3" };
-const COLLECTORS_PLACEMENT = "xl:col-start-3 xl:row-start-1 xl:row-span-2";
 const ROSE_HEIGHT = 235;
+const COLLECTOR_ROSE_HEIGHT = 260;
+/** Mastermind chart sizes in px: stacked below 2xl, side by side from 2xl up. */
+const MIND_BAR_ROW = { stacked: 20, wide: 24 };
+const MIND_DONUT_HEIGHT = { stacked: 170, wide: 240 };
+/** Below xl the bottom cards sit in the outer 2-column grid; at xl they sit in the wrapper's 3-column grid. */
+const ORDER = {
+  collectors: "order-1 xl:order-1",
+  annoy: "order-2 xl:order-2",
+  mind: "order-3 xl:order-4",
+  extremes: "order-4 xl:order-3",
+  mush: "order-5 xl:order-5",
+};
 const MAGICAL_ATHLETE_FACES: Record<number, string> = {
   1: "he moves 7.",
   2: "the last place racer warps to him.",
@@ -69,6 +80,16 @@ function Card({ title, caption, hint, children, span = 1, placement = "" }: Card
       {caption && <p className="mb-1 text-[11px] text-slate-400">{caption}</p>}
       {children}
     </section>
+  );
+}
+
+/** Chart whose height switches from `stacked` to `wide` px at the 2xl breakpoint. */
+function WideAwareChart({ stacked, wide, option }: { stacked: number; wide: number; option: EChartsOption }) {
+  const heights = { "--h-stacked": `${stacked}px`, "--h-wide": `${wide}px` } as CSSProperties;
+  return (
+    <div className="h-[var(--h-stacked)] 2xl:h-[var(--h-wide)]" style={heights}>
+      <EChart height="100%" option={option} />
+    </div>
   );
 }
 
@@ -290,50 +311,37 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
 
   const bottom: ReactNode[] = [];
 
-  if (facts.triggers_per_turn.length > 0) {
+  const collected = new Map(facts.collectors.map((c) => [c.racer_name, c]));
+  const percent = (v: number) => `${v.toFixed(1)}%`;
+  const meals = (eater: string): BarItem[] =>
+    facts.eat_targets.filter((t) => t.eater === eater).map((t) => ({ name: t.victim, value: t.rate * 100, color: colorOf(t.victim), racer: true }));
+  const verbs: Record<string, string> = { Hotel: "customers", Mouth: "eaten", BiteMark: "eaten" };
+  const roses: RoseSection[] = [
+    { name: "Hotel", items: toBars(facts.hotel_customers), format: (v: number) => v.toFixed(2) },
+    { name: "Mouth", items: meals("Mouth"), format: percent },
+    { name: "BiteMark", items: meals("BiteMark"), format: percent },
+  ]
+    .filter((r) => collected.has(r.name) && r.items.length > 0)
+    .map((r) => {
+      const c = collected.get(r.name);
+      return { ...r, color: colorOf(r.name), caption: `${(c?.per_race ?? 0).toFixed(2)} ${verbs[r.name]} per race\nnobody in ${((c?.no_one ?? 0) * 100).toFixed(0)}% of races` };
+    });
+  if (roses.length > 0) {
     bottom.push(
-      <Card key="annoy" title="Most annoying powers" caption="triggers per own turn">
-        <EChart height={190} option={buildBars(toBars(facts.triggers_per_turn), theme, (v) => v.toFixed(2), { lollipop: true })} />
+      <Card key="collectors" span={2} placement={ORDER.collectors} title="Collectors" hint="Hotel: stops on Hotel's space per game. Mouth and Bite Mark: share of the games with the victim in which they ate it (Bite Mark's transformation is not counted as a meal).">
+        <div className="grid gap-2 md:grid-cols-3">
+          {roses.map((r) => (
+            <EChart key={r.name} height={COLLECTOR_ROSE_HEIGHT} option={buildRoses([r], theme)} />
+          ))}
+        </div>
       </Card>,
     );
   }
 
-  if (facts.mastermind_first !== null && facts.mastermind_second !== null && facts.mastermind_second_predicted !== null) {
-    const rest = Math.max(0, 1 - facts.mastermind_first - facts.mastermind_second - facts.mastermind_second_predicted);
-    const calls = [...facts.mastermind_calls].sort((a, b) => b.rate - a.rate);
-    const callBars = (rows: typeof calls) => toBars(rows.map((c) => ({ racer_name: c.racer_name, value: c.rate * 100 })));
-    const best = calls.slice(0, Math.min(5, Math.ceil(calls.length / 2)));
-    const worst = calls.slice(best.length);
-    const percent0 = (v: number) => `${v.toFixed(0)}%`;
+  if (facts.triggers_per_turn.length > 0) {
     bottom.push(
-      <Card key="mind" title="Mastermind" hint="His prediction is right when the racer he predicted wins the race.">
-        <div className="grid gap-2 2xl:grid-cols-2">
-          <div>
-            {calls.length > 0 && (
-              <>
-                <p className="text-[11px] text-slate-400">the racer he predicted won this often</p>
-                <EChart height={best.length * 20 + 6} option={buildBars(callBars(best), theme, percent0, { compact: true })} />
-                <p className="text-[11px] text-slate-400">…and this rarely</p>
-                <EChart height={worst.length * 20 + 6} option={buildBars(callBars(worst), theme, percent0, { compact: true })} />
-              </>
-            )}
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400">how his games end</p>
-            <EChart
-              height={200}
-              option={buildPie(
-                [
-                  { name: "1st", value: facts.mastermind_first, color: BADGE.gold },
-                  { name: "2nd, predicted", value: facts.mastermind_second_predicted, color: BADGE.silver },
-                  { name: "2nd, natural", value: facts.mastermind_second, color: BADGE.blue },
-                  { name: "other", value: rest, color: NEUTRAL.slate },
-                ],
-                theme,
-              )}
-            />
-          </div>
-        </div>
+      <Card key="annoy" placement={ORDER.annoy} title="Most annoying powers" caption="triggers per own turn">
+        <EChart height={190} option={buildBars(toBars(facts.triggers_per_turn), theme, (v) => v.toFixed(2), { lollipop: true })} />
       </Card>,
     );
   }
@@ -357,6 +365,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
       <Card
         key="extremes"
         span={2}
+        placement={ORDER.extremes}
         title="Best and worst combinations"
         caption="VP change of the racer, net of what the opponent, board or card does to every racer"
         hint="Only clear effects count: at least 4 standard errors away from zero, with 100 or more games."
@@ -373,27 +382,51 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     );
   }
 
-  const collected = new Map(facts.collectors.map((c) => [c.racer_name, c]));
-  const percent = (v: number) => `${v.toFixed(1)}%`;
-  const meals = (eater: string): BarItem[] =>
-    facts.eat_targets.filter((t) => t.eater === eater).map((t) => ({ name: t.victim, value: t.rate * 100, color: colorOf(t.victim), racer: true }));
-  const verbs: Record<string, string> = { Hotel: "customers", Mouth: "eaten", BiteMark: "eaten" };
-  const roses: RoseSection[] = [
-    { name: "Hotel", items: toBars(facts.hotel_customers), format: (v: number) => v.toFixed(2) },
-    { name: "Mouth", items: meals("Mouth"), format: percent },
-    { name: "BiteMark", items: meals("BiteMark"), format: percent },
-  ]
-    .filter((r) => collected.has(r.name) && r.items.length > 0)
-    .map((r) => {
-      const c = collected.get(r.name);
-      return { ...r, color: colorOf(r.name), caption: `${(c?.per_race ?? 0).toFixed(2)} ${verbs[r.name]} per race\nnobody in ${((c?.no_one ?? 0) * 100).toFixed(0)}% of races` };
-    });
-  if (roses.length > 0) {
+  if (facts.mastermind_first !== null && facts.mastermind_second !== null && facts.mastermind_second_predicted !== null) {
+    const rest = Math.max(0, 1 - facts.mastermind_first - facts.mastermind_second - facts.mastermind_second_predicted);
+    const calls = [...facts.mastermind_calls].sort((a, b) => b.rate - a.rate);
+    const callBars = (rows: typeof calls) => toBars(rows.map((c) => ({ racer_name: c.racer_name, value: c.rate * 100 })));
+    const best = calls.slice(0, Math.min(5, Math.ceil(calls.length / 2)));
+    const worst = calls.slice(best.length);
+    const percent0 = (v: number) => `${v.toFixed(0)}%`;
     bottom.push(
-      <Card key="collectors" placement={COLLECTORS_PLACEMENT} title="Collectors" hint="Hotel: stops on Hotel's space per game. Mouth and Bite Mark: share of the games with the victim in which they ate it (Bite Mark's transformation is not counted as a meal).">
-        {roses.map((r) => (
-          <EChart key={r.name} height={ROSE_HEIGHT} option={buildRoses([r], theme)} />
-        ))}
+      <Card key="mind" placement={ORDER.mind} title="Mastermind" hint="His prediction is right when the racer he predicted wins the race.">
+        <div className="grid gap-2 2xl:grid-cols-2">
+          <div>
+            {calls.length > 0 && (
+              <>
+                <p className="text-[11px] text-slate-400">the racer he predicted won this often</p>
+                <WideAwareChart
+                  stacked={best.length * MIND_BAR_ROW.stacked + 6}
+                  wide={best.length * MIND_BAR_ROW.wide + 6}
+                  option={buildBars(callBars(best), theme, percent0, { compact: true })}
+                />
+                <p className="text-[11px] text-slate-400">…and this rarely</p>
+                <WideAwareChart
+                  stacked={worst.length * MIND_BAR_ROW.stacked + 6}
+                  wide={worst.length * MIND_BAR_ROW.wide + 6}
+                  option={buildBars(callBars(worst), theme, percent0, { compact: true })}
+                />
+              </>
+            )}
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-400">how his games end</p>
+            <WideAwareChart
+              stacked={MIND_DONUT_HEIGHT.stacked}
+              wide={MIND_DONUT_HEIGHT.wide}
+              option={buildPie(
+                [
+                  { name: "1st", value: facts.mastermind_first, color: BADGE.gold },
+                  { name: "2nd, predicted", value: facts.mastermind_second_predicted, color: BADGE.silver },
+                  { name: "2nd, natural", value: facts.mastermind_second, color: BADGE.blue },
+                  { name: "other", value: rest, color: NEUTRAL.slate },
+                ],
+                theme,
+              )}
+            />
+          </div>
+        </div>
       </Card>,
     );
   }
@@ -401,7 +434,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   if (facts.mush_table.length > 0) {
     const textColorOf = (name: string) => readableOn(colorOf(name), theme);
     bottom.push(
-      <Card key="mush" span={3} title="Mush" hint={`Pairs of powers he drew in the same race, from all his games whatever the filters say. Only pairs with at least ${MIN_PAIR_GAMES} races are ranked in the charts; the table lists every pair.`}>
+      <Card key="mush" span={3} placement={ORDER.mush} title="Mush" hint={`Pairs of powers he drew in the same race, from all his games whatever the filters say. Only pairs with at least ${MIN_PAIR_GAMES} races are ranked in the charts, and each power appears at most once per chart. The table lists every pair.`}>
         <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_26rem]">
           <div className="grid gap-2 md:grid-cols-3">
             {mushRoses(facts.mush_table, colorOf).map((r) => (
@@ -416,7 +449,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
 
   if (bottom.length > 0) {
     cards.push(
-      <div key="bottom" className="contents xl:col-span-3 xl:grid xl:grid-cols-3 xl:gap-3">
+      <div key="bottom" className="contents xl:col-span-3 xl:grid xl:grid-flow-dense xl:grid-cols-3 xl:gap-3">
         {bottom}
       </div>,
     );
