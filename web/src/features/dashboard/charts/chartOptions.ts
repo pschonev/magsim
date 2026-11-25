@@ -55,7 +55,7 @@ function contrast(a: string, b: string): number {
 const MIN_LABEL_CONTRAST = 3;
 
 /** The racer's own colour as a label colour, unless it is too close to the background to read. */
-function readableOn(color: string, t: ChartTheme): string {
+export function readableOn(color: string, t: ChartTheme): string {
   return /^#[0-9a-f]{6}$/i.test(color) && contrast(color, t.bg) >= MIN_LABEL_CONTRAST ? color : t.text;
 }
 

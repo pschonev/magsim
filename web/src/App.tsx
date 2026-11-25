@@ -17,8 +17,17 @@ const INITIAL_PROGRESS: BootProgress = {
   percent: 5,
 };
 
-const BOOT_SHARE = 90;
-const ANALYSIS_PROGRESS: BootProgress = { stage: "Counting the races...", percent: BOOT_SHARE + 2 };
+const BOOT_SHARE = 50;
+const DATA_LOADING_MS = 4000;
+const DATA_LOADING_SHARE = 45;
+const DATA_MESSAGE = "Loading the race data…";
+
+/** The first analysis reports no progress: fill the bar over the time it usually takes, then creep towards the end. */
+function simulatedDataProgress(elapsedMs: number): BootProgress {
+  const planned = Math.min(1, elapsedMs / DATA_LOADING_MS) * DATA_LOADING_SHARE;
+  const creep = elapsedMs > DATA_LOADING_MS ? (100 - BOOT_SHARE - DATA_LOADING_SHARE - 1) * (1 - Math.exp(-(elapsedMs - DATA_LOADING_MS) / DATA_LOADING_MS)) : 0;
+  return { stage: DATA_MESSAGE, percent: BOOT_SHARE + planned + creep, message: DATA_MESSAGE };
+}
 
 const TABS: { id: AppTab; label: string; icon: typeof Database }[] = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -61,8 +70,13 @@ export function App() {
       })
       .then(async (result) => {
         if (cancelled) return;
-        setProgress(ANALYSIS_PROGRESS);
+        const started = performance.now();
+        setProgress(simulatedDataProgress(0));
+        const ticker = window.setInterval(() => {
+          if (!cancelled) setProgress(simulatedDataProgress(performance.now() - started));
+        }, 100);
         const analysis = await worker.runAnalysis(defaultFilter(result.datasetMeta)).catch(() => null);
+        window.clearInterval(ticker);
         if (cancelled) return;
         setInitialAnalysis(analysis);
         setProgress({ stage: "Ready", percent: 100 });

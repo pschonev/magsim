@@ -195,6 +195,30 @@ class ExtremeComboDTO(msgspec.Struct, frozen=True):
     games: int
 
 
+class RacerFaceShareDTO(msgspec.Struct, frozen=True):
+    """Share of a racer's turns that ended on a given number."""
+
+    racer_name: str
+    face: int
+    share: float
+
+
+class CollectorDTO(msgspec.Struct, frozen=True):
+    """How often a collecting power collects, and the share of races in which it collected nobody."""
+
+    racer_name: str
+    per_race: float
+    no_one: float
+
+
+class MastermindCallDTO(msgspec.Struct, frozen=True):
+    """How often Mastermind's prediction came true when he predicted this racer."""
+
+    racer_name: str
+    rate: float
+    games: int
+
+
 class FaceShareDTO(msgspec.Struct, frozen=True):
     """Share of the rolls that were a given number."""
 
@@ -205,7 +229,7 @@ class FaceShareDTO(msgspec.Struct, frozen=True):
 class FunFactsDTO(msgspec.Struct, frozen=True):
     """Small per-racer facts for the Fun facts tab; empty lists when the racer is not in the data."""
 
-    ability_uses_per_race: list[NamedValueDTO] = msgspec.field(default_factory=list)
+    collectors: list[CollectorDTO] = msgspec.field(default_factory=list)
     outcomes: list[OutcomeShareDTO] = msgspec.field(default_factory=list)
     hog_for_himself: float | None = None
     hog_for_others: float | None = None
@@ -214,13 +238,13 @@ class FunFactsDTO(msgspec.Struct, frozen=True):
     eat_targets: list[EatTargetDTO] = msgspec.field(default_factory=list)
     extremes: list[ExtremeComboDTO] = msgspec.field(default_factory=list)
     cheatah_numbers: list[FaceShareDTO] = msgspec.field(default_factory=list)
-    show_off_totals: list[FaceShareDTO] = msgspec.field(default_factory=list)
+    dice_totals: list[RacerFaceShareDTO] = msgspec.field(default_factory=list)
     triggers_per_turn: list[NamedValueDTO] = msgspec.field(default_factory=list)
     blunderdog_forward: float | None = None
     diva_forward: float | None = None
     last_place_baseline: float | None = None
     hotel_customers: list[NamedValueDTO] = msgspec.field(default_factory=list)
-    mastermind_hits: list[NamedValueDTO] = msgspec.field(default_factory=list)
+    mastermind_calls: list[MastermindCallDTO] = msgspec.field(default_factory=list)
     mastermind_first: float | None = None
     mastermind_second: float | None = None
     mastermind_second_predicted: float | None = None

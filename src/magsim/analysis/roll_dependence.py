@@ -1,4 +1,4 @@
-"""How much of a racer's VP is explained by the numbers it rolls."""
+"""How far the numbers a racer rolls move its VP."""
 
 from __future__ import annotations
 
@@ -9,6 +9,9 @@ MIN_RACES = 50
 MIN_ROLLS_PER_RACE = 0.25
 CONTROLS = ("total_turns", "racer_count")
 MIN_VARIANCE = 1e-12
+MIN_AVERAGE_VP = 0.25
+SWING_LOW = 0.1
+SWING_HIGH = 0.9
 
 
 def _roll_predictors(stats_results: pl.DataFrame) -> list[pl.Expr]:
@@ -44,27 +47,30 @@ def solve_linear_system(matrix: list[list[float]], vector: list[float]) -> list[
     return solution
 
 
-def _explained_share(row: dict[str, float], predictors: int) -> float:
-    """R squared of the regression of VP on the predictors, from their (co)variances."""
+def _coefficients(row: dict[str, float], predictors: int) -> list[float]:
+    """Least-squares coefficients of VP on the predictors, from their (co)variances; zeros where unusable."""
+    zeros = [0.0] * predictors
     if row["n"] < MIN_RACES or row["vy"] <= MIN_VARIANCE:
-        return 0.0
+        return zeros
     used = [i for i in range(predictors) if row[f"s_{i}_{i}"] > MIN_VARIANCE]
     if not used:
-        return 0.0
+        return zeros
     matrix = [[row[f"s_{min(i, j)}_{max(i, j)}"] for j in used] for i in used]
     cross = [row[f"c_{i}"] for i in used]
     try:
         beta = solve_linear_system(matrix, cross)
     except ZeroDivisionError:
-        return 0.0
-    explained = sum(b * c for b, c in zip(beta, cross, strict=True)) / row["vy"]
-    return min(1.0, max(0.0, explained))
+        return zeros
+    coefficients = list(zeros)
+    for i, value in zip(used, beta, strict=True):
+        coefficients[i] = value
+    return coefficients
 
 
-def _explained_by(rolled: pl.DataFrame, predictors: list[pl.Expr]) -> dict[str, float]:
-    """R squared of VP on the predictors, per racer."""
+def _fit(rolled: pl.DataFrame, predictors: list[pl.Expr]) -> dict[str, list[float]]:
+    """Per racer: coefficients of VP regressed on the predictors."""
     count = len(predictors)
-    framed = rolled.with_columns(*(expr.alias(f"x_{i}") for i, expr in enumerate(predictors)))
+    framed = rolled.lazy().with_columns(*(expr.alias(f"x_{i}") for i, expr in enumerate(predictors)))
     covariances = [
         pl.cov(f"x_{i}", f"x_{j}").alias(f"s_{i}_{j}")
         for i in range(count)
@@ -76,47 +82,63 @@ def _explained_by(rolled: pl.DataFrame, predictors: list[pl.Expr]) -> dict[str, 
         pl.col("final_vp").var().alias("vy"),
         *covariances,
         *cross,
-    )
+    ).collect()
     return {
-        row["racer_name"]: _explained_share(row, count)
+        row["racer_name"]: _coefficients(row, count)
         for row in table.fill_nan(0.0).fill_null(0.0).to_dicts()
     }
 
 
 def compute_roll_dependence(stats_results: pl.DataFrame) -> pl.DataFrame:
-    """Per racer: share of the VP variance explained by which numbers it rolled.
+    """Per racer: how far lucky and unlucky dice move its VP, as a share of its average VP.
 
-    Race length and player count are taken out first when the frame has `total_turns` and
-    `racer_count`, so a racer that simply earns VP every turn does not look dice-dependent.
-    Racers with under a quarter of a real roll per race (Cheatah, Legs elsewhere) get 0: their
-    number is chosen or fixed, there is nothing to depend on. Falls back to the average roll
-    when the dataset has no per-face counts.
+    VP is regressed on the share of rolls that were each number, with race length and player
+    count held fixed (when the frame has `total_turns` and `racer_count`). The result is the
+    gap between the 90th and the 10th percentile of what the dice alone predict, divided by the
+    racer's average VP (at least 0.25). Racers with under a quarter of a real roll per race
+    (Cheatah) get 0: their number is chosen or fixed. Falls back to the average roll when the
+    dataset has no per-face counts.
     """
+    stats_results = stats_results.select(
+        c for c in ("racer_name", "final_vp", "rolling_turns", "sum_dice_rolled", *FACE_COLUMNS, *CONTROLS) if c in stats_results.columns
+    )
     controls = [pl.col(c).cast(pl.Float64) for c in CONTROLS if c in stats_results.columns]
+    dice = _roll_predictors(stats_results)
     rolled = stats_results.filter(pl.col("rolling_turns") > 0)
     if all(column in rolled.columns for column in FACE_COLUMNS):
         rolled = rolled.filter(pl.sum_horizontal(FACE_COLUMNS) > 0)
-    explained = _explained_by(rolled, [*controls, *_roll_predictors(stats_results)])
-    baseline = _explained_by(rolled, controls) if controls else {}
-    rolls_per_race = stats_results.group_by("racer_name").agg(
+    coefficients = _fit(rolled, [*controls, *dice])
+    dice_coefficients = pl.DataFrame(
+        {
+            "racer_name": list(coefficients),
+            **{f"b_{j}": [c[len(controls) + j] for c in coefficients.values()] for j in range(len(dice))},
+        },
+        schema={"racer_name": pl.Utf8, **{f"b_{j}": pl.Float64 for j in range(len(dice))}},
+    )
+    fitted = (
+        rolled.lazy()
+        .with_columns(*(expr.alias(f"d_{j}") for j, expr in enumerate(dice)))
+        .join(dice_coefficients.lazy(), on="racer_name", how="inner")
+        .with_columns(
+            pl.sum_horizontal(*(pl.col(f"b_{j}") * pl.col(f"d_{j}") for j in range(len(dice)))).alias("dice_vp"),
+        )
+        .group_by("racer_name")
+        .agg(
+            (pl.col("dice_vp").quantile(SWING_HIGH) - pl.col("dice_vp").quantile(SWING_LOW)).alias("spread"),
+        )
+        .collect()
+    )
+    per_racer = stats_results.group_by("racer_name").agg(
+        pl.col("final_vp").mean().alias("average_vp"),
         pl.col("rolling_turns").mean().alias("rolls_per_race"),
     )
-    values = pl.DataFrame(
-        {
-            "racer_name": list(explained),
-            "roll_dependence": [
-                max(0.0, value - baseline.get(name, 0.0)) for name, value in explained.items()
-            ],
-        },
-        schema={"racer_name": pl.Utf8, "roll_dependence": pl.Float64},
-    )
-    return (
-        rolls_per_race.join(values, on="racer_name", how="left")
-        .select(
-            "racer_name",
-            pl.when(pl.col("rolls_per_race") >= MIN_ROLLS_PER_RACE)
-            .then(pl.col("roll_dependence").fill_null(0.0))
-            .otherwise(0.0)
-            .alias("roll_dependence"),
+    return per_racer.join(fitted, on="racer_name", how="left").select(
+        "racer_name",
+        pl.when(pl.col("rolls_per_race") >= MIN_ROLLS_PER_RACE)
+        .then(
+            pl.col("spread").fill_null(0.0)
+            / pl.max_horizontal(pl.col("average_vp"), pl.lit(MIN_AVERAGE_VP)),
         )
+        .otherwise(0.0)
+        .alias("roll_dependence"),
     )

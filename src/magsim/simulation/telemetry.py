@@ -187,7 +187,9 @@ PARTY_POOPER_COMPLAINT: AbilityName = "PartyPooperNoiseComplaint"
 NEMESIS_MATCH: AbilityName = "NemesisGrudgeMatch"
 HOG_MODIFIER: ModifierName = "HogKnightHog"
 HOG_KNIGHT = "HogKnight"
-TOTAL_TRACKED = frozenset({"Cheatah", "ShowOff"})
+MASTERMIND_PREDICT: AbilityName = "MastermindPredict"
+MUSH_ABILITY: AbilityName = "MushGlobsterMash"
+TOTAL_TRACKED = frozenset({"Cheatah", "ShowOff", "Magician", "RocketScientist"})
 SHOW_OFF_ABILITY: AbilityName = "ShowOffGuysWatch"
 MR_DICE_GUY_ABILITY: AbilityName = "MrDiceGuyMore"
 STUNNER_ABILITY: AbilityName = "StunnerStopTraffic"
@@ -345,7 +347,7 @@ class MetricsAggregator:
                     self.last_single_die[event.target_racer_idx] = event.dice_values[0]
                 stats = self._get_result(event.target_racer_idx)
                 if stats.racer_name in TOTAL_TRACKED:
-                    stats.main_roll_totals = [*(stats.main_roll_totals or []), event.base_value]
+                    stats.main_roll_totals = [*(stats.main_roll_totals or []), engine.state.roll_state.base_value]
                 if event.dice_value is not None:
                     stats.sum_dice_rolled += event.dice_value
                     stats.rolling_turns += 1
@@ -396,6 +398,8 @@ class MetricsAggregator:
                     )
                 stats = self._get_result(responsible_idx)
                 stats.ability_trigger_count += 1
+                if event.source == MASTERMIND_PREDICT and event.target_racer_idx != responsible_idx:
+                    stats.predicted_racer_id = event.target_racer_idx
                 if responsible_idx == event.target_racer_idx:
                     stats.ability_self_target_count += 1
                 if responsible_idx == engine.state.current_racer_idx:
@@ -589,6 +593,9 @@ class MetricsAggregator:
             stats.final_vp = racer.victory_points - racer.starting_vp
             stats.finish_position = racer.finish_position
             stats.eliminated = racer.eliminated
+            for ability in racer.active_abilities:
+                if ability.name == MUSH_ABILITY and (copied := getattr(ability, "copied_racers", None)):
+                    stats.copied_racers = list(copied)
             output.append(stats)
         return output
 

@@ -19,7 +19,7 @@ import {
   Waves,
   Zap,
 } from "lucide-react";
-import { type ComponentType, Fragment, type ReactNode, useState } from "react";
+import { type ComponentType, type CSSProperties, Fragment, type ReactNode, useState } from "react";
 import { DataTable } from "../../components/DataTable";
 import { EChart } from "../../components/EChart";
 import { Switch } from "../../components/Switch";
@@ -60,7 +60,7 @@ import { TWIST_DESCRIPTIONS } from "./charts/twistCards";
 import { COLUMN_HELP } from "./columnHelp";
 import { TABLE_TABS } from "./tableTabs";
 
-type IconType = ComponentType<{ className?: string }>;
+type IconType = ComponentType<{ className?: string; style?: CSSProperties }>;
 
 interface ViewSpec {
   id: string;
@@ -75,10 +75,32 @@ interface Section {
   views: ViewSpec[];
 }
 
+/** Tab colours, from the loading screen; the first tab keeps the theme's purple. */
+const SECTION_COLORS: Record<string, string> = {
+  abilityenv: "#6ca1d8",
+  global: "#ee83b3",
+  interactions: "#f6ae00",
+  tables: "#539912",
+  racers: "#fd5a10",
+};
+
+function luminance(hex: string): number {
+  const channel = (offset: number) => {
+    const v = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+}
+
+/** Black or white, whichever reads better on the colour. */
+function textOn(hex: string): string {
+  return luminance(hex) > 0.28 ? "#101312" : "#ffffff";
+}
+
 const SECTIONS: Section[] = [
   {
     id: "scatter",
-    label: "Scatterplots",
+    label: "Racer Types",
     icon: Target,
     views: [
       { id: "reliability", label: "Reliability", icon: Target },
@@ -91,7 +113,7 @@ const SECTIONS: Section[] = [
   },
   {
     id: "abilityenv",
-    label: "Ability & Environments",
+    label: "Speed & Environments",
     icon: Zap,
     views: [
       { id: "ability", label: "Ability Speed", icon: Zap },
@@ -172,24 +194,26 @@ function descriptionFor(id: string): DescriptionLine[] {
 function TabButton({
   spec,
   active,
+  color,
   onSelect,
 }: {
   spec: ViewSpec;
   active: boolean;
+  color?: string;
   onSelect: () => void;
 }) {
   const Icon = spec.icon;
+  const activeClass = color ? "" : "bg-indigo-600 text-on-accent";
   return (
     <button
       type="button"
       onClick={onSelect}
+      style={active && color ? { backgroundColor: color, color: textOn(color) } : undefined}
       className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 font-display text-xs whitespace-nowrap transition-colors ${
-        active
-          ? "bg-indigo-600 text-on-accent"
-          : "text-slate-400 hover:bg-slate-800 hover:text-slate-50"
+        active ? activeClass : "text-slate-400 hover:bg-slate-800 hover:text-slate-50"
       }`}
     >
-      <Icon className="h-3.5 w-3.5" />
+      <Icon className={`h-3.5 w-3.5 ${active || color ? "" : "text-indigo-400"}`} style={!active && color ? { color } : undefined} />
       {spec.label}
     </button>
   );
@@ -325,21 +349,26 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
       <div className="flex flex-wrap items-center gap-1 rounded-lg bg-slate-900 p-1">
         {SECTIONS.map((sec) => {
           const active = sec.id === section.id;
+          const color = SECTION_COLORS[sec.id];
           return (
             <Fragment key={sec.id}>
-              <TabButton spec={sec} active={active} onSelect={() => setView(sec.views[0].id)} />
+              <TabButton spec={sec} active={active} color={color} onSelect={() => setView(sec.views[0].id)} />
               {active && sec.views.length > 1 && (
-                <div className="flex flex-wrap items-center gap-0.5 rounded-full border border-indigo-400/60 bg-indigo-500/10 py-0.5 pr-1 pl-2">
-                  <ChevronRight className="h-3.5 w-3.5 text-indigo-300" />
+                <div
+                  className={`flex flex-wrap items-center gap-0.5 rounded-full border py-0.5 pr-1 pl-2 ${color ? "" : "border-indigo-400/60 bg-indigo-500/10"}`}
+                  style={color ? { borderColor: `${color}99`, backgroundColor: `${color}1a` } : undefined}
+                >
+                  <ChevronRight className={`h-3.5 w-3.5 ${color ? "" : "text-indigo-300"}`} style={color ? { color } : undefined} />
                   {sec.views.map((spec) => (
                     <button
                       key={spec.id}
                       type="button"
                       onClick={() => setView(spec.id)}
+                      style={spec.id !== view && color ? { color } : undefined}
                       className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                         spec.id === view
                           ? "bg-slate-50 text-slate-950"
-                          : "text-indigo-300 hover:bg-indigo-500/20 hover:text-slate-50"
+                          : `${color ? "" : "text-indigo-300"} hover:bg-slate-50/10 hover:text-slate-50`
                       }`}
                     >
                       {spec.label}

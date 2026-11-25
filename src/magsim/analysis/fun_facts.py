@@ -6,8 +6,8 @@ import polars as pl
 
 from magsim.analysis.roll_dependence import FACE_COLUMNS
 
-ANNOYING_RACERS = ("Critic", "Stickler", "PartyPooper", "Null", "Inchworm", "Gunk")
-USE_RACERS = ("Hotel", "Mouth", "BiteMark")
+ANNOYING_RACERS = ("Critic", "Stickler", "PartyPooper", "Null", "Inchworm", "Gunk", "Stunner", "LeSaboteur")
+MIN_CALL_GAMES = 50
 VP_DISTRIBUTION_RACERS = ("Sisyphus", "LovableLoser", "Streaker")
 OUTCOME_RACERS = ("SpeedDemon", "Icarus", "Spoilsport")
 CANCELLING_RACER = "Spoilsport"
@@ -17,21 +17,36 @@ TARGETS_PER_EATER = 5
 EXTREMES_PER_SIDE = 5
 MIN_COMBINATION_GAMES = 100
 Z_MIN = 4.0
-SHOW_OFF_TOTAL_CAP = 12
+MIN_SHIFT = 0.1
+MAD_TO_SIGMA = 1.4826
+DICE_TOTAL_CAP = 12
+TOTAL_RACERS = ("ShowOff", "RocketScientist", "Magician")
 
 
 def _racer(results: pl.DataFrame, name: str) -> pl.DataFrame:
     return results.filter(pl.col("racer_name") == name)
 
 
-def compute_ability_uses(results: pl.DataFrame) -> pl.DataFrame:
-    """How often Hotel, Mouth and Bite Mark use their power per race (all triggers, Bite Mark's transformation included)."""
+def compute_collectors(results: pl.DataFrame) -> pl.DataFrame:
+    """Per race: how often Hotel, Mouth and Bite Mark collect someone and in how many races nobody was collected.
+
+    Bite Mark's first trigger is its transformation, which collects nobody.
+    """
+    uses = {
+        "Hotel": pl.col("ability_trigger_count"),
+        "Mouth": pl.col("ability_trigger_count"),
+        "BiteMark": (pl.col("ability_trigger_count") - 1).clip(lower_bound=0),
+    }
     rows = [
-        {"racer_name": name, "value": own["ability_trigger_count"].mean()}
-        for name in USE_RACERS
+        {
+            "racer_name": name,
+            "per_race": own.select(expr.mean()).item(),
+            "no_one": own.select((expr == 0).mean()).item(),
+        }
+        for name, expr in uses.items()
         if not (own := _racer(results, name)).is_empty()
     ]
-    return pl.DataFrame(rows, schema={"racer_name": pl.Utf8, "value": pl.Float64})
+    return pl.DataFrame(rows, schema={"racer_name": pl.Utf8, "per_race": pl.Float64, "no_one": pl.Float64})
 
 
 def compute_outcomes(results: pl.DataFrame) -> pl.DataFrame:
@@ -177,34 +192,40 @@ def compute_hotel_customers(results: pl.DataFrame, top: int = 5) -> pl.DataFrame
 
 
 def compute_mastermind(
-    results: pl.DataFrame, top: int = 3,
+    results: pl.DataFrame, per_side: int = EXTREMES_PER_SIDE,
 ) -> tuple[pl.DataFrame, float | None, float | None, float | None]:
-    """Who Mastermind predicted correctly (share of all his games), plus his 1st, natural 2nd and predicted 2nd shares.
+    """How often Mastermind's prediction came true per predicted racer (best and worst), plus his 1st, natural 2nd and predicted 2nd shares.
 
-    A 2nd place in a game where he triggered twice comes from the prediction, any other 2nd is natural.
-
-    A second trigger means the prediction came true, and then the predicted racer is the winner.
+    A second trigger means the prediction came true. A 2nd place in such a game comes from the
+    prediction, any other 2nd is natural. Without the recorded prediction the calls are empty.
     """
-    empty = pl.DataFrame(schema={"racer_name": pl.Utf8, "value": pl.Float64})
+    schema = {"racer_name": pl.Utf8, "rate": pl.Float64, "games": pl.Int64}
     own = _racer(results, "Mastermind")
     if own.is_empty():
-        return empty, None, None, None
+        return pl.DataFrame(schema=schema), None, None, None
     games = own.height
-    correct = own.filter(pl.col("ability_trigger_count") >= 2).select("config_hash")  # noqa: PLR2004
-    winners = (
-        results.join(correct, on="config_hash", how="semi")
-        .filter(pl.col("finish_position") == 1)
-        .group_by("racer_name")
-        .agg((pl.len() / games).alias("value"))
-        .sort("value", descending=True)
-        .head(top)
-    )
+    right = pl.col("ability_trigger_count") >= 2  # noqa: PLR2004
     first = own.select((pl.col("finish_position") == 1).sum() / games).item()
     second = pl.col("finish_position") == 2  # noqa: PLR2004
-    predicted = pl.col("ability_trigger_count") >= 2  # noqa: PLR2004
-    second_natural = own.select((second & ~predicted).sum() / games).item()
-    second_predicted = own.select((second & predicted).sum() / games).item()
-    return winners, first, second_natural, second_predicted
+    second_natural = own.select((second & ~right).sum() / games).item()
+    second_predicted = own.select((second & right).sum() / games).item()
+    if "predicted_racer_id" not in own.columns or own["predicted_racer_id"].is_null().all():
+        return pl.DataFrame(schema=schema), first, second_natural, second_predicted
+    predictions = own.filter(pl.col("predicted_racer_id").is_not_null()).select(
+        "config_hash",
+        pl.col("predicted_racer_id").cast(pl.Int64).alias("racer_id"),
+        right.alias("right"),
+    )
+    per_racer = (
+        results.select("config_hash", pl.col("racer_id").cast(pl.Int64), "racer_name")
+        .join(predictions, on=["config_hash", "racer_id"], how="inner")
+        .group_by("racer_name")
+        .agg(pl.col("right").mean().alias("rate"), pl.len().cast(pl.Int64).alias("games"))
+        .filter(pl.col("games") >= MIN_CALL_GAMES)
+        .sort("rate", descending=True)
+    )
+    calls = pl.concat([per_racer.head(per_side), per_racer.tail(per_side)]).unique(maintain_order=True)
+    return calls, first, second_natural, second_predicted
 
 
 def compute_eaten_targets(results: pl.DataFrame) -> pl.DataFrame:
@@ -265,26 +286,51 @@ def compute_cheatah_numbers(results: pl.DataFrame) -> pl.DataFrame:
     return _shares(rolls.filter(rolls.is_between(1, 6)), extra_zero=guessed)
 
 
-def compute_show_off_totals(results: pl.DataFrame) -> pl.DataFrame:
-    """Share of Show-Off's turns per final dice total (0 = rolled the same or lower and stayed put); totals above the cap are merged."""
-    rolls = _final_rolls(results, "ShowOff")
-    if rolls is None or rolls.is_empty():
-        return pl.DataFrame(schema={"face": pl.Int64, "share": pl.Float64})
-    return _shares(rolls.clip(upper_bound=SHOW_OFF_TOTAL_CAP))
+def compute_dice_totals(results: pl.DataFrame) -> pl.DataFrame:
+    """Share of the turns of Show-Off, Rocket Scientist and Magician per final main roll (0 = Show-Off rolled the same or lower and stayed put); totals above the cap are merged."""
+    frames = []
+    for racer in TOTAL_RACERS:
+        rolls = _final_rolls(results, racer)
+        if rolls is None or rolls.is_empty():
+            continue
+        frames.append(_shares(rolls.clip(upper_bound=DICE_TOTAL_CAP)).with_columns(pl.lit(racer).alias("racer_name")))
+    if not frames:
+        return pl.DataFrame(schema={"racer_name": pl.Utf8, "face": pl.Int64, "share": pl.Float64})
+    return pl.concat(frames).select("racer_name", "face", "share")
 
 
-def _extreme_cells(cells: pl.DataFrame, vp_spread: pl.DataFrame, kind: str) -> pl.DataFrame:
-    """Best and worst cells of one kind: only shifts of at least Z_MIN standard errors, ranked by the relative shift."""
+def _with_scores(cells: pl.DataFrame, group: str) -> pl.DataFrame:
+    """Add `score`: the shift divided by the robust spread (median absolute deviation) of everything sharing the same opponent, board or card."""
+    return (
+        cells.with_columns(pl.col("shift").median().over(group).alias("_median"))
+        .with_columns((pl.col("shift") - pl.col("_median")).abs().alias("_deviation"))
+        .with_columns(pl.col("_deviation").median().over(group).alias("_mad"))
+        .with_columns((pl.col("shift") / (MAD_TO_SIGMA * pl.col("_mad"))).alias("score"))
+        .drop("_median", "_deviation", "_mad")
+    )
+
+
+def _extreme_cells(cells: pl.DataFrame, vp_spread: pl.DataFrame, kind: str, group: str = "other") -> pl.DataFrame:
+    """Best and worst cells of one kind.
+
+    Only shifts of at least Z_MIN standard errors and MIN_SHIFT of the racer's average VP count. They are ranked by how many typical
+    shifts of their opponent, board or card they are, so a board that shakes every racer up a lot
+    does not take all the places.
+    """
     significant = (
-        cells.join(vp_spread, on="racer_name", how="inner")
-        .filter((pl.col("games") >= MIN_COMBINATION_GAMES) & (pl.col("spread") > 0))
+        _with_scores(
+            cells.join(vp_spread, on="racer_name", how="inner").filter(
+                (pl.col("games") >= MIN_COMBINATION_GAMES) & (pl.col("spread") > 0),
+            ),
+            group,
+        )
         .with_columns(
             (pl.col("vp_shift") / (pl.col("spread") / pl.col("games").sqrt())).alias("z"),
         )
-        .filter(pl.col("z").abs() >= Z_MIN)
+        .filter((pl.col("z").abs() >= Z_MIN) & (pl.col("shift").abs() >= MIN_SHIFT) & pl.col("score").is_finite())
     )
-    best = significant.filter(pl.col("shift") > 0).sort("shift", descending=True).head(EXTREMES_PER_SIDE)
-    worst = significant.filter(pl.col("shift") < 0).sort("shift").head(EXTREMES_PER_SIDE)
+    best = significant.filter(pl.col("shift") > 0).sort("score", descending=True).head(EXTREMES_PER_SIDE)
+    worst = significant.filter(pl.col("shift") < 0).sort("score").head(EXTREMES_PER_SIDE)
     return pl.concat([best, worst]).select(
         pl.lit(kind).alias("kind"), "racer_name", "other", "shift", "games",
     )
@@ -299,8 +345,6 @@ def compute_extreme_combinations(
     extremes of thousands of noisy combinations would otherwise be pure chance.
     """
     schema = {"kind": pl.Utf8, "racer_name": pl.Utf8, "other": pl.Utf8, "shift": pl.Float64, "games": pl.Int64}
-    if matchups.is_empty() and environment_totals.is_empty():
-        return pl.DataFrame(schema=schema)
     spread = results.group_by("racer_name").agg(pl.col("final_vp").std().alias("spread"))
     frames = []
     if not matchups.is_empty():
@@ -338,4 +382,33 @@ def compute_extreme_combinations(
                     kind,
                 ),
             )
+    mush = _mush_power_cells(results)
+    if mush is not None:
+        extremes = _extreme_cells(mush, spread, "mush", group="scope")
+        frames.append(extremes.with_columns(pl.col("other").alias("racer_name"), pl.lit("").alias("other")))
     return pl.concat(frames).cast(schema) if frames else pl.DataFrame(schema=schema)
+
+
+def _mush_power_cells(results: pl.DataFrame) -> pl.DataFrame | None:
+    """Mush's VP in the races where it drew a power, against its VP in all races where it drew any power."""
+    own = _racer(results, "Mush")
+    if "copied_racers" not in own.columns or own.is_empty() or not isinstance(own.schema["copied_racers"], pl.List):
+        return None
+    drew = own.filter(pl.col("copied_racers").list.len() > 0)
+    baseline = drew["final_vp"].mean() if not drew.is_empty() else None
+    if not baseline:
+        return None
+    return (
+        drew.select("final_vp", pl.col("copied_racers").list.unique().alias("power"))
+        .explode("power")
+        .group_by("power")
+        .agg(pl.col("final_vp").mean().alias("average"), pl.len().cast(pl.Int64).alias("games"))
+        .select(
+            pl.lit("Mush").alias("racer_name"),
+            pl.lit("Mush").alias("scope"),
+            pl.col("power").alias("other"),
+            ((pl.col("average") - baseline) / baseline).alias("shift"),
+            (pl.col("average") - baseline).alias("vp_shift"),
+            "games",
+        )
+    )

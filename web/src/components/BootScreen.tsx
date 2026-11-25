@@ -108,7 +108,7 @@ export function BootScreen({ progress, error, onRetry }: BootScreenProps) {
             </details>
           </div>
         ) : (
-          <Track percent={progress.percent} message={messageFor(progress.percent)} />
+          <Track percent={progress.percent} message={progress.message ?? messageFor(progress.percent)} />
         )}
       </div>
     </div>

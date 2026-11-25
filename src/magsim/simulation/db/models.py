@@ -80,6 +80,8 @@ LATE_COLUMNS: dict[str, str] = {
     "hotel_stops": "BIGINT",
     "eliminated_by": "BIGINT",
     "main_roll_totals": "INTEGER[]",
+    "predicted_racer_id": "BIGINT",
+    "copied_racers": "VARCHAR[]",
 }
 
 
@@ -142,6 +144,8 @@ class RacerResult(msgspec.Struct, array_like=True, gc=False):
     hotel_stops: int | None = None  # times the racer stopped on Hotel's space
     eliminated_by: int | None = None  # racer_id whose turn it was when this racer was eliminated
     main_roll_totals: list[int] | None = None  # final main roll of each turn, only for TOTAL_TRACKED racers
+    predicted_racer_id: int | None = None  # racer_id Mastermind predicted to win
+    copied_racers: list[str] | None = None  # racers whose powers Mush drew
 
     @classmethod
     def get_create_sql(cls) -> str:
@@ -180,6 +184,8 @@ class RacerResult(msgspec.Struct, array_like=True, gc=False):
             hotel_stops BIGINT,
             eliminated_by BIGINT,
             main_roll_totals INTEGER[],
+            predicted_racer_id BIGINT,
+            copied_racers VARCHAR[],
             PRIMARY KEY (config_hash, racer_id)
         )
         """

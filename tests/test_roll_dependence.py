@@ -52,7 +52,8 @@ def test_a_racer_whose_vp_follows_one_specific_number_depends_on_its_rolls() -> 
 def test_a_racer_whose_vp_ignores_its_rolls_does_not() -> None:
     values = dependence(dataset())
 
-    assert values["Indifferent"] < 0.05
+    assert values["Indifferent"] < 0.25
+    assert values["Indifferent"] < values["NeedsThrees"] / 5
     assert values["AlwaysFive"] == 0.0
 
 

@@ -2,7 +2,7 @@ import random
 
 import polars as pl
 
-from magsim.analysis.fun_facts import compute_extreme_combinations
+from magsim.analysis.fun_facts import _extreme_cells, compute_extreme_combinations
 from magsim.analysis.interactions import (
     compute_environment_totals,
     compute_matchup_matrix,
@@ -20,8 +20,8 @@ def dataset() -> tuple[pl.DataFrame, pl.DataFrame]:
         races.append({"config_hash": f"r{i}", "board": board, "racer_count": 4})
         for seat, name in enumerate(names):
             vp = rng.gauss(3, 1)
-            vp += 1.5 if name == "Hare" and "Banana" in names else 0
-            vp += 1.5 if name == "Gunk" and board == "A" else 0
+            vp += 3.0 if name == "Hare" and "Banana" in names else 0
+            vp += 3.0 if name == "Gunk" and board == "A" else 0
             results.append({"config_hash": f"r{i}", "racer_id": seat, "racer_name": name, "final_vp": vp})
     return pl.DataFrame(results), pl.DataFrame(races)
 
@@ -57,3 +57,42 @@ def test_pure_noise_does_not_produce_extremes() -> None:
     )
 
     assert found.is_empty()
+
+
+def test_a_board_that_shakes_everyone_up_does_not_take_every_place() -> None:
+    wide = [0.9, 0.8, 0.7, 0.6, 0.5, -0.5, -0.6, -0.7, -0.8, -0.9]
+    narrow = [0.12, 0.01, 0.0, -0.01, 0.01, 0.0, -0.01, 0.0, 0.01, -0.01]
+    names = [f"R{i}" for i in range(10)]
+    cells = pl.DataFrame(
+        {
+            "racer_name": names * 2,
+            "other": ["Wide"] * 10 + ["Narrow"] * 10,
+            "shift": wide + narrow,
+            "vp_shift": [v * 3 for v in wide + narrow],
+            "games": [1000] * 20,
+        },
+    )
+    spread = pl.DataFrame({"racer_name": names, "spread": [1.0] * 10})
+
+    found = _extreme_cells(cells, spread, "board")
+
+    best = found.filter(pl.col("shift") > 0)
+    assert ("R0", "Narrow") in set(zip(best["racer_name"], best["other"], strict=True))
+
+
+def test_mush_powers_are_ranked_against_mushs_average_with_any_power() -> None:
+    rng = random.Random(6)
+    powers = ["Kraken", "Hare", "Banana", "Gunk", "Twin", "Mouth"]
+    rows = []
+    for i in range(4000):
+        drawn = rng.sample(powers, 2)
+        vp = rng.gauss(3, 1) + (2.0 if "Kraken" in drawn else 0.0) - (1.5 if "Twin" in drawn else 0.0)
+        rows.append({"racer_name": "Mush", "final_vp": vp, "copied_racers": drawn})
+    results = pl.DataFrame(rows)
+
+    found = compute_extreme_combinations(results, pl.DataFrame(), pl.DataFrame()).filter(pl.col("kind") == "mush")
+
+    best = found.sort("shift", descending=True).row(0, named=True)
+    worst = found.sort("shift").row(0, named=True)
+    assert (best["racer_name"], best["other"]) == ("Kraken", "")
+    assert worst["racer_name"] == "Twin"

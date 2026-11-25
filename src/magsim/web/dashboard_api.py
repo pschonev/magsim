@@ -21,7 +21,7 @@ from magsim.analysis.filters import (
 )
 from magsim.analysis.fun_facts import (
     compute_chosen_faces,
-    compute_ability_uses,
+    compute_collectors,
     compute_extreme_combinations,
     compute_forward_share,
     compute_hog_split,
@@ -30,7 +30,7 @@ from magsim.analysis.fun_facts import (
     compute_outcomes,
     compute_eaten_targets,
     compute_cheatah_numbers,
-    compute_show_off_totals,
+    compute_dice_totals,
     compute_triggers_per_turn,
     compute_vp_distributions,
 )
@@ -46,9 +46,12 @@ from magsim.web.schemas import (
     DistributionBinDTO,
     EnvironmentCellDTO,
     FaceEffectDTO,
+    CollectorDTO,
     EatTargetDTO,
     ExtremeComboDTO,
     FaceShareDTO,
+    MastermindCallDTO,
+    RacerFaceShareDTO,
     FunFactsDTO,
     GlobalDynamicsRowDTO,
     MatchupCellDTO,
@@ -355,9 +358,16 @@ def _face_shares(frame: pl.DataFrame) -> list[FaceShareDTO]:
 
 def _fun_facts(results: pl.DataFrame, extremes: pl.DataFrame) -> FunFactsDTO:
     hog = compute_hog_split(results)
-    hits, mastermind_first, mastermind_second, mastermind_second_predicted = compute_mastermind(results)
+    calls, mastermind_first, mastermind_second, mastermind_second_predicted = compute_mastermind(results)
     return FunFactsDTO(
-        ability_uses_per_race=_named_values(compute_ability_uses(results)),
+        collectors=[
+            CollectorDTO(
+                racer_name=str(r["racer_name"]),
+                per_race=_safe_float(r["per_race"]),
+                no_one=_safe_float(r["no_one"]),
+            )
+            for r in compute_collectors(results).to_dicts()
+        ],
         outcomes=[
             OutcomeShareDTO(
                 racer_name=str(r["racer_name"]),
@@ -395,13 +405,27 @@ def _fun_facts(results: pl.DataFrame, extremes: pl.DataFrame) -> FunFactsDTO:
             for r in compute_eaten_targets(results).to_dicts()
         ],
         cheatah_numbers=_face_shares(compute_cheatah_numbers(results)),
-        show_off_totals=_face_shares(compute_show_off_totals(results)),
+        dice_totals=[
+            RacerFaceShareDTO(
+                racer_name=str(r["racer_name"]),
+                face=_safe_int(r["face"]),
+                share=_safe_float(r["share"]),
+            )
+            for r in compute_dice_totals(results).to_dicts()
+        ],
         triggers_per_turn=_named_values(compute_triggers_per_turn(results)),
         blunderdog_forward=compute_forward_share(results, "Blunderdog"),
         diva_forward=compute_forward_share(results, "Diva"),
         last_place_baseline=compute_forward_share(results),
         hotel_customers=_named_values(compute_hotel_customers(results)),
-        mastermind_hits=_named_values(hits),
+        mastermind_calls=[
+            MastermindCallDTO(
+                racer_name=str(r["racer_name"]),
+                rate=_safe_float(r["rate"]),
+                games=_safe_int(r["games"]),
+            )
+            for r in calls.to_dicts()
+        ],
         mastermind_first=mastermind_first,
         mastermind_second=mastermind_second,
         mastermind_second_predicted=mastermind_second_predicted,
@@ -599,7 +623,8 @@ def analyze(filtered: FilteredDataset) -> DashboardAnalysisDTO:
             error=filtered.error or "No races match these filters.",
         )
 
-    result = run_full_analysis(filtered.races, filtered.racer_results)
+    heavy = ("main_roll_totals", "eliminated_by")
+    result = run_full_analysis(filtered.races, filtered.racer_results.drop(*heavy, strict=False))
     return DashboardAnalysisDTO(
         filtered_race_count=filtered.races.height,
         filtered_result_count=filtered.racer_results.height,

@@ -2,6 +2,7 @@ import type { EChartsOption } from "../../../components/EChart";
 import type { FaceEffectDTO, OutcomeShareDTO, VpShareDTO } from "../../../types/api";
 import { displayName } from "../../../utils/names";
 import type { ChartTheme } from "../../../utils/theme";
+import { readableOn } from "./chartOptions";
 
 export const BADGE = { blue: "#6ca1d8", pink: "#ee83b3", gold: "#f6ae00", green: "#539912", orange: "#fd5a10", silver: "#c8d0cc" };
 
@@ -9,6 +10,29 @@ export interface BarItem {
   name: string;
   value: number;
   color: string;
+  /** The name is a racer's: write it in the racer's colour. */
+  racer?: boolean;
+}
+
+interface LabelEntry {
+  text: string;
+  color?: string;
+  suffix?: string;
+}
+
+/** Category axis labels with the racer's name in its colour; `suffix` (e.g. "× Party Pooper") stays neutral. */
+function racerLabels(entries: LabelEntry[], t: ChartTheme, fontSize = 12) {
+  const rich: Record<string, object> = { plain: { color: t.text, fontSize, fontWeight: 600 } };
+  entries.forEach((e, i) => {
+    rich[`c${i}`] = { color: e.color ? readableOn(e.color, t) : t.text, fontSize, fontWeight: 700 };
+  });
+  return {
+    color: t.text,
+    fontSize,
+    fontWeight: 600,
+    rich,
+    formatter: (_value: string, i: number) => `{c${i}|${entries[i].text}}${entries[i].suffix ? ` {plain|${entries[i].suffix}}` : ""}`,
+  };
 }
 
 const base = (t: ChartTheme) => ({ backgroundColor: "transparent", animation: false, textStyle: { color: t.text } });
@@ -27,7 +51,7 @@ export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) =
       data: names,
       axisTick: { show: false },
       axisLine: { show: false },
-      axisLabel: { color: t.text, fontSize: 12, fontWeight: 600 },
+      axisLabel: racerLabels(items.map((i) => ({ text: displayName(i.name), color: i.racer ? i.color : undefined })), t),
     },
     tooltip: { show: false },
     series: [
@@ -56,7 +80,7 @@ const OUTCOME_COLORS = { first: BADGE.gold, second: BADGE.silver, other: "#5c656
 const OUTCOME_NAMES = { first: "1st", second: "2nd", other: "other", eliminated: "eliminated", cancelled: "race cancelled" };
 
 /** One donut per racer showing how its races end. */
-export function buildDonuts(outcomes: OutcomeShareDTO[], t: ChartTheme): EChartsOption {
+export function buildDonuts(outcomes: OutcomeShareDTO[], colorOf: (racer: string) => string, t: ChartTheme): EChartsOption {
   const keys = (["first", "second", "other", "eliminated", "cancelled"] as const).filter((k) => outcomes.some((o) => o[k] > 0));
   const step = Math.min(50, 90 / outcomes.length);
   const centre = (i: number) => 50 + (i - (outcomes.length - 1) / 2) * step;
@@ -68,7 +92,7 @@ export function buildDonuts(outcomes: OutcomeShareDTO[], t: ChartTheme): ECharts
       left: `${centre(i)}%`,
       top: 0,
       textAlign: "center",
-      textStyle: { color: t.text, fontSize: 13, fontWeight: 700 },
+      textStyle: { color: readableOn(colorOf(o.racer_name), t), fontSize: 13, fontWeight: 700 },
     })),
     tooltip: { show: false },
     series: outcomes.map((o, i) => ({
@@ -116,41 +140,54 @@ export function buildColumns(
   };
 }
 
-/** Columns without number labels; the caller draws dice underneath. */
-export function faceEffectColumns(faces: FaceEffectDTO[], t: ChartTheme): EChartsOption {
-  return buildColumns(
-    faces.map(() => ""),
-    faces.map((f) => f.vp_per_roll),
-    faces.map((f) => (f.vp_per_roll >= 0 ? BADGE.blue : BADGE.pink)),
-    t,
-    (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`,
-  );
+/** Columns without number labels (the caller draws dice underneath); hovering shows what the number does. */
+export function faceEffectColumns(faces: FaceEffectDTO[], t: ChartTheme, describe: (face: number) => string): EChartsOption {
+  return {
+    ...buildColumns(
+      faces.map(() => ""),
+      faces.map((f) => f.vp_per_roll),
+      faces.map((f) => (f.vp_per_roll >= 0 ? BADGE.blue : BADGE.pink)),
+      t,
+      (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`,
+    ),
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      backgroundColor: t.tooltipBg,
+      borderColor: t.tooltipBorder,
+      textStyle: { color: t.text, fontSize: 12 },
+      extraCssText: "max-width: 260px; white-space: normal;",
+      formatter: (params: { dataIndex: number; value: number }[]) => {
+        const face = faces[params[0].dataIndex];
+        return `<b>Rolling a ${face.face}:</b> ${describe(face.face)}<br/>${face.vp_per_roll >= 0 ? "+" : ""}${face.vp_per_roll.toFixed(2)} VP per extra roll`;
+      },
+    },
+  };
 }
 
-const TAIL_SHARE = 0.01;
+export interface ColumnSeries {
+  name: string;
+  /** Legend text; defaults to the name. */
+  legend?: string;
+  color: string;
+  /** Lighter bars, for a racer whose colour another series already uses. */
+  faded?: boolean;
+  values: number[];
+}
 
-/** Grouped final-VP histogram of several racers; the rare high scores (each under 1 % of games) are added up in one last "N+" bar. */
-export function vpHistogram(rows: VpShareDTO[], colorOf: (racer: string) => string, t: ChartTheme): EChartsOption {
-  const racers = [...new Set(rows.map((r) => r.racer_name))];
-  const share = (racer: string, vp: number) => rows.find((r) => r.racer_name === racer && r.vp === vp)?.share ?? 0;
-  const lowest = Math.min(...rows.map((r) => r.vp));
-  const max = Math.max(...rows.map((r) => r.vp));
-  const peaks = racers.map((racer) => rows.filter((r) => r.racer_name === racer).reduce((best, r) => (r.share > best.share ? r : best)).vp);
-  const peak = Math.max(...peaks);
-  let tailStart = max + 1;
-  while (tailStart - 1 > peak && racers.every((racer) => share(racer, tailStart - 1) < TAIL_SHARE)) tailStart -= 1;
-  let headEnd = lowest - 1;
-  const firstPeak = Math.min(...peaks);
-  while (headEnd + 1 < firstPeak && racers.every((racer) => share(racer, headEnd + 1) < TAIL_SHARE)) headEnd += 1;
-  const min = headEnd + 1;
-  const vps = Array.from({ length: Math.min(tailStart, max + 1) - min }, (_, i) => min + i);
-  const hasTail = rows.some((r) => r.vp >= tailStart);
-  const hasHead = headEnd >= lowest;
-  const labels = [...(hasHead ? [`≤${headEnd}`] : []), ...vps.map(String), ...(hasTail ? [`${tailStart}+`] : [])];
-  const percent = (v: number) => `${(v * 100).toFixed(v >= 0.1 ? 0 : 1)}%`;
+const percentText = (v: number) => `${(v * 100).toFixed(v >= 0.1 ? 0 : 1)}%`;
+
+/** Grouped columns, one series per racer; each series gets a label on its tallest column. */
+export function buildGroupedColumns(labels: string[], series: ColumnSeries[], axisName: string, t: ChartTheme): EChartsOption {
+  const legendOf = (s: ColumnSeries) => s.legend ?? displayName(s.name);
   return {
     ...base(t),
-    legend: { top: 0, textStyle: { color: t.text, fontSize: 11 }, itemWidth: 10, itemHeight: 10, data: racers.map(displayName) },
+    legend: {
+      top: 0,
+      itemWidth: 10,
+      itemHeight: 10,
+      data: series.map((s) => ({ name: legendOf(s), textStyle: { color: readableOn(s.color, t), fontSize: 11 } })),
+    },
     grid: { left: 6, right: 6, top: 28, bottom: 36, containLabel: true },
     tooltip: {
       trigger: "axis",
@@ -159,12 +196,12 @@ export function vpHistogram(rows: VpShareDTO[], colorOf: (racer: string) => stri
       borderColor: t.tooltipBorder,
       textStyle: { color: t.text, fontSize: 12 },
       formatter: (params: { name: string; seriesName: string; value: number; color: string }[]) =>
-        [`${params[0].name} VP`, ...params.map((p) => `<span style="color:${p.color}">●</span> ${p.seriesName}: ${(p.value * 100).toFixed(1)}%`)].join("<br/>"),
+        [`${params[0].name} ${axisName}`, ...params.map((p) => `<span style="color:${p.color}">●</span> ${p.seriesName}: ${(p.value * 100).toFixed(1)}%`)].join("<br/>"),
     },
     xAxis: {
       type: "category",
       data: labels,
-      name: "final VP",
+      name: axisName,
       nameLocation: "middle",
       nameGap: 22,
       nameTextStyle: { color: t.text, fontSize: 11 },
@@ -173,25 +210,59 @@ export function vpHistogram(rows: VpShareDTO[], colorOf: (racer: string) => stri
       axisLabel: { color: t.text, fontSize: 11 },
     },
     yAxis: { type: "value", show: false },
-    series: racers.map((racer) => {
-      const values = [
-        ...(hasHead ? [rows.filter((r) => r.racer_name === racer && r.vp <= headEnd).reduce((sum, r) => sum + r.share, 0)] : []),
-        ...vps.map((v) => share(racer, v)),
-        ...(hasTail ? [rows.filter((r) => r.racer_name === racer && r.vp >= tailStart).reduce((sum, r) => sum + r.share, 0)] : []),
-      ];
-      const top = Math.max(...values);
+    series: series.map((s) => {
+      const top = Math.max(...s.values);
       return {
         type: "bar" as const,
-        name: displayName(racer),
+        name: legendOf(s),
         barGap: "10%",
-        itemStyle: { color: colorOf(racer), borderRadius: [2, 2, 0, 0] },
-        data: values.map((value) => ({
+        itemStyle: { color: s.color, opacity: s.faded ? 0.5 : 1, borderRadius: [2, 2, 0, 0] },
+        data: s.values.map((value) => ({
           value,
-          label: { show: value === top, position: "top", color: t.text, fontSize: 10, fontWeight: 700, formatter: () => percent(value) },
+          label: { show: value === top && value > 0, position: "top", color: t.text, fontSize: 10, fontWeight: 700, formatter: () => percentText(value) },
         })),
       };
     }),
   };
+}
+
+const TAIL_SHARE = 0.01;
+
+/** Final-VP histogram of several racers; rare scores (each under 1 % of games) at either end are added up in one "≤N" / "N+" column. */
+export function vpHistogram(rows: VpShareDTO[], colorOf: (racer: string) => string, t: ChartTheme): EChartsOption {
+  const racers = [...new Set(rows.map((r) => r.racer_name))];
+  const share = (racer: string, vp: number) => rows.find((r) => r.racer_name === racer && r.vp === vp)?.share ?? 0;
+  const lowest = Math.min(...rows.map((r) => r.vp));
+  const max = Math.max(...rows.map((r) => r.vp));
+  const peaks = racers.map((racer) => rows.filter((r) => r.racer_name === racer).reduce((best, r) => (r.share > best.share ? r : best)).vp);
+  let tailStart = max + 1;
+  while (tailStart - 1 > Math.max(...peaks) && racers.every((racer) => share(racer, tailStart - 1) < TAIL_SHARE)) tailStart -= 1;
+  let headEnd = lowest - 1;
+  while (headEnd + 1 < Math.min(...peaks) && racers.every((racer) => share(racer, headEnd + 1) < TAIL_SHARE)) headEnd += 1;
+  const vps = Array.from({ length: Math.min(tailStart, max + 1) - (headEnd + 1) }, (_, i) => headEnd + 1 + i);
+  const hasTail = rows.some((r) => r.vp >= tailStart);
+  const hasHead = headEnd >= lowest;
+  const labels = [...(hasHead ? [`≤${headEnd}`] : []), ...vps.map(String), ...(hasTail ? [`${tailStart}+`] : [])];
+  const sumWhere = (racer: string, keep: (vp: number) => boolean) =>
+    rows.filter((r) => r.racer_name === racer && keep(r.vp)).reduce((sum, r) => sum + r.share, 0);
+  return buildGroupedColumns(
+    labels,
+    racers.map((racer) => {
+      const average = rows.filter((r) => r.racer_name === racer).reduce((sum, r) => sum + r.vp * r.share, 0);
+      return {
+        name: racer,
+        legend: `${displayName(racer)} · avg ${average.toFixed(1)} VP`,
+        color: colorOf(racer),
+        values: [
+          ...(hasHead ? [sumWhere(racer, (vp) => vp <= headEnd)] : []),
+          ...vps.map((v) => share(racer, v)),
+          ...(hasTail ? [sumWhere(racer, (vp) => vp >= tailStart)] : []),
+        ],
+      };
+    }),
+    "final VP",
+    t,
+  );
 }
 
 export interface SplitPart {
@@ -204,6 +275,8 @@ export interface SplitPart {
 
 export interface SplitRow {
   name: string;
+  /** Racer colour for the row name. */
+  color?: string;
   /** Two parts that add up to one; `label` is written inside the bar next to the percentage. */
   parts: [SplitPart, SplitPart];
 }
@@ -238,7 +311,7 @@ export function buildSplitRows(rows: SplitRow[], t: ChartTheme): EChartsOption {
       data: rows.map((r) => r.name),
       axisTick: { show: false },
       axisLine: { show: false },
-      axisLabel: { color: t.text, fontSize: 12, fontWeight: 600 },
+      axisLabel: racerLabels(rows.map((r) => ({ text: r.name, color: r.color })), t),
     },
     tooltip: { show: false },
     series: [part(0), part(1)],
@@ -246,28 +319,56 @@ export function buildSplitRows(rows: SplitRow[], t: ChartTheme): EChartsOption {
 }
 
 /** Best combinations on top, worst at the bottom; bars grow right for gains and left for losses. */
-export function buildDivergingBars(items: { label: string; value: number }[], t: ChartTheme): EChartsOption {
-  const reach = Math.max(...items.map((i) => Math.abs(i.value))) * 1.35 || 1;
+export interface DivergingItem {
+  racer: string;
+  color: string;
+  /** What the racer is combined with; empty when the racer name alone says it all. */
+  other: string;
+  value: number;
+}
+
+/**
+ * Best combinations on top (bars grow right), worst at the bottom (bars grow left). The names sit
+ * next to the centre line, right-aligned above it and left-aligned below it, so no space is wasted.
+ */
+export function buildDivergingBars(items: DivergingItem[], t: ChartTheme): EChartsOption {
+  const reach = Math.max(...items.map((i) => Math.abs(i.value))) * 1.5 || 1;
+  const barWidth = "70%";
   return {
     ...base(t),
-    grid: { left: 8, right: 8, top: 4, bottom: 4, containLabel: true },
+    grid: { left: 8, right: 8, top: 2, bottom: 2 },
     xAxis: { type: "value", show: false, min: -reach, max: reach },
-    yAxis: {
-      type: "category",
-      inverse: true,
-      data: items.map((i) => i.label),
-      axisTick: { show: false },
-      axisLine: { show: false },
-      axisLabel: { color: t.text, fontSize: 11, fontWeight: 600 },
-    },
+    yAxis: { type: "category", inverse: true, show: false, data: items.map((i) => `${i.racer} ${i.other}`) },
     tooltip: { show: false },
     series: [
       {
         type: "bar",
-        barWidth: "62%",
+        barWidth,
         data: items.map((i) => ({
           value: i.value,
           itemStyle: { color: i.value >= 0 ? BADGE.blue : BADGE.pink, borderRadius: i.value >= 0 ? [0, 3, 3, 0] : [3, 0, 0, 3] },
+          label: {
+            show: true,
+            position: i.value >= 0 ? "left" : "right",
+            distance: 6,
+            fontSize: 11,
+            rich: {
+              c: { color: readableOn(i.color, t), fontSize: 11, fontWeight: 700 },
+              p: { color: t.text, fontSize: 11, fontWeight: 600 },
+            },
+            formatter: `{c|${displayName(i.racer)}}${i.other ? ` {p|× ${displayName(i.other)}}` : ""}`,
+          },
+        })),
+        markLine: { silent: true, symbol: "none", label: { show: false }, lineStyle: { color: t.reference, type: "dashed" }, data: [{ xAxis: 0 }] },
+      },
+      {
+        type: "bar",
+        barWidth,
+        barGap: "-100%",
+        silent: true,
+        itemStyle: { color: "transparent" },
+        data: items.map((i) => ({
+          value: i.value,
           label: {
             show: true,
             position: i.value >= 0 ? "right" : "left",
@@ -277,27 +378,74 @@ export function buildDivergingBars(items: { label: string; value: number }[], t:
             formatter: `${i.value >= 0 ? "+" : ""}${(i.value * 100).toFixed(0)}%`,
           },
         })),
-        markLine: { silent: true, symbol: "none", label: { show: false }, lineStyle: { color: t.reference, type: "dashed" }, data: [{ xAxis: 0 }] },
       },
     ],
   };
 }
 
-/** Rose chart: petal length is the value. */
-export function buildRose(items: BarItem[], t: ChartTheme, format: (v: number) => string): EChartsOption {
+export interface RoseSection {
+  name: string;
+  color: string;
+  caption: string;
+  items: BarItem[];
+  format: (v: number) => string;
+}
+
+/** Side by side rose charts, one per racer, each with its name and a caption above. */
+export function buildRoses(sections: RoseSection[], t: ChartTheme): EChartsOption {
+  const step = 100 / sections.length;
+  const centre = (i: number) => `${step * i + step / 2}%`;
+  return {
+    ...base(t),
+    tooltip: {
+      trigger: "item",
+      backgroundColor: t.tooltipBg,
+      borderColor: t.tooltipBorder,
+      textStyle: { color: t.text, fontSize: 12 },
+      formatter: (p: { seriesIndex: number; name: string; value: number }) => `${p.name}: ${sections[p.seriesIndex].format(p.value)}`,
+    },
+    title: sections.map((s, i) => ({
+      text: displayName(s.name),
+      subtext: s.caption,
+      left: centre(i),
+      top: 0,
+      textAlign: "center",
+      textStyle: { color: readableOn(s.color, t), fontSize: 13, fontWeight: 700 },
+      subtextStyle: { color: t.text, fontSize: 11 },
+    })),
+    series: sections.map((s, i) => ({
+      type: "pie" as const,
+      roseType: "radius" as const,
+      radius: ["8%", "42%"],
+      center: [centre(i), "64%"],
+      itemStyle: { borderColor: t.bg, borderWidth: 2, borderRadius: 3 },
+      labelLayout: { hideOverlap: true },
+      label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { name: string; value: number }) => `${p.name}\n${s.format(p.value)}` },
+      labelLine: { length: 3, length2: 3 },
+      data: s.items.map((it) => ({
+        name: displayName(it.name),
+        value: it.value,
+        itemStyle: { color: it.color },
+        label: { color: readableOn(it.color, t) },
+      })),
+    })),
+  };
+}
+
+/** A plain pie with the name and share outside each slice. */
+export function buildPie(items: { name: string; value: number; color: string }[], t: ChartTheme): EChartsOption {
   return {
     ...base(t),
     tooltip: { show: false },
     series: [
       {
         type: "pie",
-        roseType: "radius",
-        radius: ["12%", "68%"],
-        center: ["50%", "52%"],
-        itemStyle: { borderColor: t.bg, borderWidth: 2, borderRadius: 4 },
-        label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { name: string; value: number }) => `${p.name}\n${format(p.value)}` },
+        radius: ["30%", "60%"],
+        center: ["50%", "50%"],
+        itemStyle: { borderColor: t.bg, borderWidth: 2 },
+        label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { name: string; percent: number }) => `${p.name}\n${p.percent.toFixed(0)}%` },
         labelLine: { length: 4, length2: 4 },
-        data: items.map((i) => ({ name: displayName(i.name), value: i.value, itemStyle: { color: i.color } })),
+        data: items.map((i) => ({ name: i.name, value: i.value, itemStyle: { color: i.color } })),
       },
     ],
   };

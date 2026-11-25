@@ -154,10 +154,28 @@ export interface EatTargetDTO {
 }
 
 export interface ExtremeComboDTO {
-  kind: "matchup" | "board" | "twist";
+  kind: "matchup" | "board" | "twist" | "mush";
   racer_name: string;
   other: string;
   shift: number;
+  games: number;
+}
+
+export interface RacerFaceShareDTO {
+  racer_name: string;
+  face: number;
+  share: number;
+}
+
+export interface CollectorDTO {
+  racer_name: string;
+  per_race: number;
+  no_one: number;
+}
+
+export interface MastermindCallDTO {
+  racer_name: string;
+  rate: number;
   games: number;
 }
 
@@ -167,7 +185,7 @@ export interface FaceShareDTO {
 }
 
 export interface FunFactsDTO {
-  ability_uses_per_race: NamedValueDTO[];
+  collectors: CollectorDTO[];
   outcomes: OutcomeShareDTO[];
   hog_for_himself: number | null;
   hog_for_others: number | null;
@@ -176,13 +194,13 @@ export interface FunFactsDTO {
   eat_targets: EatTargetDTO[];
   extremes: ExtremeComboDTO[];
   cheatah_numbers: FaceShareDTO[];
-  show_off_totals: FaceShareDTO[];
+  dice_totals: RacerFaceShareDTO[];
   triggers_per_turn: NamedValueDTO[];
   blunderdog_forward: number | null;
   diva_forward: number | null;
   last_place_baseline: number | null;
   hotel_customers: NamedValueDTO[];
-  mastermind_hits: NamedValueDTO[];
+  mastermind_calls: MastermindCallDTO[];
   mastermind_first: number | null;
   mastermind_second: number | null;
   mastermind_second_predicted: number | null;
@@ -448,6 +466,8 @@ export interface BootProgress {
   stage: string;
   percent: number;
   detail?: string;
+  /** Text for the loading screen; defaults to a line picked from the percentage. */
+  message?: string;
 }
 
 export interface BootResult {
