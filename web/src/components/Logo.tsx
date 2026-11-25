@@ -1,4 +1,5 @@
-const COLORS = ["#6ca1d8", "#ee83b3", "#f6ae00", "#539912", "#fd5a10"];
+import { BRAND_LIST as COLORS } from "../utils/palette";
+
 const SEGMENT_WIDTH = 58 / COLORS.length;
 
 /** The loading screen's track in miniature, followed by the name. */

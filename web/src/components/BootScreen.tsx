@@ -1,5 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import type { BootProgress } from "../types/api";
+import { BRAND_LIST } from "../utils/palette";
 
 interface BootScreenProps {
   progress: BootProgress;
@@ -18,13 +19,14 @@ const MESSAGES = [
   "Ready… steady…",
 ];
 
-const SEGMENTS = [
-  { x: -10, width: 134, color: "#6ca1d8" },
-  { x: 124, width: 124, color: "#ee83b3" },
-  { x: 248, width: 124, color: "#f6ae00" },
-  { x: 372, width: 124, color: "#539912" },
-  { x: 496, width: 154, color: "#fd5a10" },
+const SEGMENT_EDGES = [
+  { x: -10, width: 134 },
+  { x: 124, width: 124 },
+  { x: 248, width: 124 },
+  { x: 372, width: 124 },
+  { x: 496, width: 154 },
 ];
+const SEGMENTS = SEGMENT_EDGES.map((edge, i) => ({ ...edge, color: BRAND_LIST[i] }));
 
 const TRACK_START = 10;
 const TRACK_WIDTH = 620;

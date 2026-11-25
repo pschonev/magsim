@@ -2,9 +2,10 @@ import type { EChartsOption } from "../../../components/EChart";
 import type { FaceEffectDTO, OutcomeShareDTO, VpShareDTO } from "../../../types/api";
 import { displayName } from "../../../utils/names";
 import type { ChartTheme } from "../../../utils/theme";
+import { BRAND, DIVERGING, NEUTRAL } from "../../../utils/palette";
 import { readableOn } from "./chartOptions";
 
-export const BADGE = { blue: "#6ca1d8", pink: "#ee83b3", gold: "#f6ae00", green: "#539912", orange: "#fd5a10", silver: "#c8d0cc" };
+export const BADGE = { ...BRAND, silver: NEUTRAL.silver };
 
 export interface BarItem {
   name: string;
@@ -76,7 +77,7 @@ export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) =
   };
 }
 
-const OUTCOME_COLORS = { first: BADGE.gold, second: BADGE.silver, other: "#5c6560", eliminated: BADGE.pink, cancelled: BADGE.green };
+const OUTCOME_COLORS = { first: BADGE.gold, second: BADGE.silver, other: NEUTRAL.slate, eliminated: DIVERGING.strongBad, cancelled: BADGE.blue };
 const OUTCOME_NAMES = { first: "1st", second: "2nd", other: "other", eliminated: "eliminated", cancelled: "race cancelled" };
 
 /** One donut per racer showing how its races end. */
@@ -146,7 +147,7 @@ export function faceEffectColumns(faces: FaceEffectDTO[], t: ChartTheme, describ
     ...buildColumns(
       faces.map(() => ""),
       faces.map((f) => f.vp_per_roll),
-      faces.map((f) => (f.vp_per_roll >= 0 ? BADGE.blue : BADGE.pink)),
+      faces.map((f) => (f.vp_per_roll >= 0 ? DIVERGING.good : DIVERGING.bad)),
       t,
       (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`,
     ),
@@ -350,7 +351,7 @@ export function buildDivergingBars(items: DivergingItem[], t: ChartTheme): EChar
         barWidth,
         data: items.map((i) => ({
           value: i.value,
-          itemStyle: { color: i.value >= 0 ? BADGE.blue : BADGE.pink, borderRadius: i.value >= 0 ? [0, 3, 3, 0] : [3, 0, 0, 3] },
+          itemStyle: { color: i.value >= 0 ? DIVERGING.good : DIVERGING.bad, borderRadius: i.value >= 0 ? [0, 3, 3, 0] : [3, 0, 0, 3] },
           label: {
             show: true,
             position: i.value >= 0 ? "left" : "right",

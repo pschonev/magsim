@@ -280,22 +280,34 @@ def _shares(values: pl.Series, extra_zero: int = 0) -> pl.DataFrame:
 
 
 def compute_cheatah_numbers(results: pl.DataFrame) -> pl.DataFrame:
-    """Per number Cheatah set: its share of all his picks and the share of those picks that were guessed."""
+    """Per number Cheatah set: its share of all his picks and the share of those picks that were guessed.
+
+    Face 0 is the share of all his picks that were guessed (no move). Without the recorded guessed
+    numbers (older datasets) it comes from his skipped main moves and is spread evenly over the numbers.
+    """
     schema = {"face": pl.Int64, "share": pl.Float64, "guessed": pl.Float64}
     played = _final_rolls(results, "Cheatah")
     if played is None or played.is_empty():
         return pl.DataFrame(schema=schema)
     own = _racer(results, "Cheatah")
-    has_guesses = "guessed_rolls" in own.columns and not own["guessed_rolls"].is_null().all()
-    guessed = own["guessed_rolls"].explode().drop_nulls().to_list() if has_guesses else []
-    played_counts, guessed_counts = Counter(played.to_list()), Counter(guessed)
-    faces = [f for f in range(1, 7) if played_counts[f] + guessed_counts[f] > 0]
-    total = sum(played_counts[f] + guessed_counts[f] for f in faces)
+    played_counts = Counter(played.to_list())
+    if "guessed_rolls" in own.columns and not own["guessed_rolls"].is_null().all():
+        guessed_counts = Counter(own["guessed_rolls"].explode().drop_nulls().to_list())
+        overall = sum(guessed_counts.values()) / (sum(played_counts.values()) + sum(guessed_counts.values()))
+        guessed_of = {f: guessed_counts[f] / (played_counts[f] + guessed_counts[f]) for f in range(1, 7) if played_counts[f] + guessed_counts[f] > 0}
+    else:
+        guessed_total = float(own["skipped_self_main_move"].drop_nulls().sum())
+        overall = guessed_total / (sum(played_counts.values()) + guessed_total)
+        guessed_of = dict.fromkeys(range(1, 7), overall)
+        guessed_counts = Counter()
+    picks = {f: played_counts[f] + guessed_counts[f] for f in range(1, 7) if played_counts[f] + guessed_counts[f] > 0}
+    total = sum(picks.values())
+    faces = sorted(picks)
     return pl.DataFrame(
         {
-            "face": faces,
-            "share": [(played_counts[f] + guessed_counts[f]) / total for f in faces],
-            "guessed": [guessed_counts[f] / (played_counts[f] + guessed_counts[f]) for f in faces],
+            "face": [0, *faces],
+            "share": [overall, *(picks[f] / total for f in faces)],
+            "guessed": [1.0, *(guessed_of[f] for f in faces)],
         },
         schema=schema,
     )

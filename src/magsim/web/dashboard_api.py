@@ -37,7 +37,7 @@ from magsim.analysis.fun_facts import (
 from magsim.analysis.metrics import run_full_analysis
 from magsim.analysis.racer_specific import compute_roll_effects, compute_stepkid_wins
 from magsim.analysis.tables import SUMMARY_TABLE_TITLES, with_racer_extras
-from magsim.core.palettes import get_racer_color
+from magsim.web.colors import racer_color
 from magsim.web.schemas import (
     AbilityBreakdownRowDTO,
     AnalysisFilterDTO,
@@ -229,7 +229,7 @@ def _df_to_racer_stats(df: pl.DataFrame, extras: pl.DataFrame) -> list[RacerStat
     return [
         RacerStatRowDTO(
             racer_name=str(row["racer_name"]),
-            color=get_racer_color(str(row["racer_name"])),
+            color=racer_color(str(row["racer_name"])),
             mean_vp=_safe_float(row["mean_vp"]),
             std_vp_sigma=_safe_float(row["std_vp_sigma"]),
             consistency_score=_safe_float(row["consistency_score"]),
@@ -598,7 +598,7 @@ def get_metadata(dataset: Dataset) -> DatasetMetaDTO:
         counts=counts,
         racers=racers,
         automatic_racers=[r for r in racers if r in auto_set],
-        racer_colors={r: get_racer_color(r) for r in racers},
+        racer_colors={r: racer_color(r) for r in racers},
         twists=twists,
     )
 

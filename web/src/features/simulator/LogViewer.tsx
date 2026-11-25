@@ -2,6 +2,7 @@ import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LogEntryDTO, StepSnapshotDTO } from "../../types/api";
 import { LEVEL_COLORS, type LogHighlighter } from "./logFormat";
+import { BRAND } from "../../utils/palette";
 
 interface LogViewerProps {
   logs: LogEntryDTO[];
@@ -161,7 +162,7 @@ export function LogViewer({
               ref={isActive ? turnRef : undefined}
               style={{
                 padding: 4,
-                borderLeft: `4px solid ${isActive ? "#00FF00" : "#333"}`,
+                borderLeft: `4px solid ${isActive ? BRAND.green : "#333"}`,
                 background: isActive ? "#181818" : BG_COLOR,
                 opacity: isActive ? 1 : 0.5,
                 borderBottom: "1px solid #333",
@@ -201,9 +202,9 @@ function Marker({ markerRef }: { markerRef: React.RefObject<HTMLDivElement | nul
     <div
       ref={markerRef}
       style={{
-        color: "red",
+        color: BRAND.orange,
         fontSize: 10,
-        borderTop: "1px dashed red",
+        borderTop: `1px dashed ${BRAND.orange}`,
         marginTop: 2,
         marginBottom: 2,
       }}

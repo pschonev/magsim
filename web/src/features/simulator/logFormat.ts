@@ -1,4 +1,5 @@
 import type { SimulatorMetaDTO } from "../../types/api";
+import { BRAND, tint } from "../../utils/palette";
 
 export interface LogSpan {
   text: string;
@@ -21,23 +22,27 @@ const ENGINE_ID_WIDTH = 4;
 const GREY = "#808080";
 const NAME_WHITE = "#c0c0c0";
 
-// Notebook colors; Rich's dark ANSI red/green/yellow/blue are lifted for readability on dark.
+// The log is always dark, so the brand colours are lifted towards white where they would be too dim.
+const GREEN = tint(BRAND.green, 0.35);
+const GOOD = { color: GREEN, bold: true };
+const BAD = { color: BRAND.orange, bold: true };
+
 export const LEVEL_COLORS: Record<string, string> = {
-  DEBUG: "#22c55e",
-  INFO: "#60a5fa",
-  WARNING: "#eab308",
-  ERROR: "#ef4444",
-  CRITICAL: "#ef4444",
+  DEBUG: GREEN,
+  INFO: BRAND.blue,
+  WARNING: BRAND.gold,
+  ERROR: BRAND.orange,
+  CRITICAL: BRAND.orange,
 };
 
-const MOVE = { color: "#23d18b", bold: true };
-const WARP = { color: "#87d700", bold: true };
-const MAIN_MOVE = { color: "#319e31", bold: true };
-const ABILITY = { color: "#29b8db", bold: true };
-const MODIFIER = { color: "#ffaf00", bold: true };
-const BOARD = { color: "#d670d6", bold: true };
-const DICE_ROLL = { color: "#f5f543", bold: true };
-const BASE_VALUE_OVERRIDE = { color: "#43f59c", bold: true };
+const MOVE = { color: GREEN, bold: true };
+const WARP = { color: tint(BRAND.green, 0.55), bold: true };
+const MAIN_MOVE = { color: tint(BRAND.green, 0.2), bold: true };
+const ABILITY = { color: tint(BRAND.blue, 0.3), bold: true };
+const MODIFIER = { color: BRAND.gold, bold: true };
+const BOARD = { color: BRAND.pink, bold: true };
+const DICE_ROLL = { color: tint(BRAND.gold, 0.45), bold: true };
+const BASE_VALUE_OVERRIDE = { color: tint(BRAND.green, 0.65), bold: true };
 
 function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -76,14 +81,14 @@ export function createLogHighlighter(meta: SimulatorMetaDTO): LogHighlighter {
     if (pattern) rules.push({ pattern, style });
   }
   rules.push(
-    { pattern: /!!!/g, style: { color: "#ff0000", bold: true } },
+    { pattern: /!!!/g, style: BAD },
     {
       pattern: new RegExp(escapeRegex(meta.twist_banner), "g"),
-      style: { color: "#ef4444", bold: true },
+      style: BAD,
     },
-    { pattern: /\bVP:\b/g, style: { color: "#eab308", bold: true } },
-    { pattern: /\b\+1 VP\b/g, style: { color: "#22c55e", bold: true } },
-    { pattern: /\b-1 VP\b/g, style: { color: "#ef4444", bold: true } },
+    { pattern: /\bVP:\b/g, style: { color: BRAND.gold, bold: true } },
+    { pattern: /\b\+1 VP\b/g, style: GOOD },
+    { pattern: /\b-1 VP\b/g, style: BAD },
   );
 
   const racerPattern = new RegExp(

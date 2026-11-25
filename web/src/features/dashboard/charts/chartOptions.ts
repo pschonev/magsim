@@ -9,17 +9,18 @@ import type {
   ValueShareDTO,
 } from "../../../types/api";
 import { type ECharts, graphic } from "echarts/core";
+import { BRAND, DIVERGING, SERIES, readableText, visibleMark } from "../../../utils/palette";
 import type { ChartTheme } from "../../../utils/theme";
 import { rankTransform } from "./rank";
 
-const SHIFT_STRONG_BAD = "#D32F2F";
-const SHIFT_BAD = "#F06292";
-const SHIFT_GOOD = "#42A5F5";
-const SHIFT_STRONG_GOOD = "#0D47A1";
-export const PLAYER_COUNT_COLORS = ["#40B0A6", "#FFC107", "#D81B60", "#1E88E5", "#9C27B0"];
-export const TURNS_COLOR = "#40B0A6";
-export const VP_COLOR = "#D81B60";
-export const TRIGGERS_COLOR = "#E69F00";
+const SHIFT_STRONG_BAD = DIVERGING.strongBad;
+const SHIFT_BAD = DIVERGING.bad;
+const SHIFT_GOOD = DIVERGING.good;
+const SHIFT_STRONG_GOOD = DIVERGING.strongGood;
+export const PLAYER_COUNT_COLORS: readonly string[] = SERIES.players;
+export const TURNS_COLOR = SERIES.turns;
+export const VP_COLOR = SERIES.vp;
+export const TRIGGERS_COLOR = SERIES.triggers;
 
 export const BOARD_ORDER = ["Standard", "WildWilds", "WhirlyWorld", "TwistyTwirl"];
 const SHORT_BOARDS: Record<string, string> = {
@@ -39,24 +40,14 @@ export function sortBoards(names: string[]): string[] {
 
 export const shortBoard = (name: string) => SHORT_BOARDS[name] ?? name;
 
-function luminance(hex: string): number {
-  const channel = (offset: number) => {
-    const v = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
-    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
-}
-
-function contrast(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
-}
-
-const MIN_LABEL_CONTRAST = 3;
-
-/** The racer's own colour as a label colour, unless it is too close to the background to read. */
+/** The racer's own colour as a label colour: the same hue, shifted until it reads on the chart background. */
 export function readableOn(color: string, t: ChartTheme): string {
-  return /^#[0-9a-f]{6}$/i.test(color) && contrast(color, t.bg) >= MIN_LABEL_CONTRAST ? color : t.text;
+  return readableText(color, t.bg);
+}
+
+/** The racer's own colour for a dot or bar, shifted until it stands out from the chart background. */
+export function markOn(color: string, t: ChartTheme): string {
+  return visibleMark(color, t.bg);
 }
 
 export const fixed = (digits: number) => (v: number) => v.toFixed(digits);
@@ -258,7 +249,7 @@ export function buildQuadrantOption<R extends QuadrantRow>(
         data: rows.map((r, i) => ({
           name: r.racer_name,
           value: [px[i], py[i]],
-          itemStyle: { color: r.color, opacity: 0.9 },
+          itemStyle: { color: markOn(r.color, t), opacity: 0.9 },
           label: {
             show: true,
             formatter: displayName(r.racer_name),
@@ -308,10 +299,10 @@ export function buildQuadrantOption<R extends QuadrantRow>(
 }
 
 export const ABILITY_METRICS = [
-  { label: "+ Self", key: "pos_self", side: -1, color: "#40B0A6" },
-  { label: "- Self", key: "neg_self", side: 1, color: "#1E88E5" },
-  { label: "- Others", key: "neg_other", side: -1, color: "#D81B60" },
-  { label: "+ Others", key: "pos_other", side: 1, color: "#FFC107" },
+  { label: "+ Self", key: "pos_self", side: -1, color: BRAND.blue },
+  { label: "- Self", key: "neg_self", side: 1, color: BRAND.gold },
+  { label: "- Others", key: "neg_other", side: -1, color: DIVERGING.strongBad },
+  { label: "+ Others", key: "pos_other", side: 1, color: DIVERGING.strongGood },
 ] as const;
 
 const ABILITY_GRID_MARGIN = 3;
@@ -410,7 +401,7 @@ export function buildAbilityOption(
       type: "bar" as const,
       name: m.label,
       stack: "total",
-      itemStyle: { color: m.color },
+      itemStyle: { color: markOn(m.color, t) },
       barWidth: "70%",
       data: rows.map((r) => ({ value: signedValue(r, m), name: r.racer_name })),
       ...(metricIndex === 0
@@ -439,7 +430,7 @@ export function buildAbilityOption(
             distance: 6,
             formatter: `{dot|●} ${displayName(r.racer_name)}`,
             color: t.text,
-            rich: { dot: { color: racerColors[r.racer_name] ?? t.text, fontSize: 12 } },
+            rich: { dot: { color: racerColors[r.racer_name] ? markOn(racerColors[r.racer_name], t) : t.text, fontSize: 12 } },
             fontWeight: 700,
             fontSize: 11,
           },

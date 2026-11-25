@@ -462,3 +462,13 @@ Still open: Cheatah's chosen number and Show-Off's roll totals (per-turn movemen
 - Roll Sensitivity (final): adjusted R² of a lightly ridged regression of VP on, per game, the share of the racer's dice per number, whether each number came up, and how often (18 inputs; Mr Dice Guy also gets his turns without a duplicate). No race-length control, games without a roll count (zeros), races with the Randomness Ceased twist are left out. Falls back to the kept main-move faces (`rolled_*`), then to the average roll, for datasets without `dice_*`.
 - New batch column set `dice_1..6`: every die a racer rolls for any reason (rerolls, duels, extra dice, The Hose, Show-Off), counted in `roll_die()` through `GameEngine.on_die_rolled` (permission given for engine/roll.py and game_engine.py; rejected Party Pooper 6s are not counted, forced and fixed values are). `rolled_*` stays as the kept main-move face for the dice cards.
 - Checked in Chrome with 6 extra columns of synthetic dice data: analysis fits in memory, first load ~10 s, three re-runs fine.
+
+- Cheatah card: the crossed-out die (share of his picks that were guessed) is back; averages for Mr Dice Guy, Cheatah and the dice totals now count turns without a move (no pick, guessed, bust) as 0. Datasets without `guessed_rolls` estimate the guessed share from his skipped main moves (which also include tripped turns, so slightly high) until the new batch is in.
+
+## Round 23: one colour system
+
+- `web/src/utils/palette.ts` is the single source: the five loading-screen colours (`BRAND`), the colour-blind-safe good/bad pair and heatmap ends (`DIVERGING`, unchanged values), series colours (`SERIES`), and helpers that keep a colour's hue but shift its lightness until it reads on the current background (`readableText` for text at 4.5:1, `visibleMark` for bars and dots at 3:1). Loading screen, logo, tabs, fun facts, charts and the log all import from it.
+- Racer colours: `magsim.web.colors` keeps the hand-made palettes and gives every racer without one a fallback picked with a stable hash (was Python's randomised `hash()`, so those racers changed colour on every page load). Missing racers still go into `core/palettes.py`.
+- Colour-blind check (Machado simulation, Lab distance): never pair green with orange or gold with orange as category colours. Player counts are now light blue / gold / dark blue, the ability bars blue / gold / red / dark blue, outcome donut gold / silver / grey / red / blue.
+- Log: the colours are the brand colours lifted towards white (all at least 4.9:1 on the dark terminal), moves and VP gains green, errors and losses orange, abilities blue, boards pink, warnings and modifiers gold.
+- Not migrated: the simulator board and token art (`RaceTrackSVG`, `boardScenery`).

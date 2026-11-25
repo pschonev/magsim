@@ -19,7 +19,7 @@ from magsim.core.events import (
     WarpCmdEvent,
 )
 from magsim.core.mixins import ApproachHookMixin
-from magsim.core.palettes import get_racer_color, get_racer_palette
+from magsim.web.colors import racer_color, racer_palette
 from magsim.core.registry import RACER_ABILITIES
 from magsim.core.state import GameRules
 from magsim.core.types import (
@@ -253,7 +253,7 @@ def _build_game_config(req: SimulationRequestDTO) -> GameConfig:
 
 
 def _palettes(names: list[str]) -> dict[str, RacerPaletteDTO]:
-    palettes = {name: get_racer_palette(name) for name in names}
+    palettes = {name: racer_palette(name) for name in names}
     return {
         name: RacerPaletteDTO(p.primary, p.secondary, p.outline)
         for name, p in palettes.items()
@@ -276,7 +276,7 @@ def get_simulator_meta() -> SimulatorMetaDTO:
         boards=boards,
         twists=twists,
         automatic_racers=automatic_racers,
-        racer_colors={r: get_racer_color(r) for r in racers},
+        racer_colors={r: racer_color(r) for r in racers},
         racer_palettes=_palettes(racers),
         racer_abilities=racer_abilities,
         ability_names=sorted(str(a) for a in get_args(AbilityName)),
@@ -330,7 +330,7 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
             seed=req.seed,
             total_turns=0,
             racer_names=list(req.racers),
-            racer_colors={r: get_racer_color(r) for r in req.racers},
+            racer_colors={r: racer_color(r) for r in req.racers},
             racer_palettes=_palettes(req.racers),
             board_states=[],
             steps=[],
@@ -522,7 +522,7 @@ def run_simulation(req: SimulationRequestDTO) -> SimulationResponseDTO:
         seed=config.seed,
         total_turns=total_turns,
         racer_names=racer_names,
-        racer_colors={r: get_racer_color(r) for r in racer_names},
+        racer_colors={r: racer_color(r) for r in racer_names},
         racer_palettes=_palettes(racer_names),
         board_states=board_states,
         steps=steps,

@@ -4,6 +4,7 @@ import type { DashboardAnalysisDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
 import { useTheme } from "../../utils/ThemeProvider";
 import type { ChartTheme } from "../../utils/theme";
+import { BRAND, NEUTRAL, visibleMark } from "../../utils/palette";
 import { readableOn } from "./charts/chartOptions";
 import {
   BADGE,
@@ -69,7 +70,7 @@ function DieFace({ face, title }: { face: number; title?: string }) {
     <div className="relative h-8 w-8 shrink-0 rounded-md border-2 border-black" style={{ backgroundColor: "#ffffff" }} title={title}>
       {face === 0 && (
         <svg viewBox="0 0 32 32" className="absolute inset-0 h-full w-full">
-          <path d="M6 6 L26 26 M26 6 L6 26" stroke="#fd5a10" strokeWidth={4} strokeLinecap="round" />
+          <path d="M6 6 L26 26 M26 6 L6 26" stroke={BRAND.orange} strokeWidth={4} strokeLinecap="round" />
         </svg>
       )}
       {(PIPS[face] ?? []).map(([x, y]) => (
@@ -91,10 +92,13 @@ interface DiceSeries {
 
 const pct = (share: number) => `${(share * 100).toFixed(share < 0.1 ? 1 : 0)}%`;
 
-function averageFace(faces: { face: number; share: number }[]): number {
+/** Average number of tiles per turn; turns without a move (no pick, guessed, busted) count as 0. */
+function averageMove(faces: { face: number; share: number; guessed?: number }[]): number {
+  const picks = faces.some((f) => f.guessed !== undefined);
   const moving = faces.filter((f) => f.face > 0);
-  const total = moving.reduce((sum, f) => sum + f.share, 0);
-  return total === 0 ? 0 : moving.reduce((sum, f) => sum + f.face * f.share, 0) / total;
+  const weighted = moving.reduce((sum, f) => sum + f.face * f.share * (1 - (f.guessed ?? 0)), 0);
+  const total = (picks ? moving : faces).reduce((sum, f) => sum + f.share, 0);
+  return total === 0 ? 0 : weighted / total;
 }
 
 /** One die per number with a bar for each racer growing out of it; face 0 is the crossed-out die. */
@@ -104,7 +108,7 @@ function SharedDice({ series, theme }: { series: DiceSeries[]; theme: ChartTheme
   const faces = [1, 2, 3, 4, 5, 6, ...(hasZero ? [0] : [])];
   const shareOf = (s: DiceSeries, face: number) => s.faces.find((f) => f.face === face)?.share ?? 0;
   const faded = (i: number) => (i > 0 && series[i].color === series[i - 1].color ? 0.5 : 1);
-  const guessedOf = (s: DiceSeries, face: number) => s.faces.find((f) => f.face === face)?.guessed ?? 0;
+  const guessedOf = (s: DiceSeries, face: number) => (face === 0 ? 0 : (s.faces.find((f) => f.face === face)?.guessed ?? 0));
   const tip = (s: DiceSeries, face: number) =>
     face === 0
       ? `${displayName(s.name)}: ${s.noMove} in ${pct(shareOf(s, 0))} of turns`
@@ -115,7 +119,7 @@ function SharedDice({ series, theme }: { series: DiceSeries[]; theme: ChartTheme
         {series.map((s, i) => (
           <span key={s.name} className="inline-flex items-center gap-1.5" style={{ color: readableOn(s.color, theme) }}>
             <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: s.color, opacity: faded(i) }} />
-            {displayName(s.name)} · avg {averageFace(s.faces).toFixed(1)}
+            {displayName(s.name)} · avg {averageMove(s.faces).toFixed(1)}
           </span>
         ))}
       </div>
@@ -157,7 +161,7 @@ function diceTotalSeries(
     labels: shown.map((v) => (v === 0 ? "✗" : v === DICE_TOTAL_CAP ? `${v}+` : String(v))),
     series: racers.map((racer, i) => {
       const own = rows.filter((r) => r.racer_name === racer);
-      const average = averageFace(own);
+      const average = averageMove(own);
       const color = colorOf(racer);
       return {
         name: racer,
@@ -173,7 +177,7 @@ function diceTotalSeries(
 export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysisDTO; racerColors: Record<string, string> }) {
   const { chart: theme } = useTheme();
   const { fun_facts: facts, racer_specific: specific } = analysis;
-  const colorOf = (name: string) => racerColors[name] ?? BADGE.blue;
+  const colorOf = (name: string) => visibleMark(racerColors[name] ?? BADGE.blue, theme.bg);
   const toBars = (rows: { racer_name: string; value: number }[]): BarItem[] =>
     rows.map((r) => ({ name: r.racer_name, value: r.value, color: colorOf(r.racer_name), racer: true }));
 
@@ -203,12 +207,12 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     const overall = weighted((r) => r.usual_win_rate);
     const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
     splits.push({
-      name: "Stepdad's stepkid wins",
+      name: "Stepdad support",
       color: colorOf("Stepdad"),
       parts: [
-        { label: "behind him", share: behind, color: BADGE.gold, text: `behind him ${pct(behind)}` },
+        { label: "his stepkids", share: behind, color: BADGE.gold, text: `his stepkids ${pct(behind)}` },
         { label: "", share: Math.max(0, 1 - behind - overall), color: theme.gridLine, text: "" },
-        { label: "all", share: overall, color: BADGE.blue, text: `all ${pct(overall)}` },
+        { label: "others", share: overall, color: BADGE.blue, text: `others ${pct(overall)}` },
       ],
     });
   }
@@ -258,11 +262,11 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
 
   const dice: DiceSeries[] = [
     { name: "MrDiceGuy", color: colorOf("MrDiceGuy"), faces: facts.mr_dice_guy_faces, verb: "picks", noMove: "all six dice differ, nothing to pick" },
-    { name: "Cheatah", color: colorOf("Cheatah"), faces: facts.cheatah_numbers, verb: "sets the die to", noMove: "" },
+    { name: "Cheatah", color: colorOf("Cheatah"), faces: facts.cheatah_numbers, verb: "sets the die to", noMove: "number guessed, no move" },
   ].filter((d) => d.faces.length > 0);
   if (dice.length > 0) {
     cards.push(
-      <Card key="pick" title="Choosy racers" caption="✗ = nothing to pick · faded part = guessed, no move">
+      <Card key="pick" title="Choosy racers" caption="✗ = no move, counts as 0 in the average · faded part = guessed">
         <SharedDice series={dice} theme={theme} />
       </Card>,
     );
@@ -271,7 +275,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   if (facts.dice_totals.length > 0) {
     const { labels, series } = diceTotalSeries(facts.dice_totals, colorOf);
     cards.push(
-      <Card key="totals" title="Dice totals" caption="final roll of the turn · ✗ = rolled lower, no move">
+      <Card key="totals" title="Dice totals" caption="final roll of the turn · ✗ = rolled lower, no move (counts as 0)">
         <EChart height={190} option={buildGroupedColumns(labels, series, "total", theme)} />
       </Card>,
     );
@@ -313,7 +317,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
                   { name: "1st", value: facts.mastermind_first, color: BADGE.gold },
                   { name: "2nd, predicted", value: facts.mastermind_second_predicted, color: BADGE.silver },
                   { name: "2nd, natural", value: facts.mastermind_second, color: BADGE.blue },
-                  { name: "other", value: rest, color: "#5c6560" },
+                  { name: "other", value: rest, color: NEUTRAL.slate },
                 ],
                 theme,
               )}

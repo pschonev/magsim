@@ -275,6 +275,19 @@ def test_cheatah_numbers_split_each_number_into_played_and_guessed_picks() -> No
     assert rows[6]["guessed"] == 1 / 3
     assert rows[3]["share"] == 0.25
     assert rows[3]["guessed"] == 0.0
+    assert rows[0]["share"] == 0.25
+
+
+def test_cheatah_numbers_without_recorded_guesses_use_his_skipped_main_moves() -> None:
+    results = frame([{"racer_name": "Cheatah"}, {"racer_name": "Cheatah"}]).with_columns(
+        pl.Series("main_roll_totals", [[6, 6], [3]], dtype=pl.List(pl.Int64)),
+        pl.Series("skipped_self_main_move", [1.0, 0.0]),
+    )
+
+    rows = {r["face"]: r for r in compute_cheatah_numbers(results).to_dicts()}
+
+    assert rows[0]["share"] == 0.25
+    assert rows[6]["guessed"] == 0.25
 
 
 def test_dice_totals_are_per_racer_and_merge_everything_above_the_cap() -> None:
