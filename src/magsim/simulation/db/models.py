@@ -82,6 +82,7 @@ LATE_COLUMNS: dict[str, str] = {
     "main_roll_totals": "INTEGER[]",
     "predicted_racer_id": "BIGINT",
     "copied_racers": "VARCHAR[]",
+    "guessed_rolls": "INTEGER[]",
 }
 
 
@@ -146,6 +147,7 @@ class RacerResult(msgspec.Struct, array_like=True, gc=False):
     main_roll_totals: list[int] | None = None  # final main roll of each turn, only for TOTAL_TRACKED racers
     predicted_racer_id: int | None = None  # racer_id Mastermind predicted to win
     copied_racers: list[str] | None = None  # racers whose powers Mush drew
+    guessed_rolls: list[int] | None = None  # numbers Cheatah set that were guessed
 
     @classmethod
     def get_create_sql(cls) -> str:
@@ -186,6 +188,7 @@ class RacerResult(msgspec.Struct, array_like=True, gc=False):
             main_roll_totals INTEGER[],
             predicted_racer_id BIGINT,
             copied_racers VARCHAR[],
+            guessed_rolls INTEGER[],
             PRIMARY KEY (config_hash, racer_id)
         )
         """

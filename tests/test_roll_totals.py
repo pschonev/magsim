@@ -66,3 +66,22 @@ def test_mush_records_the_powers_it_drew(scenario: type[GameScenario]) -> None:
     assert results[0].copied_racers is not None
     assert len(results[0].copied_racers) == 1
     assert results[1].copied_racers is None
+
+
+def test_cheatah_records_every_number_it_set_as_played_or_guessed(scenario: type[GameScenario]) -> None:
+    from magsim.ai.baseline_agent import BaselineAgent
+
+    game = scenario(
+        [
+            RacerConfig(0, "Cheatah", start_pos=0, agent=BaselineAgent()),  # pyright: ignore[reportArgumentType]
+            dummy(1, 0),
+        ],
+        dice_rolls=[1] * 40,
+    )
+
+    cheatah = play_turns(game, 12)[0]
+
+    played = cheatah.main_roll_totals or []
+    guessed = cheatah.guessed_rolls or []
+    assert len(played) + len(guessed) == 6
+    assert set(played + guessed) == {6}

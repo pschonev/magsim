@@ -189,6 +189,7 @@ HOG_MODIFIER: ModifierName = "HogKnightHog"
 HOG_KNIGHT = "HogKnight"
 MASTERMIND_PREDICT: AbilityName = "MastermindPredict"
 MUSH_ABILITY: AbilityName = "MushGlobsterMash"
+CHEATAH_ABILITY: AbilityName = "CheatahSleightOfPaw"
 TOTAL_TRACKED = frozenset({"Cheatah", "ShowOff", "Magician", "RocketScientist"})
 SHOW_OFF_ABILITY: AbilityName = "ShowOffGuysWatch"
 MR_DICE_GUY_ABILITY: AbilityName = "MrDiceGuyMore"
@@ -400,6 +401,13 @@ class MetricsAggregator:
                 stats.ability_trigger_count += 1
                 if event.source == MASTERMIND_PREDICT and event.target_racer_idx != responsible_idx:
                     stats.predicted_racer_id = event.target_racer_idx
+                if (
+                    event.source == CHEATAH_ABILITY
+                    and event.detail is not None
+                    and engine.get_racer(responsible_idx).roll_override is None
+                ):
+                    # A set number that left no pending override was guessed: no main move
+                    stats.guessed_rolls = [*(stats.guessed_rolls or []), event.detail]
                 if responsible_idx == event.target_racer_idx:
                     stats.ability_self_target_count += 1
                 if responsible_idx == engine.state.current_racer_idx:

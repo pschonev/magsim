@@ -338,6 +338,7 @@ class AbilityTriggeredEvent(GameEvent):
     source: AbilityName | ModifierName
     target_racer_idx: int | None
     movement_distance: int = 0
+    detail: int | None = None  # a number the power chose, e.g. the number Cheatah set the die to
 
     @classmethod
     def from_event(cls, event: GameEvent) -> Self:

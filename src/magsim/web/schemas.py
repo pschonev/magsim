@@ -219,6 +219,14 @@ class MastermindCallDTO(msgspec.Struct, frozen=True):
     games: int
 
 
+class PickDTO(msgspec.Struct, frozen=True):
+    """Share of a racer's picks that were a given number, and how many of those were guessed."""
+
+    face: int
+    share: float
+    guessed: float
+
+
 class FaceShareDTO(msgspec.Struct, frozen=True):
     """Share of the rolls that were a given number."""
 
@@ -237,7 +245,7 @@ class FunFactsDTO(msgspec.Struct, frozen=True):
     mr_dice_guy_faces: list[FaceShareDTO] = msgspec.field(default_factory=list)
     eat_targets: list[EatTargetDTO] = msgspec.field(default_factory=list)
     extremes: list[ExtremeComboDTO] = msgspec.field(default_factory=list)
-    cheatah_numbers: list[FaceShareDTO] = msgspec.field(default_factory=list)
+    cheatah_numbers: list[PickDTO] = msgspec.field(default_factory=list)
     dice_totals: list[RacerFaceShareDTO] = msgspec.field(default_factory=list)
     triggers_per_turn: list[NamedValueDTO] = msgspec.field(default_factory=list)
     blunderdog_forward: float | None = None

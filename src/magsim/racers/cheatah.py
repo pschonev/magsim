@@ -124,6 +124,7 @@ class CheatahSleightOfPaw(Ability, SelectionDecisionMixin[int]):
             source=self.name,
             phase=event.phase,
             target_racer_idx=owner.idx,
+            detail=face,
         )
 
     @override

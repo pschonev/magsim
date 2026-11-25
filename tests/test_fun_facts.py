@@ -263,20 +263,18 @@ def test_eaten_targets_are_shares_of_the_games_the_eater_and_victim_shared(monke
     ]
 
 
-def test_cheatah_numbers_include_the_guessed_turns_as_face_zero() -> None:
-    results = frame(
-        [
-            {"racer_name": "Cheatah", "skipped_self_main_move": 1.0},
-            {"racer_name": "Cheatah", "skipped_self_main_move": 0.0},
-        ],
-    ).with_columns(
+def test_cheatah_numbers_split_each_number_into_played_and_guessed_picks() -> None:
+    results = frame([{"racer_name": "Cheatah"}, {"racer_name": "Cheatah"}]).with_columns(
         pl.Series("main_roll_totals", [[6, 6], [3]], dtype=pl.List(pl.Int64)),
-        pl.Series("skipped_self_main_move", [1.0, 0.0]),
+        pl.Series("guessed_rolls", [[6], None], dtype=pl.List(pl.Int64)),
     )
 
-    shares = {r["face"]: r["share"] for r in compute_cheatah_numbers(results).to_dicts()}
+    rows = {r["face"]: r for r in compute_cheatah_numbers(results).to_dicts()}
 
-    assert shares == {0: 0.25, 3: 0.25, 6: 0.5}
+    assert rows[6]["share"] == 0.75
+    assert rows[6]["guessed"] == 1 / 3
+    assert rows[3]["share"] == 0.25
+    assert rows[3]["guessed"] == 0.0
 
 
 def test_dice_totals_are_per_racer_and_merge_everything_above_the_cap() -> None:

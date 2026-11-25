@@ -34,6 +34,7 @@ const PIPS: Record<number, [number, number][]> = {
 
 const SPAN: Record<1 | 2 | 3, string> = { 1: "", 2: "sm:col-span-2", 3: "sm:col-span-2 xl:col-span-3" };
 const DICE_TOTAL_CAP = 12;
+const EXTREME_COLUMNS: Record<number, string> = { 3: "xl:grid-cols-3", 4: "xl:grid-cols-4" };
 const MAGICAL_ATHLETE_FACES: Record<number, string> = {
   1: "he moves 7.",
   2: "the last place racer warps to him.",
@@ -81,7 +82,8 @@ function DieFace({ face, title }: { face: number; title?: string }) {
 interface DiceSeries {
   name: string;
   color: string;
-  faces: { face: number; share: number }[];
+  /** `guessed` is the share of this number's picks that were guessed. */
+  faces: { face: number; share: number; guessed?: number }[];
   /** What the racer does with a number, for the hover text, e.g. "picks". */
   verb: string;
   noMove: string;
@@ -102,10 +104,11 @@ function SharedDice({ series, theme }: { series: DiceSeries[]; theme: ChartTheme
   const faces = [1, 2, 3, 4, 5, 6, ...(hasZero ? [0] : [])];
   const shareOf = (s: DiceSeries, face: number) => s.faces.find((f) => f.face === face)?.share ?? 0;
   const faded = (i: number) => (i > 0 && series[i].color === series[i - 1].color ? 0.5 : 1);
+  const guessedOf = (s: DiceSeries, face: number) => s.faces.find((f) => f.face === face)?.guessed ?? 0;
   const tip = (s: DiceSeries, face: number) =>
     face === 0
       ? `${displayName(s.name)}: ${s.noMove} in ${pct(shareOf(s, 0))} of turns`
-      : `${displayName(s.name)} ${s.verb} ${face} (moves ${face} tile${face === 1 ? "" : "s"}) in ${pct(shareOf(s, face))} of turns`;
+      : `${displayName(s.name)} ${s.verb} ${face} (moves ${face} tile${face === 1 ? "" : "s"}) in ${pct(shareOf(s, face))} of turns${s.faces.some((f) => f.guessed !== undefined) ? `, guessed ${pct(guessedOf(s, face))} of the time` : ""}`;
   return (
     <>
       <div className="flex flex-wrap gap-x-4 gap-y-1 pb-1 text-xs font-semibold">
@@ -125,7 +128,10 @@ function SharedDice({ series, theme }: { series: DiceSeries[]; theme: ChartTheme
                 return (
                   <div key={s.name} className="flex h-full flex-col items-center justify-end" title={tip(s, face)}>
                     <span className="text-[10px] font-semibold text-slate-200">{share === 0 ? "" : (share * 100).toFixed(share < 0.1 ? 1 : 0)}</span>
-                    <div className="w-3 rounded-t" style={{ height: `${(share / top) * 85}%`, backgroundColor: s.color, opacity: faded(i) }} />
+                    <div className="flex w-3 flex-col overflow-hidden rounded-t" style={{ height: `${(share / top) * 85}%`, opacity: faded(i) }}>
+                      <div style={{ flex: guessedOf(s, face), backgroundColor: s.color, opacity: 0.35 }} />
+                      <div style={{ flex: 1 - guessedOf(s, face), backgroundColor: s.color }} />
+                    </div>
                   </div>
                 );
               })}
@@ -193,12 +199,18 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   if (stepkidGames > 0) {
     const weighted = (pick: (r: (typeof specific.stepkid_wins)[number]) => number) =>
       specific.stepkid_wins.reduce((sum, r) => sum + pick(r) * r.games, 0) / stepkidGames;
-    const wins = (rate: number, color: string): SplitRow["parts"] => [
-      { label: "wins", share: rate, color, text: `wins ${(rate * 100).toFixed(0)}%` },
-      { label: "", share: 1 - rate, color: theme.gridLine, text: "" },
-    ];
-    splits.push({ name: "Racer behind Stepdad", color: colorOf("Stepdad"), parts: wins(weighted((r) => r.win_rate), BADGE.gold) });
-    splits.push({ name: "Same racers overall", color: colorOf("Stepdad"), parts: wins(weighted((r) => r.usual_win_rate), BADGE.blue) });
+    const behind = weighted((r) => r.win_rate);
+    const overall = weighted((r) => r.usual_win_rate);
+    const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
+    splits.push({
+      name: "Stepdad's stepkid wins",
+      color: colorOf("Stepdad"),
+      parts: [
+        { label: "behind him", share: behind, color: BADGE.gold, text: `behind him ${pct(behind)}` },
+        { label: "", share: Math.max(0, 1 - behind - overall), color: theme.gridLine, text: "" },
+        { label: "all", share: overall, color: BADGE.blue, text: `all ${pct(overall)}` },
+      ],
+    });
   }
   if (splits.length > 0) {
     const baseline = facts.last_place_baseline === null ? "many" : `${Math.round(facts.last_place_baseline * 100)}%`;
@@ -246,11 +258,11 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
 
   const dice: DiceSeries[] = [
     { name: "MrDiceGuy", color: colorOf("MrDiceGuy"), faces: facts.mr_dice_guy_faces, verb: "picks", noMove: "all six dice differ, nothing to pick" },
-    { name: "Cheatah", color: colorOf("Cheatah"), faces: facts.cheatah_numbers, verb: "sets the die to", noMove: "number guessed, no move" },
+    { name: "Cheatah", color: colorOf("Cheatah"), faces: facts.cheatah_numbers, verb: "sets the die to", noMove: "" },
   ].filter((d) => d.faces.length > 0);
   if (dice.length > 0) {
     cards.push(
-      <Card key="pick" title="Choosy racers" caption="✗ = no pick / guessed">
+      <Card key="pick" title="Choosy racers" caption="✗ = nothing to pick · faded part = guessed, no move">
         <SharedDice series={dice} theme={theme} />
       </Card>,
     );
@@ -336,11 +348,11 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
         caption="VP change of the racer, net of what the opponent, board or card does to every racer"
         hint="Only clear effects count: at least 4 standard errors away from zero, with 100 or more games."
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className={`grid gap-4 md:grid-cols-2 ${EXTREME_COLUMNS[extremeSets.length] ?? ""}`}>
           {extremeSets.map((c) => (
             <div key={c.kind}>
               <p className="text-xs font-semibold text-slate-200">{c.title}</p>
-              <EChart height={c.items.length * 22 + 8} option={buildDivergingBars(c.items, theme)} />
+              <EChart height={c.items.length * 30 + 8} option={buildDivergingBars(c.items, theme)} />
             </div>
           ))}
         </div>

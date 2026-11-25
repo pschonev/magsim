@@ -51,6 +51,7 @@ from magsim.web.schemas import (
     ExtremeComboDTO,
     FaceShareDTO,
     MastermindCallDTO,
+    PickDTO,
     RacerFaceShareDTO,
     FunFactsDTO,
     GlobalDynamicsRowDTO,
@@ -404,7 +405,10 @@ def _fun_facts(results: pl.DataFrame, extremes: pl.DataFrame) -> FunFactsDTO:
             EatTargetDTO(eater=str(r["eater"]), victim=str(r["victim"]), rate=_safe_float(r["rate"]))
             for r in compute_eaten_targets(results).to_dicts()
         ],
-        cheatah_numbers=_face_shares(compute_cheatah_numbers(results)),
+        cheatah_numbers=[
+            PickDTO(face=_safe_int(r["face"]), share=_safe_float(r["share"]), guessed=_safe_float(r["guessed"]))
+            for r in compute_cheatah_numbers(results).to_dicts()
+        ],
         dice_totals=[
             RacerFaceShareDTO(
                 racer_name=str(r["racer_name"]),

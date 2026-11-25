@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import Counter
+
 import polars as pl
 
 from magsim.analysis.roll_dependence import FACE_COLUMNS
@@ -278,12 +280,25 @@ def _shares(values: pl.Series, extra_zero: int = 0) -> pl.DataFrame:
 
 
 def compute_cheatah_numbers(results: pl.DataFrame) -> pl.DataFrame:
-    """Share of Cheatah's turns per number he set; face 0 is a turn where the number was guessed."""
-    rolls = _final_rolls(results, "Cheatah")
-    if rolls is None or rolls.is_empty():
-        return pl.DataFrame(schema={"face": pl.Int64, "share": pl.Float64})
-    guessed = int(_racer(results, "Cheatah")["skipped_self_main_move"].drop_nulls().sum())
-    return _shares(rolls.filter(rolls.is_between(1, 6)), extra_zero=guessed)
+    """Per number Cheatah set: its share of all his picks and the share of those picks that were guessed."""
+    schema = {"face": pl.Int64, "share": pl.Float64, "guessed": pl.Float64}
+    played = _final_rolls(results, "Cheatah")
+    if played is None or played.is_empty():
+        return pl.DataFrame(schema=schema)
+    own = _racer(results, "Cheatah")
+    has_guesses = "guessed_rolls" in own.columns and not own["guessed_rolls"].is_null().all()
+    guessed = own["guessed_rolls"].explode().drop_nulls().to_list() if has_guesses else []
+    played_counts, guessed_counts = Counter(played.to_list()), Counter(guessed)
+    faces = [f for f in range(1, 7) if played_counts[f] + guessed_counts[f] > 0]
+    total = sum(played_counts[f] + guessed_counts[f] for f in faces)
+    return pl.DataFrame(
+        {
+            "face": faces,
+            "share": [(played_counts[f] + guessed_counts[f]) / total for f in faces],
+            "guessed": [guessed_counts[f] / (played_counts[f] + guessed_counts[f]) for f in faces],
+        },
+        schema=schema,
+    )
 
 
 def compute_dice_totals(results: pl.DataFrame) -> pl.DataFrame:

@@ -278,28 +278,32 @@ export interface SplitRow {
   /** Racer colour for the row name. */
   color?: string;
   /** Two parts that add up to one; `label` is written inside the bar next to the percentage. */
-  parts: [SplitPart, SplitPart];
+  /** Two or three parts that add up to one. */
+  parts: SplitPart[];
 }
 
 /** One 100 % bar per row, each split into two outcomes with its own wording. */
 export function buildSplitRows(rows: SplitRow[], t: ChartTheme): EChartsOption {
-  const part = (index: 0 | 1) => ({
+  const columns = Math.max(...rows.map((r) => r.parts.length));
+  const part = (index: number) => ({
     type: "bar" as const,
     stack: "all",
     barWidth: 26,
-    data: rows.map((r) => ({
-      value: r.parts[index].share,
-      itemStyle: { color: r.parts[index].color },
-      label: {
-        show: true,
-        color: "#101312",
-        fontWeight: 800,
-        fontSize: 11,
-        formatter:
-          r.parts[index].text ??
-          `${r.parts[index].share < 0.2 ? "" : `${r.parts[index].label} `}${Math.round(r.parts[index].share * 100)}%`,
-      },
-    })),
+    data: rows.map((r) => {
+      const p = r.parts[index];
+      if (!p) return { value: 0, label: { show: false } };
+      return {
+        value: p.share,
+        itemStyle: { color: p.color },
+        label: {
+          show: true,
+          color: "#101312",
+          fontWeight: 800,
+          fontSize: 11,
+          formatter: p.text ?? `${p.share < 0.2 ? "" : `${p.label} `}${Math.round(p.share * 100)}%`,
+        },
+      };
+    }),
   });
   return {
     ...base(t),
@@ -314,7 +318,7 @@ export function buildSplitRows(rows: SplitRow[], t: ChartTheme): EChartsOption {
       axisLabel: racerLabels(rows.map((r) => ({ text: r.name, color: r.color })), t),
     },
     tooltip: { show: false },
-    series: [part(0), part(1)],
+    series: Array.from({ length: columns }, (_, i) => part(i)),
   };
 }
 
@@ -333,7 +337,7 @@ export interface DivergingItem {
  */
 export function buildDivergingBars(items: DivergingItem[], t: ChartTheme): EChartsOption {
   const reach = Math.max(...items.map((i) => Math.abs(i.value))) * 1.5 || 1;
-  const barWidth = "70%";
+  const barWidth = "62%";
   return {
     ...base(t),
     grid: { left: 8, right: 8, top: 2, bottom: 2 },
@@ -352,11 +356,12 @@ export function buildDivergingBars(items: DivergingItem[], t: ChartTheme): EChar
             position: i.value >= 0 ? "left" : "right",
             distance: 6,
             fontSize: 11,
+            lineHeight: 12,
             rich: {
-              c: { color: readableOn(i.color, t), fontSize: 11, fontWeight: 700 },
-              p: { color: t.text, fontSize: 11, fontWeight: 600 },
+              c: { color: readableOn(i.color, t), fontSize: 11, fontWeight: 700, lineHeight: 12 },
+              p: { color: t.text, fontSize: 10, fontWeight: 600, lineHeight: 12 },
             },
-            formatter: `{c|${displayName(i.racer)}}${i.other ? ` {p|× ${displayName(i.other)}}` : ""}`,
+            formatter: `{c|${displayName(i.racer)}}${i.other ? `\n{p|× ${displayName(i.other)}}` : ""}`,
           },
         })),
         markLine: { silent: true, symbol: "none", label: { show: false }, lineStyle: { color: t.reference, type: "dashed" }, data: [{ xAxis: 0 }] },

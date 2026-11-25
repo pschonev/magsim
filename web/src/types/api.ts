@@ -179,6 +179,12 @@ export interface MastermindCallDTO {
   games: number;
 }
 
+export interface PickDTO {
+  face: number;
+  share: number;
+  guessed: number;
+}
+
 export interface FaceShareDTO {
   face: number;
   share: number;
@@ -193,7 +199,7 @@ export interface FunFactsDTO {
   mr_dice_guy_faces: FaceShareDTO[];
   eat_targets: EatTargetDTO[];
   extremes: ExtremeComboDTO[];
-  cheatah_numbers: FaceShareDTO[];
+  cheatah_numbers: PickDTO[];
   dice_totals: RacerFaceShareDTO[];
   triggers_per_turn: NamedValueDTO[];
   blunderdog_forward: number | null;

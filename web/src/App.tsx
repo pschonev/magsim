@@ -2,6 +2,7 @@ import { BarChart3, Database, Moon, PlayCircle, Sun, Upload } from "lucide-react
 import { useCallback, useEffect, useState } from "react";
 import { BootScreen } from "./components/BootScreen";
 import { DatasetUploadModal } from "./components/DatasetUploadModal";
+import { Logo } from "./components/Logo";
 import { PyodideEngineClient } from "./engine/pyodideClient";
 import { DashboardView } from "./features/dashboard/DashboardView";
 import { RawDataView } from "./features/data/RawDataView";
@@ -18,14 +19,36 @@ const INITIAL_PROGRESS: BootProgress = {
 };
 
 const BOOT_SHARE = 50;
-const DATA_LOADING_MS = 4000;
+const DEFAULT_DATA_MS = 6000;
+const MIN_DATA_MS = 2500;
+const MAX_DATA_MS = 20000;
 const DATA_LOADING_SHARE = 45;
 const DATA_MESSAGE = "Loading the race data…";
+const DATA_TIME_KEY = "magsim-data-ms";
 
-/** The first analysis reports no progress: fill the bar over the time it usually takes, then creep towards the end. */
-function simulatedDataProgress(elapsedMs: number): BootProgress {
-  const planned = Math.min(1, elapsedMs / DATA_LOADING_MS) * DATA_LOADING_SHARE;
-  const creep = elapsedMs > DATA_LOADING_MS ? (100 - BOOT_SHARE - DATA_LOADING_SHARE - 1) * (1 - Math.exp(-(elapsedMs - DATA_LOADING_MS) / DATA_LOADING_MS)) : 0;
+/** How long the first analysis took last time on this machine, so the simulated bar follows the real speed. */
+function expectedDataMs(): number {
+  try {
+    const stored = Number(localStorage.getItem(DATA_TIME_KEY));
+    return Number.isFinite(stored) && stored > 0 ? Math.min(MAX_DATA_MS, Math.max(MIN_DATA_MS, stored)) : DEFAULT_DATA_MS;
+  } catch {
+    return DEFAULT_DATA_MS;
+  }
+}
+
+function rememberDataMs(ms: number): void {
+  try {
+    localStorage.setItem(DATA_TIME_KEY, String(Math.round(ms)));
+  } catch {
+    // The bar just falls back to the default estimate next time.
+  }
+}
+
+/** The first analysis reports no progress: fill the bar over the expected time, then creep towards the end. */
+function simulatedDataProgress(elapsedMs: number, expectedMs: number): BootProgress {
+  const planned = Math.min(1, elapsedMs / expectedMs) * DATA_LOADING_SHARE;
+  const rest = 100 - BOOT_SHARE - DATA_LOADING_SHARE - 1;
+  const creep = elapsedMs > expectedMs ? rest * (1 - Math.exp(-(elapsedMs - expectedMs) / expectedMs)) : 0;
   return { stage: DATA_MESSAGE, percent: BOOT_SHARE + planned + creep, message: DATA_MESSAGE };
 }
 
@@ -71,12 +94,14 @@ export function App() {
       .then(async (result) => {
         if (cancelled) return;
         const started = performance.now();
-        setProgress(simulatedDataProgress(0));
+        const expected = expectedDataMs();
+        setProgress(simulatedDataProgress(0, expected));
         const ticker = window.setInterval(() => {
-          if (!cancelled) setProgress(simulatedDataProgress(performance.now() - started));
+          if (!cancelled) setProgress(simulatedDataProgress(performance.now() - started, expected));
         }, 100);
         const analysis = await worker.runAnalysis(defaultFilter(result.datasetMeta)).catch(() => null);
         window.clearInterval(ticker);
+        if (analysis) rememberDataMs(performance.now() - started);
         if (cancelled) return;
         setInitialAnalysis(analysis);
         setProgress({ stage: "Ready", percent: 100 });
@@ -136,21 +161,7 @@ export function App() {
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
         <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-3">
           <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-black text-on-accent">
-                m
-              </span>
-              <div>
-                <h1 className="hidden font-display text-xl leading-tight tracking-tight text-slate-50 min-[420px]:block">
-                  magsim
-                </h1>
-                <p className="hidden text-[10px] text-slate-400 sm:block">
-                  {datasetMeta.race_count.toLocaleString()} races
-                  {import.meta.env.DEV &&
-                    ` · ${(bootResult.bootMs / 1000).toFixed(2)}s boot · Python ${bootResult.pythonVersion} · Polars ${bootResult.polarsVersion}`}
-                </p>
-              </div>
-            </div>
+            <Logo />
 
             <nav className="flex items-center gap-1 rounded-lg bg-slate-900 p-1">
               {TABS.map(({ id, label, icon: Icon }) => (
@@ -174,6 +185,11 @@ export function App() {
           </div>
 
           <div className="flex items-center gap-2">
+          <p className="hidden text-xs text-slate-400 sm:block">
+            {datasetMeta.race_count.toLocaleString()} races
+            {import.meta.env.DEV &&
+              ` · ${(bootResult.bootMs / 1000).toFixed(2)}s boot · Python ${bootResult.pythonVersion} · Polars ${bootResult.polarsVersion}`}
+          </p>
           <button
             type="button"
             onClick={toggle}
