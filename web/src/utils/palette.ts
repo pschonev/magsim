@@ -23,13 +23,21 @@ export const DIVERGING = {
   strongGood: "#0D47A1",
 } as const;
 
+/** Category colours for three or four things in one chart; gold and silver stay reserved for 1st and 2nd place. */
+export const CATEGORY = {
+  orange: BRAND.orange,
+  purple: "#9b6ad8",
+  teal: "#2bb5a0",
+  lime: "#b5d334",
+} as const;
+
 /** Series colours: one per thing that is compared side by side. */
 export const SERIES = {
   turns: BRAND.blue,
   vp: BRAND.pink,
   triggers: BRAND.gold,
-  /** Light blue, gold, dark blue: they differ in lightness as well as hue, so they stay apart in every kind of colour blindness. */
-  players: [BRAND.blue, BRAND.gold, DIVERGING.strongGood, BRAND.pink, BRAND.green],
+  /** Orange, purple, teal: three hues that stay apart in every kind of colour blindness and avoid the gold/silver place colours and the blue/pink/gold single-series colours. */
+  players: [CATEGORY.orange, CATEGORY.purple, CATEGORY.teal],
 } as const;
 
 const MIN_TEXT_CONTRAST = 4.5;

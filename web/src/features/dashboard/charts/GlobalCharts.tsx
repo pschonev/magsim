@@ -7,7 +7,6 @@ import { Description } from "./Description";
 import {
   GLOBAL_METRICS_A,
   GLOBAL_METRICS_B,
-  PLAYER_COUNT_COLORS,
   TURNS_COLOR,
   TRIGGERS_COLOR,
   TRIGGERS_SERIES,
@@ -17,6 +16,7 @@ import {
   buildBoardCurvesOption,
   buildGroupedBarOption,
   buildValueHistogramOption,
+  playerCountColor,
   sortBoards,
   sortedCounts,
   valueRange,
@@ -35,6 +35,7 @@ function Card({ title, aside, children }: { title: string; aside?: ReactNode; ch
 }
 
 function Legend({ counts }: { counts: number[] }) {
+  const { chart: theme } = useTheme();
   return (
     <div className="flex items-center gap-3 text-xs text-slate-300">
       <span className="font-medium">Players</span>
@@ -42,7 +43,7 @@ function Legend({ counts }: { counts: number[] }) {
         <span key={count} className="inline-flex items-center gap-1.5">
           <span
             className="inline-block h-2.5 w-2.5 rounded-sm"
-            style={{ backgroundColor: PLAYER_COUNT_COLORS[i % PLAYER_COUNT_COLORS.length] }}
+            style={{ backgroundColor: playerCountColor(i, theme) }}
           />
           {count}
         </span>

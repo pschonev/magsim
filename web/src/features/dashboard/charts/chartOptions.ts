@@ -9,7 +9,7 @@ import type {
   ValueShareDTO,
 } from "../../../types/api";
 import { type ECharts, graphic } from "echarts/core";
-import { BRAND, DIVERGING, SERIES, readableText, visibleMark } from "../../../utils/palette";
+import { CATEGORY, DIVERGING, SERIES, readableText, visibleMark } from "../../../utils/palette";
 import type { ChartTheme } from "../../../utils/theme";
 import { rankTransform } from "./rank";
 
@@ -48,6 +48,11 @@ export function readableOn(color: string, t: ChartTheme): string {
 /** The racer's own colour for a dot or bar, shifted until it stands out from the chart background. */
 export function markOn(color: string, t: ChartTheme): string {
   return visibleMark(color, t.bg);
+}
+
+/** The colour of the i-th player count, shifted to stand out from the chart background; chart and legend share it. */
+export function playerCountColor(i: number, t: ChartTheme): string {
+  return markOn(PLAYER_COUNT_COLORS[i % PLAYER_COUNT_COLORS.length], t);
 }
 
 export const fixed = (digits: number) => (v: number) => v.toFixed(digits);
@@ -299,10 +304,10 @@ export function buildQuadrantOption<R extends QuadrantRow>(
 }
 
 export const ABILITY_METRICS = [
-  { label: "+ Self", key: "pos_self", side: -1, color: BRAND.blue },
-  { label: "- Self", key: "neg_self", side: 1, color: BRAND.gold },
+  { label: "+ Self", key: "pos_self", side: -1, color: CATEGORY.teal },
+  { label: "- Self", key: "neg_self", side: 1, color: CATEGORY.purple },
   { label: "- Others", key: "neg_other", side: -1, color: DIVERGING.strongBad },
-  { label: "+ Others", key: "pos_other", side: 1, color: DIVERGING.strongGood },
+  { label: "+ Others", key: "pos_other", side: 1, color: CATEGORY.lime },
 ] as const;
 
 const ABILITY_GRID_MARGIN = 3;
@@ -497,7 +502,7 @@ export function buildGroupedBarOption(
     series: counts.map((count, i) => ({
       type: "bar" as const,
       name: String(count),
-      itemStyle: { color: PLAYER_COUNT_COLORS[i % PLAYER_COUNT_COLORS.length] },
+      itemStyle: { color: playerCountColor(i, t) },
       data: boards.map((board) => {
         const row = rows.find((r) => r.board === board && r.racer_count === count);
         return row ? (row[key] as number) : null;
@@ -657,7 +662,7 @@ export function buildBoardCurvesOption(
         : []),
       ...counts.map((count, i) => {
       const own = rows.filter((r) => r.racer_count === count);
-      const color = PLAYER_COUNT_COLORS[i % PLAYER_COUNT_COLORS.length];
+      const color = playerCountColor(i, t);
       return {
         type: "line" as const,
         name: String(count),
