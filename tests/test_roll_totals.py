@@ -85,3 +85,27 @@ def test_cheatah_records_every_number_it_set_as_played_or_guessed(scenario: type
     guessed = cheatah.guessed_rolls or []
     assert len(played) + len(guessed) == 6
     assert set(played + guessed) == {6}
+
+
+def test_every_die_a_racer_rolls_is_counted_including_the_ones_it_rerolls_away(scenario: type[GameScenario]) -> None:
+    from magsim.simulation.telemetry import MetricsAggregator
+
+    game = scenario(
+        [dummy(0, 20), RacerConfig(1, "Magician", start_pos=0)],
+        dice_rolls=[3, 1, 1, 6],
+    )
+    engine = game.engine
+    aggregator = MetricsAggregator(config_hash="test")
+    aggregator.initialize_racers(engine)
+    engine.on_event_processed = lambda eng, event: aggregator.on_event(event=event, engine=eng)
+    engine.on_die_rolled = aggregator.on_die_rolled
+    for turn_index in range(2):
+        racer_idx = engine.state.current_racer_idx
+        engine.run_turn()
+        aggregator.on_turn_end(engine, turn_index=turn_index, active_racer_idx=racer_idx)
+        engine.advance_turn()
+
+    magician = aggregator.results[1]
+
+    assert (magician.dice_1, magician.dice_6) == (2, 1)
+    assert aggregator.results[0].dice_3 == 1

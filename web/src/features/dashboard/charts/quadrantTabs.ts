@@ -31,7 +31,7 @@ export const QUADRANT_TABS: QuadrantTab<RacerStatRowDTO>[] = [
     spec: {
       xKey: "roll_dependence",
       yKey: "avg_net_movement",
-      xTitle: "Roll Sensitivity (VP swing, % of avg VP)",
+      xTitle: "Roll Sensitivity (% of VP decided by dice)",
       yTitle: "Ability Speed",
       quadLabels: ["Engine", "Supercharged", "Schemer", "Gambler"],
       midX: "median",
@@ -40,9 +40,9 @@ export const QUADRANT_TABS: QuadrantTab<RacerStatRowDTO>[] = [
       extra: [{ key: "avg_speed_raw", label: "Speed (raw)", format: fixed(2) }],
     },
     description: [
-      { bold: "X-Axis (Roll Sensitivity):", text: " How much VP the racer gains or loses between lucky and unlucky dice, as a share of its average VP. Right: its dice make or break the race." },
+      { bold: "X-Axis (Roll Sensitivity):", text: " How much of the racer's VP is decided by the dice it rolls, including rerolls and extra dice. Right: its dice make or break the race." },
       { bold: "Y-Axis (Ability Speed):", text: " How many extra tiles per turn its power gives it. Top: the power carries it far ahead. Bottom: the power costs it movement." },
-      { bold: "Note:", text: " Racers that pick or fix their own number (Cheatah, Legs) sit at zero. Powers that earn VP instead of moving are in Power profile. Racers whose power depends on other racers' positions or on turn order, not on their own numbers (Spoilsport), also sit near zero." },
+      { bold: "Note:", text: " Racers that pick or fix their own number (Cheatah, Legs) sit near zero. Powers that earn VP instead of moving are in Power profile. Racers whose power depends on other racers' positions or on turn order, not on their own numbers (Spoilsport), also sit near zero." },
     ],
   },
   {

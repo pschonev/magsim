@@ -1,33 +1,44 @@
-"""How far the numbers a racer rolls move its VP."""
+"""How much of a racer's VP its dice decide."""
 
 from __future__ import annotations
 
 import polars as pl
 
 FACE_COLUMNS = tuple(f"rolled_{face}" for face in range(1, 7))
+DICE_COLUMNS = tuple(f"dice_{face}" for face in range(1, 7))
 MIN_RACES = 50
-MIN_ROLLS_PER_RACE = 0.25
-CONTROLS = ("total_turns", "racer_count")
 MIN_VARIANCE = 1e-12
-MIN_AVERAGE_VP = 0.25
-SWING_LOW = 0.1
-SWING_HIGH = 0.9
+RIDGE = 1e-9
+NO_PICK_RACERS = ("MrDiceGuy",)
 
 
-def _roll_predictors(stats_results: pl.DataFrame) -> list[pl.Expr]:
-    """The share of the racer's rolls that were each number (the sixth is implied by the others).
+def _dice_columns(frame: pl.DataFrame) -> tuple[str, ...] | None:
+    """Every die the racer rolled if the dataset has it, else only the kept main-move faces."""
+    for columns in (DICE_COLUMNS, FACE_COLUMNS):
+        if all(c in frame.columns for c in columns) and frame.select(pl.col(*columns).null_count()).row(0) == (0,) * 6:
+            return columns
+    return None
 
-    Shares, not counts: counts also contain how many rolls the racer made, which is mostly how
-    long the race lasted and has nothing to do with which numbers came up.
+
+def _predictors(frame: pl.DataFrame) -> list[pl.Expr]:
+    """Per game: the share of the racer's dice that were each number, whether each number came up at all, and how often.
+
+    Games without a roll keep all zeros. Mr Dice Guy also gets his turns without a duplicate to pick.
     """
-    has_faces = all(column in stats_results.columns for column in FACE_COLUMNS)
-    if (
-        has_faces
-        and stats_results.select(pl.col(*FACE_COLUMNS).null_count()).row(0) == (0,) * 6
-    ):
-        rolls = pl.sum_horizontal(FACE_COLUMNS)
-        return [pl.col(column) / rolls for column in FACE_COLUMNS[:-1]]
-    return [pl.col("sum_dice_rolled") / pl.col("rolling_turns")]
+    columns = _dice_columns(frame)
+    if columns is None:
+        return [(pl.col("sum_dice_rolled") / pl.col("rolling_turns")).fill_nan(0.0).fill_null(0.0)]
+    total = pl.sum_horizontal(columns)
+    predictors = [
+        *(pl.when(total > 0).then(pl.col(c) / total).otherwise(0.0) for c in columns),
+        *((pl.col(c) > 0).cast(pl.Float64) for c in columns),
+        *(pl.col(c).cast(pl.Float64) for c in columns),
+    ]
+    if "skipped_self_main_move" in frame.columns:
+        predictors.append(
+            pl.when(pl.col("racer_name").is_in(NO_PICK_RACERS)).then(pl.col("skipped_self_main_move")).otherwise(0.0),
+        )
+    return predictors
 
 
 def solve_linear_system(matrix: list[list[float]], vector: list[float]) -> list[float]:
@@ -47,30 +58,37 @@ def solve_linear_system(matrix: list[list[float]], vector: list[float]) -> list[
     return solution
 
 
-def _coefficients(row: dict[str, float], predictors: int) -> list[float]:
-    """Least-squares coefficients of VP on the predictors, from their (co)variances; zeros where unusable."""
-    zeros = [0.0] * predictors
+def _adjusted_r2(row: dict[str, float], predictors: int) -> float:
+    """Adjusted R squared of a lightly ridged regression of VP on the predictors, from their (co)variances."""
     if row["n"] < MIN_RACES or row["vy"] <= MIN_VARIANCE:
-        return zeros
+        return 0.0
     used = [i for i in range(predictors) if row[f"s_{i}_{i}"] > MIN_VARIANCE]
     if not used:
-        return zeros
+        return 0.0
     matrix = [[row[f"s_{min(i, j)}_{max(i, j)}"] for j in used] for i in used]
+    ridge = RIDGE * sum(matrix[i][i] for i in range(len(used))) / len(used)
+    for i in range(len(used)):
+        matrix[i][i] += ridge
     cross = [row[f"c_{i}"] for i in used]
     try:
         beta = solve_linear_system(matrix, cross)
     except ZeroDivisionError:
-        return zeros
-    coefficients = list(zeros)
-    for i, value in zip(used, beta, strict=True):
-        coefficients[i] = value
-    return coefficients
+        return 0.0
+    explained = min(1.0, max(0.0, sum(b * c for b, c in zip(beta, cross, strict=True)) / row["vy"]))
+    spare = row["n"] - len(used) - 1
+    return max(0.0, 1.0 - (1.0 - explained) * (row["n"] - 1) / spare) if spare > 0 else 0.0
 
 
-def _fit(rolled: pl.DataFrame, predictors: list[pl.Expr]) -> dict[str, list[float]]:
-    """Per racer: coefficients of VP regressed on the predictors."""
+def compute_roll_dependence(stats_results: pl.DataFrame) -> pl.DataFrame:
+    """Per racer: the share of its VP variance that the dice it rolled explain (adjusted R squared).
+
+    The predictors are the share of the racer's dice per number, whether each number came up
+    and how often it did (see `_predictors`). Every game counts, including games without a roll.
+    Falls back to the kept main-move faces, then to the average roll, for older datasets.
+    """
+    predictors = _predictors(stats_results)
     count = len(predictors)
-    framed = rolled.lazy().with_columns(*(expr.alias(f"x_{i}") for i, expr in enumerate(predictors)))
+    framed = stats_results.lazy().with_columns(*(expr.alias(f"x_{i}") for i, expr in enumerate(predictors)))
     covariances = [
         pl.cov(f"x_{i}", f"x_{j}").alias(f"s_{i}_{j}")
         for i in range(count)
@@ -83,62 +101,11 @@ def _fit(rolled: pl.DataFrame, predictors: list[pl.Expr]) -> dict[str, list[floa
         *covariances,
         *cross,
     ).collect()
-    return {
-        row["racer_name"]: _coefficients(row, count)
-        for row in table.fill_nan(0.0).fill_null(0.0).to_dicts()
-    }
-
-
-def compute_roll_dependence(stats_results: pl.DataFrame) -> pl.DataFrame:
-    """Per racer: how far lucky and unlucky dice move its VP, as a share of its average VP.
-
-    VP is regressed on the share of rolls that were each number, with race length and player
-    count held fixed (when the frame has `total_turns` and `racer_count`). The result is the
-    gap between the 90th and the 10th percentile of what the dice alone predict, divided by the
-    racer's average VP (at least 0.25). Racers with under a quarter of a real roll per race
-    (Cheatah) get 0: their number is chosen or fixed. Falls back to the average roll when the
-    dataset has no per-face counts.
-    """
-    stats_results = stats_results.select(
-        c for c in ("racer_name", "final_vp", "rolling_turns", "sum_dice_rolled", *FACE_COLUMNS, *CONTROLS) if c in stats_results.columns
-    )
-    controls = [pl.col(c).cast(pl.Float64) for c in CONTROLS if c in stats_results.columns]
-    dice = _roll_predictors(stats_results)
-    rolled = stats_results.filter(pl.col("rolling_turns") > 0)
-    if all(column in rolled.columns for column in FACE_COLUMNS):
-        rolled = rolled.filter(pl.sum_horizontal(FACE_COLUMNS) > 0)
-    coefficients = _fit(rolled, [*controls, *dice])
-    dice_coefficients = pl.DataFrame(
+    rows = table.fill_nan(0.0).fill_null(0.0).to_dicts()
+    return pl.DataFrame(
         {
-            "racer_name": list(coefficients),
-            **{f"b_{j}": [c[len(controls) + j] for c in coefficients.values()] for j in range(len(dice))},
+            "racer_name": [row["racer_name"] for row in rows],
+            "roll_dependence": [_adjusted_r2(row, count) for row in rows],
         },
-        schema={"racer_name": pl.Utf8, **{f"b_{j}": pl.Float64 for j in range(len(dice))}},
-    )
-    fitted = (
-        rolled.lazy()
-        .with_columns(*(expr.alias(f"d_{j}") for j, expr in enumerate(dice)))
-        .join(dice_coefficients.lazy(), on="racer_name", how="inner")
-        .with_columns(
-            pl.sum_horizontal(*(pl.col(f"b_{j}") * pl.col(f"d_{j}") for j in range(len(dice)))).alias("dice_vp"),
-        )
-        .group_by("racer_name")
-        .agg(
-            (pl.col("dice_vp").quantile(SWING_HIGH) - pl.col("dice_vp").quantile(SWING_LOW)).alias("spread"),
-        )
-        .collect()
-    )
-    per_racer = stats_results.group_by("racer_name").agg(
-        pl.col("final_vp").mean().alias("average_vp"),
-        pl.col("rolling_turns").mean().alias("rolls_per_race"),
-    )
-    return per_racer.join(fitted, on="racer_name", how="left").select(
-        "racer_name",
-        pl.when(pl.col("rolls_per_race") >= MIN_ROLLS_PER_RACE)
-        .then(
-            pl.col("spread").fill_null(0.0)
-            / pl.max_horizontal(pl.col("average_vp"), pl.lit(MIN_AVERAGE_VP)),
-        )
-        .otherwise(0.0)
-        .alias("roll_dependence"),
+        schema={"racer_name": pl.Utf8, "roll_dependence": pl.Float64},
     )

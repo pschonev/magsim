@@ -47,7 +47,7 @@ export const COLUMN_HELP: Record<string, ColumnHelp> = {
     text: "**Does the power fire more when the racer is behind or ahead?**\n\nPositive: mostly while behind. Negative: mostly while ahead.",
   },
   "Roll Sens %": {
-    text: "**How much VP the racer gains or loses between lucky and unlucky dice,** as a share of its average VP.\n\nHigh: its dice make or break the race. A typical racer is around 55 %. Racers that pick or fix their number show 0.",
+    text: "**How much of the racer's VP is decided by the dice it rolls,** including rerolls and extra dice.\n\nHigh: its dice make or break the race. A typical racer is around 10 %. Racers that pick or fix their number sit near 0.",
   },
   "Trig/Turn": { text: "**Ability triggers per own turn.**" },
   "Self-Targ/Turn": { text: "**Triggers per own turn that targeted the racer itself.**" },

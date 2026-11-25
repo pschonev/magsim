@@ -456,3 +456,9 @@ Still open: Cheatah's chosen number and Show-Off's roll totals (per-turn movemen
 - Header logo is the loading screen's track in miniature plus "magsim"; the race count moved to the right. Loading bar: the data part follows the duration of the last load (localStorage `magsim-data-ms`), 6 s on the first visit.
 - Stepdad is one bar: [behind him 40 %][gap][all 20 %]. Best/worst combinations use two-line labels and one row of panels on wide screens.
 - Batch columns now planned: eliminated_by, main_roll_totals (Cheatah, Show-Off, Magician, Rocket Scientist), predicted_racer_id, copied_racers, guessed_rolls. After the batch: top/bottom 5 Mush combos in the Collectors card.
+
+## Round 22
+
+- Roll Sensitivity (final): adjusted R² of a lightly ridged regression of VP on, per game, the share of the racer's dice per number, whether each number came up, and how often (18 inputs; Mr Dice Guy also gets his turns without a duplicate). No race-length control, games without a roll count (zeros), races with the Randomness Ceased twist are left out. Falls back to the kept main-move faces (`rolled_*`), then to the average roll, for datasets without `dice_*`.
+- New batch column set `dice_1..6`: every die a racer rolls for any reason (rerolls, duels, extra dice, The Hose, Show-Off), counted in `roll_die()` through `GameEngine.on_die_rolled` (permission given for engine/roll.py and game_engine.py; rejected Party Pooper 6s are not counted, forced and fixed values are). `rolled_*` stays as the kept main-move face for the dice cards.
+- Checked in Chrome with 6 extra columns of synthetic dice data: analysis fits in memory, first load ~10 s, three re-runs fine.

@@ -267,6 +267,12 @@ class MetricsAggregator:
             for a in engine.get_racer(racer_idx).active_abilities
         )
 
+    def on_die_rolled(self, racer_idx: int, value: int) -> None:
+        """Count every die a racer rolls, whatever it is rolled for."""
+        stats = self._get_result(racer_idx)
+        column = f"dice_{value}"
+        setattr(stats, column, getattr(stats, column) + 1)
+
     def _get_result(self, racer_idx: int) -> RacerResult:
         return self.results[racer_idx]
 

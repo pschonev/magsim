@@ -77,6 +77,13 @@ def report_base_value_change(
 
 def roll_die(engine: GameEngine, roller_idx: int) -> D6Values:
     """The single place where a d6 is rolled; ability hooks may force or reject values."""
+    value = _roll_die(engine, roller_idx)
+    if engine.on_die_rolled is not None:
+        engine.on_die_rolled(roller_idx, value)
+    return value
+
+
+def _roll_die(engine: GameEngine, roller_idx: int) -> D6Values:
     roller = engine.get_racer(roller_idx)
     # Auras need a position; finished or eliminated racers still roll, unaffected.
     hooks = (

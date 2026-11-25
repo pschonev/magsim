@@ -105,6 +105,7 @@ class GameEngine:
 
     # Callback for external observers
     on_event_processed: Callable[[GameEngine, GameEvent], None] | None = None
+    on_die_rolled: Callable[[int, int], None] | None = None  # (roller_idx, value) for every die that counts
     verbose: bool = True
     _logger: logging.Logger = field(init=False, repr=False)
 

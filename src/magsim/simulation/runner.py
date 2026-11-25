@@ -85,6 +85,7 @@ def run_single_simulation(
         aggregator.on_event(event=event, engine=engine)
 
     engine.on_event_processed = on_event_processed
+    engine.on_die_rolled = aggregator.on_die_rolled
 
     def bridge_notification_event(event: GameEvent, _owner: int, engine: GameEngine):
         aggregator.on_event(event=event, engine=engine)

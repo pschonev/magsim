@@ -83,6 +83,7 @@ LATE_COLUMNS: dict[str, str] = {
     "predicted_racer_id": "BIGINT",
     "copied_racers": "VARCHAR[]",
     "guessed_rolls": "INTEGER[]",
+    **{f"dice_{face}": "BIGINT" for face in range(1, 7)},
 }
 
 
@@ -148,6 +149,13 @@ class RacerResult(msgspec.Struct, array_like=True, gc=False):
     predicted_racer_id: int | None = None  # racer_id Mastermind predicted to win
     copied_racers: list[str] | None = None  # racers whose powers Mush drew
     guessed_rolls: list[int] | None = None  # numbers Cheatah set that were guessed
+    # Every die the racer rolled for any reason (rerolls, duels, extra dice), not only the kept main roll
+    dice_1: int = 0
+    dice_2: int = 0
+    dice_3: int = 0
+    dice_4: int = 0
+    dice_5: int = 0
+    dice_6: int = 0
 
     @classmethod
     def get_create_sql(cls) -> str:
@@ -189,6 +197,12 @@ class RacerResult(msgspec.Struct, array_like=True, gc=False):
             predicted_racer_id BIGINT,
             copied_racers VARCHAR[],
             guessed_rolls INTEGER[],
+            dice_1 BIGINT,
+            dice_2 BIGINT,
+            dice_3 BIGINT,
+            dice_4 BIGINT,
+            dice_5 BIGINT,
+            dice_6 BIGINT,
             PRIMARY KEY (config_hash, racer_id)
         )
         """
