@@ -1,4 +1,4 @@
-import { BookOpen, Search, X } from "lucide-react";
+import { BookOpen, GitFork, Search, X, Zap } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { TWIST_DESCRIPTIONS } from "../features/dashboard/charts/twistCards";
 import { displayName } from "../utils/names";
@@ -23,10 +23,14 @@ interface GlossaryItem {
   ability: string;
   abilityKey: string;
   clarifications: string | null;
-  flavor: string | null;
   implemented: boolean;
+  decision: boolean;
   hasColor: boolean;
+  showMarker: boolean;
 }
+
+const AUTOMATIC_LABEL = "Automatic: the power always applies, no choices";
+const DECISION_LABEL = "Has a decision: the player chooses when or how to use the power";
 
 const SECTIONS: Section[] = [
   { id: "base", label: "Base game", heading: "Base game racers" },
@@ -55,9 +59,10 @@ function racerItem(entry: RacerGlossaryEntry): GlossaryItem {
     ability: entry.ability,
     abilityKey: fold(entry.ability),
     clarifications: entry.clarifications,
-    flavor: entry.flavor,
     implemented: entry.implemented,
+    decision: entry.decision,
     hasColor: true,
+    showMarker: entry.implemented,
   };
 }
 
@@ -72,9 +77,10 @@ function twistItem([key, description]: [string, string]): GlossaryItem {
     ability: description,
     abilityKey: fold(description),
     clarifications: null,
-    flavor: null,
     implemented: true,
+    decision: false,
     hasColor: false,
+    showMarker: false,
   };
 }
 
@@ -92,6 +98,16 @@ function matches(item: GlossaryItem, query: string): boolean {
   return (key !== "" && item.nameKey.includes(key)) || item.abilityKey.includes(text);
 }
 
+function PowerMarker({ decision }: { decision: boolean }) {
+  const label = decision ? DECISION_LABEL : AUTOMATIC_LABEL;
+  const Icon = decision ? GitFork : Zap;
+  return (
+    <span title={label} aria-label={label} role="img" className="inline-flex text-slate-400">
+      <Icon className="h-3 w-3" aria-hidden="true" />
+    </span>
+  );
+}
+
 function ItemCard({ item, color }: { item: GlossaryItem; color: string | undefined }) {
   return (
     <article className="rounded-lg border border-slate-800 p-3">
@@ -99,6 +115,7 @@ function ItemCard({ item, color }: { item: GlossaryItem; color: string | undefin
         <h4 className={`text-sm font-bold ${color ? "" : "text-slate-50"}`} style={color ? { color } : undefined}>
           {item.name}
         </h4>
+        {item.showMarker && <PowerMarker decision={item.decision} />}
         {item.title && (
           <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">{item.title}</span>
         )}
@@ -112,7 +129,6 @@ function ItemCard({ item, color }: { item: GlossaryItem; color: string | undefin
           <span className="font-semibold">Clarifications:</span> {item.clarifications}
         </p>
       )}
-      {item.flavor && <p className="mt-1.5 text-[11px] text-slate-400 italic">{item.flavor}</p>}
     </article>
   );
 }
@@ -210,6 +226,15 @@ function GlossaryDialog({ onClose, racerColors }: { onClose: () => void; racerCo
               })}
             </div>
           </div>
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[11px] text-slate-400">
+            <span className="inline-flex items-center gap-1">
+              <Zap className="h-3 w-3" aria-hidden="true" /> Automatic: the power always applies, no choices
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <GitFork className="h-3 w-3" aria-hidden="true" /> Decision: the player chooses when or how to use the
+              power
+            </span>
+          </p>
         </div>
 
         <div ref={scrollRef} className="relative min-h-0 flex-1 space-y-6 overflow-y-auto p-3 sm:p-4">

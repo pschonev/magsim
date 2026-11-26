@@ -76,7 +76,7 @@ interface Section {
   views: ViewSpec[];
 }
 
-/** Tab colours, from the loading screen; the first tab keeps the theme's purple. */
+/** Tab colours, from the loading screen; Racer Types keeps the theme's purple. */
 const SECTION_COLORS: Record<string, string> = {
   abilityenv: BRAND.blue,
   global: BRAND.pink,
@@ -86,6 +86,12 @@ const SECTION_COLORS: Record<string, string> = {
 };
 
 const SECTIONS: Section[] = [
+  {
+    id: "racers",
+    label: "Fun facts",
+    icon: Star,
+    views: [{ id: "facts", label: "Fun facts", icon: Star }],
+  },
   {
     id: "scatter",
     label: "Racer Types",
@@ -139,12 +145,6 @@ const SECTIONS: Section[] = [
       { id: "abilities", label: "Abilities", icon: Sparkles },
       { id: "dynamics", label: "Dynamics", icon: Activity },
     ],
-  },
-  {
-    id: "racers",
-    label: "Fun facts",
-    icon: Star,
-    views: [{ id: "facts", label: "Fun facts", icon: Star }],
   },
 ];
 

@@ -72,6 +72,13 @@ def get_automatic_racers() -> tuple[str, ...]:
     return tuple(sorted(automatic))
 
 
+@cache
+def racers_with_decisions() -> tuple[str, ...]:
+    """Return sorted racer names with at least one own ability that asks the player for a choice."""
+    automatic = set(get_automatic_racers())
+    return tuple(sorted(name for name in RACER_ABILITIES if name not in automatic))
+
+
 def filter_dataset(
     df_races: pl.DataFrame,
     df_racer_results: pl.DataFrame,

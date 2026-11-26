@@ -6,6 +6,7 @@ import unicodedata
 from pathlib import Path
 from typing import get_args
 
+from magsim.analysis.filters import racers_with_decisions
 from magsim.core.types import RacerName
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,8 +25,8 @@ GLOSSARY_TYPE = (
     "  title: string;\n"
     "  ability: string;\n"
     "  clarifications: string | null;\n"
-    "  flavor: string;\n"
     "  implemented: boolean;\n"
+    "  decision: boolean;\n"
     "}\n"
 )
 
@@ -50,7 +51,12 @@ def table_rows() -> list[tuple[str, list[str]]]:
     return rows
 
 
-def glossary_entry(card_set: str, cells: list[str], internal: dict[str, str]) -> dict[str, str | bool | None]:
+def glossary_entry(
+    card_set: str,
+    cells: list[str],
+    internal: dict[str, str],
+    deciders: frozenset[str],
+) -> dict[str, str | bool | None]:
     """One glossary row; racers without an engine module keep their plain name as key."""
     key = internal.get(normalize(cells[0]))
     return {
@@ -59,8 +65,8 @@ def glossary_entry(card_set: str, cells: list[str], internal: dict[str, str]) ->
         "title": cells[1],
         "ability": cells[2],
         "clarifications": None if cells[3] == "none" else cells[3],
-        "flavor": cells[4],
         "implemented": key is not None,
+        "decision": key is not None and key in deciders,
     }
 
 
@@ -78,7 +84,10 @@ def main() -> None:
     )
     print(f"{len(texts)} racers written to {TARGET}")
 
-    entries = [glossary_entry(card_set, cells, internal) for card_set, cells in rows if card_set and len(cells) >= 5]
+    deciders = frozenset(racers_with_decisions())
+    entries = [
+        glossary_entry(card_set, cells, internal, deciders) for card_set, cells in rows if card_set and len(cells) >= 5
+    ]
     lines = "\n".join(f"  {json.dumps(entry, ensure_ascii=False)}," for entry in entries)
     GLOSSARY_TARGET.write_text(
         HEADER + GLOSSARY_TYPE + f"\nexport const RACER_GLOSSARY: RacerGlossaryEntry[] = [\n{lines}\n];\n",
