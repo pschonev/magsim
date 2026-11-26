@@ -1108,7 +1108,7 @@ export function environmentAxis(
   const boardsEnd = keys.length - 1;
   if (twists.length > 0 && keys.length > 0) addGap();
   const twistStart = keys.length + 1;
-  for (const twist of twists) addGroup(twist, [...countsOf(twist)].sort((a, b) => a - b), breakWords(twist));
+  for (const twist of twists) addGroup(twist, [...countsOf(twist)].sort((a, b) => a - b), breakWords(displayName(twist)));
   const twistEnd = keys.length - 1;
   addGap();
   const allStart = keys.length + 1;

@@ -72,19 +72,44 @@ export function MushTable({ pairs, textColorOf }: MushTableProps) {
 
   return (
     <div>
-      <div className="relative mb-1.5 w-full sm:w-64">
-        <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(0);
-          }}
-          placeholder="Search racer"
-          aria-label="Search racer"
-          className="w-full rounded-md border border-slate-700 bg-slate-950 py-1.5 pr-2 pl-7 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
-        />
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <div className="relative min-w-0 flex-1 sm:max-w-64">
+          <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(0);
+            }}
+            placeholder="Search racer"
+            aria-label="Search racer"
+            className="w-full rounded-md border border-slate-700 bg-slate-950 py-1.5 pr-2 pl-7 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+          />
+        </div>
+        <div className="flex shrink-0 items-center gap-2 text-[11px] text-slate-400">
+          <button
+            type="button"
+            aria-label="Previous page"
+            disabled={current === 0}
+            onClick={() => setPage(current - 1)}
+            className="rounded border border-slate-700 p-1 disabled:opacity-30"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <span>
+            page {current + 1} of {pageCount}
+          </span>
+          <button
+            type="button"
+            aria-label="Next page"
+            disabled={current >= pageCount - 1}
+            onClick={() => setPage(current + 1)}
+            className="rounded border border-slate-700 p-1 disabled:opacity-30"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto rounded-lg border border-slate-800">
         <table className="w-full border-collapse text-xs">
@@ -133,29 +158,6 @@ export function MushTable({ pairs, textColorOf }: MushTableProps) {
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="mt-1.5 flex items-center justify-end gap-2 text-[11px] text-slate-400">
-        <button
-          type="button"
-          aria-label="Previous page"
-          disabled={current === 0}
-          onClick={() => setPage(current - 1)}
-          className="rounded border border-slate-700 p-1 disabled:opacity-30"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-        </button>
-        <span>
-          page {current + 1} of {pageCount}
-        </span>
-        <button
-          type="button"
-          aria-label="Next page"
-          disabled={current >= pageCount - 1}
-          onClick={() => setPage(current + 1)}
-          className="rounded border border-slate-700 p-1 disabled:opacity-30"
-        >
-          <ChevronRight className="h-3.5 w-3.5" />
-        </button>
       </div>
     </div>
   );

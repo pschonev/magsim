@@ -2,6 +2,7 @@ import { RACER_TEXTS } from "./racerTexts";
 
 const SPECIAL_NAMES: Record<string, string> = {
   Doppelgangster: "Doppelgängster",
+  Pinata: "Piñata",
   ReRunner: "Re-Runner",
   ShowOff: "Show-Off",
   Standard: "Mild Mile",

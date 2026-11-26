@@ -1,7 +1,8 @@
-import { BarChart3, Database, Moon, PlayCircle, Sun, Upload } from "lucide-react";
+import { BarChart3, BookOpen, Database, Moon, PlayCircle, Sun, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { BootScreen } from "./components/BootScreen";
 import { DatasetUploadModal } from "./components/DatasetUploadModal";
+import { GlossaryModal } from "./components/GlossaryModal";
 import { Logo } from "./components/Logo";
 import { PyodideEngineClient } from "./engine/pyodideClient";
 import { DashboardView } from "./features/dashboard/DashboardView";
@@ -78,6 +79,7 @@ export function App() {
   );
   const [incoming, setIncoming] = useState<IncomingRace | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [glossaryOpen, setGlossaryOpen] = useState(false);
 
   useEffect(() => {
     const worker = new PyodideEngineClient();
@@ -192,6 +194,16 @@ export function App() {
           </p>
           <button
             type="button"
+            onClick={() => setGlossaryOpen(true)}
+            aria-label="Open glossary"
+            title="Glossary of racers and twist cards"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 p-1.5 text-xs font-medium text-slate-200 hover:border-indigo-500 hover:bg-slate-800 sm:px-3"
+          >
+            <BookOpen className="h-4 w-4 text-indigo-400 sm:h-3.5 sm:w-3.5" />
+            <span className="hidden sm:inline">Glossary</span>
+          </button>
+          <button
+            type="button"
             onClick={toggle}
             aria-label={mode === "dark" ? "Switch to light theme" : "Switch to dark theme"}
             title={mode === "dark" ? "Light theme" : "Dark theme"}
@@ -234,6 +246,11 @@ export function App() {
         )}
       </main>
 
+      <GlossaryModal
+        open={glossaryOpen}
+        onClose={() => setGlossaryOpen(false)}
+        racerColors={datasetMeta.racer_colors}
+      />
       <DatasetUploadModal
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}

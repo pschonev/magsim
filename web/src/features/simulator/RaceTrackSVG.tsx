@@ -481,13 +481,13 @@ export function RaceTrackSVG({ step, board, boardName, stepMessages, racerPalett
             key={`${twist}-${k}`}
             className="cursor-help"
             onMouseEnter={() =>
-              setTooltip({ title: `Twist: ${twist}`, lines: [TWIST_DESCRIPTIONS[twist] ?? "A twist card is in play."] })
+              setTooltip({ title: `Twist: ${displayName(twist)}`, lines: [TWIST_DESCRIPTIONS[twist] ?? "A twist card is in play."] })
             }
             onMouseLeave={() => setTooltip(null)}
           >
             <text x={panel.x + 22} y={titleBase + 22 + k * 17} fontSize={13} fill={INK.twist} stroke="#000" strokeWidth={4} paintOrder="stroke">
               {k + 1 > 1 || board.twists.length > 1 ? `${k + 1}. ` : ""}
-              {twist}
+              {displayName(twist)}
               {isMirrored && twist.toLowerCase().includes("mirror") ? " (mirrored)" : ""}
             </text>
           </g>

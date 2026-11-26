@@ -15,8 +15,10 @@ export interface BarItem {
   racer?: boolean;
   /** A second colour: the slice fades from `color` to this one (for pairs of racers). */
   color2?: string;
-  /** Extra text for the hover. */
+  /** Extra text for the hover; in bar lists it is the whole tooltip. */
   detail?: string;
+  /** Muted text after the value label of a bar, e.g. "· 312 games". */
+  note?: string;
 }
 
 interface LabelEntry {
@@ -47,16 +49,36 @@ interface BarOptions {
   lollipop?: boolean;
   /** Smaller text, thinner margins; for narrow cards. */
   compact?: boolean;
+  /** Fixed width in px of the name column (long names are truncated), so separate charts start their bars at the same x. */
+  labelWidth?: number;
+  /** Extra px kept free right of the plot (with `labelWidth`), for value labels that carry a `note`. */
+  labelRoom?: number;
+}
+
+/** Room between the name column's right edge and the axis line: the default axis label margin plus a little slack. */
+const BAR_LABEL_GAP = 10;
+
+function barGrid(compact: boolean, labelWidth: number | undefined, labelRoom: number) {
+  if (labelWidth !== undefined) return { left: labelWidth, right: 6 + labelRoom, top: 3, bottom: 3, containLabel: false };
+  if (compact) return { left: 2, right: 6, top: 3, bottom: 3, containLabel: true };
+  return { left: 8, right: 16, top: 6, bottom: 6, containLabel: true };
 }
 
 /** Horizontal bars (or lollipops) with the value at the end of each bar; one racer per row. */
-export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) => string, { lollipop = false, compact = false }: BarOptions = {}): EChartsOption {
+export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) => string, { lollipop = false, compact = false, labelWidth, labelRoom = 0 }: BarOptions = {}): EChartsOption {
   const names = items.map((i) => displayName(i.name));
   const max = Math.max(...items.map((i) => i.value), 0) * (compact ? 1.2 : 1.25) || 1;
   const fontSize = compact ? 11 : 12;
+  const labels = racerLabels(items.map((i) => ({ text: displayName(i.name), color: i.racer ? i.color : undefined })), t, fontSize);
+  const valueText = (p: { value: number; dataIndex: number }) => {
+    const note = items[p.dataIndex].note;
+    return note ? `{v|${format(p.value)}} {n|${note}}` : format(p.value);
+  };
+  const valueRich = { v: { color: t.text, fontWeight: 700, fontSize }, n: { color: t.reference, fontWeight: 500, fontSize: fontSize - 1 } };
+  const hasDetail = items.some((i) => i.detail);
   return {
     ...base(t),
-    grid: compact ? { left: 2, right: 6, top: 3, bottom: 3, containLabel: true } : { left: 8, right: 16, top: 6, bottom: 6, containLabel: true },
+    grid: barGrid(compact, labelWidth, labelRoom),
     xAxis: { type: "value", show: false, min: 0, max },
     yAxis: {
       type: "category",
@@ -64,15 +86,25 @@ export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) =
       data: names,
       axisTick: { show: false },
       axisLine: { show: false },
-      axisLabel: racerLabels(items.map((i) => ({ text: displayName(i.name), color: i.racer ? i.color : undefined })), t, fontSize),
+      axisLabel: labelWidth === undefined ? labels : { ...labels, width: labelWidth - BAR_LABEL_GAP, overflow: "truncate" },
     },
-    tooltip: { show: false },
+    tooltip: hasDetail
+      ? {
+          trigger: "axis",
+          axisPointer: { type: "shadow" },
+          confine: true,
+          backgroundColor: t.tooltipBg,
+          borderColor: t.tooltipBorder,
+          textStyle: { color: t.text, fontSize: 12 },
+          formatter: (params: { dataIndex: number }[]) => items[params[0].dataIndex].detail ?? "",
+        }
+      : { show: false },
     series: [
       {
         type: "bar",
         barWidth: lollipop ? 3 : compact ? "72%" : "62%",
         data: items.map((i) => ({ value: i.value, itemStyle: { color: i.color, borderRadius: lollipop ? 0 : 4 } })),
-        label: lollipop ? { show: false } : { show: true, position: "right", color: t.text, fontWeight: 700, fontSize, formatter: (p: { value: number }) => format(p.value) },
+        label: lollipop ? { show: false } : { show: true, position: "right", color: t.text, fontWeight: 700, fontSize, rich: valueRich, formatter: valueText },
       },
       ...(lollipop
         ? [
@@ -189,6 +221,9 @@ export interface ColumnSeries {
 }
 
 const percentText = (v: number) => `${(v * 100).toFixed(v >= 0.1 ? 0 : 1)}%`;
+/** Room above the plot for the legend row plus the value label of the tallest bar; below it for the axis labels and the axis name. */
+const GROUPED_TOP = 46;
+const GROUPED_BOTTOM = 20;
 
 /** Grouped columns, one series per racer; each series gets a label on its tallest column. */
 export function buildGroupedColumns(labels: string[], series: ColumnSeries[], axisName: string, t: ChartTheme): EChartsOption {
@@ -201,7 +236,7 @@ export function buildGroupedColumns(labels: string[], series: ColumnSeries[], ax
       itemHeight: 10,
       data: series.map((s) => ({ name: legendOf(s), textStyle: { color: readableOn(s.color, t), fontSize: 11 } })),
     },
-    grid: { left: 6, right: 6, top: 28, bottom: 36, containLabel: true },
+    grid: { left: 6, right: 6, top: GROUPED_TOP, bottom: GROUPED_BOTTOM, containLabel: true },
     tooltip: {
       trigger: "axis",
       axisPointer: { type: "shadow" },
@@ -409,13 +444,19 @@ export function buildDivergingBars(items: DivergingItem[], t: ChartTheme): EChar
 
 export interface RoseSection {
   name: string;
+  /** Heading the caller draws above the chart. */
+  title: string;
   color: string;
+  /** Explanation the caller shows in an info tip next to the title; lines are separated by "\n". */
   caption: string;
   items: BarItem[];
   format: (v: number) => string;
 }
 
-/** Side by side rose charts, one per racer, each with its name and a caption above. */
+/** Percent of half the shorter chart side; the outer value leaves room for a two-line label around the longest slice. */
+const ROSE_RADIUS = ["9%", "64%"];
+
+/** Side by side rose charts; the caller draws title and caption outside the chart so the roses use the whole area. */
 export function buildRoses(sections: RoseSection[], t: ChartTheme): EChartsOption {
   const step = 100 / sections.length;
   const centre = (i: number) => `${step * i + step / 2}%`;
@@ -429,23 +470,14 @@ export function buildRoses(sections: RoseSection[], t: ChartTheme): EChartsOptio
       formatter: (p: { seriesIndex: number; name: string; value: number; data: { detail?: string } }) =>
         `${p.name}: ${sections[p.seriesIndex].format(p.value)}${p.data.detail ? ` (${p.data.detail})` : ""}`,
     },
-    title: sections.map((s, i) => ({
-      text: displayName(s.name),
-      subtext: s.caption,
-      left: centre(i),
-      top: 0,
-      textAlign: "center",
-      textStyle: { color: readableOn(s.color, t), fontSize: 13, fontWeight: 700 },
-      subtextStyle: { color: t.text, fontSize: 11 },
-    })),
     series: sections.map((s, i) => ({
       type: "pie" as const,
       roseType: "radius" as const,
-      radius: ["8%", "42%"],
-      center: [centre(i), "64%"],
+      radius: ROSE_RADIUS,
+      center: [centre(i), "50%"],
       itemStyle: { borderColor: t.bg, borderWidth: 2, borderRadius: 3 },
       labelLayout: { hideOverlap: true },
-      label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { name: string; value: number }) => `${p.name}\n${s.format(p.value)}` },
+      label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { name: string; value: number }) => `${p.name.replace(" + ", " +\n")}\n${s.format(p.value)}` },
       labelLine: { length: 3, length2: 3 },
       data: s.items.map((it) => ({
         name: displayName(it.name),
@@ -489,12 +521,13 @@ export function mushRoses(pairs: MushPairDTO[], colorOf: (racer: string) => stri
     ranked.filter((p) => p.top2_rate !== null).sort((a, b) => (b.top2_rate ?? 0) - (a.top2_rate ?? 0)),
     ROSE_PAIRS,
   );
-  const section = (name: string, rows: MushPairDTO[], caption: string, value: (p: MushPairDTO) => number, format: (v: number) => string): RoseSection[] =>
+  const section = (name: string, title: string, rows: MushPairDTO[], caption: string, value: (p: MushPairDTO) => number, format: (v: number) => string): RoseSection[] =>
     rows.length === 0
       ? []
       : [
           {
             name,
+            title,
             color: colorOf("Mush"),
             caption,
             format,
@@ -503,9 +536,9 @@ export function mushRoses(pairs: MushPairDTO[], colorOf: (racer: string) => stri
         ];
   const vp = (v: number) => `${v.toFixed(2)} VP`;
   return [
-    ...section("Best pairs", best, "average VP in races with both powers\neach power once", (p) => p.average_vp, vp),
-    ...section("Worst pairs", worst, "average VP in races with both powers\neach power once", (p) => p.average_vp, vp),
-    ...section("Best pairs, top 2", topTwo, "share of races finishing 1st or 2nd\neach power once", (p) => (p.top2_rate ?? 0) * 100, (v) => `${v.toFixed(0)}%`),
+    ...section("Best pairs", "Best pairs VP", best, "average VP in races with both powers\neach power once", (p) => p.average_vp, vp),
+    ...section("Worst pairs", "Worst pairs VP", worst, "average VP in races with both powers\neach power once", (p) => p.average_vp, vp),
+    ...section("Best pairs, top 2", "Best pairs, top 2", topTwo, "share of races finishing 1st or 2nd\neach power once", (p) => (p.top2_rate ?? 0) * 100, (v) => `${v.toFixed(0)}%`),
   ];
 }
 
@@ -517,7 +550,7 @@ export function buildPie(items: { name: string; value: number; color: string }[]
     series: [
       {
         type: "pie",
-        radius: ["24%", "44%"],
+        radius: ["30%", "52%"],
         center: ["50%", "50%"],
         itemStyle: { borderColor: t.bg, borderWidth: 2 },
         label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { name: string; percent: number }) => `${p.name.replace(", ", ",\n")}\n${p.percent.toFixed(0)}%` },

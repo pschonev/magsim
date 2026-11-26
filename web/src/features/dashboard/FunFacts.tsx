@@ -1,10 +1,11 @@
 import type { CSSProperties, ReactNode } from "react";
 import { EChart, type EChartsOption } from "../../components/EChart";
+import { InfoTip } from "../../components/InfoTip";
 import type { DashboardAnalysisDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
 import { useTheme } from "../../utils/ThemeProvider";
 import type { ChartTheme } from "../../utils/theme";
-import { BRAND, NEUTRAL, visibleMark } from "../../utils/palette";
+import { BRAND, visibleMark } from "../../utils/palette";
 import { readableOn } from "./charts/chartOptions";
 import { MushTable } from "./MushTable";
 import {
@@ -39,11 +40,24 @@ const PIPS: Record<number, [number, number][]> = {
 const SPAN: Record<1 | 2 | 3, string> = { 1: "", 2: "sm:col-span-2", 3: "sm:col-span-2 xl:col-span-3" };
 const DICE_TOTAL_CAP = 12;
 const EXTREME_COLUMNS: Record<number, string> = { 2: "2xl:grid-cols-2", 3: "2xl:grid-cols-3" };
-const ROSE_HEIGHT = 235;
-const COLLECTOR_ROSE_HEIGHT = 260;
+/** Mush roses: `stacked` below 2xl (table underneath), `wide` from 2xl to fill the card beside the taller table. */
+const MUSH_ROSE_HEIGHT = { stacked: 260, wide: 310 };
+const COLLECTOR_ROSE_HEIGHT = 250;
+/** Rose heading row: `h-5` plus `mb-1`, in px. */
+const ROSE_TITLE_ROW = 24;
+/** Most annoying powers sits beside Collectors from xl up: same height as a rose with its heading. */
+const ANNOY_HEIGHT = COLLECTOR_ROSE_HEIGHT + ROSE_TITLE_ROW;
+const GROUPED_COLUMNS_HEIGHT = 190;
 /** Mastermind chart sizes in px: stacked below 2xl, side by side from 2xl up. */
 const MIND_BAR_ROW = { stacked: 20, wide: 24 };
 const MIND_DONUT_HEIGHT = { stacked: 170, wide: 240 };
+/** Height of one 11px caption line above a Mastermind bar list, and the chart padding added to the rows. */
+const MIND_CAPTION_ROW = 17;
+const MIND_BAR_PADDING = 6;
+/** Name column width of both Mastermind bar lists, wide enough for "Doppelgängster". */
+const MIND_LABEL_WIDTH = 112;
+/** Pixels kept free right of the plot for the muted "· 12,345 games" next to each percentage. */
+const MIND_NOTE_ROOM = 84;
 /** Below xl the bottom cards sit in the outer 2-column grid; at xl they sit in the wrapper's 3-column grid. */
 const ORDER = {
   collectors: "order-1 xl:order-1",
@@ -74,12 +88,36 @@ interface CardProps {
 function Card({ title, caption, hint, children, span = 1, placement = "" }: CardProps) {
   return (
     <section className={`rounded-xl border border-slate-800 bg-slate-900 p-3 ${SPAN[span]} ${placement}`}>
-      <h3 className={`mb-1 font-display text-sm text-slate-50 ${hint ? "cursor-help" : ""}`} title={hint}>
-        {title}
-      </h3>
-      {caption && <p className="mb-1 text-[11px] text-slate-400">{caption}</p>}
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <h3 className="font-display text-sm text-slate-50">{title}</h3>
+        {(caption || hint) && (
+          <InfoTip label={`More about ${title}`}>
+            {caption && <p>{caption}</p>}
+            {hint && <p>{hint}</p>}
+          </InfoTip>
+        )}
+      </div>
       {children}
     </section>
+  );
+}
+
+/** One rose with its title (in the section colour) and an info tip carrying the explanation. */
+function RoseCard({ section, height, theme }: { section: RoseSection; height: { stacked: number; wide: number }; theme: ChartTheme }) {
+  return (
+    <div>
+      <div className="mb-1 flex h-5 items-center justify-center gap-1.5">
+        <h4 className="text-[13px] font-bold" style={{ color: readableOn(section.color, theme) }}>
+          {section.title}
+        </h4>
+        <InfoTip label={`More about ${section.title}`}>
+          {section.caption.split("\n").map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </InfoTip>
+      </div>
+      <WideAwareChart stacked={height.stacked} wide={height.wide} option={buildRoses([section], theme)} />
+    </div>
   );
 }
 
@@ -88,7 +126,7 @@ function WideAwareChart({ stacked, wide, option }: { stacked: number; wide: numb
   const heights = { "--h-stacked": `${stacked}px`, "--h-wide": `${wide}px` } as CSSProperties;
   return (
     <div className="h-[var(--h-stacked)] 2xl:h-[var(--h-wide)]" style={heights}>
-      <EChart height="100%" option={option} />
+      <EChart renderer="svg" height="100%" option={option} />
     </div>
   );
 }
@@ -238,7 +276,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
       name: "Stepdad support",
       color: colorOf("Stepdad"),
       parts: [
-        { label: "his stepkids", share: behind, color: BADGE.gold, text: `his stepkids ${pct(behind)}` },
+        { label: "his stepkids winrate", share: behind, color: BADGE.gold, text: `his stepkids winrate ${pct(behind)}` },
         { label: "", share: Math.max(0, 1 - behind - overall), color: theme.gridLine, text: "" },
         { label: "others", share: overall, color: BADGE.blue, text: `others ${pct(overall)}` },
       ],
@@ -252,7 +290,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
         title="Split decisions"
         hint={`Last place counts ties, so a typical racer starts ${baseline} of its turns there. Stepdad: how often the racer playing right after him wins, compared with how often that same racer wins in general.`}
       >
-        <EChart height={splits.length * 40 + 12} option={buildSplitRows(splits, theme)} />
+        <EChart renderer="svg" height={splits.length * 40 + 12} option={buildSplitRows(splits, theme)} />
       </Card>,
     );
   }
@@ -260,15 +298,15 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   if (facts.outcomes.length > 0) {
     cards.push(
       <Card key="out" title="How their races end">
-        <EChart height={190} option={buildDonuts(facts.outcomes, colorOf, theme)} />
+        <EChart renderer="svg" height={190} option={buildDonuts(facts.outcomes, colorOf, theme)} />
       </Card>,
     );
   }
 
   if (specific.magical_athlete_faces.length > 0) {
     cards.push(
-      <Card key="ma" title="Magical Athlete's lucky numbers" caption="VP per extra roll">
-        <EChart height={130} option={faceEffectColumns(specific.magical_athlete_faces, theme, (face) => MAGICAL_ATHLETE_FACES[face] ?? "")} />
+      <Card key="ma" title="Magical Athlete's lucky numbers" caption="VP per extra roll, for each number rolled.">
+        <EChart renderer="svg" height={130} option={faceEffectColumns(specific.magical_athlete_faces, theme, (face) => MAGICAL_ATHLETE_FACES[face] ?? "")} />
         <div className="grid grid-cols-6 px-1.5">
           {specific.magical_athlete_faces.map((f) => (
             <div key={f.face} className="flex justify-center">
@@ -283,7 +321,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   if (facts.vp_distributions.length > 0) {
     cards.push(
       <Card key="vp" title="VP per race">
-        <EChart height={190} option={vpHistogram(facts.vp_distributions, colorOf, theme)} />
+        <EChart renderer="svg" height={GROUPED_COLUMNS_HEIGHT} option={vpHistogram(facts.vp_distributions, colorOf, theme)} />
       </Card>,
     );
   }
@@ -294,7 +332,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   ].filter((d) => d.faces.length > 0);
   if (dice.length > 0) {
     cards.push(
-      <Card key="pick" title="Choosy racers" caption="✗ = no move, counts as 0 in the average · faded part = guessed">
+      <Card key="pick" title="Choosy racers" caption="✗ = no move, counts as 0 in the average. Faded part = guessed.">
         <SharedDice series={dice} theme={theme} />
       </Card>,
     );
@@ -303,8 +341,8 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   if (facts.dice_totals.length > 0) {
     const { labels, series } = diceTotalSeries(facts.dice_totals, colorOf);
     cards.push(
-      <Card key="totals" title="Dice totals" caption="final roll of the turn · ✗ = rolled lower, no move (counts as 0)">
-        <EChart height={190} option={buildGroupedColumns(labels, series, "total", theme)} />
+      <Card key="totals" title="Dice totals" caption="Final roll of the turn. ✗ = rolled lower, no move (counts as 0).">
+        <EChart renderer="svg" height={GROUPED_COLUMNS_HEIGHT} option={buildGroupedColumns(labels, series, "total", theme)} />
       </Card>,
     );
   }
@@ -317,9 +355,9 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     facts.eat_targets.filter((t) => t.eater === eater).map((t) => ({ name: t.victim, value: t.rate * 100, color: colorOf(t.victim), racer: true }));
   const verbs: Record<string, string> = { Hotel: "customers", Mouth: "eaten", BiteMark: "eaten" };
   const roses: RoseSection[] = [
-    { name: "Hotel", items: toBars(facts.hotel_customers), format: (v: number) => v.toFixed(2) },
-    { name: "Mouth", items: meals("Mouth"), format: percent },
-    { name: "BiteMark", items: meals("BiteMark"), format: percent },
+    { name: "Hotel", title: "Hotel guests", items: toBars(facts.hotel_customers), format: (v: number) => v.toFixed(2) },
+    { name: "Mouth", title: "Mouth victims", items: meals("Mouth"), format: percent },
+    { name: "BiteMark", title: "Bite Mark victims", items: meals("BiteMark"), format: percent },
   ]
     .filter((r) => collected.has(r.name) && r.items.length > 0)
     .map((r) => {
@@ -331,7 +369,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
       <Card key="collectors" span={2} placement={ORDER.collectors} title="Collectors" hint="Hotel: stops on Hotel's space per game. Mouth and Bite Mark: share of the games with the victim in which they ate it (Bite Mark's transformation is not counted as a meal).">
         <div className="grid gap-2 md:grid-cols-3">
           {roses.map((r) => (
-            <EChart key={r.name} height={COLLECTOR_ROSE_HEIGHT} option={buildRoses([r], theme)} />
+            <RoseCard key={r.name} section={r} height={{ stacked: COLLECTOR_ROSE_HEIGHT, wide: COLLECTOR_ROSE_HEIGHT }} theme={theme} />
           ))}
         </div>
       </Card>,
@@ -340,8 +378,8 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
 
   if (facts.triggers_per_turn.length > 0) {
     bottom.push(
-      <Card key="annoy" placement={ORDER.annoy} title="Most annoying powers" caption="triggers per own turn">
-        <EChart height={190} option={buildBars(toBars(facts.triggers_per_turn), theme, (v) => v.toFixed(2), { lollipop: true })} />
+      <Card key="annoy" placement={ORDER.annoy} title="Most annoying powers" caption="Triggers per own turn.">
+        <EChart renderer="svg" height={ANNOY_HEIGHT} option={buildBars(toBars(facts.triggers_per_turn), theme, (v) => v.toFixed(2), { lollipop: true })} />
       </Card>,
     );
   }
@@ -367,14 +405,14 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
         span={2}
         placement={ORDER.extremes}
         title="Best and worst combinations"
-        caption="VP change of the racer, net of what the opponent, board or card does to every racer"
+        caption="VP change of the racer, net of what the opponent, board or card does to every racer."
         hint="Only clear effects count: at least 4 standard errors away from zero, with 100 or more games."
       >
         <div className={`grid gap-2 ${EXTREME_COLUMNS[extremeSets.length] ?? ""}`}>
           {extremeSets.map((c) => (
             <div key={c.kind}>
               <p className="text-xs font-semibold text-slate-200">{c.title}</p>
-              <EChart height={c.items.length * 28 + 4} option={buildDivergingBars(c.items, theme)} />
+              <EChart renderer="svg" height={c.items.length * 28 + 4} option={buildDivergingBars(c.items, theme)} />
             </div>
           ))}
         </div>
@@ -385,10 +423,20 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   if (facts.mastermind_first !== null && facts.mastermind_second !== null && facts.mastermind_second_predicted !== null) {
     const rest = Math.max(0, 1 - facts.mastermind_first - facts.mastermind_second - facts.mastermind_second_predicted);
     const calls = [...facts.mastermind_calls].sort((a, b) => b.rate - a.rate);
-    const callBars = (rows: typeof calls) => toBars(rows.map((c) => ({ racer_name: c.racer_name, value: c.rate * 100 })));
+    const callBars = (rows: typeof calls): BarItem[] =>
+      rows.map((c) => ({
+        name: c.racer_name,
+        value: c.rate * 100,
+        color: colorOf(c.racer_name),
+        racer: true,
+        note: `· ${c.games.toLocaleString()} games`,
+        detail: `${displayName(c.racer_name)}: predicted to win in ${c.games.toLocaleString()} games, right ${(c.rate * 100).toFixed(1)}% of the time`,
+      }));
     const best = calls.slice(0, Math.min(5, Math.ceil(calls.length / 2)));
     const worst = calls.slice(best.length);
     const percent0 = (v: number) => `${v.toFixed(0)}%`;
+    const barOptions = { compact: true, labelWidth: MIND_LABEL_WIDTH, labelRoom: MIND_NOTE_ROOM };
+    const wideListHeight = calls.length * MIND_BAR_ROW.wide + 2 * (MIND_CAPTION_ROW + MIND_BAR_PADDING);
     bottom.push(
       <Card key="mind" placement={ORDER.mind} title="Mastermind" hint="His prediction is right when the racer he predicted wins the race.">
         <div className="grid gap-2 2xl:grid-cols-2">
@@ -397,30 +445,29 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
               <>
                 <p className="text-[11px] text-slate-400">the racer he predicted won this often</p>
                 <WideAwareChart
-                  stacked={best.length * MIND_BAR_ROW.stacked + 6}
-                  wide={best.length * MIND_BAR_ROW.wide + 6}
-                  option={buildBars(callBars(best), theme, percent0, { compact: true })}
+                  stacked={best.length * MIND_BAR_ROW.stacked + MIND_BAR_PADDING}
+                  wide={best.length * MIND_BAR_ROW.wide + MIND_BAR_PADDING}
+                  option={buildBars(callBars(best), theme, percent0, barOptions)}
                 />
                 <p className="text-[11px] text-slate-400">…and this rarely</p>
                 <WideAwareChart
-                  stacked={worst.length * MIND_BAR_ROW.stacked + 6}
-                  wide={worst.length * MIND_BAR_ROW.wide + 6}
-                  option={buildBars(callBars(worst), theme, percent0, { compact: true })}
+                  stacked={worst.length * MIND_BAR_ROW.stacked + MIND_BAR_PADDING}
+                  wide={worst.length * MIND_BAR_ROW.wide + MIND_BAR_PADDING}
+                  option={buildBars(callBars(worst), theme, percent0, barOptions)}
                 />
               </>
             )}
           </div>
           <div>
-            <p className="text-[11px] text-slate-400">how his games end</p>
             <WideAwareChart
               stacked={MIND_DONUT_HEIGHT.stacked}
-              wide={MIND_DONUT_HEIGHT.wide}
+              wide={Math.max(MIND_DONUT_HEIGHT.wide, wideListHeight)}
               option={buildPie(
                 [
                   { name: "1st", value: facts.mastermind_first, color: BADGE.gold },
                   { name: "2nd, predicted", value: facts.mastermind_second_predicted, color: BADGE.silver },
                   { name: "2nd, natural", value: facts.mastermind_second, color: BADGE.blue },
-                  { name: "other", value: rest, color: NEUTRAL.slate },
+                  { name: "other", value: rest, color: colorOf("Mastermind") },
                 ],
                 theme,
               )}
@@ -434,11 +481,11 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   if (facts.mush_table.length > 0) {
     const textColorOf = (name: string) => readableOn(colorOf(name), theme);
     bottom.push(
-      <Card key="mush" span={3} placement={ORDER.mush} title="Mush" hint={`Pairs of powers he drew in the same race, from all his games whatever the filters say. Only pairs with at least ${MIN_PAIR_GAMES} races are ranked in the charts, and each power appears at most once per chart. The table lists every pair.`}>
+      <Card key="mush" span={3} placement={ORDER.mush} title="Mush picks without repeat" hint={`Pairs of powers he drew in the same race, from all his games whatever the filters say. Only pairs with at least ${MIN_PAIR_GAMES} races are ranked in the charts, and each power appears at most once per chart. The table lists every pair.`}>
         <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_26rem]">
           <div className="grid gap-2 md:grid-cols-3">
             {mushRoses(facts.mush_table, colorOf).map((r) => (
-              <EChart key={r.name} height={ROSE_HEIGHT} option={buildRoses([r], theme)} />
+              <RoseCard key={r.name} section={r} height={MUSH_ROSE_HEIGHT} theme={theme} />
             ))}
           </div>
           <MushTable pairs={facts.mush_table} textColorOf={textColorOf} />

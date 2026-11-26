@@ -324,7 +324,7 @@ export function SimulatorConfigPanel({
                         : "border-slate-700 bg-slate-950 text-slate-400 hover:text-slate-200"
                     }`}
                   >
-                    {t}
+                    {displayName(t)}
                   </button>
                 );
               })}
@@ -347,7 +347,7 @@ export function SimulatorConfigPanel({
                         : "border-slate-700 bg-slate-950 text-slate-400 hover:text-slate-200"
                     }`}
                   >
-                    {t}
+                    {displayName(t)}
                   </button>
                 );
               })}

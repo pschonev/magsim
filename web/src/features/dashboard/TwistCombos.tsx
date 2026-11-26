@@ -2,6 +2,10 @@ import { useState } from "react";
 import { DataTable } from "../../components/DataTable";
 import { Switch } from "../../components/Switch";
 import type { TwistComboStatDTO } from "../../types/api";
+import { displayName } from "../../utils/names";
+
+/** Card names in "A → B" or "A + B" labels shown with their display names. */
+const comboLabel = (combo: string) => combo.split(/( → | \+ )/).map((part) => displayName(part)).join("");
 
 /** All combinations of twist cards that were drawn, with race length and VP; searchable and sortable. */
 export function TwistComboTable({ stats }: { stats: TwistComboStatDTO[] }) {
@@ -21,7 +25,7 @@ export function TwistComboTable({ stats }: { stats: TwistComboStatDTO[] }) {
         <DataTable
           key={String(ignoreOrder)}
           columns={["Combination", "Races", "Avg turns", "Avg total VP", "Avg abilities triggered"]}
-          rows={rows.map((r) => [r.combo, r.races, Number(r.avg_turns.toFixed(1)), Number(r.avg_total_vp.toFixed(2)), r.avg_triggers === null ? null : Number(r.avg_triggers.toFixed(1))])}
+          rows={rows.map((r) => [comboLabel(r.combo), r.races, Number(r.avg_turns.toFixed(1)), Number(r.avg_total_vp.toFixed(2)), r.avg_triggers === null ? null : Number(r.avg_triggers.toFixed(1))])}
         />
       )}
     </div>

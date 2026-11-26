@@ -11,7 +11,7 @@ import {
   VisualMapComponent,
 } from "echarts/components";
 import * as echarts from "echarts/core";
-import { CanvasRenderer } from "echarts/renderers";
+import { CanvasRenderer, SVGRenderer } from "echarts/renderers";
 import { useEffect, useRef } from "react";
 
 const CHART_FONT = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
@@ -32,6 +32,7 @@ echarts.use([
   DataZoomComponent,
   GraphicComponent,
   CanvasRenderer,
+  SVGRenderer,
 ]);
 
 export type EChartsOption = echarts.EChartsCoreOption;
@@ -40,6 +41,8 @@ export interface EChartProps {
   option: EChartsOption;
   height?: number | string;
   className?: string;
+  /** SVG keeps text crisp at any zoom or pixel ratio; canvas is faster for big data (heatmaps). */
+  renderer?: "canvas" | "svg";
   onClick?: (params: Record<string, unknown>) => void;
   onChartReady?: (chart: echarts.ECharts) => (() => void) | undefined;
 }
@@ -48,6 +51,7 @@ export function EChartImpl({
   option,
   height = 420,
   className = "",
+  renderer = "canvas",
   onClick,
   onChartReady,
 }: EChartProps) {
@@ -61,7 +65,7 @@ export function EChartImpl({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const chart = echarts.init(el, undefined, { renderer: "canvas" });
+    const chart = echarts.init(el, undefined, { renderer });
     instanceRef.current = chart;
 
     const handleClick = (params: Record<string, unknown>) => {
@@ -82,14 +86,14 @@ export function EChartImpl({
       chart.dispose();
       instanceRef.current = null;
     };
-  }, []);
+  }, [renderer]);
 
   useEffect(() => {
     const chart = instanceRef.current;
     if (!chart) return;
     chart.setOption({ textStyle: { fontFamily: CHART_FONT }, ...option }, { notMerge: true, lazyUpdate: true });
     chart.resize();
-  }, [option, height]);
+  }, [option, height, renderer]);
 
   return (
     <div

@@ -41,8 +41,8 @@ export function FilterPanel({
     `${draft.counts.join("/")} players`,
     draft.boards.length === meta.boards.length ? "all boards" : draft.boards.map(displayName).join(", "),
     ...(draft.combos.length > 0 ? [`${draft.combos.length} combo filter(s)`] : []),
-    ...(draft.forced_twists.length > 0 ? [`only ${draft.forced_twists.join(" + ")}`] : []),
-    ...(draft.excluded_twists.length > 0 ? [`without ${draft.excluded_twists.join(", ")}`] : []),
+    ...(draft.forced_twists.length > 0 ? [`only ${draft.forced_twists.map(displayName).join(" + ")}`] : []),
+    ...(draft.excluded_twists.length > 0 ? [`without ${draft.excluded_twists.map(displayName).join(", ")}`] : []),
     ...(analyzedCount !== null ? [`${analyzedCount.toLocaleString()} races analyzed`] : []),
   ].join(" · ");
 
