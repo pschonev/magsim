@@ -26,6 +26,7 @@ class Ability:
     name: AbilityName
     triggers: tuple[type[GameEvent], ...] = ()
     preferred_dice: D6VAlueSet = frozenset([4, 5, 6])
+    avoid_dice: D6VAlueSet = frozenset()
     granted: bool = False
     own: bool = False  # the racer's own starting ability; kept when a granted power swaps the core
 

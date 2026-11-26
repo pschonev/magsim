@@ -4,8 +4,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, override
 
 from magsim.ai.evaluation import (
+    banned_faces,
     get_benefit_at,
     get_hazard_at,
+    wished_faces,
 )
 from magsim.core.abilities import Ability
 from magsim.core.agent import (
@@ -116,6 +118,11 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
         # Use final_value to account for modifiers like Gunk
         dest = me.position + ctx.game_state.roll_state.final_value
 
+        # 0. BAN: Reroll a face some active ability must never see
+        if raw_roll in banned_faces(engine, me):
+            engine.log_info(f"{me.repr} uses {self.name} to avoid a banned {raw_roll}!")
+            return True
+
         # 1. PRIORITY: Keep if Excellent (Win / VP / Boost)
         if benefit := get_benefit_at(engine, dest):
             engine.log_info(f"{me.repr} keeps roll to reach {benefit}!")
@@ -126,7 +133,11 @@ class AbilityMagicalReroll(Ability, BooleanDecisionMixin):
             engine.log_info(f"{me.repr} uses {self.name} to avoid {hazard}!")
             return True
 
-        # 3. GREED: Threshold based on remaining rerolls
+        # 3. WISH: Keep a face the racer's powers want (Mush draws, soft wishes)
+        if raw_roll in wished_faces(engine, me):
+            return False
+
+        # 4. GREED: Threshold based on remaining rerolls
         threshold = 5 if self.reroll_count == 0 else 4
 
         if raw_roll < threshold:

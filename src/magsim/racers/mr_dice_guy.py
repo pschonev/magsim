@@ -4,7 +4,13 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast, override
 
-from magsim.ai.evaluation import get_benefit_at, get_current_modifiers, get_hazard_at
+from magsim.ai.evaluation import (
+    banned_faces,
+    get_benefit_at,
+    get_current_modifiers,
+    get_hazard_at,
+    wished_faces,
+)
 from magsim.core.abilities import Ability
 from magsim.core.agent import (
     SelectionDecisionContext,
@@ -84,12 +90,16 @@ class MrDiceGuyMoreAbility(Ability, MainRollMixin, SelectionDecisionMixin[int]):
             return None
 
         mods = get_current_modifiers(engine, me.idx)
-        landings = {value: me.position + value + mods for value in ctx.options}
+        banned = banned_faces(engine, me)
+        options = [v for v in ctx.options if v not in banned] or list(ctx.options)
+        landings = {value: me.position + value + mods for value in options}
 
-        for value in ctx.options:
+        for value in options:
             if benefit := get_benefit_at(engine, landings[value]):
                 engine.log_info(f"{me.repr} picks {value} to reach {benefit}!")
                 return value
 
-        safe = [v for v in ctx.options if not get_hazard_at(engine, landings[v])]
-        return safe[0] if safe else ctx.options[0]
+        safe = [v for v in options if not get_hazard_at(engine, landings[v])]
+        wished = wished_faces(engine, me)
+        candidates = [v for v in safe if v in wished] or safe
+        return candidates[0] if candidates else options[0]

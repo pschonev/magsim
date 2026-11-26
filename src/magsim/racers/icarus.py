@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from magsim.core.agent import Agent
     from magsim.core.events import AbilityTriggeredEventOrSkipped, MoveDistanceQuery
     from magsim.core.state import ActiveRacerState
-    from magsim.core.types import AbilityName, ModifierName
+    from magsim.core.types import AbilityName, D6VAlueSet, ModifierName
     from magsim.engine.game_engine import GameEngine
 
 BOOST = 3
@@ -64,6 +64,7 @@ class IcarusBoost(RacerModifier, RollModificationMixin):
 class IcarusFlightRisk(Ability, LifecycleManagedMixin):
     name: AbilityName = "IcarusFlightRisk"
     triggers: tuple[type[GameEvent], ...] = (RollResultEvent,)
+    avoid_dice: D6VAlueSet = frozenset({FATAL_DIE})
 
     @override
     def execute(
