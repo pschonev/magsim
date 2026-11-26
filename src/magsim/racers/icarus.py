@@ -65,6 +65,7 @@ class IcarusFlightRisk(Ability, LifecycleManagedMixin):
     name: AbilityName = "IcarusFlightRisk"
     triggers: tuple[type[GameEvent], ...] = (RollResultEvent,)
     avoid_dice: D6VAlueSet = frozenset({FATAL_DIE})
+    preferred_dice: D6VAlueSet = frozenset({1, 2, 3, 4, 5})
 
     @override
     def execute(

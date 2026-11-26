@@ -7,6 +7,7 @@ from magsim.ai.evaluation import (
     get_benefit_at,
     get_current_modifiers,
     get_hazard_at,
+    keeps_roll_for_draw,
 )
 from magsim.core.abilities import Ability
 from magsim.core.agent import (
@@ -85,6 +86,9 @@ class LegsMoveAbility(Ability, BooleanDecisionMixin):
         # Calculate where "Move 5" lands us
         mods = get_current_modifiers(engine, me.idx)
         target_5 = me.position + 5 + mods
+
+        if keeps_roll_for_draw(engine, me, target_5):
+            return False
 
         # 1. PRIORITY: If 5 is amazing, take it!
         if benefit := get_benefit_at(engine, target_5):

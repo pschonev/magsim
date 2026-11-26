@@ -103,6 +103,11 @@ def wished_faces(engine: GameEngine, racer: ActiveRacerState) -> frozenset[int]:
     return draws & soft or draws
 
 
+def keeps_roll_for_draw(engine: GameEngine, racer: ActiveRacerState, landing: int) -> bool:
+    """True when the racer wants a Mush draw and skipping the roll would not land on a benefit tile."""
+    return bool(draw_faces(engine, racer)) and get_benefit_at(engine, landing) is None
+
+
 def get_benefit_at(engine: GameEngine, pos: int) -> str | None:
     """
     Returns the display name of the feature making this position excellent.
