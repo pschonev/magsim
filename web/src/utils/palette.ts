@@ -40,6 +40,21 @@ export const SERIES = {
   players: [CATEGORY.orange, CATEGORY.purple, CATEGORY.teal],
 } as const;
 
+/**
+ * One colour per profile stat, in wedge order: VP, Win %, xPlayers, xSeat, xBoard, xTwist, xOpponents, xDice.
+ * Neighbours differ in hue and lightness; silver stays reserved for 2nd place. Adjust with `markOn` for the theme.
+ */
+export const PROFILE_COLORS = [
+  SERIES.vp,
+  BRAND.gold,
+  CATEGORY.purple,
+  CATEGORY.orange,
+  CATEGORY.teal,
+  CATEGORY.lime,
+  BRAND.blue,
+  "#e0353b",
+] as const;
+
 const MIN_TEXT_CONTRAST = 4.5;
 const MIN_MARK_CONTRAST = 3;
 const LIGHTNESS_STEP = 0.02;

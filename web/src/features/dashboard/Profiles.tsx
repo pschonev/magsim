@@ -1,158 +1,229 @@
-import { ArrowDown, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { EChart } from "../../components/EChart";
+import { memo, useCallback, useMemo, useState } from "react";
 import { InfoTip } from "../../components/InfoTip";
 import type { ProfileDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
-import { RACER_GLOSSARY } from "../../utils/racerGlossary";
+import { PROFILE_COLORS } from "../../utils/palette";
 import { useTheme } from "../../utils/ThemeProvider";
 import { markOn } from "./charts/chartOptions";
-import {
-  GROUP_COLORS,
-  GROUP_LABELS,
-  type AxisGroup,
-  buildRadarOption,
-  groupInk,
-  topRacer,
-} from "./charts/profileCharts";
+import { DEFAULT_SORT, PROFILE_AXES, SHARE_AXIS, SORT_OPTIONS, sortRows } from "./charts/profileCharts";
+import { ProfileDetail } from "./ProfileDetail";
+import { type HoverHandler, type HoverTarget, ProfileTip } from "./ProfileTip";
+import { RoseGlyph, ShareScale } from "./RoseGlyph";
 import type { ProfilesState } from "./useProfiles";
+import { GRID_GAP, useFitGrid } from "./useFitGrid";
 
-const RADAR_HEIGHT = 540;
-const LIST_ID = "profile-racers";
-const GROUPS: AxisGroup[] = ["performance", "factors"];
+const CARD_PAD = 5;
+const CARD_BORDER = 1;
+const NAME_ROW = 14;
+const NAME_GAP = 2;
+const SCALE_WIDTH = 16;
+const SCALE_GAP = 3;
+/** Below this glyph size the explained-share number is left out. */
+const MIN_GLYPH_FOR_NUMBER = 72;
 
-const wholePercent = (v: number) => `${Math.round(v * 100)}%`;
-
-interface RacerPickerProps {
-  rows: ProfileDTO[];
-  selected: string;
-  color: string;
-  onSelect: (racer: string) => void;
-}
-
-function RacerPicker({ rows, selected, color, onSelect }: RacerPickerProps) {
-  const [text, setText] = useState(displayName(selected));
-  useEffect(() => setText(displayName(selected)), [selected]);
-  const byLabel = new Map(rows.map((r) => [displayName(r.racer_name).toLowerCase(), r.racer_name]));
-  const labels = rows.map((r) => displayName(r.racer_name)).sort((a, b) => a.localeCompare(b));
-  return (
-    <div className="relative w-full">
-      <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-      <input
-        type="text"
-        list={LIST_ID}
-        value={text}
-        onFocus={(e) => e.currentTarget.select()}
-        onChange={(e) => {
-          setText(e.target.value);
-          const match = byLabel.get(e.target.value.trim().toLowerCase());
-          if (match) onSelect(match);
-        }}
-        onBlur={() => setText(displayName(selected))}
-        placeholder="Search racer"
-        aria-label="Racer"
-        style={{ borderLeftColor: color, borderLeftWidth: 4, color }}
-        className="w-full rounded-md border border-slate-700 bg-slate-950 py-1.5 pr-2 pl-7 text-sm font-semibold placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
-      />
-      <datalist id={LIST_ID}>
-        {labels.map((label) => (
-          <option key={label} value={label} />
-        ))}
-      </datalist>
-    </div>
+function glyphSize(cardWidth: number, cardHeight: number): number {
+  const chrome = 2 * (CARD_PAD + CARD_BORDER);
+  return Math.floor(
+    Math.min(cardHeight - chrome - NAME_ROW - NAME_GAP, cardWidth - chrome - SCALE_WIDTH - SCALE_GAP),
   );
 }
 
-function ExplainedShare({ profile, ink }: { profile: ProfileDTO; ink: string }) {
-  const percentile = profile.pct_explained_share;
+interface OverviewCardProps {
+  profile: ProfileDTO;
+  ink: string;
+  statColors: readonly string[];
+  cardWidth: number;
+  cardHeight: number;
+  onOpen: (racer: string) => void;
+  onHover: HoverHandler;
+}
+
+const OverviewCard = memo(function OverviewCard({
+  profile,
+  ink,
+  statColors,
+  cardWidth,
+  cardHeight,
+  onOpen,
+  onHover,
+}: OverviewCardProps) {
+  const size = glyphSize(cardWidth, cardHeight);
+  const name = displayName(profile.racer_name);
   return (
-    <div className="space-y-1">
-      <div className="flex items-baseline gap-3">
-        <span className="font-display text-6xl font-bold tabular-nums" style={{ color: ink }}>
-          {wholePercent(profile.explained_share)}
-        </span>
-        <span className="text-xs font-semibold text-slate-300">Explained share</span>
-      </div>
-      <div className="relative pt-6">
-        <div className="h-3 rounded-full bg-slate-700" />
-        <div className="absolute top-6 left-1/2 h-3 w-px -translate-x-1/2 bg-slate-400" aria-hidden="true" />
-        <ArrowDown
-          className="absolute top-0 h-6 w-6 -translate-x-1/2"
-          style={{ left: `${percentile * 100}%`, color: ink }}
-          strokeWidth={3}
-          aria-hidden="true"
+    <button
+      type="button"
+      aria-label={`Open ${name}`}
+      onClick={() => onOpen(profile.racer_name)}
+      style={{ padding: CARD_PAD }}
+      className="flex min-w-0 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-md border border-slate-800 bg-slate-900 hover:border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+    >
+      <span className="w-full truncate text-center text-[11px] leading-[14px] font-bold" style={{ color: ink }}>
+        {name}
+      </span>
+      <span className="flex items-start" style={{ gap: SCALE_GAP }}>
+        <RoseGlyph
+          size={size}
+          profile={profile}
+          colors={statColors}
+          onHover={(hit) => onHover(hit && { profile, axisIndex: hit.index, x: hit.x, y: hit.y })}
         />
-      </div>
-      <div className="grid grid-cols-3 text-[11px] text-slate-400">
-        <span>least explainable</span>
-        <span className="text-center">typical</span>
-        <span className="text-right">most explainable</span>
-      </div>
-      <p className="text-xs text-slate-300">more explainable than {Math.round(percentile * 100)} % of racers</p>
-    </div>
+        <ShareScale
+          rank={profile.pct_explained_share}
+          height={size}
+          label={size >= MIN_GLYPH_FOR_NUMBER ? SHARE_AXIS.display(profile) : undefined}
+          onHover={(hit) => onHover(hit && { profile, axisIndex: null, x: hit.x, y: hit.y })}
+        />
+      </span>
+    </button>
   );
+});
+
+interface OverviewGridProps {
+  rows: ProfileDTO[];
+  inks: Map<string, string>;
+  statColors: readonly string[];
+  onOpen: (racer: string) => void;
+  onHover: HoverHandler;
 }
 
-function SmallStat({ label, value, title }: { label: string; value: string; title: string }) {
-  return (
-    <span title={title} className="inline-flex items-baseline gap-1">
-      {label}
-      <span className="font-semibold text-slate-300 tabular-nums">{value}</span>
-    </span>
-  );
-}
-
-function RacerCard({ profile, color }: { profile: ProfileDTO; color: string }) {
-  const entry = RACER_GLOSSARY.find((e) => e.key === profile.racer_name);
+function OverviewGrid({ rows, inks, statColors, onOpen, onHover }: OverviewGridProps) {
+  const { ref, layout } = useFitGrid(rows.length);
   return (
     <div
-      className="space-y-1 rounded-lg border border-slate-700 bg-slate-900 p-3"
-      style={{ borderLeftColor: color, borderLeftWidth: 4 }}
+      ref={ref}
+      className="grid"
+      style={
+        layout
+          ? {
+              gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
+              gridAutoRows: `${layout.cardHeight}px`,
+              gap: GRID_GAP,
+            }
+          : undefined
+      }
     >
-      <div className="font-display text-base font-bold" style={{ color }}>
-        {displayName(profile.racer_name)}
-      </div>
-      {entry && (
-        <>
-          <div className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">{entry.title}</div>
-          <p className="text-sm text-slate-200">{entry.ability}</p>
-          {entry.clarifications && <p className="text-xs text-slate-400">{entry.clarifications}</p>}
-        </>
-      )}
-      <div className="flex flex-wrap gap-x-4 gap-y-0.5 border-t border-slate-800 pt-1.5 text-[11px] text-slate-500">
-        <SmallStat
-          label="Speed"
-          value={profile.speed.toFixed(2)}
-          title="Average raw speed per turn: the average roll plus ability movement, as in the Overview table"
-        />
-        <SmallStat
-          label="Ability triggers per turn"
-          value={profile.triggers_per_turn.toFixed(2)}
-          title="How often this racer's abilities trigger per turn it takes"
-        />
-        <SmallStat label="Races" value={profile.races.toLocaleString()} title="Races this racer is in" />
-      </div>
+      {layout &&
+        rows.map((profile) => (
+          <OverviewCard
+            key={profile.racer_name}
+            profile={profile}
+            ink={inks.get(profile.racer_name) ?? ""}
+            statColors={statColors}
+            cardWidth={layout.cardWidth}
+            cardHeight={layout.cardHeight}
+            onOpen={onOpen}
+            onHover={onHover}
+          />
+        ))}
     </div>
   );
 }
 
-function RadarPanel({ profile, rows, color }: { profile: ProfileDTO; rows: ProfileDTO[]; color: string }) {
-  const { chart: theme } = useTheme();
-  const option = useMemo(() => buildRadarOption(profile, rows, color, theme), [profile, rows, color, theme]);
+interface ControlsProps {
+  statColors: readonly string[];
+  sortId: string;
+  onSort: (id: string) => void;
+}
+
+function Controls({ statColors, sortId, onSort }: ControlsProps) {
   return (
-    <div>
-      <EChart renderer="svg" height={RADAR_HEIGHT} option={option} />
-      <div className="flex flex-wrap justify-center gap-x-5 gap-y-1 text-[11px]">
-        {GROUPS.map((group) => (
-          <span key={group} className="inline-flex items-center gap-1.5" style={{ color: groupInk(group, theme) }}>
-            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: GROUP_COLORS[group] }} />
-            {GROUP_LABELS[group]}
-          </span>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-300">
+      <ul className="flex flex-wrap items-center gap-x-3 gap-y-1" aria-label="Colour legend">
+        {PROFILE_AXES.map((axis, i) => (
+          <li key={axis.label} className="inline-flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: statColors[i] }} />
+            {axis.label}
+          </li>
         ))}
-      </div>
-      <p className="text-center text-[11px] text-slate-500">
-        Shape = rank among all racers · numbers = the racer&apos;s actual values
-      </p>
+      </ul>
+      <label className="ml-auto inline-flex items-center gap-1.5 text-slate-400">
+        Sort:
+        <select
+          value={sortId}
+          onChange={(e) => onSort(e.target.value)}
+          className="rounded-md border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-[11px] text-slate-200"
+        >
+          {SORT_OPTIONS.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.text}
+            </option>
+          ))}
+        </select>
+      </label>
+      <InfoTip label="More about profiles">
+        <p>
+          <strong className="text-slate-50">Explained share</strong> is how much of this racer&apos;s VP variation from
+          race to race the six x-factors together account for; the rest is in-race interplay we don&apos;t track.
+        </p>
+        <p>
+          <strong className="text-slate-50">x = explainable:</strong> the share of this racer&apos;s VP variation (race
+          to race) that the factor accounts for. The shape shows rank among racers; the numbers are actual values.
+        </p>
+        <p>
+          Each wedge is one stat: its length is the racer&apos;s rank among all racers (rings at 50 % and 100 %), its
+          colour only repeats the stat. The bar on the right is the explained share; the marker is the racer&apos;s rank
+          (top = most explainable). Click a racer to enlarge it.
+        </p>
+        <p>The six factors are players, seat, board, twist card, opponents and dice.</p>
+        <p>
+          Values come from all races; the dashboard filters do not apply. Profiles are computed for the bundled dataset
+          only; shares of variance, not effect sizes.
+        </p>
+      </InfoTip>
+    </div>
+  );
+}
+
+interface ProfilesReadyProps {
+  rows: ProfileDTO[];
+  racerColors: Record<string, string>;
+  selected: string | null;
+  onSelect: (racer: string | null) => void;
+}
+
+function ProfilesReady({ rows, racerColors, selected, onSelect }: ProfilesReadyProps) {
+  const { chart: theme } = useTheme();
+  const [sortId, setSortId] = useState(DEFAULT_SORT);
+  const [hover, setHover] = useState<HoverTarget | null>(null);
+  const sorted = useMemo(() => sortRows(rows, sortId), [rows, sortId]);
+  const statColors = useMemo(() => PROFILE_COLORS.map((c) => markOn(c, theme)), [theme]);
+  const inks = useMemo(
+    () => new Map(rows.map((r) => [r.racer_name, markOn(racerColors[r.racer_name] ?? theme.accent, theme)])),
+    [rows, racerColors, theme],
+  );
+  const choose = useCallback(
+    (racer: string | null) => {
+      setHover(null);
+      onSelect(racer);
+    },
+    [onSelect],
+  );
+  const profile = rows.find((r) => r.racer_name === selected);
+  return (
+    <div className="space-y-2">
+      {profile ? (
+        <ProfileDetail
+          profile={profile}
+          rows={sorted}
+          ink={inks.get(profile.racer_name) ?? theme.text}
+          statColors={statColors}
+          onSelect={choose}
+          onHover={setHover}
+        />
+      ) : (
+        <>
+          <Controls statColors={statColors} sortId={sortId} onSort={setSortId} />
+          <OverviewGrid rows={sorted} inks={inks} statColors={statColors} onOpen={choose} onHover={setHover} />
+        </>
+      )}
+      {hover && (
+        <ProfileTip
+          target={hover}
+          rows={rows}
+          statColors={statColors}
+          ink={inks.get(hover.profile.racer_name) ?? theme.text}
+        />
+      )}
     </div>
   );
 }
@@ -160,54 +231,17 @@ function RadarPanel({ profile, rows, color }: { profile: ProfileDTO; rows: Profi
 interface ProfilesProps {
   state: ProfilesState;
   racerColors: Record<string, string>;
-  /** The chosen racer; null until the user picks one (then the racer with the highest average VP). */
+  /** The opened racer; null shows the overview of all racers. */
   selected: string | null;
-  onSelect: (racer: string) => void;
+  onSelect: (racer: string | null) => void;
 }
 
 export function Profiles({ state, racerColors, selected, onSelect }: ProfilesProps) {
-  const { chart: theme } = useTheme();
   if (state.status === "loading") {
     return <p className="p-6 text-center text-xs text-slate-400">Loading profiles…</p>;
   }
   if (state.status === "unavailable") {
     return <p className="p-6 text-center text-xs text-slate-400">Profiles are only available for the bundled dataset</p>;
   }
-  const { rows } = state;
-  const profile = rows.find((r) => r.racer_name === selected) ?? topRacer(rows);
-  const color = markOn(racerColors[profile.racer_name] ?? theme.accent, theme);
-  const ink = groupInk("factors", theme);
-  return (
-    <div className="space-y-2">
-      <div className="flex items-start gap-2 text-xs text-slate-400">
-        <div className="space-y-0.5">
-          <p>
-            <strong className="text-slate-200">Explained share</strong> is how much of this racer&apos;s VP variation
-            from race to race the six x-factors together account for; the rest is in-race interplay we don&apos;t track.
-          </p>
-          <p>
-            <strong className="text-slate-200">x = explainable:</strong> the share of this racer&apos;s VP variation
-            (race to race) that the factor accounts for. The shape shows rank among racers; the numbers are actual values.
-          </p>
-        </div>
-        <InfoTip label="More about profiles">
-          <p>
-            The six factors are players, seat, board, twist card, opponents and dice. A high explained share means the
-            setup tells a lot about how this racer does; a low one means results depend on in-race interactions we
-            can&apos;t see.
-          </p>
-          <p>Values come from all races: the dashboard filters do not apply. Shares of variance, not effect sizes.</p>
-        </InfoTip>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-[minmax(0,11fr)_minmax(0,9fr)]">
-        <RadarPanel profile={profile} rows={rows} color={color} />
-        <div className="flex flex-col gap-5 md:self-center">
-          <RacerPicker rows={rows} selected={profile.racer_name} color={color} onSelect={onSelect} />
-          <ExplainedShare profile={profile} ink={ink} />
-          <RacerCard profile={profile} color={color} />
-        </div>
-      </div>
-    </div>
-  );
+  return <ProfilesReady rows={state.rows} racerColors={racerColors} selected={selected} onSelect={onSelect} />;
 }
