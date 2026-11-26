@@ -297,10 +297,10 @@ def _df_to_global_dynamics(df: pl.DataFrame) -> list[GlobalDynamicsRowDTO]:
             trip_rate=_safe_float(row["trip_rate"]),
             abilities_triggered=_safe_float(row["abilities_triggered"]),
             avg_vp=_safe_float(row["avg_vp"]),
-            dice_dep=_safe_float(row["dice_dep"]),
-            ability_dep=_safe_float(row["ability_dep"]),
-            start_bias=_safe_float(row["start_bias"]),
-            midgame_bias=_safe_float(row["midgame_bias"]),
+            roll_sens=_safe_float(row["roll_sens"]),
+            ability_payoff=_safe_float(row["ability_payoff"]),
+            going_first_bonus=_safe_float(row["going_first_bonus"]),
+            lead_bonus=_safe_float(row["lead_bonus"]),
         )
         for row in df.to_dicts()
     ]

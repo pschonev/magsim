@@ -10,6 +10,7 @@ from magsim.analysis.distributions import (
     compute_twist_combo_stats,
     compute_value_distributions,
 )
+from magsim.analysis.global_sensitivities import compute_global_sensitivities
 from magsim.analysis.interactions import (
     compute_environment_matrix,
     compute_environment_totals,
@@ -614,7 +615,11 @@ def run_full_analysis(
     prepared = prepare_metrics_data(df_races_f, df_racer_results_f)
     racer_stats = compute_racer_stats(prepared)
     abilities = compute_abilities_breakdown(prepared.stats_results)
-    global_dynamics = compute_global_dynamics(prepared, df_races_f)
+    global_dynamics = compute_global_dynamics(prepared, df_races_f).join(
+        compute_global_sensitivities(df_racer_results_f, df_races_f),
+        on=["board", "racer_count"],
+        how="left",
+    )
     dist_global, dist_faceted = compute_distributions(prepared.dist_raw)
     matchup_matrix = compute_matchup_matrix(prepared.stats_results, racer_stats)
     environment_matrix = compute_environment_matrix(prepared.stats_results, df_races_f)

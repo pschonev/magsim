@@ -65,8 +65,9 @@ def with_racer_extras(
     trigger_pull: pl.DataFrame,
     extras: pl.DataFrame,
 ) -> dict[str, pl.DataFrame]:
-    """Add the extra per-racer columns and move columns between tables (see the dashboard to-do list)."""
+    """Add the extra per-racer columns, move columns between tables and drop the retired pooled correlations from the VP table."""
     result = dict(tables)
+    result["vp"] = result["vp"].select("Racer", "Avg VP")
     if not trigger_pull.is_empty():
         caused = trigger_pull.select(
             pl.col("racer_name").alias("Racer"),

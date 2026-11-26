@@ -79,6 +79,7 @@ export function App() {
   );
   const [incoming, setIncoming] = useState<IncomingRace | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploaded, setUploaded] = useState(false);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
 
   useEffect(() => {
@@ -86,6 +87,7 @@ export function App() {
     let cancelled = false;
     setClient(worker);
     setBootResult(null);
+    setUploaded(false);
     setInitialAnalysis(null);
     setBootError(null);
     setProgress(INITIAL_PROGRESS);
@@ -144,6 +146,7 @@ export function App() {
     if (!client) return;
     const datasetMeta = await client.loadDatasetBytes(racesBytes, resultsBytes, format);
     setBootResult((prev) => (prev ? { ...prev, datasetMeta } : prev));
+    setUploaded(true);
   };
 
   if (!bootResult || !client) {
@@ -226,7 +229,7 @@ export function App() {
 
       <main className="w-full flex-1 p-2 sm:p-4">
         <div hidden={activeTab !== "dashboard"}>
-          <DashboardView client={client} meta={datasetMeta} initialAnalysis={initialAnalysis} />
+          <DashboardView client={client} meta={datasetMeta} initialAnalysis={initialAnalysis} bundled={!uploaded} />
         </div>
         {visited.has("data") && (
           <div hidden={activeTab !== "data"}>

@@ -10,8 +10,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-from magsim.analysis.export import export_parquet_to_ipc
+import msgspec
+import polars as pl
 
+from magsim.analysis.export import export_parquet_to_ipc
+from magsim.analysis.filters import clean_races_df
+from magsim.analysis.profiles import compute_profiles
+from magsim.web.schemas import ProfileDTO
+
+PROFILES_FILE = "profiles.json"
+PROFILE_DECIMALS = 5
 PYODIDE_VERSION = "314.0.8"
 DATASET_FILES = ("races.parquet", "racer_results.parquet")
 MUSH_FILE = "mush_pairs.parquet"
@@ -73,6 +81,15 @@ def export_ipc(src_parquet: Path, dst_ipc: Path) -> None:
     export_parquet_to_ipc(src_parquet, dst_ipc, compression="zstd")
 
 
+def write_profiles(source_results: Path, dst_json: Path) -> None:
+    """Compute the per-racer profiles of the bundled dataset and write them as a JSON list of ProfileDTO."""
+    races = clean_races_df(pl.read_parquet(source_results / "races.parquet"))
+    results = pl.read_parquet(source_results / "racer_results.parquet")
+    profiles = compute_profiles(results, races).with_columns(pl.col(pl.Float64).round(PROFILE_DECIMALS))
+    dtos = [msgspec.convert(row, ProfileDTO) for row in profiles.to_dicts()]
+    dst_json.write_bytes(msgspec.json.encode(dtos))
+
+
 def prepare_web_assets(
     repo_root: Path,
     *,
@@ -106,6 +123,9 @@ def prepare_web_assets(
     if (source_results / MUSH_FILE).exists():
         export_ipc(source_results / MUSH_FILE, mush_ipc)
         manifest["mushPairs"] = f"results/{mush_ipc.name}"
+    profiles_json = results_dir / PROFILES_FILE
+    write_profiles(source_results, profiles_json)
+    manifest["profiles"] = f"results/{profiles_json.name}"
     manifest_path = target_public / "runtime-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest

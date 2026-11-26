@@ -59,7 +59,7 @@ function MetricGrid({ analysis }: { analysis: DashboardAnalysisDTO }) {
   return (
     <div className="grid grid-cols-2 gap-px bg-slate-800 lg:grid-cols-5">
       {metrics.map((m) => (
-        <EChart key={m.key} height={230} option={buildGroupedBarOption(rows, m.key, m.label, theme)} />
+        <EChart key={m.key} height={230} option={buildGroupedBarOption(rows, m.key, m.label, theme, m.share)} />
       ))}
     </div>
   );
@@ -168,14 +168,16 @@ function GroupCurves({ analysis, kind, series }: { analysis: DashboardAnalysisDT
   );
 }
 
-export type GlobalPart = "dynamics" | "distributions" | "twists";
+export type GlobalPart = "dynamics" | "twists";
 
-const PART_NOTES: Record<GlobalPart | "boards", ReactNode> = {
+const PART_NOTES: Record<GlobalPart | "distributions" | "boards", ReactNode> = {
   dynamics: (
     <Description
       lines={[
-        { bold: "Dice Dep:", text: " Correlation between raw dice roll sums and final Victory Points." },
-        { bold: "Ability Dep:", text: " Correlation between net movement from abilities and final Victory Points." },
+        { bold: "Roll Sens:", text: " how much of a racer's VP is decided by the dice it rolls (share of variance), averaged over racers." },
+        { bold: "Extra VP When Active:", text: " VP a racer gains in races where its ability fires a lot compared with races where it fires little, as share of its average VP, averaged over racers." },
+        { bold: "Going-First Bonus:", text: " how much more VP the first seat scores than the last, as a share of average VP." },
+        { bold: "Lead Bonus:", text: " VP per tile of lead at two thirds of the race, as a share of average VP." },
         { bold: "Trip Rate:", text: " Percentage of total turns spent recovering from trips across the race." },
         { bold: "Abilities Triggered:", text: " Average total ability triggers per race, scaled by player count." },
       ]}
@@ -219,28 +221,29 @@ export function GlobalCharts({ analysis, part }: { analysis: DashboardAnalysisDT
   return (
     <div className="space-y-4">
       {part === "dynamics" && (
-        <Card title="Dynamics by board and player count" aside={<Legend counts={counts} />}>
-          <MetricGrid analysis={analysis} />
-        </Card>
-      )}
-      {part === "distributions" && (
         <>
-          <Card title="How long races last, how many VP they hand out and how many abilities fire">
+          <Card title="Dynamics by board and player count" aside={<Legend counts={counts} />}>
+            <MetricGrid analysis={analysis} />
+          </Card>
+          {PART_NOTES.dynamics}
+          <Card title="Distributions across all boards: how long races last, how many VP they hand out and how many abilities fire">
             <Distributions analysis={analysis} />
           </Card>
           {PART_NOTES.distributions}
-          <Card title="By board and player count" aside={controls}>
-            <GroupCurves analysis={analysis} kind="board" series={chosen} />
-          </Card>
-          {PART_NOTES.boards}
         </>
       )}
       {part === "twists" && (
-        <Card title="By Twisty Twirl card and player count" aside={controls}>
-          <GroupCurves analysis={analysis} kind="twist" series={chosen} />
-        </Card>
+        <>
+          <Card title="Distributions by board and player count" aside={controls}>
+            <GroupCurves analysis={analysis} kind="board" series={chosen} />
+          </Card>
+          {PART_NOTES.boards}
+          <Card title="Distributions by Twisty Twirl card and player count" aside={controls}>
+            <GroupCurves analysis={analysis} kind="twist" series={chosen} />
+          </Card>
+          {PART_NOTES.twists}
+        </>
       )}
-      {part !== "distributions" && PART_NOTES[part]}
     </div>
   );
 }

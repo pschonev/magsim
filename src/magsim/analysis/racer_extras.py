@@ -11,12 +11,15 @@ ENVIRONMENT = ["board", "racer_count"]
 FIXED_DICE_TWIST = "Randomness Ceased"
 
 
-def _without_fixed_dice(stats_results: pl.DataFrame, df_races_f: pl.DataFrame) -> pl.DataFrame:
+def without_fixed_dice(stats_results: pl.DataFrame, df_races_f: pl.DataFrame) -> pl.DataFrame:
     """Drop the races where a twist card froze every racer's die: one roll decides the whole race there."""
     if "twists" not in df_races_f.columns:
         return stats_results
     fixed = df_races_f.filter(pl.col("twists").list.contains(FIXED_DICE_TWIST)).select("config_hash")
     return stats_results.join(fixed, on="config_hash", how="anti")
+
+
+_without_fixed_dice = without_fixed_dice
 
 
 def compute_racer_extras(
@@ -56,7 +59,7 @@ def compute_racer_extras(
         .fill_null(0.0)
     )
     return (
-        preferences.join(compute_roll_dependence(_without_fixed_dice(stats_results, df_races_f)), on="racer_name", how="left")
+        preferences.join(compute_roll_dependence(without_fixed_dice(stats_results, df_races_f)), on="racer_name", how="left")
         .join(compute_racer_profile(stats_results, df_races_f), on="racer_name", how="left")
         .sort("racer_name")
     )

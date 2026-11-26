@@ -96,10 +96,10 @@ export interface GlobalDynamicsRowDTO {
   trip_rate: number;
   abilities_triggered: number;
   avg_vp: number;
-  dice_dep: number;
-  ability_dep: number;
-  start_bias: number;
-  midgame_bias: number;
+  roll_sens: number;
+  ability_payoff: number;
+  going_first_bonus: number;
+  lead_bonus: number;
 }
 
 export interface ValueShareDTO {
@@ -191,6 +191,31 @@ export interface MushPairDTO {
   games: number;
   average_vp: number;
   top2_rate: number | null;
+}
+
+export interface ProfileDTO {
+  racer_name: string;
+  races: number;
+  avg_vp: number;
+  win_rate: number;
+  speed: number;
+  triggers_per_turn: number;
+  r2_players: number;
+  r2_seat: number;
+  r2_board: number;
+  r2_twist: number;
+  r2_opponents: number;
+  r2_dice: number;
+  explained_share: number;
+  pct_avg_vp: number;
+  pct_win_rate: number;
+  pct_r2_players: number;
+  pct_r2_seat: number;
+  pct_r2_board: number;
+  pct_r2_twist: number;
+  pct_r2_opponents: number;
+  pct_r2_dice: number;
+  pct_explained_share: number;
 }
 
 export interface FaceShareDTO {
@@ -476,6 +501,8 @@ export interface RuntimeManifest {
   racerResults: string;
   /** Mush's power pairs; older builds have none. */
   mushPairs?: string;
+  /** Per-racer profiles (JSON list of ProfileDTO) of the bundled dataset; older builds have none. */
+  profiles?: string;
   pyodideVersion: string;
 }
 

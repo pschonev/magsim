@@ -114,10 +114,10 @@ class GlobalDynamicsRowDTO(msgspec.Struct, frozen=True):
     trip_rate: float
     abilities_triggered: float
     avg_vp: float
-    dice_dep: float
-    ability_dep: float
-    start_bias: float
-    midgame_bias: float
+    roll_sens: float
+    ability_payoff: float
+    going_first_bonus: float
+    lead_bonus: float
 
 
 class ValueShareDTO(msgspec.Struct, frozen=True):
@@ -235,6 +235,33 @@ class MushPairDTO(msgspec.Struct, frozen=True):
     games: int
     average_vp: float
     top2_rate: float | None
+
+
+class ProfileDTO(msgspec.Struct, frozen=True):
+    """One racer's performance, adjusted R squared per factor group and the percentile rank (0 to 1) of each among all racers."""
+
+    racer_name: str
+    races: int
+    avg_vp: float
+    win_rate: float
+    speed: float
+    triggers_per_turn: float
+    r2_players: float
+    r2_seat: float
+    r2_board: float
+    r2_twist: float
+    r2_opponents: float
+    r2_dice: float
+    explained_share: float
+    pct_avg_vp: float
+    pct_win_rate: float
+    pct_r2_players: float
+    pct_r2_seat: float
+    pct_r2_board: float
+    pct_r2_twist: float
+    pct_r2_opponents: float
+    pct_r2_dice: float
+    pct_explained_share: float
 
 
 class FaceShareDTO(msgspec.Struct, frozen=True):

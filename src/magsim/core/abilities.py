@@ -27,6 +27,7 @@ class Ability:
     triggers: tuple[type[GameEvent], ...] = ()
     preferred_dice: D6VAlueSet = frozenset([4, 5, 6])
     granted: bool = False
+    own: bool = False  # the racer's own starting ability; kept when a granted power swaps the core
 
     def register(self, engine: GameEngine, owner_idx: int):
         """Subscribes this ability to the engine events defined in `triggers`."""

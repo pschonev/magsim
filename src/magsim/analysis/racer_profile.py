@@ -58,15 +58,46 @@ def swinginess(base: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def profile_base(stats_results: pl.DataFrame, df_races_f: pl.DataFrame) -> pl.DataFrame:
+    """Results with the race's player count and the VP relative to the race average (`vp_rel`)."""
+    return stats_results.join(
+        df_races_f.select("config_hash", "racer_count"),
+        on="config_hash",
+        how="inner",
+    ).with_columns(
+        (pl.col("final_vp") - pl.col("final_vp").mean().over("config_hash")).alias(
+            "vp_rel",
+        ),
+    )
+
+
+def _seated(base: pl.DataFrame) -> pl.DataFrame:
+    """Rows of races with more than one racer, with the seat as a fraction (0 first, 1 last)."""
+    return base.filter(pl.col("racer_count") > 1).with_columns(
+        (pl.col("racer_id") / (pl.col("racer_count") - 1)).alias("seat_frac"),
+    )
+
+
+def field_seat_slope(base: pl.DataFrame) -> float | None:
+    """VP slope of `vp_rel` on the seat fraction over all racers (negative when the first seat is better)."""
+    if not _has(base, "racer_id", "racer_count"):
+        return None
+    return _seated(base).select(_slope("seat_frac")).item()
+
+
+def field_lead_slope(base: pl.DataFrame) -> float | None:
+    """VP per tile of lead at two thirds of the race over all racers."""
+    if not _has(base, "midgame_relative_pos"):
+        return None
+    return base.drop_nulls("midgame_relative_pos").select(_slope("midgame_relative_pos")).item()
+
+
 def seat_lift(base: pl.DataFrame) -> pl.DataFrame:
     """VP gained from the first seat instead of the last, minus what every racer gains."""
     if not _has(base, "racer_id", "racer_count"):
         return pl.DataFrame(schema={"racer_name": pl.Utf8, "seat_lift": pl.Float64})
-    seated = base.filter(pl.col("racer_count") > 1).with_columns(
-        (pl.col("racer_id") / (pl.col("racer_count") - 1)).alias("seat_frac"),
-    )
-    field = seated.select(_slope("seat_frac")).item()
-    return seated.group_by("racer_name").agg(
+    field = field_seat_slope(base)
+    return _seated(base).group_by("racer_name").agg(
         (field - _slope("seat_frac")).alias("seat_lift"),
     )
 
@@ -75,9 +106,8 @@ def lead_lift(base: pl.DataFrame) -> pl.DataFrame:
     """VP per tile of lead at two thirds of the race, minus what every racer gains."""
     if not _has(base, "midgame_relative_pos"):
         return pl.DataFrame(schema={"racer_name": pl.Utf8, "lead_lift": pl.Float64})
-    known = base.drop_nulls("midgame_relative_pos")
-    field = known.select(_slope("midgame_relative_pos")).item()
-    return known.group_by("racer_name").agg(
+    field = field_lead_slope(base)
+    return base.drop_nulls("midgame_relative_pos").group_by("racer_name").agg(
         (_slope("midgame_relative_pos") - field).alias("lead_lift"),
     )
 
@@ -117,15 +147,7 @@ def compute_racer_profile(
     stats_results: pl.DataFrame, df_races_f: pl.DataFrame,
 ) -> pl.DataFrame:
     """Swinginess, seat lift, lead lift, ability payoff and fires-when-behind per racer (null when unknown)."""
-    base = stats_results.join(
-        df_races_f.select("config_hash", "racer_count"),
-        on="config_hash",
-        how="inner",
-    ).with_columns(
-        (pl.col("final_vp") - pl.col("final_vp").mean().over("config_hash")).alias(
-            "vp_rel",
-        ),
-    )
+    base = profile_base(stats_results, df_races_f)
     never_fires = (
         [(pl.col("ability_trigger_count").sum() == 0).alias("never_fires")]
         if "ability_trigger_count" in base.columns

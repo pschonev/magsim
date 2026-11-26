@@ -20,7 +20,7 @@ def _dice_columns(frame: pl.DataFrame) -> tuple[str, ...] | None:
     return None
 
 
-def _predictors(frame: pl.DataFrame) -> list[pl.Expr]:
+def dice_predictors(frame: pl.DataFrame) -> list[pl.Expr]:
     """Per game: the share of the racer's dice that were each number, whether each number came up at all, and how often.
 
     Games without a roll keep all zeros. Mr Dice Guy also gets his turns without a duplicate to pick.
@@ -58,7 +58,7 @@ def solve_linear_system(matrix: list[list[float]], vector: list[float]) -> list[
     return solution
 
 
-def _adjusted_r2(row: dict[str, float], predictors: int) -> float:
+def adjusted_r2(row: dict[str, float], predictors: int) -> float:
     """Adjusted R squared of a lightly ridged regression of VP on the predictors, from their (co)variances."""
     if row["n"] < MIN_RACES or row["vy"] <= MIN_VARIANCE:
         return 0.0
@@ -83,10 +83,10 @@ def compute_roll_dependence(stats_results: pl.DataFrame) -> pl.DataFrame:
     """Per racer: the share of its VP variance that the dice it rolled explain (adjusted R squared).
 
     The predictors are the share of the racer's dice per number, whether each number came up
-    and how often it did (see `_predictors`). Every game counts, including games without a roll.
+    and how often it did (see `dice_predictors`). Every game counts, including games without a roll.
     Falls back to the kept main-move faces, then to the average roll, for older datasets.
     """
-    predictors = _predictors(stats_results)
+    predictors = dice_predictors(stats_results)
     count = len(predictors)
     framed = stats_results.lazy().with_columns(*(expr.alias(f"x_{i}") for i, expr in enumerate(predictors)))
     covariances = [
@@ -105,7 +105,7 @@ def compute_roll_dependence(stats_results: pl.DataFrame) -> pl.DataFrame:
     return pl.DataFrame(
         {
             "racer_name": [row["racer_name"] for row in rows],
-            "roll_dependence": [_adjusted_r2(row, count) for row in rows],
+            "roll_dependence": [adjusted_r2(row, count) for row in rows],
         },
         schema={"racer_name": pl.Utf8, "roll_dependence": pl.Float64},
     )

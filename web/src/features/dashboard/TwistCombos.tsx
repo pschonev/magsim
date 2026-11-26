@@ -16,7 +16,7 @@ export function TwistComboTable({ stats }: { stats: TwistComboStatDTO[] }) {
       <div className="flex flex-wrap items-center gap-6">
         <Switch label="Ignore draw order" checked={ignoreOrder} onChange={setIgnoreOrder} />
         <span className="text-xs text-slate-400">
-          {rows.length} combinations of several cards (single cards are under By twist card). Each combination has only a few hundred races, so differences of a turn or less are noise.
+          {rows.length} combinations of several cards (single cards are under By board & twist card). Each combination has only a few hundred races, so differences of a turn or less are noise.
         </span>
       </div>
       {rows.length === 0 ? (

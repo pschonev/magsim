@@ -445,21 +445,28 @@ export function buildAbilityOption(
   };
 }
 
-export const GLOBAL_METRICS_A = [
+export interface GlobalMetric {
+  key: keyof GlobalDynamicsRowDTO;
+  label: string;
+  /** The value is a share (0.05 = 5 %) and is shown as a percentage. */
+  share?: boolean;
+}
+
+export const GLOBAL_METRICS_A: readonly GlobalMetric[] = [
   { key: "avg_vp", label: "Avg VP" },
   { key: "avg_turns", label: "Avg Turns" },
   { key: "tightness", label: "Tightness" },
   { key: "volatility", label: "Volatility" },
   { key: "trip_rate", label: "Trip Rate" },
-] as const;
+];
 
-export const GLOBAL_METRICS_B = [
-  { key: "dice_dep", label: "Dice Dep" },
-  { key: "ability_dep", label: "Ability Dep" },
-  { key: "start_bias", label: "Start Bias" },
-  { key: "midgame_bias", label: "MidGame Bias" },
+export const GLOBAL_METRICS_B: readonly GlobalMetric[] = [
+  { key: "roll_sens", label: "Roll Sens", share: true },
+  { key: "ability_payoff", label: "Extra VP When Active", share: true },
+  { key: "going_first_bonus", label: "Going-First Bonus", share: true },
+  { key: "lead_bonus", label: "Lead Bonus", share: true },
   { key: "abilities_triggered", label: "Abilities Triggered" },
-] as const;
+];
 
 export function sortedCounts(rows: GlobalDynamicsRowDTO[]): number[] {
   return [...new Set(rows.map((r) => r.racer_count))].sort((a, b) => a - b);
@@ -470,6 +477,7 @@ export function buildGroupedBarOption(
   key: keyof GlobalDynamicsRowDTO,
   label: string,
   t: ChartTheme,
+  share = false,
 ): EChartsOption {
   const baseText = { color: t.text };
   const boards = sortBoards(rows.map((r) => r.board));
@@ -488,7 +496,7 @@ export function buildGroupedBarOption(
     },
     yAxis: {
       type: "value",
-      axisLabel: baseText,
+      axisLabel: share ? { ...baseText, formatter: wholePercent } : baseText,
       splitLine: { lineStyle: { color: t.gridLine } },
     },
     tooltip: {
@@ -497,7 +505,7 @@ export function buildGroupedBarOption(
       borderColor: t.tooltipBorder,
       textStyle: baseText,
       formatter: (p: { name: string; seriesName: string; value: number }) =>
-        `${p.name}, ${p.seriesName} players<br/><b>${label}</b>: ${p.value.toFixed(3)}`,
+        `${p.name}, ${p.seriesName} players<br/><b>${label}</b>: ${share ? percent(p.value) : p.value.toFixed(3)}`,
     },
     series: counts.map((count, i) => ({
       type: "bar" as const,

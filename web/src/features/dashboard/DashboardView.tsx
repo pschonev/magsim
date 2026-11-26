@@ -3,14 +3,18 @@ import type { DashboardAnalysisDTO, DatasetMetaDTO, EngineClient } from "../../t
 import { AnalysisPanel } from "./AnalysisPanel";
 import { FilterPanel } from "./FilterPanel";
 import { useDashboard } from "./useDashboard";
+import { useProfiles } from "./useProfiles";
 
 interface DashboardViewProps {
   client: EngineClient;
   meta: DatasetMetaDTO;
   initialAnalysis: DashboardAnalysisDTO | null;
+  /** False once the user has uploaded their own dataset. */
+  bundled: boolean;
 }
 
-export function DashboardView({ client, meta, initialAnalysis }: DashboardViewProps) {
+export function DashboardView({ client, meta, initialAnalysis, bundled }: DashboardViewProps) {
+  const profiles = useProfiles(bundled);
   const { draft, setDraft, analysis, running, failure, isStale, run } = useDashboard(
     client,
     meta,
@@ -39,7 +43,7 @@ export function DashboardView({ client, meta, initialAnalysis }: DashboardViewPr
 
       {!message && analysis && (
         <>
-          <AnalysisPanel analysis={analysis} racerColors={meta.racer_colors} />
+          <AnalysisPanel analysis={analysis} racerColors={meta.racer_colors} profiles={profiles} />
         </>
       )}
 

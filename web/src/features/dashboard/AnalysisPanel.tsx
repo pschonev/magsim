@@ -32,6 +32,8 @@ import { useNarrow } from "../../utils/useNarrow";
 import { Description, type DescriptionLine } from "./charts/Description";
 import { GlobalCharts, type GlobalPart } from "./charts/GlobalCharts";
 import { FunFacts } from "./FunFacts";
+import { Profiles } from "./Profiles";
+import type { ProfilesState } from "./useProfiles";
 import { TwistComboTable } from "./TwistCombos";
 import {
   type ColorScale,
@@ -97,6 +99,7 @@ const SECTIONS: Section[] = [
     label: "Racer Types",
     icon: Target,
     views: [
+      { id: "profiles", label: "Profiles", icon: Gem },
       { id: "reliability", label: "Reliability", icon: Target },
       { id: "dicepower", label: "Dice vs Power", icon: Cog },
       { id: "powerprofile", label: "Power profile", icon: Zap },
@@ -120,8 +123,7 @@ const SECTIONS: Section[] = [
     icon: Globe,
     views: [
       { id: "global-dynamics", label: "Dynamics", icon: Activity },
-      { id: "global-distributions", label: "Distributions & boards", icon: Waves },
-      { id: "global-twists", label: "By twist card", icon: Sparkles },
+      { id: "global-twists", label: "By board & twist card", icon: Sparkles },
       { id: "global-combos", label: "Twist combos", icon: Layers },
     ],
   },
@@ -152,7 +154,6 @@ const sectionOf = (view: string) => SECTIONS.find((s) => s.views.some((v) => v.i
 const DEFAULT_VIEW = SECTIONS[0].views[0].id;
 const GLOBAL_PARTS: Record<string, GlobalPart> = {
   "global-dynamics": "dynamics",
-  "global-distributions": "distributions",
   "global-twists": "twists",
 };
 const ABILITY_ROW_HEIGHT = 15;
@@ -304,9 +305,11 @@ const axisInfo = (rows: string, columns: string): DescriptionLine[] => [
 interface AnalysisPanelProps {
   analysis: DashboardAnalysisDTO;
   racerColors: Record<string, string>;
+  profiles: ProfilesState;
 }
 
-export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
+export function AnalysisPanel({ analysis, racerColors, profiles }: AnalysisPanelProps) {
+  const [profileRacer, setProfileRacer] = useState<string | null>(null);
   const { chart: theme } = useTheme();
   const height = useChartHeight();
   const narrow = useNarrow();
@@ -400,6 +403,10 @@ export function AnalysisPanel({ analysis, racerColors }: AnalysisPanelProps) {
       {view === "global-combos" && <TwistComboTable stats={analysis.twist_combo_stats} />}
 
       {view === "facts" && <FunFacts analysis={analysis} racerColors={racerColors} />}
+
+      {view === "profiles" && (
+        <Profiles state={profiles} racerColors={racerColors} selected={profileRacer} onSelect={setProfileRacer} />
+      )}
 
       {view === "interactions" && (
         <>
