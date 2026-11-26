@@ -142,3 +142,8 @@ html,
 body {
   background: var(--color-slate-950);
 }
+
+/* Keep the page width the same whether or not a scrollbar is showing, so fitted grids never re-flow. */
+html {
+  scrollbar-gutter: stable;
+}

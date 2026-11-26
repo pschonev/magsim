@@ -321,6 +321,20 @@ export interface SummaryTableDTO {
   rows: SummaryCellDTO[][];
 }
 
+/** Share of a racer's races per ability-trigger bin; `triggers` follows `RacerDistributionsDTO.trigger_labels`. */
+export interface RacerDistributionDTO {
+  racer_name: string;
+  races: number;
+  triggers: number[];
+  mean_triggers: number;
+}
+
+/** Trigger bins (0 up to the cap minus one, then the cap or more) and every racer with enough races. */
+export interface RacerDistributionsDTO {
+  trigger_labels: string[];
+  racers: RacerDistributionDTO[];
+}
+
 export interface DashboardAnalysisDTO {
   filtered_race_count: number;
   filtered_result_count: number;
@@ -333,6 +347,7 @@ export interface DashboardAnalysisDTO {
   value_distributions: ValueShareDTO[];
   racer_specific: RacerSpecificDTO;
   fun_facts: FunFactsDTO;
+  racer_distributions: RacerDistributionsDTO;
   twist_combo_stats: TwistComboStatDTO[];
   matchup_matrix: MatchupCellDTO[];
   environment_matrix: EnvironmentCellDTO[];

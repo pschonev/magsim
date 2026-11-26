@@ -1,11 +1,12 @@
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect } from "react";
-import type { ProfileDTO } from "../../types/api";
+import type { ProfileDTO, RacerDistributionsDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
 import { RACER_GLOSSARY } from "../../utils/racerGlossary";
 import { PROFILE_AXES, SHARE_AXIS, rankOf } from "./charts/profileCharts";
 import type { HoverHandler } from "./ProfileTip";
 import { RoseGlyph, ShareScale } from "./RoseGlyph";
+import { TriggerDistribution } from "./TriggerDistribution";
 
 const ROSE_SIZE = 540;
 const SCALE_HEIGHT = 400;
@@ -62,13 +63,17 @@ interface StatListProps {
 
 function StatList({ profile, rows, statColors }: StatListProps) {
   return (
-    <ul className="space-y-1 rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs">
+    <ul className="grid grid-cols-[auto_auto_auto_auto] items-center justify-start gap-x-3 gap-y-1 rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs">
       {PROFILE_AXES.map((axis, i) => (
-        <li key={axis.label} title={axis.description} className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: statColors[i] }} />
-          <span className="w-20 shrink-0 font-semibold text-slate-100">{axis.label}</span>
-          <span className="min-w-0 flex-1 truncate text-slate-300 tabular-nums">{axis.raw(profile)}</span>
-          <span className="shrink-0 text-slate-400 tabular-nums">
+        <li key={axis.label} className="contents">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statColors[i] }} />
+          <span title={axis.description} className="font-semibold text-slate-100">
+            {axis.label}
+          </span>
+          <span title={axis.description} className="text-slate-300 tabular-nums">
+            {axis.raw(profile)}
+          </span>
+          <span className="text-slate-500 tabular-nums">
             rank {rankOf(rows, axis, profile)} of {rows.length}
           </span>
         </li>
@@ -83,11 +88,12 @@ interface ProfileDetailProps {
   rows: ProfileDTO[];
   ink: string;
   statColors: readonly string[];
+  distributions: RacerDistributionsDTO;
   onSelect: (racer: string | null) => void;
   onHover: HoverHandler;
 }
 
-export function ProfileDetail({ profile, rows, ink, statColors, onSelect, onHover }: ProfileDetailProps) {
+export function ProfileDetail({ profile, rows, ink, statColors, distributions, onSelect, onHover }: ProfileDetailProps) {
   const index = rows.findIndex((r) => r.racer_name === profile.racer_name);
   const previous = rows[(index - 1 + rows.length) % rows.length];
   const next = rows[(index + 1) % rows.length];
@@ -179,6 +185,7 @@ export function ProfileDetail({ profile, rows, ink, statColors, onSelect, onHove
         <div className="space-y-3">
           <RacerCard profile={profile} ink={ink} />
           <StatList profile={profile} rows={rows} statColors={statColors} />
+          <TriggerDistribution racerName={profile.racer_name} ink={ink} distributions={distributions} />
         </div>
       </div>
     </div>

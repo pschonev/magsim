@@ -389,6 +389,22 @@ class SummaryTableDTO(msgspec.Struct, frozen=True):
     rows: list[list[SummaryCellDTO]]
 
 
+class RacerDistributionDTO(msgspec.Struct, frozen=True):
+    """Share of a racer's races per ability-trigger bin; `triggers` follows `RacerDistributionsDTO.trigger_labels`."""
+
+    racer_name: str
+    races: int
+    triggers: list[float]
+    mean_triggers: float
+
+
+class RacerDistributionsDTO(msgspec.Struct, frozen=True):
+    """Trigger bins (0 up to the cap minus one, then the cap or more) and every racer with enough races."""
+
+    trigger_labels: list[str] = msgspec.field(default_factory=list)
+    racers: list[RacerDistributionDTO] = msgspec.field(default_factory=list)
+
+
 class DashboardAnalysisDTO(msgspec.Struct, frozen=True):
     """Complete dashboard analysis bundle returned to the frontend."""
 
@@ -407,6 +423,7 @@ class DashboardAnalysisDTO(msgspec.Struct, frozen=True):
     value_distributions: list[ValueShareDTO] = msgspec.field(default_factory=list)
     racer_specific: RacerSpecificDTO = msgspec.field(default_factory=RacerSpecificDTO)
     fun_facts: FunFactsDTO = msgspec.field(default_factory=FunFactsDTO)
+    racer_distributions: RacerDistributionsDTO = msgspec.field(default_factory=RacerDistributionsDTO)
     twist_combo_stats: list[TwistComboStatDTO] = msgspec.field(default_factory=list)
     matchup_matrix: list[MatchupCellDTO] = msgspec.field(default_factory=list)
     environment_matrix: list[EnvironmentCellDTO] = msgspec.field(default_factory=list)

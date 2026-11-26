@@ -3,7 +3,8 @@ import { EChart } from "../../../components/EChart";
 import type { DashboardAnalysisDTO, ValueShareDTO } from "../../../types/api";
 import { displayName } from "../../../utils/names";
 import { useTheme } from "../../../utils/ThemeProvider";
-import { Description } from "./Description";
+import { InfoTip } from "../../../components/InfoTip";
+import { Description, type DescriptionLine } from "./Description";
 import {
   GLOBAL_METRICS_A,
   GLOBAL_METRICS_B,
@@ -22,14 +23,26 @@ import {
   valueRange,
 } from "./chartOptions";
 
-function Card({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
+interface CardProps {
+  title: string;
+  info: DescriptionLine[];
+  aside?: ReactNode;
+  children: ReactNode;
+}
+
+function Card({ title, info, aside, children }: CardProps) {
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+    <section className="rounded-xl border border-slate-800 bg-slate-900">
       <header className="flex items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
-        <h3 className="font-display text-sm text-slate-100">{title}</h3>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h3 className="font-display text-sm text-slate-100">{title}</h3>
+          <InfoTip label={`About: ${title}`}>
+            <Description lines={info} />
+          </InfoTip>
+        </div>
         {aside}
       </header>
-      {children}
+      <div className="overflow-hidden rounded-b-xl">{children}</div>
     </section>
   );
 }
@@ -170,42 +183,26 @@ function GroupCurves({ analysis, kind, series }: { analysis: DashboardAnalysisDT
 
 export type GlobalPart = "dynamics" | "twists";
 
-const PART_NOTES: Record<GlobalPart | "distributions" | "boards", ReactNode> = {
-  dynamics: (
-    <Description
-      lines={[
-        { bold: "Roll Sens:", text: " how much of a racer's VP is decided by the dice it rolls (share of variance), averaged over racers." },
-        { bold: "Extra VP When Active:", text: " VP a racer gains in races where its ability fires a lot compared with races where it fires little, as share of its average VP, averaged over racers." },
-        { bold: "Going-First Bonus:", text: " how much more VP the first seat scores than the last, as a share of average VP." },
-        { bold: "Lead Bonus:", text: " VP per tile of lead at two thirds of the race, as a share of average VP." },
-        { bold: "Trip Rate:", text: " Percentage of total turns spent recovering from trips across the race." },
-        { bold: "Abilities Triggered:", text: " Average total ability triggers per race, scaled by player count." },
-      ]}
-    />
-  ),
-  distributions: (
-    <Description
-      lines={[
-        { bold: "Distributions:", text: " One bar per exact value; the dashed line is the median. The most extreme 1 % of races are cut off at the ends." },
-      ]}
-    />
-  ),
-  boards: (
-    <Description
-      lines={[
-        { bold: "Grey area:", text: " the distribution over all races, to show how this board and player count shift it." },
-      ]}
-    />
-  ),
-  twists: (
-    <Description
-      lines={[
-        { bold: "Twist cards:", text: " races that drew Fans Demand Chaos form their own group; races with several named cards are skipped here (see Twist combos)." },
-        { bold: "Grey area:", text: " the distribution over all races." },
-      ]}
-    />
-  ),
-};
+const NOTES = {
+  dynamics: [
+    { bold: "Roll Sens:", text: " how much of a racer's VP is decided by the dice it rolls (share of variance), averaged over racers." },
+    { bold: "Extra VP When Active:", text: " VP a racer gains in races where its ability fires a lot compared with races where it fires little, as share of its average VP, averaged over racers." },
+    { bold: "Going-First Bonus:", text: " how much more VP the first seat scores than the last, as a share of average VP." },
+    { bold: "Lead Bonus:", text: " VP per tile of lead at two thirds of the race, as a share of average VP." },
+    { bold: "Trip Rate:", text: " Percentage of total turns spent recovering from trips across the race." },
+    { bold: "Abilities Triggered:", text: " Average total ability triggers per race, scaled by player count." },
+  ],
+  distributions: [
+    { bold: "Distributions:", text: " One bar per exact value; the dashed line is the median. The most extreme 1 % of races are cut off at the ends." },
+  ],
+  boards: [
+    { bold: "Grey area:", text: " the distribution over all races, to show how this board and player count shift it." },
+  ],
+  twists: [
+    { bold: "Twist cards:", text: " races that drew Fans Demand Chaos form their own group; races with several named cards are skipped here (see Twist combos)." },
+    { bold: "Grey area:", text: " the distribution over all races." },
+  ],
+} satisfies Record<string, DescriptionLine[]>;
 
 export function GlobalCharts({ analysis, part }: { analysis: DashboardAnalysisDTO; part: GlobalPart }) {
   const counts = sortedCounts(analysis.global_dynamics);
@@ -222,26 +219,25 @@ export function GlobalCharts({ analysis, part }: { analysis: DashboardAnalysisDT
     <div className="space-y-4">
       {part === "dynamics" && (
         <>
-          <Card title="Dynamics by board and player count" aside={<Legend counts={counts} />}>
+          <Card title="Dynamics by board and player count" info={NOTES.dynamics} aside={<Legend counts={counts} />}>
             <MetricGrid analysis={analysis} />
           </Card>
-          {PART_NOTES.dynamics}
-          <Card title="Distributions across all boards: how long races last, how many VP they hand out and how many abilities fire">
+          <Card
+            title="Distributions across all boards: how long races last, how many VP they hand out and how many abilities fire"
+            info={NOTES.distributions}
+          >
             <Distributions analysis={analysis} />
           </Card>
-          {PART_NOTES.distributions}
         </>
       )}
       {part === "twists" && (
         <>
-          <Card title="Distributions by board and player count" aside={controls}>
+          <Card title="Distributions by board and player count" info={NOTES.boards} aside={controls}>
             <GroupCurves analysis={analysis} kind="board" series={chosen} />
           </Card>
-          {PART_NOTES.boards}
-          <Card title="Distributions by Twisty Twirl card and player count" aside={controls}>
+          <Card title="Distributions by Twisty Twirl card and player count" info={NOTES.twists} aside={controls}>
             <GroupCurves analysis={analysis} kind="twist" series={chosen} />
           </Card>
-          {PART_NOTES.twists}
         </>
       )}
     </div>

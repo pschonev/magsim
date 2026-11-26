@@ -78,9 +78,9 @@ interface Section {
   views: ViewSpec[];
 }
 
-/** Tab colours, from the loading screen; Racer Types keeps the theme's purple. */
+/** Tab colours, from the loading screen; Racer Profiles keeps the theme's purple. */
 const SECTION_COLORS: Record<string, string> = {
-  abilityenv: BRAND.blue,
+  racermaps: BRAND.blue,
   global: BRAND.pink,
   interactions: BRAND.gold,
   tables: BRAND.green,
@@ -95,26 +95,35 @@ const SECTIONS: Section[] = [
     views: [{ id: "facts", label: "Fun facts", icon: Star }],
   },
   {
-    id: "scatter",
-    label: "Racer Types",
-    icon: Target,
+    id: "racerprofiles",
+    label: "Racer Profiles",
+    icon: Gem,
     views: [
       { id: "profiles", label: "Profiles", icon: Gem },
+      { id: "ability", label: "Ability Speed", icon: Zap },
+    ],
+  },
+  {
+    id: "interactions",
+    label: "Interactions",
+    icon: Swords,
+    views: [
+      { id: "interactions", label: "Matchups", icon: Swords },
+      { id: "triggers", label: "Triggers", icon: Share2 },
+      { id: "environments", label: "Environments", icon: MapIcon },
+    ],
+  },
+  {
+    id: "racermaps",
+    label: "Racer Maps",
+    icon: Target,
+    views: [
       { id: "reliability", label: "Reliability", icon: Target },
       { id: "dicepower", label: "Dice vs Power", icon: Cog },
       { id: "powerprofile", label: "Power profile", icon: Zap },
       { id: "momentum", label: "Momentum", icon: Waves },
       { id: "excitement", label: "Excitement", icon: Flame },
       { id: "preferences", label: "Preferences", icon: Users },
-    ],
-  },
-  {
-    id: "abilityenv",
-    label: "Speed & Environments",
-    icon: Zap,
-    views: [
-      { id: "ability", label: "Ability Speed", icon: Zap },
-      { id: "environments", label: "Environments", icon: MapIcon },
     ],
   },
   {
@@ -125,15 +134,6 @@ const SECTIONS: Section[] = [
       { id: "global-dynamics", label: "Dynamics", icon: Activity },
       { id: "global-twists", label: "By board & twist card", icon: Sparkles },
       { id: "global-combos", label: "Twist combos", icon: Layers },
-    ],
-  },
-  {
-    id: "interactions",
-    label: "Interactions",
-    icon: Swords,
-    views: [
-      { id: "interactions", label: "Matchups", icon: Swords },
-      { id: "triggers", label: "Triggers", icon: Share2 },
     ],
   },
   {
@@ -405,7 +405,13 @@ export function AnalysisPanel({ analysis, racerColors, profiles }: AnalysisPanel
       {view === "facts" && <FunFacts analysis={analysis} racerColors={racerColors} />}
 
       {view === "profiles" && (
-        <Profiles state={profiles} racerColors={racerColors} selected={profileRacer} onSelect={setProfileRacer} />
+        <Profiles
+          state={profiles}
+          racerColors={racerColors}
+          distributions={analysis.racer_distributions}
+          selected={profileRacer}
+          onSelect={setProfileRacer}
+        />
       )}
 
       {view === "interactions" && (

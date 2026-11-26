@@ -36,6 +36,10 @@ from magsim.analysis.fun_facts import (
     compute_vp_distributions,
 )
 from magsim.analysis.metrics import run_full_analysis
+from magsim.analysis.racer_distributions import (
+    compute_racer_distributions,
+    trigger_labels,
+)
 from magsim.analysis.racer_specific import compute_roll_effects, compute_stepkid_wins
 from magsim.analysis.tables import SUMMARY_TABLE_TITLES, with_racer_extras
 from magsim.web.colors import racer_color
@@ -54,6 +58,8 @@ from magsim.web.schemas import (
     MastermindCallDTO,
     MushPairDTO,
     PickDTO,
+    RacerDistributionDTO,
+    RacerDistributionsDTO,
     RacerFaceShareDTO,
     FunFactsDTO,
     GlobalDynamicsRowDTO,
@@ -81,6 +87,7 @@ RACE_PRIORITY_COLUMNS: tuple[str, ...] = (
     "total_turns",
 )
 MAX_PAGE_LIMIT = 500
+SHARE_DIGITS = 4
 
 
 def _read_parquet_bytes(raw: bytes) -> pl.DataFrame:
@@ -454,6 +461,27 @@ def _fun_facts(results: pl.DataFrame, extremes: pl.DataFrame, mush_pairs: pl.Dat
     )
 
 
+def _rounded_shares(shares: list[float]) -> list[float]:
+    return [round(share, SHARE_DIGITS) for share in shares]
+
+
+def _distribution_dto(row: dict[str, Any]) -> RacerDistributionDTO:
+    return RacerDistributionDTO(
+        racer_name=str(row["racer_name"]),
+        races=_safe_int(row["races"]),
+        triggers=_rounded_shares(row["triggers"]),
+        mean_triggers=_safe_float(row["mean_triggers"]),
+    )
+
+
+def _racer_distributions(results: pl.DataFrame) -> RacerDistributionsDTO:
+    distributions = compute_racer_distributions(results)
+    return RacerDistributionsDTO(
+        trigger_labels=list(trigger_labels(distributions.trigger_cap)),
+        racers=[_distribution_dto(row) for row in distributions.racers.to_dicts()],
+    )
+
+
 def _df_to_twist_combo_stats(df: pl.DataFrame) -> list[TwistComboStatDTO]:
     return [
         TwistComboStatDTO(
@@ -672,6 +700,7 @@ def analyze(filtered: FilteredDataset, mush_pairs: pl.DataFrame | None = None) -
             ),
             mush_pairs,
         ),
+        racer_distributions=_racer_distributions(filtered.racer_results),
         twist_combo_stats=_df_to_twist_combo_stats(result.twist_combo_stats),
         matchup_matrix=_df_to_matchup_matrix(result.matchup_matrix),
         environment_matrix=_df_to_environment_matrix(

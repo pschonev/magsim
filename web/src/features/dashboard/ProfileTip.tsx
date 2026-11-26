@@ -1,10 +1,7 @@
-import { useLayoutEffect, useRef } from "react";
 import type { ProfileDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
 import { PROFILE_AXES, SHARE_AXIS, rankOf } from "./charts/profileCharts";
-
-const POINTER_OFFSET = 14;
-const VIEWPORT_MARGIN = 8;
+import { FloatingTip } from "./FloatingTip";
 
 /** What the pointer is over: one wedge, or the explained-share scale (`axisIndex` null). */
 export interface HoverTarget {
@@ -25,30 +22,13 @@ interface ProfileTipProps {
   ink: string;
 }
 
-/** The one tooltip of the Profiles tab: follows the pointer and stays inside the viewport. */
+/** The one tooltip of the Profiles tab. */
 export function ProfileTip({ target, rows, statColors, ink }: ProfileTipProps) {
-  const ref = useRef<HTMLDivElement | null>(null);
   const { profile, axisIndex, x, y } = target;
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const { width, height } = el.getBoundingClientRect();
-    const left = Math.min(x + POINTER_OFFSET, window.innerWidth - width - VIEWPORT_MARGIN);
-    const below = y + POINTER_OFFSET + height <= window.innerHeight - VIEWPORT_MARGIN;
-    const top = below ? y + POINTER_OFFSET : y - POINTER_OFFSET - height;
-    el.style.left = `${Math.max(VIEWPORT_MARGIN, left)}px`;
-    el.style.top = `${Math.max(VIEWPORT_MARGIN, top)}px`;
-  });
-
   const axis = axisIndex === null ? SHARE_AXIS : PROFILE_AXES[axisIndex];
   const rank = `rank ${rankOf(rows, axis, profile)} of ${rows.length}`;
   return (
-    <div
-      ref={ref}
-      role="tooltip"
-      className="pointer-events-none fixed top-0 left-0 z-50 w-max max-w-[260px] space-y-0.5 rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-[11px] text-slate-200 shadow-xl"
-    >
+    <FloatingTip x={x} y={y}>
       <div className="font-semibold" style={{ color: ink }}>
         {displayName(profile.racer_name)}
       </div>
@@ -68,6 +48,6 @@ export function ProfileTip({ target, rows, statColors, ink }: ProfileTipProps) {
           </div>
         </>
       )}
-    </div>
+    </FloatingTip>
   );
 }

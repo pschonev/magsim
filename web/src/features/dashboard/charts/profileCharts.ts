@@ -92,7 +92,8 @@ export function rankOf(rows: ProfileDTO[], axis: AxisSpec, profile: ProfileDTO):
 }
 
 export const SORT_NAME = "Name";
-export const DEFAULT_SORT = SHARE_AXIS.label;
+/** Average VP, the first axis. */
+export const DEFAULT_SORT = PROFILE_AXES[0].label;
 
 export interface SortOption {
   id: string;
@@ -100,8 +101,8 @@ export interface SortOption {
 }
 
 export const SORT_OPTIONS: SortOption[] = [
-  { id: SHARE_AXIS.label, text: `${SHARE_AXIS.label} ↓ (default)` },
-  ...PROFILE_AXES.map((a) => ({ id: a.label, text: a.label })),
+  ...PROFILE_AXES.map((a) => ({ id: a.label, text: a.label === DEFAULT_SORT ? `${a.label} ↓ (default)` : a.label })),
+  { id: SHARE_AXIS.label, text: SHARE_AXIS.label },
   { id: SORT_NAME, text: SORT_NAME },
 ];
 

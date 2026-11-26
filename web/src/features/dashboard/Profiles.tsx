@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { InfoTip } from "../../components/InfoTip";
-import type { ProfileDTO } from "../../types/api";
+import type { ProfileDTO, RacerDistributionsDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
 import { PROFILE_COLORS } from "../../utils/palette";
 import { useTheme } from "../../utils/ThemeProvider";
@@ -86,8 +86,9 @@ interface OverviewGridProps {
   onHover: HoverHandler;
 }
 
-function OverviewGrid({ rows, inks, statColors, onOpen, onHover }: OverviewGridProps) {
-  const { ref, layout } = useFitGrid(rows.length);
+/** Memoised: a hover changes only the tooltip state above it, so the grid and its fit are not recomputed. */
+const OverviewGrid = memo(function OverviewGrid({ rows, inks, statColors, onOpen, onHover }: OverviewGridProps) {
+  const { ref, layout } = useFitGrid(rows.length, glyphSize);
   return (
     <div
       ref={ref}
@@ -117,7 +118,7 @@ function OverviewGrid({ rows, inks, statColors, onOpen, onHover }: OverviewGridP
         ))}
     </div>
   );
-}
+});
 
 interface ControlsProps {
   statColors: readonly string[];
@@ -177,11 +178,12 @@ function Controls({ statColors, sortId, onSort }: ControlsProps) {
 interface ProfilesReadyProps {
   rows: ProfileDTO[];
   racerColors: Record<string, string>;
+  distributions: RacerDistributionsDTO;
   selected: string | null;
   onSelect: (racer: string | null) => void;
 }
 
-function ProfilesReady({ rows, racerColors, selected, onSelect }: ProfilesReadyProps) {
+function ProfilesReady({ rows, racerColors, distributions, selected, onSelect }: ProfilesReadyProps) {
   const { chart: theme } = useTheme();
   const [sortId, setSortId] = useState(DEFAULT_SORT);
   const [hover, setHover] = useState<HoverTarget | null>(null);
@@ -207,6 +209,7 @@ function ProfilesReady({ rows, racerColors, selected, onSelect }: ProfilesReadyP
           rows={sorted}
           ink={inks.get(profile.racer_name) ?? theme.text}
           statColors={statColors}
+          distributions={distributions}
           onSelect={choose}
           onHover={setHover}
         />
@@ -231,17 +234,27 @@ function ProfilesReady({ rows, racerColors, selected, onSelect }: ProfilesReadyP
 interface ProfilesProps {
   state: ProfilesState;
   racerColors: Record<string, string>;
+  /** Filtered ability-trigger distributions, shown in the detail view. */
+  distributions: RacerDistributionsDTO;
   /** The opened racer; null shows the overview of all racers. */
   selected: string | null;
   onSelect: (racer: string | null) => void;
 }
 
-export function Profiles({ state, racerColors, selected, onSelect }: ProfilesProps) {
+export function Profiles({ state, racerColors, distributions, selected, onSelect }: ProfilesProps) {
   if (state.status === "loading") {
     return <p className="p-6 text-center text-xs text-slate-400">Loading profiles…</p>;
   }
   if (state.status === "unavailable") {
     return <p className="p-6 text-center text-xs text-slate-400">Profiles are only available for the bundled dataset</p>;
   }
-  return <ProfilesReady rows={state.rows} racerColors={racerColors} selected={selected} onSelect={onSelect} />;
+  return (
+    <ProfilesReady
+      rows={state.rows}
+      racerColors={racerColors}
+      distributions={distributions}
+      selected={selected}
+      onSelect={onSelect}
+    />
+  );
 }
