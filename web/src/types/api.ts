@@ -218,6 +218,31 @@ export interface ProfileDTO {
   pct_explained_share: number;
 }
 
+/** A base-game racer's VP in the old game and the change from Second Wind opponents and the new boards, in % of it. */
+export interface ExpansionEffectDTO {
+  racer_name: string;
+  races: number;
+  old_game_vp: number;
+  opponents_pct: number;
+  boards_pct: number;
+  combined_pct: number;
+  combined_se_pct: number;
+}
+
+/** One racer with simple fixed choices (baseline) against the smart AI over the same games; win rates are shares (0 to 1), vp_delta_pct is in %. */
+export interface AiCompareDTO {
+  racer_name: string;
+  games: number;
+  vp_baseline: number;
+  vp_smart: number;
+  vp_delta: number;
+  vp_delta_pct: number;
+  win_baseline: number;
+  win_smart: number;
+  win_delta: number;
+  vp_delta_se: number | null;
+}
+
 export interface FaceShareDTO {
   face: number;
   share: number;
@@ -518,6 +543,10 @@ export interface RuntimeManifest {
   mushPairs?: string;
   /** Per-racer profiles (JSON list of ProfileDTO) of the bundled dataset; older builds have none. */
   profiles?: string;
+  /** Base-game racers in the expanded game (JSON list of ExpansionEffectDTO); older builds have none. */
+  expansion?: string;
+  /** Smart against baseline AI per racer with decisions (JSON list of AiCompareDTO); absent without a batch run. */
+  aiCompare?: string;
   pyodideVersion: string;
 }
 

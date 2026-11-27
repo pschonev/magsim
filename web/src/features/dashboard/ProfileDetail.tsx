@@ -1,9 +1,10 @@
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect } from "react";
-import type { ProfileDTO, RacerDistributionsDTO } from "../../types/api";
+import type { EnvironmentCellDTO, MatchupCellDTO, ProfileDTO, RacerDistributionsDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
 import { RACER_GLOSSARY } from "../../utils/racerGlossary";
 import { PROFILE_AXES, PROFILE_CAPTION, SHARE_AXIS, rankOf } from "./charts/profileCharts";
+import { BestWorstConditions } from "./BestWorstConditions";
 import { FilterScopeBadge } from "./FilterScopeBadge";
 import type { HoverHandler } from "./ProfileTip";
 import { RoseGlyph, ShareBar, ShareScale, roseLabelsFor } from "./RoseGlyph";
@@ -110,13 +111,28 @@ interface ProfileDetailProps {
   /** All racers in the current sort order; previous and next follow it. */
   rows: ProfileDTO[];
   ink: string;
+  /** Theme-adjusted colour per racer, for opponent names. */
+  inks: Map<string, string>;
   statColors: readonly string[];
   distributions: RacerDistributionsDTO;
+  matchups: MatchupCellDTO[];
+  environments: EnvironmentCellDTO[];
   onSelect: (racer: string | null) => void;
   onHover: HoverHandler;
 }
 
-export function ProfileDetail({ profile, rows, ink, statColors, distributions, onSelect, onHover }: ProfileDetailProps) {
+export function ProfileDetail({
+  profile,
+  rows,
+  ink,
+  inks,
+  statColors,
+  distributions,
+  matchups,
+  environments,
+  onSelect,
+  onHover,
+}: ProfileDetailProps) {
   const index = rows.findIndex((r) => r.racer_name === profile.racer_name);
   const previous = rows[(index - 1 + rows.length) % rows.length];
   const next = rows[(index + 1) % rows.length];
@@ -176,7 +192,7 @@ export function ProfileDetail({ profile, rows, ink, statColors, distributions, o
         </div>
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
         <div className="min-w-0 space-y-3">
           <div className="flex items-center justify-center gap-4">
             <div ref={roseRef} className="flex min-w-0 flex-1 justify-center" style={{ maxWidth: ROSE_SIZE + 260 }}>
@@ -210,12 +226,13 @@ export function ProfileDetail({ profile, rows, ink, statColors, distributions, o
             </div>
           </div>
         </div>
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)]">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
           <RacerCard profile={profile} ink={ink} />
-          <StatList profile={profile} rows={rows} statColors={statColors} />
-          <div className="min-w-0 md:col-span-2 lg:col-span-1">
-            <TriggerDistribution racerName={profile.racer_name} ink={ink} distributions={distributions} />
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-3 md:grid-cols-[auto_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)] xl:grid-cols-[auto_minmax(0,1fr)]">
+            <StatList profile={profile} rows={rows} statColors={statColors} />
+            <BestWorstConditions racerName={profile.racer_name} matchups={matchups} environments={environments} inks={inks} />
           </div>
+          <TriggerDistribution racerName={profile.racer_name} ink={ink} distributions={distributions} />
         </div>
       </div>
     </div>

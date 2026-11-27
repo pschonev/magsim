@@ -1,6 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { InfoTip } from "../../components/InfoTip";
-import type { ProfileDTO, RacerDistributionsDTO } from "../../types/api";
+import type { EnvironmentCellDTO, MatchupCellDTO, ProfileDTO, RacerDistributionsDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
 import { PROFILE_COLORS } from "../../utils/palette";
 import { useTheme } from "../../utils/ThemeProvider";
@@ -226,11 +226,21 @@ interface ProfilesReadyProps {
   rows: ProfileDTO[];
   racerColors: Record<string, string>;
   distributions: RacerDistributionsDTO;
+  matchups: MatchupCellDTO[];
+  environments: EnvironmentCellDTO[];
   selected: string | null;
   onSelect: (racer: string | null) => void;
 }
 
-function ProfilesReady({ rows, racerColors, distributions, selected, onSelect }: ProfilesReadyProps) {
+function ProfilesReady({
+  rows,
+  racerColors,
+  distributions,
+  matchups,
+  environments,
+  selected,
+  onSelect,
+}: ProfilesReadyProps) {
   const { chart: theme } = useTheme();
   const [sortId, setSortId] = useState(DEFAULT_SORT);
   const [hover, setHover] = useState<HoverTarget | null>(null);
@@ -257,8 +267,11 @@ function ProfilesReady({ rows, racerColors, distributions, selected, onSelect }:
           profile={profile}
           rows={sorted}
           ink={inks.get(profile.racer_name) ?? theme.text}
+          inks={inks}
           statColors={statColors}
           distributions={distributions}
+          matchups={matchups}
+          environments={environments}
           onSelect={choose}
           onHover={setHover}
         />
@@ -285,12 +298,23 @@ interface ProfilesProps {
   racerColors: Record<string, string>;
   /** Filtered ability-trigger distributions, shown in the detail view. */
   distributions: RacerDistributionsDTO;
+  /** Filtered matchup and board / twist card shifts, for the best and worst conditions in the detail view. */
+  matchups: MatchupCellDTO[];
+  environments: EnvironmentCellDTO[];
   /** The opened racer; null shows the overview of all racers. */
   selected: string | null;
   onSelect: (racer: string | null) => void;
 }
 
-export function Profiles({ state, racerColors, distributions, selected, onSelect }: ProfilesProps) {
+export function Profiles({
+  state,
+  racerColors,
+  distributions,
+  matchups,
+  environments,
+  selected,
+  onSelect,
+}: ProfilesProps) {
   if (state.status === "loading") {
     return <p className="p-6 text-center text-xs text-slate-400">Loading profiles…</p>;
   }
@@ -302,6 +326,8 @@ export function Profiles({ state, racerColors, distributions, selected, onSelect
       rows={state.rows}
       racerColors={racerColors}
       distributions={distributions}
+      matchups={matchups}
+      environments={environments}
       selected={selected}
       onSelect={onSelect}
     />

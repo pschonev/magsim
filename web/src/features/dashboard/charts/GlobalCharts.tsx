@@ -78,7 +78,7 @@ function SizedChart({ height, optionFor }: SizedChartProps) {
   const { ref, width } = useWidth();
   return (
     <div ref={ref} className="min-w-0">
-      <EChart height={height} option={optionFor(width)} />
+      <EChart renderer="svg" height={height} option={optionFor(width)} />
     </div>
   );
 }

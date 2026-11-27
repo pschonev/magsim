@@ -15,6 +15,7 @@ import { LabelLayout } from "echarts/features";
 import { CanvasRenderer, SVGRenderer } from "echarts/renderers";
 import { useEffect, useRef } from "react";
 import { CHART_FONT } from "../utils/chartFont";
+import { useDevicePixelRatio } from "../utils/useDevicePixelRatio";
 
 echarts.use([
   ScatterChart,
@@ -80,11 +81,14 @@ export function EChartImpl({
   onClickRef.current = onClick;
   const onReadyRef = useRef(onChartReady);
   onReadyRef.current = onChartReady;
+  const screenRatio = useDevicePixelRatio();
+  // Only the canvas bitmap depends on the pixel ratio: SVG is vector and never needs a re-init for it.
+  const pixelRatio = renderer === "canvas" ? screenRatio : 1;
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const chart = echarts.init(el, undefined, { renderer });
+    const chart = echarts.init(el, undefined, { renderer, devicePixelRatio: pixelRatio });
     instanceRef.current = chart;
 
     const handleClick = (params: Record<string, unknown>) => {
@@ -105,14 +109,14 @@ export function EChartImpl({
       chart.dispose();
       instanceRef.current = null;
     };
-  }, [renderer]);
+  }, [renderer, pixelRatio]);
 
   useEffect(() => {
     const chart = instanceRef.current;
     if (!chart) return;
     chart.setOption(withDefaults(option), { notMerge: true, lazyUpdate: true });
     chart.resize();
-  }, [option, height, renderer]);
+  }, [option, height, renderer, pixelRatio]);
 
   return (
     <div

@@ -89,7 +89,8 @@ release-prep = "python scripts/release_prep.py"
 batch-main = "magsim batch -f configs/twisty_oversampled.toml"
 batch-mush = "magsim batch -f --seed-offset 10000000 --results-dir results_mush configs/mush_only.toml"
 mush-pairs = "python scripts/prepare_mush_pairs.py"
-batch = { sequence = ["batch-main", "batch-mush", "mush-pairs"] }
+ai-compare = "python scripts/ai_compare.py"
+batch = { sequence = ["batch-main", "batch-mush", "mush-pairs", "ai-compare"] }
 # Only the Mush games (the main batch already exists): `uv run poe mush`, then `uv run poe web-build`
 mush = { sequence = ["batch-mush", "mush-pairs"] }
 

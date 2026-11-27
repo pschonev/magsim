@@ -46,7 +46,7 @@ export function DashboardView({ client, meta, initialAnalysis, bundled }: Dashbo
 
       {!message && analysis && (
         <div aria-busy={running} className={`transition-opacity duration-200 ${running ? "opacity-60" : ""}`}>
-          <AnalysisPanel analysis={analysis} racerColors={meta.racer_colors} profiles={profiles} />
+          <AnalysisPanel analysis={analysis} racerColors={meta.racer_colors} profiles={profiles} bundled={bundled} />
         </div>
       )}
 

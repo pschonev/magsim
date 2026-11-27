@@ -13,13 +13,18 @@ from pathlib import Path
 import msgspec
 import polars as pl
 
+from magsim.analysis.expansion_effect import compute_expansion_effect
 from magsim.analysis.export import export_parquet_to_ipc
 from magsim.analysis.filters import clean_races_df
 from magsim.analysis.profiles import compute_profiles
-from magsim.web.schemas import ProfileDTO
+from magsim.web.schemas import AiCompareDTO, ExpansionEffectDTO, ProfileDTO
 
 PROFILES_FILE = "profiles.json"
 PROFILE_DECIMALS = 5
+EXPANSION_FILE = "expansion.json"
+AI_COMPARE_PARQUET = "ai_compare.parquet"
+AI_COMPARE_FILE = "ai_compare.json"
+TABLE_DECIMALS = 4
 PYODIDE_VERSION = "314.0.8"
 DATASET_FILES = ("races.parquet", "racer_results.parquet")
 MUSH_FILE = "mush_pairs.parquet"
@@ -90,6 +95,22 @@ def write_profiles(source_results: Path, dst_json: Path) -> None:
     dst_json.write_bytes(msgspec.json.encode(dtos))
 
 
+def write_expansion(source_results: Path, dst_json: Path) -> None:
+    """Compute how the base-game racers fare in the expanded game and write it as a JSON list of ExpansionEffectDTO."""
+    races = clean_races_df(pl.read_parquet(source_results / "races.parquet"))
+    results = pl.read_parquet(source_results / "racer_results.parquet")
+    effect = compute_expansion_effect(results, races).with_columns(pl.col(pl.Float64).round(TABLE_DECIMALS))
+    dtos = [msgspec.convert(row, ExpansionEffectDTO) for row in effect.to_dicts()]
+    dst_json.write_bytes(msgspec.json.encode(dtos))
+
+
+def write_ai_compare(src_parquet: Path, dst_json: Path) -> None:
+    """Write the smart-versus-baseline AI table as a JSON list of AiCompareDTO."""
+    table = pl.read_parquet(src_parquet).with_columns(pl.col(pl.Float64).round(TABLE_DECIMALS))
+    dtos = [msgspec.convert(row, AiCompareDTO) for row in table.to_dicts()]
+    dst_json.write_bytes(msgspec.json.encode(dtos))
+
+
 def prepare_web_assets(
     repo_root: Path,
     *,
@@ -126,6 +147,14 @@ def prepare_web_assets(
     profiles_json = results_dir / PROFILES_FILE
     write_profiles(source_results, profiles_json)
     manifest["profiles"] = f"results/{profiles_json.name}"
+    expansion_json = results_dir / EXPANSION_FILE
+    write_expansion(source_results, expansion_json)
+    manifest["expansion"] = f"results/{expansion_json.name}"
+    ai_compare_json = results_dir / AI_COMPARE_FILE
+    ai_compare_json.unlink(missing_ok=True)
+    if (source_results / AI_COMPARE_PARQUET).exists():
+        write_ai_compare(source_results / AI_COMPARE_PARQUET, ai_compare_json)
+        manifest["aiCompare"] = f"results/{ai_compare_json.name}"
     manifest_path = target_public / "runtime-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest

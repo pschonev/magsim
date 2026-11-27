@@ -181,9 +181,11 @@ magsim batch configs/sim.toml
 ```
 The dashboard's own dataset takes two runs, which one command does (it replaces `results/` and `results_mush/`):
 ```bash
-uv run poe batch   # main batch (configs/twisty_oversampled.toml) + Mush-only games + Mush's merged power pairs
-uv run poe mush    # only the Mush-only games and the pairs, when the main batch already exists
+uv run poe batch       # main batch (configs/twisty_oversampled.toml) + Mush-only games + Mush's merged power pairs + AI comparison
+uv run poe mush        # only the Mush-only games and the pairs, when the main batch already exists
+uv run poe ai-compare  # only the smart-vs-baseline AI comparison (results/ai_compare.parquet; `-- --games 500 --racers Banana Mastermind` for a quick run)
 ```
+The AI comparison plays every racer with decisions (except Cheatah, whose outcome depends on the guesser's model of the pick, so a fixed baseline is not comparable) over the same games twice, once with simple fixed choices and once with the smart AI, one process per racer. `poe web-build` ships it (and the Second Wind winners & losers table, computed from `results/`) as small JSON files in the Fun facts tab; both are hidden for uploaded datasets.
 Mush's power pairs need far more Mush games than a uniform batch holds. The Mush-only games go to `results_mush/` and are never merged into `results/`, because they would make Mush a third of all races and tilt every other statistic. Only a small table of pairs (`results/mush_pairs.parquet`, about 10 KB) is merged and shipped with the dashboard; `poe release-prep` copies it into the committed `docs/results` snapshot next to the two datasets. A dataset you upload in the dashboard has no such table, so its Mush charts use only its own Mush games (and stay empty without enough of them).
 
 **3. Build and start the dashboard with your results:**

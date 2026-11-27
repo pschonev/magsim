@@ -7,9 +7,12 @@ import { useTheme } from "../../utils/ThemeProvider";
 import type { ChartTheme } from "../../utils/theme";
 import { BRAND, textOn, visibleMark } from "../../utils/palette";
 import { readableOn } from "./charts/chartOptions";
+import { Card } from "./FactCard";
 import { FilterScopeBadge } from "./FilterScopeBadge";
 import { MushTable } from "./MushTable";
+import { StaticFacts } from "./StaticFacts";
 import { useSize, useWidth } from "./useChartBox";
+import { useStaticTables } from "./useStaticTables";
 import {
   BADGE,
   DONUT_COMPACT_WIDTH,
@@ -39,7 +42,6 @@ const PIPS: Record<number, [number, number][]> = {
   6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]],
 };
 
-const SPAN: Record<1 | 2 | 3, string> = { 1: "", 2: "sm:col-span-2", 3: "sm:col-span-2 xl:col-span-3" };
 const DICE_TOTAL_CAP = 12;
 const EXTREME_COLUMNS: Record<number, string> = { 2: "2xl:grid-cols-2", 3: "2xl:grid-cols-3" };
 /** Every grid starts with one `minmax(0, 1fr)` track: an implicit auto track would grow to its widest chart and never shrink back. */
@@ -81,36 +83,6 @@ const MAGICAL_ATHLETE_FACES: Record<number, string> = {
   5: "The lead racer moves backwards 5.",
   6: "Moves 6 and trips any racers he passes.",
 };
-
-interface CardProps {
-  title: string;
-  caption?: string;
-  hint?: string;
-  children: ReactNode;
-  span?: 1 | 2 | 3;
-  /** Extra grid placement classes. */
-  placement?: string;
-  /** Shown after the title and info tip. */
-  badge?: ReactNode;
-}
-
-function Card({ title, caption, hint, children, span = 1, placement = "", badge }: CardProps) {
-  return (
-    <section className={`min-w-0 rounded-xl border border-slate-800 bg-slate-900 p-3 ${SPAN[span]} ${placement}`}>
-      <div className="mb-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
-        <h3 className="font-display text-sm text-slate-50">{title}</h3>
-        {(caption || hint) && (
-          <InfoTip label={`More about ${title}`}>
-            {caption && <p>{caption}</p>}
-            {hint && <p>{hint}</p>}
-          </InfoTip>
-        )}
-        {badge}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 /** One rose with its title (in the section colour) and an info tip carrying the explanation. */
 function RoseCard({ section, height, theme }: { section: RoseSection; height: { stacked: number; wide: number }; theme: ChartTheme }) {
@@ -313,8 +285,16 @@ function diceTotalSeries(
   };
 }
 
-export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysisDTO; racerColors: Record<string, string> }) {
+interface FunFactsProps {
+  analysis: DashboardAnalysisDTO;
+  racerColors: Record<string, string>;
+  /** False once the user has uploaded their own dataset: the precomputed tables belong to the bundled one. */
+  bundled: boolean;
+}
+
+export function FunFacts({ analysis, racerColors, bundled }: FunFactsProps) {
   const { chart: theme } = useTheme();
+  const tables = useStaticTables(bundled);
   const { fun_facts: facts, racer_specific: specific } = analysis;
   const colorOf = (name: string) => visibleMark(racerColors[name] ?? BADGE.blue, theme.bg);
   const toBars = (rows: { racer_name: string; value: number }[]): BarItem[] =>
@@ -576,6 +556,10 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
         {bottom}
       </div>,
     );
+  }
+
+  if (tables.expansion || tables.aiCompare) {
+    cards.push(<StaticFacts key="static" tables={tables} colorOf={colorOf} theme={theme} />);
   }
 
   if (cards.length === 0) return <p className="text-xs text-slate-400">No facts for this filter.</p>;

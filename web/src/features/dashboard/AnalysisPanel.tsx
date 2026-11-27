@@ -18,7 +18,7 @@ import {
   Zap,
 } from "lucide-react";
 import { BRAND, readableText, textOn } from "../../utils/palette";
-import { type ComponentType, type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import { type ComponentType, type CSSProperties, Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { DataTable } from "../../components/DataTable";
 import { EChart } from "../../components/EChart";
 import { InfoTip } from "../../components/InfoTip";
@@ -29,6 +29,7 @@ import { useTheme } from "../../utils/ThemeProvider";
 import { useChartHeight } from "../../utils/useChartHeight";
 import { RACER_DESCRIPTIONS } from "../../utils/names";
 import { useNarrow } from "../../utils/useNarrow";
+import { useWide } from "../../utils/useWide";
 import { Description, type DescriptionLine } from "./charts/Description";
 import { GlobalCharts, type GlobalPart } from "./charts/GlobalCharts";
 import { FunFacts } from "./FunFacts";
@@ -229,6 +230,8 @@ interface SubTabsProps {
   onSelect: (view: string) => void;
   color?: string;
   ink?: string;
+  /** Sits in the section tabs' row (which scrolls) instead of scrolling as a row of its own. */
+  inline?: boolean;
 }
 
 function SubTab({ spec, active, color, ink, onSelect }: { spec: ViewSpec; active: boolean; color?: string; ink?: string; onSelect: () => void }) {
@@ -249,20 +252,27 @@ function SubTab({ spec, active, color, ink, onSelect }: { spec: ViewSpec; active
   );
 }
 
-/** The views of the active section, as a full-width scrolling row below the section tabs. */
-function SubTabs({ section, view, onSelect, color, ink }: SubTabsProps) {
+/** The views of the active section: a pill right after the active tab (`inline`), or a full-width scrolling row. */
+function SubTabs({ section, view, onSelect, color, ink, inline = false }: SubTabsProps) {
+  const buttons = (
+    <div className={`flex items-center gap-0.5 p-0.5 ${inline ? "" : "w-max min-w-full"}`}>
+      {section.views.map((spec) => (
+        <SubTab key={spec.id} spec={spec} active={spec.id === view} color={color} ink={ink} onSelect={() => onSelect(spec.id)} />
+      ))}
+    </div>
+  );
   return (
     <div
-      className={`rounded-full border ${color ? "" : "border-indigo-400/60 bg-indigo-500/10"}`}
+      className={`rounded-full border ${inline ? "shrink-0" : ""} ${color ? "" : "border-indigo-400/60 bg-indigo-500/10"}`}
       style={color ? { borderColor: `${color}99`, backgroundColor: `${color}1a` } : undefined}
     >
-      <ScrollFade className="rounded-full" fadeFrom="from-slate-950" hideScrollbar>
-        <div className="flex w-max min-w-full items-center gap-0.5 p-0.5">
-          {section.views.map((spec) => (
-            <SubTab key={spec.id} spec={spec} active={spec.id === view} color={color} ink={ink} onSelect={() => onSelect(spec.id)} />
-          ))}
-        </div>
-      </ScrollFade>
+      {inline ? (
+        buttons
+      ) : (
+        <ScrollFade className="rounded-full" fadeFrom="from-slate-950" hideScrollbar>
+          {buttons}
+        </ScrollFade>
+      )}
     </div>
   );
 }
@@ -353,13 +363,16 @@ interface AnalysisPanelProps {
   analysis: DashboardAnalysisDTO;
   racerColors: Record<string, string>;
   profiles: ProfilesState;
+  /** False once the user has uploaded their own dataset. */
+  bundled: boolean;
 }
 
-export function AnalysisPanel({ analysis, racerColors, profiles }: AnalysisPanelProps) {
+export function AnalysisPanel({ analysis, racerColors, profiles, bundled }: AnalysisPanelProps) {
   const [profileRacer, setProfileRacer] = useState<string | null>(null);
   const { chart: theme } = useTheme();
   const height = useChartHeight();
   const narrow = useNarrow();
+  const wide = useWide();
   const [view, setView] = useState(DEFAULT_VIEW);
   const [rankView, setRankView] = useState(false);
   const [usePercent, setUsePercent] = useState(true);
@@ -384,6 +397,7 @@ export function AnalysisPanel({ analysis, racerColors, profiles }: AnalysisPanel
   const section = sectionOf(view);
   const sectionColor = SECTION_COLORS[section.id];
   const sectionInk = sectionColor ? readableText(sectionColor, theme.bg) : undefined;
+  const hasSubTabs = section.views.length > 1;
   const legend = (scale: ColorScale, format: (v: number) => string) => (
     <HeatmapLegend scale={scale} legendFormat={format} />
   );
@@ -395,20 +409,25 @@ export function AnalysisPanel({ analysis, racerColors, profiles }: AnalysisPanel
             {SECTIONS.map((sec) => {
               const color = SECTION_COLORS[sec.id];
               const ink = color ? readableText(color, theme.bg) : undefined;
+              const active = sec.id === section.id;
               return (
-                <TabButton
-                  key={sec.id}
-                  spec={sec}
-                  active={sec.id === section.id}
-                  color={color}
-                  ink={ink}
-                  onSelect={() => setView(sec.views[0].id)}
-                />
+                <Fragment key={sec.id}>
+                  <TabButton
+                    spec={sec}
+                    active={active}
+                    color={color}
+                    ink={ink}
+                    onSelect={() => setView(sec.views[0].id)}
+                  />
+                  {active && wide && hasSubTabs && (
+                    <SubTabs section={section} view={view} onSelect={setView} color={sectionColor} ink={sectionInk} inline />
+                  )}
+                </Fragment>
               );
             })}
           </div>
         </ScrollFade>
-        {section.views.length > 1 && (
+        {!wide && hasSubTabs && (
           <SubTabs section={section} view={view} onSelect={setView} color={sectionColor} ink={sectionInk} />
         )}
       </div>
@@ -419,6 +438,7 @@ export function AnalysisPanel({ analysis, racerColors, profiles }: AnalysisPanel
             <Switch label="Rank-based view" checked={rankView} onChange={setRankView} />
           </ViewToolbar>
           <EChart
+            renderer="svg"
             height={height}
             option={buildQuadrantOption(analysis.racer_stats, quadrant.spec, rankView, theme)}
           />
@@ -429,6 +449,7 @@ export function AnalysisPanel({ analysis, racerColors, profiles }: AnalysisPanel
         <>
           <ViewToolbar info={info} />
           <EChart
+            renderer="svg"
             height={Math.max(height, analysis.abilities.length * ABILITY_ROW_HEIGHT + 130)}
             option={buildAbilityOption(analysis.abilities, racerColors, theme, narrow)}
           />
@@ -439,13 +460,15 @@ export function AnalysisPanel({ analysis, racerColors, profiles }: AnalysisPanel
 
       {view === "global-combos" && <TwistComboTable stats={analysis.twist_combo_stats} />}
 
-      {view === "facts" && <FunFacts analysis={analysis} racerColors={racerColors} />}
+      {view === "facts" && <FunFacts analysis={analysis} racerColors={racerColors} bundled={bundled} />}
 
       {view === "profiles" && (
         <Profiles
           state={profiles}
           racerColors={racerColors}
           distributions={analysis.racer_distributions}
+          matchups={analysis.matchup_matrix}
+          environments={analysis.environment_matrix}
           selected={profileRacer}
           onSelect={setProfileRacer}
         />

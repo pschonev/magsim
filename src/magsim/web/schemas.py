@@ -264,6 +264,33 @@ class ProfileDTO(msgspec.Struct, frozen=True):
     pct_explained_share: float
 
 
+class ExpansionEffectDTO(msgspec.Struct, frozen=True):
+    """A base-game racer's VP in the old game and the change from Second Wind opponents and the new boards, in % of it."""
+
+    racer_name: str
+    races: int
+    old_game_vp: float
+    opponents_pct: float
+    boards_pct: float
+    combined_pct: float
+    combined_se_pct: float
+
+
+class AiCompareDTO(msgspec.Struct, frozen=True):
+    """One racer played with simple fixed choices (baseline) and with the smart AI over the same games; win rates are shares (0 to 1), `vp_delta_pct` is in %."""
+
+    racer_name: str
+    games: int
+    vp_baseline: float
+    vp_smart: float
+    vp_delta: float
+    vp_delta_pct: float
+    win_baseline: float
+    win_smart: float
+    win_delta: float
+    vp_delta_se: float | None = None
+
+
 class FaceShareDTO(msgspec.Struct, frozen=True):
     """Share of the rolls that were a given number."""
 

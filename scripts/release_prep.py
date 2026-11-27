@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = ROOT / "results"
 SNAPSHOT_DIR = ROOT / "docs" / "results"
 DATASET_FILES = ("races.parquet", "racer_results.parquet")
-OPTIONAL_FILES = ("mush_pairs.parquet",)
+OPTIONAL_FILES = ("mush_pairs.parquet", "ai_compare.parquet")
 
 
 def sync_results() -> None:

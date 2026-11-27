@@ -367,7 +367,16 @@ export interface DivergingItem {
   /** What the racer is combined with; empty when the racer name alone says it all. */
   other: string;
   value: number;
+  /** Hover text (HTML) for the row; without any, the chart has no tooltip. */
+  detail?: string;
 }
+
+export interface DivergingColors {
+  gain: string;
+  loss: string;
+}
+
+const DIVERGING_COLORS: DivergingColors = { gain: DIVERGING.good, loss: DIVERGING.bad };
 
 /** Axis room per side: the longest bar plus its value label; the shorter side keeps at least this share of the longer one for the names. */
 const DIVERGING_ROOM = 1.4;
@@ -377,7 +386,7 @@ const DIVERGING_MIN_SIDE = 0.45;
  * Best combinations on top (bars grow right), worst at the bottom (bars grow left). The names sit
  * next to the centre line, right-aligned above it and left-aligned below it, so no space is wasted.
  */
-export function buildDivergingBars(items: DivergingItem[], t: ChartTheme): EChartsOption {
+export function buildDivergingBars(items: DivergingItem[], t: ChartTheme, colors: DivergingColors = DIVERGING_COLORS): EChartsOption {
   const gain = Math.max(0, ...items.map((i) => i.value)) * DIVERGING_ROOM;
   const loss = Math.max(0, ...items.map((i) => -i.value)) * DIVERGING_ROOM;
   const longest = Math.max(gain, loss) || 1;
@@ -387,14 +396,24 @@ export function buildDivergingBars(items: DivergingItem[], t: ChartTheme): EChar
     grid: { left: 2, right: 2, top: 1, bottom: 1 },
     xAxis: { type: "value", show: false, min: -Math.max(loss, DIVERGING_MIN_SIDE * longest), max: Math.max(gain, DIVERGING_MIN_SIDE * longest) },
     yAxis: { type: "category", inverse: true, show: false, data: items.map((i) => `${i.racer} ${i.other}`) },
-    tooltip: { show: false },
+    tooltip: items.some((i) => i.detail)
+      ? {
+          trigger: "axis",
+          axisPointer: { type: "shadow" },
+          confine: true,
+          backgroundColor: t.tooltipBg,
+          borderColor: t.tooltipBorder,
+          textStyle: { color: t.text, fontSize: 12 },
+          formatter: (params: { dataIndex: number }[]) => items[params[0].dataIndex].detail ?? "",
+        }
+      : { show: false },
     series: [
       {
         type: "bar",
         barWidth,
         data: items.map((i) => ({
           value: i.value,
-          itemStyle: { color: i.value >= 0 ? DIVERGING.good : DIVERGING.bad, borderRadius: i.value >= 0 ? [0, 3, 3, 0] : [3, 0, 0, 3] },
+          itemStyle: { color: i.value >= 0 ? colors.gain : colors.loss, borderRadius: i.value >= 0 ? [0, 3, 3, 0] : [3, 0, 0, 3] },
           label: {
             show: true,
             position: i.value >= 0 ? "left" : "right",
