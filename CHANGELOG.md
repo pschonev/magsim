@@ -1,5 +1,87 @@
 # Changelog
 
+## 2.0.0 (2026-11-27)
+
+### Feat
+
+- **web**: use game box colours with stripes and dotted lines for Second Wind
+- **web**: mark Second Wind racers, add racer-set filter buttons, align profile detail cards
+- **web**: add new ai and expansion comparison
+- **web**: show ability triggers distribution on profile detail
+- **ai**: honour dice bans, soft wishes and the Mush draw wish in dice decisions
+- add rose overview
+- **web**: Profiles radar with explained share, new methodology in tables and Global dynamics
+- **web**: drop glossary flavor text, mark automatic vs decision racers, Fun facts first tab
+- **web**: glossary modal, svg fun facts charts, mastermind game counts, Piñata display name
+- **web**: add racer search to Mush pairs table
+- **web**: adjust fun facts
+- **sim,web**: poe batch and poe mush; mush power pairs shipped as a small table
+- **sim,analysis**: count every die rolled, roll sensitivity as adjusted R² of dice shares, presence and counts
+- **sim,web**: record cheatah guesses, header logo, estimated data-loading progress, one-bar stepdad, narrower best/worst panels
+- **web**: colour-coded tabs, simulated data-loading progress, mastermind calls, mush powers, compact best/worst, collectors without transformation
+- **web**: merge distributions and boards tab; add best/worst matchup, board and twist cards
+- **web**: add fun facts
+- **web**: rounded-rectangle race board with podium, per-board scenery and tripped die
+- **web**: printed-board race track, badge loading screen, twist-card stats and filters, display font
+- **sim**: per-face roll counts and Mr Dice Guy choice-only credit; feat(analysis): roll sensitivity as explained VP variance
+- **web**: phone layout, exact-value Global charts, opponent-adjusted heatmaps, display names, Preferences scatter
+- **web**: M6 and polish
+- **web**: restore notebook parity for simulator logs, navigation, track and auto-run
+- **web**: minimal app shell with worker boot, retry, and TS/Python contract test
+- improve racer behavior with hardcoded racers
+- add twist cards
+- **twist**: add Fans Demand Chaos with ordered cards and twist ban list
+- **twist**: add Season Finale and record drawn twist per race
+- add mirror world twist card
+- log twist card effects when drawn
+- add alchemy lab containment breach twist card
+- add randomness ceased and curse wands twist cards
+- **board**: add conveyor belt and scrying pool twist cards
+- **engine**: twist card dispatch with forced draws, roast chicken, time imp
+- add Whirly World
+- add Re-Runner
+- add Cheatah, Stepdad, NULL
+- Add Hog Knight
+- add LeSaboteur and Penguin
+- **racers**: add Mr. Dice Guy and Show-Off with multi-dice roll state
+- Add The Hose, Party Pooper and Stunner
+- Add Doppelgängster
+- Add Understudy and Mush
+- add Spoilsport and Gloth with race-ended event
+- add Blunderdog with backward main moves and base-roll multiplier
+- **racers**: Add Magical Athlete, Streaker
+- add Nepo Baby with board first_corner
+- add Icarus, Bite Mark and Speed Demon with shared elimination helper
+- add Hotel, Nemesis, The Hose and optional starting-VP simulation
+- **racers**: add Kraken, Soulmate, Critic
+- **racers**: add Diva, Hopfrog, Mole
+- **racers**: add Overtaker, Tail, Kingtripper
+
+### Fix
+
+- cleaning up lots of little UI problems
+- **ai**: keep Icarus rolls 1-5 and stop Mush skipping rolls when he wants a draw
+- **web**: adjust palette
+- **web**: fix a bunch of small visual things
+- **telemetry**: skip the Stunner aura check for rollers that are off the track
+- **web**: content-hash the wheel path; feat(web): dashboard filters, notebook summary tables, raw data tables
+- **telemetry**: separate lost, traded and skipped-turn main moves
+- **frontend**: Fix off by one error
+
+### Refactor
+
+- **web**: single colour palette with contrast-safe racer colours, brand-based log colours, stable racer fallback colours
+- **web**: clearer sub-tab pill, fun facts cards instead of racer special charts
+- **web**: fix more minor problems
+- **web**: replace DashboardSession with frozen Dataset and functions
+- **frontend**: M1 done
+- **frontend**: Improve config racer table
+- **frontend**: Update styling
+- **frontend**: Adjust styling
+
+
+- add new data
+
 ## 1.1.2 (2026-03-06)
 
 ### Fix
