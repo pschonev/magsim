@@ -19,53 +19,54 @@ from magsim.analysis.filters import (
     filter_dataset,
     get_automatic_racers,
 )
-from magsim.analysis.mush_pairs import mush_rows, pair_stats, pair_table
 from magsim.analysis.fun_facts import (
+    compute_cheatah_numbers,
     compute_chosen_faces,
     compute_collectors,
+    compute_dice_totals,
+    compute_eaten_targets,
     compute_extreme_combinations,
     compute_forward_share,
     compute_hog_split,
     compute_hotel_customers,
     compute_mastermind,
     compute_outcomes,
-    compute_eaten_targets,
-    compute_cheatah_numbers,
-    compute_dice_totals,
     compute_triggers_per_turn,
     compute_vp_distributions,
 )
 from magsim.analysis.metrics import run_full_analysis
+from magsim.analysis.mush_pairs import mush_rows, pair_stats, pair_table
 from magsim.analysis.racer_distributions import (
     compute_racer_distributions,
     trigger_labels,
 )
+from magsim.analysis.racer_sets import SECOND_WIND
 from magsim.analysis.racer_specific import compute_roll_effects, compute_stepkid_wins
 from magsim.analysis.tables import SUMMARY_TABLE_TITLES, with_racer_extras
 from magsim.web.colors import racer_color
 from magsim.web.schemas import (
     AbilityBreakdownRowDTO,
     AnalysisFilterDTO,
+    CollectorDTO,
     DashboardAnalysisDTO,
     DatasetMetaDTO,
     DistributionBinDTO,
-    EnvironmentCellDTO,
-    FaceEffectDTO,
-    CollectorDTO,
     EatTargetDTO,
+    EnvironmentCellDTO,
     ExtremeComboDTO,
+    FaceEffectDTO,
     FaceShareDTO,
+    FunFactsDTO,
+    GlobalDynamicsRowDTO,
     MastermindCallDTO,
+    MatchupCellDTO,
     MushPairDTO,
+    NamedValueDTO,
+    OutcomeShareDTO,
     PickDTO,
     RacerDistributionDTO,
     RacerDistributionsDTO,
     RacerFaceShareDTO,
-    FunFactsDTO,
-    GlobalDynamicsRowDTO,
-    MatchupCellDTO,
-    NamedValueDTO,
-    OutcomeShareDTO,
     RacerSpecificDTO,
     RacerStatRowDTO,
     RawTablePageDTO,
@@ -652,6 +653,7 @@ def get_metadata(dataset: Dataset) -> DatasetMetaDTO:
         automatic_racers=[r for r in racers if r in auto_set],
         racer_colors={r: racer_color(r) for r in racers},
         twists=twists,
+        second_wind_racers=[r for r in racers if r in SECOND_WIND],
     )
 
 

@@ -1,4 +1,4 @@
-import { AlertTriangle, Ban, Bot, Check, ChevronDown, ChevronRight, Play, SlidersHorizontal, X } from "lucide-react";
+import { AlertTriangle, Ban, BookOpen, Bot, Check, ChevronDown, ChevronRight, Play, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
 import { MultiSelect } from "../../components/MultiSelect";
 import type {
@@ -8,6 +8,10 @@ import type {
 } from "../../types/api";
 import { COMBO_MODE_LABELS, addCombo, removeCombo } from "./filters";
 import { displayName } from "../../utils/names";
+import { SecondWindBadge } from "./SecondWindBadge";
+
+const SELECT_BUTTON_CLASS =
+  "inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 max-sm:min-h-10 pointer-coarse:min-h-10 max-sm:w-full max-sm:justify-center";
 
 interface FilterPanelProps {
   meta: DatasetMetaDTO;
@@ -34,6 +38,8 @@ export function FilterPanel({
   const [open, setOpen] = useState(false);
 
   const automatic = meta.racers.filter((r) => meta.automatic_racers.includes(r));
+  const secondWind = meta.racers.filter((r) => meta.second_wind_racers.includes(r));
+  const baseGame = meta.racers.filter((r) => !meta.second_wind_racers.includes(r));
   const summary = [
     draft.racers.length === meta.racers.length
       ? `All ${meta.racers.length} racers`
@@ -103,10 +109,28 @@ export function FilterPanel({
           type="button"
           title="Select all racers that do not require human/AI decisions."
           onClick={() => onChange({ ...draft, racers: automatic })}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 max-sm:min-h-10 pointer-coarse:min-h-10 max-sm:w-full max-sm:justify-center"
+          className={SELECT_BUTTON_CLASS}
         >
           <Bot className="h-3.5 w-3.5" />
           Select automatic racers
+        </button>
+        <button
+          type="button"
+          title="Select the base game racers."
+          onClick={() => onChange({ ...draft, racers: baseGame })}
+          className={SELECT_BUTTON_CLASS}
+        >
+          <BookOpen className="h-3.5 w-3.5" />
+          Select base game
+        </button>
+        <button
+          type="button"
+          title="Select the Second Wind expansion racers."
+          onClick={() => onChange({ ...draft, racers: secondWind })}
+          className={SELECT_BUTTON_CLASS}
+        >
+          <SecondWindBadge size={14} />
+          Select Second Wind
         </button>
         <MultiSelect
           label="Player counts"

@@ -365,9 +365,11 @@ interface AnalysisPanelProps {
   profiles: ProfilesState;
   /** False once the user has uploaded their own dataset. */
   bundled: boolean;
+  /** Racers from the Second Wind expansion. */
+  secondWind: ReadonlySet<string>;
 }
 
-export function AnalysisPanel({ analysis, racerColors, profiles, bundled }: AnalysisPanelProps) {
+export function AnalysisPanel({ analysis, racerColors, profiles, bundled, secondWind }: AnalysisPanelProps) {
   const [profileRacer, setProfileRacer] = useState<string | null>(null);
   const { chart: theme } = useTheme();
   const height = useChartHeight();
@@ -460,12 +462,13 @@ export function AnalysisPanel({ analysis, racerColors, profiles, bundled }: Anal
 
       {view === "global-combos" && <TwistComboTable stats={analysis.twist_combo_stats} />}
 
-      {view === "facts" && <FunFacts analysis={analysis} racerColors={racerColors} bundled={bundled} />}
+      {view === "facts" && <FunFacts analysis={analysis} racerColors={racerColors} bundled={bundled} secondWind={secondWind} />}
 
       {view === "profiles" && (
         <Profiles
           state={profiles}
           racerColors={racerColors}
+          secondWind={secondWind}
           distributions={analysis.racer_distributions}
           matchups={analysis.matchup_matrix}
           environments={analysis.environment_matrix}

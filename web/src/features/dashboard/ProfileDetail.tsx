@@ -8,6 +8,7 @@ import { BestWorstConditions } from "./BestWorstConditions";
 import { FilterScopeBadge } from "./FilterScopeBadge";
 import type { HoverHandler } from "./ProfileTip";
 import { RoseGlyph, ShareBar, ShareScale, roseLabelsFor } from "./RoseGlyph";
+import { SecondWindBadge } from "./SecondWindBadge";
 import { TriggerDistribution } from "./TriggerDistribution";
 import { useWidth } from "./useChartBox";
 
@@ -70,22 +71,30 @@ interface StatListProps {
 
 function StatList({ profile, rows, statColors }: StatListProps) {
   return (
-    <ul className="grid min-w-0 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center justify-start gap-x-3 gap-y-1 rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs sm:grid-cols-[auto_auto_auto_auto]">
-      {PROFILE_AXES.map((axis, i) => (
-        <li key={axis.label} className="contents">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statColors[i] }} />
-          <span title={axis.description} className="font-semibold text-slate-100">
-            {axis.label}
-          </span>
-          <span title={axis.description} className="text-slate-300 tabular-nums">
-            {axis.raw(profile)}
-          </span>
-          <span className="text-slate-500 tabular-nums">
-            rank {rankOf(rows, axis, profile)} of {rows.length}
-          </span>
+    <div className="h-full min-w-0 space-y-1.5 rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs">
+      <h3 className="text-xs font-semibold text-slate-100">Stats</h3>
+      <ul className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center justify-start gap-x-3 gap-y-1 sm:grid-cols-[auto_auto_auto_auto]">
+        <li className="contents text-[11px] text-slate-500">
+          <span className="col-span-2" />
+          <span>value</span>
+          <span>rank</span>
         </li>
-      ))}
-    </ul>
+        {PROFILE_AXES.map((axis, i) => (
+          <li key={axis.label} className="contents">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statColors[i] }} />
+            <span title={axis.description} className="font-semibold text-slate-100">
+              {axis.label}
+            </span>
+            <span title={axis.description} className="text-slate-300 tabular-nums">
+              {axis.raw(profile)}
+            </span>
+            <span className="text-slate-500 tabular-nums">
+              {rankOf(rows, axis, profile)} of {rows.length}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -108,6 +117,8 @@ function ShareHeading({ profile }: { profile: ProfileDTO }) {
 
 interface ProfileDetailProps {
   profile: ProfileDTO;
+  /** True for a Second Wind expansion racer: shows the badge beside the name. */
+  expansion: boolean;
   /** All racers in the current sort order; previous and next follow it. */
   rows: ProfileDTO[];
   ink: string;
@@ -123,6 +134,7 @@ interface ProfileDetailProps {
 
 export function ProfileDetail({
   profile,
+  expansion,
   rows,
   ink,
   inks,
@@ -177,8 +189,12 @@ export function ProfileDetail({
           >
             <ChevronLeft className="h-5 w-5" aria-hidden="true" />
           </button>
-          <span className="min-w-32 text-center font-display text-lg font-bold" style={{ color: ink }}>
+          <span
+            className="inline-flex min-w-32 items-center justify-center gap-1.5 text-center font-display text-lg font-bold"
+            style={{ color: ink }}
+          >
             {displayName(profile.racer_name)}
+            {expansion && <SecondWindBadge size={20} />}
           </span>
           <button
             type="button"
@@ -228,7 +244,7 @@ export function ProfileDetail({
         </div>
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
           <RacerCard profile={profile} ink={ink} />
-          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-3 md:grid-cols-[auto_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)] xl:grid-cols-[auto_minmax(0,1fr)]">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-stretch gap-3 md:grid-cols-[auto_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)] xl:grid-cols-[auto_minmax(0,1fr)]">
             <StatList profile={profile} rows={rows} statColors={statColors} />
             <BestWorstConditions racerName={profile.racer_name} matchups={matchups} environments={environments} inks={inks} />
           </div>

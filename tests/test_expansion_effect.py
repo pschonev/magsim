@@ -19,18 +19,40 @@ ERROR_RACES = 40
 OPPONENT_PENALTY = 4.0
 BOARD_PENALTY = 3.0
 OLD_VP = 5.5
+POOL_SIZE = len(BASE_POOL) + len(SECOND_WIND_POOL)
+SECOND_WIND_OPPONENT_SHARE = len(SECOND_WIND_POOL) / (POOL_SIZE - 1)
+OPPONENT_VICTIM_VP = OLD_VP - OPPONENT_PENALTY * SECOND_WIND_OPPONENT_SHARE
+FIELD_OLD = OLD_VP - OPPONENT_PENALTY * SECOND_WIND_OPPONENT_SHARE / POOL_SIZE
+FIELD_NEW = FIELD_OLD - BOARD_PENALTY / POOL_SIZE
+FIELD_AVERAGE = (FIELD_OLD + FIELD_NEW) / 2
+OLD_STRENGTH = OLD_VP / FIELD_OLD
+SCALED_NEW_BOARDS = 0.6
 
 
-def vp_of(racer: str, board: str, sw_share: float, rng: random.Random) -> float:
+def expected_boards_pct(old_vp: float, new_vp: float) -> float:
+    """Boards effect of a racer with these mean VPs, as % of its old-game strength, against the field means."""
+    return 100 * (new_vp / FIELD_NEW - old_vp / FIELD_OLD) / OLD_STRENGTH
+
+
+def vp_of(
+    racer: str,
+    board: str,
+    sw_share: float,
+    rng: random.Random,
+    board_penalty: float = BOARD_PENALTY,
+) -> float:
     vp = 5.0 + rng.random()
     if racer == OPPONENT_VICTIM:
         return vp - OPPONENT_PENALTY * sw_share
     if racer == BOARD_VICTIM and board in NEW_BOARDS:
-        return vp - BOARD_PENALTY
+        return vp - board_penalty
     return vp
 
 
-def dataset() -> tuple[pl.DataFrame, pl.DataFrame]:
+def dataset(
+    new_board_scale: float = 1.0,
+    board_penalty: float = BOARD_PENALTY,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
     rng = random.Random(11)
     race_rows = []
     result_rows = []
@@ -51,13 +73,18 @@ def dataset() -> tuple[pl.DataFrame, pl.DataFrame]:
         )
         for name in names:
             sw_share = sum(other in SECOND_WIND for other in names if other != name) / (count - 1)
-            vp = 1000.0 if failed else vp_of(name, board, sw_share, rng)
+            vp = 1000.0 if failed else vp_of(name, board, sw_share, rng, board_penalty)
+            if board in NEW_BOARDS:
+                vp *= new_board_scale
             result_rows.append({"config_hash": f"r{i}", "racer_name": name, "final_vp": vp})
     return pl.DataFrame(result_rows), pl.DataFrame(race_rows, infer_schema_length=None)
 
 
-def effect_rows() -> dict[str, dict[str, float]]:
-    results, races = dataset()
+def effect_rows(
+    new_board_scale: float = 1.0,
+    board_penalty: float = BOARD_PENALTY,
+) -> dict[str, dict[str, float]]:
+    results, races = dataset(new_board_scale, board_penalty)
     return {row["racer_name"]: row for row in compute_expansion_effect(results, races).to_dicts()}
 
 
@@ -85,22 +112,29 @@ def test_planted_opponent_effect_shows_up_for_its_racer_only() -> None:
     rows = effect_rows()
 
     victim = rows[OPPONENT_VICTIM]
-    expected = -100 * OPPONENT_PENALTY / OLD_VP
+    expected = -100 * OPPONENT_PENALTY / FIELD_AVERAGE / OLD_STRENGTH
     assert abs(victim["opponents_pct"] - expected) < 8
-    assert abs(victim["boards_pct"]) < 6
     assert abs(rows[BOARD_VICTIM]["opponents_pct"]) < 6
     assert abs(rows[NEUTRAL]["opponents_pct"]) < 6
 
 
-def test_planted_board_effect_shows_up_for_its_racer_only() -> None:
+def test_planted_board_effect_is_measured_against_the_field() -> None:
     rows = effect_rows()
 
     victim = rows[BOARD_VICTIM]
-    expected = -100 * BOARD_PENALTY / OLD_VP
-    assert abs(victim["boards_pct"] - expected) < 6
+    assert abs(victim["boards_pct"] - expected_boards_pct(OLD_VP, OLD_VP - BOARD_PENALTY)) < 6
     assert abs(victim["opponents_pct"]) < 6
-    assert abs(rows[OPPONENT_VICTIM]["boards_pct"]) < 6
-    assert abs(rows[NEUTRAL]["boards_pct"]) < 6
+    assert abs(rows[NEUTRAL]["boards_pct"] - expected_boards_pct(OLD_VP, OLD_VP)) < 6
+    scoocher_boards = expected_boards_pct(OPPONENT_VICTIM_VP, OPPONENT_VICTIM_VP)
+    assert abs(rows[OPPONENT_VICTIM]["boards_pct"] - scoocher_boards) < 6
+    assert rows[NEUTRAL]["boards_pct"] > rows[BOARD_VICTIM]["boards_pct"] + 40
+
+
+def test_boards_with_fewer_vp_for_everyone_are_not_a_negative_boards_effect() -> None:
+    rows = effect_rows(new_board_scale=SCALED_NEW_BOARDS, board_penalty=0.0)
+
+    for row in rows.values():
+        assert row["boards_pct"] > -6
 
 
 def test_combined_effect_is_the_sum_and_has_a_small_standard_error() -> None:
@@ -111,11 +145,11 @@ def test_combined_effect_is_the_sum_and_has_a_small_standard_error() -> None:
         assert 0 < row["combined_se_pct"] < 5
 
 
-def test_old_game_vp_is_the_unaffected_baseline() -> None:
+def test_old_game_strength_is_vp_relative_to_the_field_average() -> None:
     rows = effect_rows()
 
-    assert abs(rows[NEUTRAL]["old_game_vp"] - OLD_VP) < 0.2
-    assert abs(rows[BOARD_VICTIM]["old_game_vp"] - OLD_VP) < 0.2
+    assert abs(rows[NEUTRAL]["old_game_strength"] - OLD_STRENGTH) < 0.08
+    assert abs(rows[BOARD_VICTIM]["old_game_strength"] - OLD_STRENGTH) < 0.08
 
 
 def test_rows_are_sorted_best_first_and_convert_to_the_export_dto() -> None:

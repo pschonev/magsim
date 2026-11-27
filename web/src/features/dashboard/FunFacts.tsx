@@ -12,6 +12,7 @@ import { FilterScopeBadge } from "./FilterScopeBadge";
 import { MushTable } from "./MushTable";
 import { StaticFacts } from "./StaticFacts";
 import { useSize, useWidth } from "./useChartBox";
+import { useProfiles } from "./useProfiles";
 import { useStaticTables } from "./useStaticTables";
 import {
   BADGE,
@@ -290,11 +291,14 @@ interface FunFactsProps {
   racerColors: Record<string, string>;
   /** False once the user has uploaded their own dataset: the precomputed tables belong to the bundled one. */
   bundled: boolean;
+  /** Names of the Second Wind racers; every other racer is base game. */
+  secondWind: ReadonlySet<string>;
 }
 
-export function FunFacts({ analysis, racerColors, bundled }: FunFactsProps) {
+export function FunFacts({ analysis, racerColors, bundled, secondWind }: FunFactsProps) {
   const { chart: theme } = useTheme();
   const tables = useStaticTables(bundled);
+  const profiles = useProfiles(bundled);
   const { fun_facts: facts, racer_specific: specific } = analysis;
   const colorOf = (name: string) => visibleMark(racerColors[name] ?? BADGE.blue, theme.bg);
   const toBars = (rows: { racer_name: string; value: number }[]): BarItem[] =>
@@ -558,8 +562,9 @@ export function FunFacts({ analysis, racerColors, bundled }: FunFactsProps) {
     );
   }
 
-  if (tables.expansion || tables.aiCompare) {
-    cards.push(<StaticFacts key="static" tables={tables} colorOf={colorOf} theme={theme} />);
+  const profileRows = profiles.status === "ready" ? profiles.rows : null;
+  if (tables.expansion || tables.aiCompare || profileRows) {
+    cards.push(<StaticFacts key="static" tables={tables} profiles={profileRows} secondWind={secondWind} colorOf={colorOf} theme={theme} />);
   }
 
   if (cards.length === 0) return <p className="text-xs text-slate-400">No facts for this filter.</p>;

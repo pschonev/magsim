@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import { useMemo } from "react";
 import type { DashboardAnalysisDTO, DatasetMetaDTO, EngineClient } from "../../types/api";
 import { AnalysisPanel } from "./AnalysisPanel";
 import { AnalysisProgressBar } from "./AnalysisProgressBar";
@@ -21,6 +22,7 @@ export function DashboardView({ client, meta, initialAnalysis, bundled }: Dashbo
     meta,
     initialAnalysis,
   );
+  const secondWind = useMemo(() => new Set(meta.second_wind_racers), [meta.second_wind_racers]);
   const message = failure ?? analysis?.error ?? null;
 
   return (
@@ -46,7 +48,13 @@ export function DashboardView({ client, meta, initialAnalysis, bundled }: Dashbo
 
       {!message && analysis && (
         <div aria-busy={running} className={`transition-opacity duration-200 ${running ? "opacity-60" : ""}`}>
-          <AnalysisPanel analysis={analysis} racerColors={meta.racer_colors} profiles={profiles} bundled={bundled} />
+          <AnalysisPanel
+            analysis={analysis}
+            racerColors={meta.racer_colors}
+            profiles={profiles}
+            bundled={bundled}
+            secondWind={secondWind}
+          />
         </div>
       )}
 

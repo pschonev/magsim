@@ -526,6 +526,144 @@ export function buildRoses(sections: RoseSection[], t: ChartTheme, width = 0, he
   };
 }
 
+export interface RacerValue {
+  name: string;
+  value: number;
+}
+
+export interface HistogramGroup {
+  label: string;
+  color: string;
+  racers: RacerValue[];
+}
+
+export const HISTOGRAM_BINS = 9;
+
+export function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+interface HistogramBins {
+  min: number;
+  width: number;
+  /** `members[bin][group]`: the racers of that group in that bin. */
+  members: RacerValue[][][];
+}
+
+/** Equal-width bins from the overall minimum to the maximum; the maximum falls into the last bin. */
+function binGroups(groups: HistogramGroup[], count = HISTOGRAM_BINS): HistogramBins {
+  const values = groups.flatMap((g) => g.racers.map((r) => r.value));
+  const min = Math.min(...values);
+  const width = (Math.max(...values) - min) / count || 1;
+  const members = Array.from({ length: count }, () => groups.map((): RacerValue[] => []));
+  groups.forEach((g, gi) => {
+    for (const r of g.racers) members[Math.min(count - 1, Math.floor((r.value - min) / width))][gi].push(r);
+  });
+  return { min, width, members };
+}
+
+/** Room above the plot for the legend and two staggered median labels; below it for the bin labels and the axis name. */
+const OVERLAY_TOP = 54;
+const OVERLAY_BOTTOM = 36;
+const MEDIAN_LABEL_STEP = 14;
+
+/**
+ * Grouped histogram: one bar per group in each shared bin, plus a dashed median line per group.
+ * The lines live on a hidden value axis spanning the bins' outer edges, so they sit at the true median.
+ */
+export function buildOverlaidHistogram(groups: HistogramGroup[], axisName: string, t: ChartTheme): EChartsOption {
+  const { min, width, members } = binGroups(groups);
+  const legendOf = (g: HistogramGroup) => `${g.label} (${g.racers.length})`;
+  const edge = (bin: number) => (min + bin * width).toFixed(2);
+  return {
+    ...base(t),
+    legend: {
+      top: 0,
+      itemWidth: 10,
+      itemHeight: 10,
+      data: groups.map((g) => ({ name: legendOf(g), textStyle: { color: readableOn(g.color, t), fontSize: 11 } })),
+    },
+    grid: { left: 6, right: 10, top: OVERLAY_TOP, bottom: OVERLAY_BOTTOM, containLabel: true },
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      confine: true,
+      backgroundColor: t.tooltipBg,
+      borderColor: t.tooltipBorder,
+      textStyle: { color: t.text, fontSize: 12 },
+      extraCssText: "max-width: 260px; white-space: normal;",
+      formatter: (params: { dataIndex: number }[]) => {
+        const bin = params[0].dataIndex;
+        const lines = groups.map((g, gi) => {
+          const names = [...members[bin][gi]].sort((a, b) => a.value - b.value).map((r) => `${displayName(r.name)} ${r.value.toFixed(2)}`);
+          return `<span style="color:${g.color}">●</span> ${legendOf(g)}: ${names.length > 0 ? names.join(", ") : "none"}`;
+        });
+        return [`<b>${edge(bin)} to ${edge(bin + 1)} ${axisName}</b>`, ...lines].join("<br/>");
+      },
+    },
+    xAxis: [
+      {
+        type: "category",
+        data: members.map((_, bin) => (min + (bin + 0.5) * width).toFixed(2)),
+        name: axisName,
+        nameLocation: "middle",
+        nameGap: 22,
+        nameTextStyle: { color: t.text, fontSize: 11 },
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: t.axisLine } },
+        axisLabel: { color: t.text, fontSize: 11, hideOverlap: true },
+      },
+      { type: "value", show: false, min, max: min + members.length * width, axisPointer: { show: false } },
+    ],
+    yAxis: {
+      type: "value",
+      minInterval: 1,
+      name: "racers",
+      nameTextStyle: { color: t.text, fontSize: 11, align: "left" },
+      axisLabel: { color: t.text, fontSize: 11 },
+      splitLine: { lineStyle: { color: t.gridLine } },
+    },
+    series: [
+      ...groups.map((g, gi) => ({
+        type: "bar" as const,
+        name: legendOf(g),
+        barGap: "10%",
+        barCategoryGap: "20%",
+        itemStyle: { color: g.color, borderRadius: [2, 2, 0, 0] },
+        data: members.map((bin) => bin[gi].length),
+      })),
+      {
+        type: "line" as const,
+        xAxisIndex: 1,
+        silent: true,
+        data: [],
+        markLine: {
+          silent: true,
+          symbol: "none",
+          data: groups.map((g, gi) => {
+            const mid = median(g.racers.map((r) => r.value));
+            return {
+              xAxis: mid,
+              lineStyle: { color: g.color, type: "dashed" as const, width: 2 },
+              label: {
+                show: true,
+                position: "end" as const,
+                formatter: `median ${mid.toFixed(2)}`,
+                color: readableOn(g.color, t),
+                fontSize: 11,
+                fontWeight: 700,
+                offset: [0, -gi * MEDIAN_LABEL_STEP],
+              },
+            };
+          }),
+        },
+      },
+    ],
+  };
+}
+
 export const MIN_PAIR_GAMES = 30;
 const ROSE_PAIRS = 5;
 

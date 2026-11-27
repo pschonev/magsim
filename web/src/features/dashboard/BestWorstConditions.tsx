@@ -108,7 +108,7 @@ export function BestWorstConditions({ racerName, matchups, environments, inks }:
   );
   const sideColor = { best: markOn(DIVERGING.good, theme), worst: markOn(DIVERGING.bad, theme) };
   return (
-    <div className="min-w-0 space-y-1.5 rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs">
+    <div className="h-full min-w-0 space-y-1.5 rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs">
       <div className="flex items-center gap-1.5">
         <h3 className="text-xs font-semibold text-slate-100">Best &amp; worst conditions</h3>
         <InfoTip label="More about best and worst conditions">

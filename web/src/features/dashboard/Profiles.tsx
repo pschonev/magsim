@@ -10,6 +10,7 @@ import { FilterScopeBadge } from "./FilterScopeBadge";
 import { ProfileDetail } from "./ProfileDetail";
 import { type HoverHandler, type HoverTarget, ProfileTip } from "./ProfileTip";
 import { PROFILE_TIP_GROUP, RoseGlyph, ShareScale } from "./RoseGlyph";
+import { SecondWindBadge } from "./SecondWindBadge";
 import { useDismissTip } from "./useDismissTip";
 import { GRID_GAP, useFitGrid } from "./useFitGrid";
 import type { ProfilesState } from "./useProfiles";
@@ -25,6 +26,7 @@ const MIN_GLYPH_FOR_NUMBER = 72;
 /** Cards whose glyph would be smaller than this beside the scale drop the scale and give the rose the full width. */
 const MIN_GLYPH_WITH_SCALE = 44;
 const MIN_GLYPH = 16;
+const BADGE_SIZE = 14;
 
 interface CardGlyph {
   size: number;
@@ -47,12 +49,14 @@ interface OverviewCardProps {
   statColors: readonly string[];
   cardWidth: number;
   cardHeight: number;
+  expansion: boolean;
   onOpen: (racer: string) => void;
   onHover: HoverHandler;
 }
 
 const OverviewCard = memo(function OverviewCard({
   profile,
+  expansion,
   ink,
   statColors,
   cardWidth,
@@ -69,9 +73,13 @@ const OverviewCard = memo(function OverviewCard({
       title={name}
       onClick={() => onOpen(profile.racer_name)}
       style={{ padding: CARD_PAD }}
-      className="flex min-w-0 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-md border border-slate-800 bg-slate-900 hover:border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+      className="relative flex min-w-0 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-md border border-slate-800 bg-slate-900 hover:border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
     >
-      <span className="w-full truncate text-center text-[11px] leading-[14px] font-bold" style={{ color: ink }}>
+      {expansion && <SecondWindBadge size={BADGE_SIZE} className="pointer-events-none absolute top-px right-px" />}
+      <span
+        className={`w-full truncate text-center text-[11px] leading-[14px] font-bold ${expansion ? "px-4" : ""}`}
+        style={{ color: ink }}
+      >
         {name}
       </span>
       <span className="flex items-start" style={{ gap: SCALE_GAP }}>
@@ -98,12 +106,20 @@ interface OverviewGridProps {
   rows: ProfileDTO[];
   inks: Map<string, string>;
   statColors: readonly string[];
+  secondWind: ReadonlySet<string>;
   onOpen: (racer: string) => void;
   onHover: HoverHandler;
 }
 
 /** Memoised: a hover changes only the tooltip state above it, so the grid and its fit are not recomputed. */
-const OverviewGrid = memo(function OverviewGrid({ rows, inks, statColors, onOpen, onHover }: OverviewGridProps) {
+const OverviewGrid = memo(function OverviewGrid({
+  rows,
+  inks,
+  statColors,
+  secondWind,
+  onOpen,
+  onHover,
+}: OverviewGridProps) {
   const { ref, layout } = useFitGrid(rows.length, glyphSize);
   return (
     <div
@@ -124,6 +140,7 @@ const OverviewGrid = memo(function OverviewGrid({ rows, inks, statColors, onOpen
           <OverviewCard
             key={profile.racer_name}
             profile={profile}
+            expansion={secondWind.has(profile.racer_name)}
             ink={inks.get(profile.racer_name) ?? ""}
             statColors={statColors}
             cardWidth={layout.cardWidth}
@@ -225,6 +242,7 @@ function Controls({ statColors, sortId, onSort }: ControlsProps) {
 interface ProfilesReadyProps {
   rows: ProfileDTO[];
   racerColors: Record<string, string>;
+  secondWind: ReadonlySet<string>;
   distributions: RacerDistributionsDTO;
   matchups: MatchupCellDTO[];
   environments: EnvironmentCellDTO[];
@@ -235,6 +253,7 @@ interface ProfilesReadyProps {
 function ProfilesReady({
   rows,
   racerColors,
+  secondWind,
   distributions,
   matchups,
   environments,
@@ -265,6 +284,7 @@ function ProfilesReady({
       {profile ? (
         <ProfileDetail
           profile={profile}
+          expansion={secondWind.has(profile.racer_name)}
           rows={sorted}
           ink={inks.get(profile.racer_name) ?? theme.text}
           inks={inks}
@@ -278,7 +298,14 @@ function ProfilesReady({
       ) : (
         <>
           <Controls statColors={statColors} sortId={sortId} onSort={setSortId} />
-          <OverviewGrid rows={sorted} inks={inks} statColors={statColors} onOpen={choose} onHover={setHover} />
+          <OverviewGrid
+            rows={sorted}
+            inks={inks}
+            statColors={statColors}
+            secondWind={secondWind}
+            onOpen={choose}
+            onHover={setHover}
+          />
         </>
       )}
       {hover && (
@@ -296,6 +323,8 @@ function ProfilesReady({
 interface ProfilesProps {
   state: ProfilesState;
   racerColors: Record<string, string>;
+  /** Racers from the Second Wind expansion; they get a badge. */
+  secondWind: ReadonlySet<string>;
   /** Filtered ability-trigger distributions, shown in the detail view. */
   distributions: RacerDistributionsDTO;
   /** Filtered matchup and board / twist card shifts, for the best and worst conditions in the detail view. */
@@ -309,6 +338,7 @@ interface ProfilesProps {
 export function Profiles({
   state,
   racerColors,
+  secondWind,
   distributions,
   matchups,
   environments,
@@ -325,6 +355,7 @@ export function Profiles({
     <ProfilesReady
       rows={state.rows}
       racerColors={racerColors}
+      secondWind={secondWind}
       distributions={distributions}
       matchups={matchups}
       environments={environments}

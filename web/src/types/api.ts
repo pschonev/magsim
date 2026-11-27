@@ -36,6 +36,7 @@ export interface DatasetMetaDTO {
   automatic_racers: string[];
   racer_colors: Record<string, string>;
   twists: string[];
+  second_wind_racers: string[];
 }
 
 export interface RacerStatRowDTO {
@@ -218,11 +219,11 @@ export interface ProfileDTO {
   pct_explained_share: number;
 }
 
-/** A base-game racer's VP in the old game and the change from Second Wind opponents and the new boards, in % of it. */
+/** A base-game racer's old-game VP as a multiple of the field average and the change from Second Wind opponents and the new boards, in % of it. */
 export interface ExpansionEffectDTO {
   racer_name: string;
   races: number;
-  old_game_vp: number;
+  old_game_strength: number;
   opponents_pct: number;
   boards_pct: number;
   combined_pct: number;

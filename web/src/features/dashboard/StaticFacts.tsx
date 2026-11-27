@@ -1,10 +1,18 @@
 import { type ReactNode, useState } from "react";
 import { EChart } from "../../components/EChart";
-import type { AiCompareDTO, ExpansionEffectDTO } from "../../types/api";
+import type { AiCompareDTO, ExpansionEffectDTO, ProfileDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
 import { BRAND, CATEGORY } from "../../utils/palette";
 import type { ChartTheme } from "../../utils/theme";
-import { type DivergingColors, type DivergingItem, buildDivergingBars } from "./charts/funFactCharts";
+import {
+  type DivergingColors,
+  type DivergingItem,
+  type HistogramGroup,
+  type RacerValue,
+  buildDivergingBars,
+  buildOverlaidHistogram,
+  median,
+} from "./charts/funFactCharts";
 import { Card } from "./FactCard";
 import { FilterScopeBadge } from "./FilterScopeBadge";
 import type { StaticTables } from "./useStaticTables";
@@ -27,7 +35,7 @@ const EXPANSION_PARTS: { key: ExpansionPart; label: string }[] = [
 ];
 
 const EXPANSION_TIP =
-  "How the base-game racers fare in the expanded game, as % of their VP in the old game (no Second Wind opponents, Mild Mile / Wild Wilds). Total adds two parts 1:1: Opponents (facing only Second Wind opponents instead of only base-game ones) and Board (playing Whirly World / Twisty Twirl, incl. twist cards, instead of the old boards). From all simulated races.";
+  "How the base-game racers fare in the expanded game, as % of their strength in the old game (no Second Wind opponents, Mild Mile / Wild Wilds). Strength is the racer's VP relative to the average racer on the same board and player count, so boards with fewer VP spaces do not lower everyone: Opponents, Board and Total are changes in standing against the field. Total adds two parts 1:1: Opponents (facing only Second Wind opponents instead of only base-game ones) and Board (playing Whirly World / Twisty Twirl, incl. twist cards, instead of the old boards). From all simulated races.";
 const AI_COMPARE_TIP =
   "Each game is played twice with the same lineup and dice: once with this racer making simple fixed choices (baseline), once with our smart AI. Bars show how much more VP our algorithm earns, so this measures how good our decision code is, not how much a perfect or human player could gain (e.g. Mush does not plan the order of his abilities). Only racers with decisions. Cheatah is left out: its outcome depends on how well the player to its right guesses, so a fixed baseline is not comparable.";
 
@@ -43,7 +51,7 @@ function expansionItems(rows: ExpansionEffectDTO[], part: ExpansionPart, colorOf
       value: r[part] / 100,
       detail: [
         `<b>${displayName(r.racer_name)}</b>`,
-        `Old game: ${r.old_game_vp.toFixed(2)} VP`,
+        `Old game: ${r.old_game_strength.toFixed(2)}× the average racer`,
         `vs Second Wind opponents: ${signed(r.opponents_pct)} %`,
         `on the new boards: ${signed(r.boards_pct)} %`,
         `Combined: ${signed(r.combined_pct)} % ± ${r.combined_se_pct.toFixed(1)}`,
@@ -102,8 +110,66 @@ function RankedBarsCard({ title, caption, items, theme, colors, controls }: Rank
   );
 }
 
+type Measure = "avg_vp" | "speed";
+
+const MEASURES: { key: Measure; label: string; axisName: string; summary: string }[] = [
+  { key: "avg_vp", label: "VP", axisName: "average VP", summary: "VP" },
+  { key: "speed", label: "Speed", axisName: "speed", summary: "speed" },
+];
+const BASE_COLOR = BRAND.blue;
+const SECOND_WIND_COLOR = BRAND.pink;
+const HISTOGRAM_HEIGHT = 230;
+
+const BASE_VS_SECOND_WIND_TIP =
+  "Each dot-sized bin counts racers by their average VP (or speed) over all simulated races, one data point per racer, so racers with many games do not dominate. Dashed lines are the medians. Based on the shipped results, not the filters.";
+
+interface BaseVsSecondWindCardProps {
+  profiles: ProfileDTO[];
+  secondWind: ReadonlySet<string>;
+  theme: ChartTheme;
+}
+
+/** Base-game racers against Second Wind racers: overlaid histograms of their average VP or speed. */
+function BaseVsSecondWindCard({ profiles, secondWind, theme }: BaseVsSecondWindCardProps) {
+  const [measure, setMeasure] = useState<Measure>("avg_vp");
+  const { axisName, summary } = MEASURES.find((m) => m.key === measure) ?? MEASURES[0];
+  const racersOf = (inSecondWind: boolean): RacerValue[] =>
+    profiles.filter((p) => secondWind.has(p.racer_name) === inSecondWind).map((p) => ({ name: p.racer_name, value: p[measure] }));
+  const groups: HistogramGroup[] = [
+    { label: "Base game", color: BASE_COLOR, racers: racersOf(false) },
+    { label: "Second Wind", color: SECOND_WIND_COLOR, racers: racersOf(true) },
+  ];
+  const [baseMedian, secondWindMedian] = groups.map((g) => median(g.racers.map((r) => r.value)));
+  return (
+    <Card title="Base game vs Second Wind" caption={BASE_VS_SECOND_WIND_TIP}>
+      <div role="group" aria-label="Measure" className="mb-2 flex gap-1">
+        {MEASURES.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={measure === key}
+            onClick={() => setMeasure(key)}
+            className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${measure === key ? "border-slate-500 bg-slate-800 text-slate-50" : "border-slate-700 text-slate-300 hover:text-slate-50"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <EChart renderer="svg" height={HISTOGRAM_HEIGHT} option={buildOverlaidHistogram(groups, axisName, theme)} />
+      <p className="mt-1 text-[11px] text-slate-300">
+        Median {summary}: base {baseMedian.toFixed(2)}, Second Wind {secondWindMedian.toFixed(2)}
+      </p>
+    </Card>
+  );
+}
+
+const XL_COLUMNS: Record<number, string> = { 2: "xl:grid-cols-2", 3: "xl:grid-cols-3" };
+
 interface StaticFactsProps {
   tables: StaticTables;
+  /** The shipped profiles; null while loading or when the build has none. */
+  profiles: ProfileDTO[] | null;
+  secondWind: ReadonlySet<string>;
   colorOf: (racer: string) => string;
   theme: ChartTheme;
 }
@@ -144,12 +210,20 @@ function ExpansionCard({ rows, colorOf, theme }: ExpansionCardProps) {
   );
 }
 
-/** The two bundled-dataset cards at the bottom of Fun facts: side by side from xl up, stacked below. */
-export function StaticFacts({ tables, colorOf, theme }: StaticFactsProps) {
-  const both = tables.expansion !== null && tables.aiCompare !== null;
+/** True when the profiles hold racers of both groups, so both histograms and their medians exist. */
+function hasBothGroups(profiles: ProfileDTO[] | null, secondWind: ReadonlySet<string>): profiles is ProfileDTO[] {
+  if (profiles === null) return false;
+  return profiles.some((p) => secondWind.has(p.racer_name)) && profiles.some((p) => !secondWind.has(p.racer_name));
+}
+
+/** The bundled-dataset cards at the bottom of Fun facts: side by side from xl up, stacked below. */
+export function StaticFacts({ tables, profiles, secondWind, colorOf, theme }: StaticFactsProps) {
+  const comparable = hasBothGroups(profiles, secondWind);
+  const count = [tables.expansion, comparable, tables.aiCompare].filter(Boolean).length;
   return (
-    <div className={`order-6 grid ${ONE_COLUMN} gap-3 sm:col-span-2 xl:col-span-3 ${both ? "xl:grid-cols-2" : ""}`}>
+    <div className={`order-6 grid ${ONE_COLUMN} gap-3 sm:col-span-2 xl:col-span-3 ${XL_COLUMNS[count] ?? ""}`}>
       {tables.expansion && <ExpansionCard rows={tables.expansion} colorOf={colorOf} theme={theme} />}
+      {comparable && <BaseVsSecondWindCard profiles={profiles} secondWind={secondWind} theme={theme} />}
       {tables.aiCompare && (
         <RankedBarsCard
           title="Impact of decision algorithm"

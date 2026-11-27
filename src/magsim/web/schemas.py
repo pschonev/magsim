@@ -48,6 +48,7 @@ class DatasetMetaDTO(msgspec.Struct, frozen=True):
     automatic_racers: list[str]
     racer_colors: dict[str, str]
     twists: list[str] = msgspec.field(default_factory=list)
+    second_wind_racers: list[str] = msgspec.field(default_factory=list)
 
 
 class RacerStatRowDTO(msgspec.Struct, frozen=True):
@@ -265,11 +266,11 @@ class ProfileDTO(msgspec.Struct, frozen=True):
 
 
 class ExpansionEffectDTO(msgspec.Struct, frozen=True):
-    """A base-game racer's VP in the old game and the change from Second Wind opponents and the new boards, in % of it."""
+    """A base-game racer's old-game VP as a multiple of the field average and the change from Second Wind opponents and the new boards, in % of it."""
 
     racer_name: str
     races: int
-    old_game_vp: float
+    old_game_strength: float
     opponents_pct: float
     boards_pct: float
     combined_pct: float

@@ -21,7 +21,7 @@ COMBINED_CONTRAST = [
 OUTPUT_SCHEMA = {
     "racer_name": pl.Utf8,
     "races": pl.Int64,
-    "old_game_vp": pl.Float64,
+    "old_game_strength": pl.Float64,
     "opponents_pct": pl.Float64,
     "boards_pct": pl.Float64,
     "combined_pct": pl.Float64,
@@ -42,7 +42,7 @@ def _predictors() -> list[pl.Expr]:
 
 
 def _moments(results: pl.DataFrame, races: pl.DataFrame) -> list[dict[str, float]]:
-    """Per base-game racer: n, X'X, X'y and y'y of its races without errors."""
+    """Per base-game racer: n, X'X, X'y and y'y of its error-free races, y being its VP over the field's mean VP."""
     valid_races = races.filter(pl.col("error_code").is_null() & (pl.col("total_turns") > 1)).select(
         "config_hash",
         "board",
@@ -50,9 +50,11 @@ def _moments(results: pl.DataFrame, races: pl.DataFrame) -> list[dict[str, float
         "racer_names",
     )
     frame = (
-        results.filter(pl.col("racer_name").is_in(list(BASE_GAME)))
-        .select("config_hash", "racer_name", pl.col("final_vp").cast(pl.Float64).alias("y"))
+        results.select("config_hash", "racer_name", pl.col("final_vp").cast(pl.Float64))
         .join(valid_races, on="config_hash", how="inner")
+        .with_columns(pl.col("final_vp").mean().over("board", "racer_count").alias("field_mean"))
+        .filter(pl.col("racer_name").is_in(list(BASE_GAME)) & (pl.col("field_mean") > 0))
+        .with_columns((pl.col("final_vp") / pl.col("field_mean")).alias("y"))
         .with_columns(expr.cast(pl.Float64).alias(f"x{i}") for i, expr in enumerate(_predictors()))
     )
     return (
@@ -72,7 +74,7 @@ def _moments(results: pl.DataFrame, races: pl.DataFrame) -> list[dict[str, float
 
 
 def _effect(moments: dict[str, float]) -> dict[str, float | str | int] | None:
-    """The racer's old-game VP, effects as % of it and the standard error of the combined %, or None if not estimable."""
+    """The racer's old-game strength, effects as % of it and the standard error of the combined %, or None if not estimable."""
     n = moments["n"]
     if n < MIN_RACES:
         return None
@@ -86,24 +88,24 @@ def _effect(moments: dict[str, float]) -> dict[str, float | str | int] | None:
         spread = solve_linear_system(xtx, COMBINED_CONTRAST)
     except ZeroDivisionError:
         return None
-    old_game_vp = (
+    old_game_strength = (
         beta[INTERCEPT]
         + 0.5 * beta[WILD]
         + beta[PLAYERS_5] * xtx[INTERCEPT][PLAYERS_5] / n
         + beta[PLAYERS_6] * xtx[INTERCEPT][PLAYERS_6] / n
     )
     spare = n - PREDICTORS
-    if old_game_vp <= 0 or spare <= 0:
+    if old_game_strength <= 0 or spare <= 0:
         return None
     residual = max(0.0, moments["yy"] - sum(b * c for b, c in zip(beta, xty, strict=True)))
     combined_variance = residual / spare * sum(c * z for c, z in zip(COMBINED_CONTRAST, spread, strict=True))
     opponents = beta[SW_SHARE]
     boards = 0.5 * (beta[WHIRLY] + beta[TWISTY]) - 0.5 * beta[WILD]
-    scale = 100 / old_game_vp
+    scale = 100 / old_game_strength
     return {
         "racer_name": moments["racer_name"],
         "races": int(n),
-        "old_game_vp": old_game_vp,
+        "old_game_strength": old_game_strength,
         "opponents_pct": opponents * scale,
         "boards_pct": boards * scale,
         "combined_pct": (opponents + boards) * scale,
@@ -112,15 +114,18 @@ def _effect(moments: dict[str, float]) -> dict[str, float | str | int] | None:
 
 
 def compute_expansion_effect(results: pl.DataFrame, races: pl.DataFrame) -> pl.DataFrame:
-    """Per base-game racer: its VP in the old game and how Second Wind opponents and the new boards change it.
+    """Per base-game racer: its old-game strength and how Second Wind opponents and the new boards change it.
 
-    One least-squares fit per racer on all its error-free races: final VP on the share of Second Wind
-    opponents, board dummies (Standard baseline) and player-count dummies (4 players baseline).
-    `old_game_vp` is the fitted VP against base-game opponents only, averaged over the two old boards
-    (Standard, Wild Wilds) and the racer's own player mix. `opponents_pct` is the Second Wind opponent
-    coefficient, `boards_pct` the average of Whirly World and Twisty Twirl minus Wild Wilds (new against
-    old boards, each pair weighted equally), `combined_pct` their sum, all as % of `old_game_vp`.
-    `combined_se_pct` is the standard error of the combined effect. Sorted by `combined_pct`, best first.
+    VP is first divided by the mean VP of all racers on the same board and player count, so boards with
+    fewer VP spaces do not lower everyone. One least-squares fit per racer on all its error-free races:
+    that relative VP on the share of Second Wind opponents, board dummies (Standard baseline) and
+    player-count dummies (4 players baseline). `old_game_strength` is the fitted relative VP against
+    base-game opponents only, averaged over the two old boards (Standard, Wild Wilds) and the racer's own
+    player mix (1.0 = field average). `opponents_pct` is the Second Wind opponent coefficient, `boards_pct`
+    the average of Whirly World and Twisty Twirl minus Wild Wilds (new against old boards, each pair
+    weighted equally), `combined_pct` their sum, all as % of `old_game_strength`, i.e. the change in
+    standing against the field. `combined_se_pct` is the standard error of the combined effect.
+    Sorted by `combined_pct`, best first.
     """
     rows = [effect for moments in _moments(results, races) if (effect := _effect(moments)) is not None]
     return pl.DataFrame(rows, schema=OUTPUT_SCHEMA).sort("combined_pct", descending=True)
