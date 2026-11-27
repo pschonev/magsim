@@ -4,9 +4,6 @@ import logging
 import re
 from typing import TYPE_CHECKING, get_args, override
 
-from rich.highlighter import Highlighter
-from rich.logging import RichHandler
-
 from magsim.core.palettes import get_racer_color
 from magsim.core.types import (
     AbilityName,
@@ -99,50 +96,60 @@ class RichMarkupFormatter(logging.Formatter):
         return f"[{COLOR['prefix']}]{prefix:<19}[/{COLOR['prefix']}]  {message}"
 
 
-class GameLogHighlighter(Highlighter):
+class PlainLogFormatter(logging.Formatter):
     @override
-    def highlight(self, text: Text) -> None:
-        # 1. Standard Regex Highlighting
-        text.highlight_regex(r"\bMove\b", COLOR["move"])
-        text.highlight_regex(r"\bMoving\b", COLOR["move"])
-        text.highlight_regex(r"\bPushing\b", COLOR["warp"])
-        text.highlight_regex(r"\bMain Move\b", COLOR["main_move"])
-        text.highlight_regex(r"\bWarp\b", COLOR["warp"])
-        text.highlight_regex(r"\bBOARD\b", COLOR["board"])
-        text.highlight_regex(r"\bDice Roll\b", COLOR["dice_roll"])
-        text.highlight_regex(r"\bBase Value Override\b", COLOR["base_value_override"])
-        text.highlight_regex(ABILITY_PATTERN, COLOR["ability"])
-        text.highlight_regex(RACER_MODIFIER_PATTERN, COLOR["modifier"])
-        text.highlight_regex(BOARD_MODIFIER_PATTERN, COLOR["board"])
-
-        text.highlight_regex(r"!!!", COLOR["warning"])
-        text.highlight_regex(re.escape(TWIST_BANNER), COLOR["twist_banner"])
-        text.highlight_regex(r"\bVP:\b", "bold yellow")
-        text.highlight_regex(r"\b\+1 VP\b", "bold green")
-        text.highlight_regex(r"\b-1 VP\b", "bold red")
-
-        # 2. Dynamic Racer Highlighting
-        # We iterate over matches to apply specific colors per racer
-        for match in RACER_COMPOSITE_PATTERN.finditer(text.plain):
-            prefix_span = match.span("prefix")  # e.g., "0.1:" or "1•"
-            name_span = match.span("name")  # e.g., "Banana"
-            racer_name = match.group("name")
-
-            # Get the Hex Color (e.g., "#FFE135")
-            hex_color = get_racer_color(racer_name)
-
-            # A. Color the Prefix (Index/Bullet) with the Racer's specific color
-            # We assume the color is a hex string. Rich accepts matching hex style.
-            if prefix_span[0] != -1:
-                text.stylize(hex_color, start=prefix_span[0], end=prefix_span[1])
-
-            # B. Color the Name itself Bold White (as requested)
-            text.stylize("bold white", start=name_span[0], end=name_span[1])
+    def format(self, record: logging.LogRecord) -> str:
+        total_turn = getattr(record, "total_turn", 0)
+        turn_log_count = getattr(record, "turn_log_count", 0)
+        racer_repr = getattr(record, "racer_repr", "_")
+        engine_level = getattr(record, "engine_level", 0)
+        engine_id = getattr(record, "engine_id", 0)
+        prefix = (
+            f"{engine_level}:{engine_id} {total_turn}.{racer_repr}.{turn_log_count}"
+        )
+        return f"{prefix:<19}  {record.getMessage()}"
 
 
-def configure_logging() -> None:
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+def _build_rich_handler() -> logging.Handler:
+    from rich.highlighter import Highlighter  # noqa: PLC0415
+    from rich.logging import RichHandler  # noqa: PLC0415
+
+    class GameLogHighlighter(Highlighter):
+        @override
+        def highlight(self, text: Text) -> None:
+            # 1. Standard Regex Highlighting
+            text.highlight_regex(r"\bMove\b", COLOR["move"])
+            text.highlight_regex(r"\bMoving\b", COLOR["move"])
+            text.highlight_regex(r"\bPushing\b", COLOR["warp"])
+            text.highlight_regex(r"\bMain Move\b", COLOR["main_move"])
+            text.highlight_regex(r"\bWarp\b", COLOR["warp"])
+            text.highlight_regex(r"\bBOARD\b", COLOR["board"])
+            text.highlight_regex(r"\bDice Roll\b", COLOR["dice_roll"])
+            text.highlight_regex(
+                r"\bBase Value Override\b",
+                COLOR["base_value_override"],
+            )
+            text.highlight_regex(ABILITY_PATTERN, COLOR["ability"])
+            text.highlight_regex(RACER_MODIFIER_PATTERN, COLOR["modifier"])
+            text.highlight_regex(BOARD_MODIFIER_PATTERN, COLOR["board"])
+
+            text.highlight_regex(r"!!!", COLOR["warning"])
+            text.highlight_regex(re.escape(TWIST_BANNER), COLOR["twist_banner"])
+            text.highlight_regex(r"\bVP:\b", "bold yellow")
+            text.highlight_regex(r"\b\+1 VP\b", "bold green")
+            text.highlight_regex(r"\b-1 VP\b", "bold red")
+
+            # 2. Dynamic Racer Highlighting
+            for match in RACER_COMPOSITE_PATTERN.finditer(text.plain):
+                prefix_span = match.span("prefix")
+                name_span = match.span("name")
+                racer_name = match.group("name")
+
+                hex_color = get_racer_color(racer_name)
+                if prefix_span[0] != -1:
+                    text.stylize(hex_color, start=prefix_span[0], end=prefix_span[1])
+                text.stylize("bold white", start=name_span[0], end=name_span[1])
+
     handler = RichHandler(
         markup=True,
         show_path=False,
@@ -150,6 +157,17 @@ def configure_logging() -> None:
         highlighter=GameLogHighlighter(),
     )
     handler.setFormatter(RichMarkupFormatter())
+    return handler
+
+
+def configure_logging() -> None:
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    try:
+        handler = _build_rich_handler()
+    except ModuleNotFoundError:
+        handler = logging.StreamHandler()
+        handler.setFormatter(PlainLogFormatter())
     logger.handlers.clear()
     logger.addHandler(handler)
     logger.propagate = False

@@ -1,0 +1,389 @@
+<title>magsim Design Direction</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column for the argument, wide figure panels for the visual proposals. */
+:root {
+  --bg: #f6f6f3;
+  --surface: #ffffff;
+  --ink: #17181a;
+  --muted: #5d6066;
+  --line: #d9d9d4;
+  --outline: #17181a;
+  --accent: #8120c4;
+  --accent-ink: #ffffff;
+  --tile: #ecebe6;
+  --tile-text: #3d4045;
+  --track-base: #17181a;
+  --board-center: #17181a;
+  --board-center-text: #ffffff;
+  --shadow: rgba(23, 24, 26, 0.9);
+  --blue: #6ca1d8;
+  --pink: #ee83b3;
+  --yellow: #f6ae00;
+  --green: #539912;
+  --orange: #fd5a10;
+  --font-display: "Lilita One", "Arial Black", Impact, sans-serif;
+  --font-alt: "Bricolage Grotesque", "Arial Black", sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131615; --surface: #1b1f1d; --ink: #eef0ee; --muted: #9aa29d; --line: #303633;
+    --outline: #0a0b0b; --accent: #b455f5; --accent-ink: #160a20; --tile: #2b302d; --tile-text: #c7ccc8;
+    --track-base: #050606; --board-center: #050606; --board-center-text: #f4f6f4; --shadow: rgba(0, 0, 0, 0.9);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131615; --surface: #1b1f1d; --ink: #eef0ee; --muted: #9aa29d; --line: #303633;
+  --outline: #0a0b0b; --accent: #b455f5; --accent-ink: #160a20; --tile: #2b302d; --tile-text: #c7ccc8;
+  --track-base: #050606; --board-center: #050606; --board-center-text: #f4f6f4; --shadow: rgba(0, 0, 0, 0.9);
+  color-scheme: dark;
+}
+
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6; }
+.page { max-width: 1040px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 72px; display: grid; gap: 56px; }
+.prose { max-width: 66ch; }
+h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(2.4rem, 6vw, 3.6rem); letter-spacing: 0.01em; }
+h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.8rem; letter-spacing: 0.01em; }
+h3 { font-size: 1rem; font-weight: 700; }
+p { margin: 0; }
+.stack { display: grid; gap: 14px; }
+.eyebrow { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.1rem; color: var(--muted); }
+
+/* the badge stripe: the one decorative signature, used as a section marker */
+.stripe { display: flex; height: 10px; border-radius: 999px; overflow: hidden; border: 2px solid var(--outline); max-width: 260px; }
+.stripe span { flex: 1; }
+
+.panel { background: var(--surface); border: 2px solid var(--line); border-radius: 18px; padding: 24px; display: grid; gap: 20px; min-width: 0; }
+.figure-scroll { overflow-x: auto; }
+
+.swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.swatch { border: 2px solid var(--outline); border-radius: 14px; overflow: hidden; background: var(--surface); box-shadow: 3px 3px 0 var(--shadow); }
+.swatch .chip { height: 64px; }
+.swatch .meta { padding: 8px 10px; font-size: 0.8rem; display: grid; gap: 2px; }
+.swatch .meta b { font-size: 0.85rem; }
+.swatch .meta code { font-family: var(--font-mono); color: var(--muted); font-size: 0.74rem; }
+
+.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.role { border-left: 4px solid var(--c); padding: 4px 0 4px 12px; font-size: 0.9rem; }
+.role b { display: block; }
+
+.type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.type-card { border: 2px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 10px; min-width: 0; }
+.type-card.pick { border-color: var(--accent); }
+.type-card .big { font-size: 2.2rem; line-height: 1.05; }
+.type-card .small { color: var(--muted); font-size: 0.85rem; }
+.badge-pick { justify-self: start; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; background: var(--accent); color: var(--accent-ink); padding: 2px 8px; border-radius: 999px; }
+
+/* component samples */
+.demo-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border: 2px solid var(--outline); border-radius: 999px; background: var(--surface); }
+.tab { font: 600 0.82rem var(--font-body); border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+.tab.on { background: var(--accent); color: var(--accent-ink); }
+.tab-group { font: 0.95rem var(--font-display); padding: 6px 10px 6px 12px; color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
+.tab-group i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--outline); background: var(--c); }
+.btn { font: 700 0.85rem var(--font-body); padding: 8px 16px; border-radius: 999px; border: 2px solid var(--outline); background: var(--surface); color: var(--ink); box-shadow: 3px 3px 0 var(--shadow); cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn:focus-visible, .tab:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+.pill { font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 2px solid var(--outline); background: var(--c); color: #17181a; }
+.racer-chip { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.9rem; border: 2px solid var(--line); border-radius: 999px; padding: 3px 12px 3px 4px; background: var(--surface); }
+.token { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--outline); box-shadow: inset 0 0 0 3px var(--ring); background: var(--fill); }
+
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.compare > div { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.compare ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 6px; }
+
+.log { font-family: var(--font-mono); font-size: 0.8rem; border: 2px solid var(--outline); border-radius: 14px; overflow: hidden; background: var(--board-center); color: var(--board-center-text); }
+.log .turn { padding: 6px 12px; font-family: var(--font-display); font-size: 0.9rem; letter-spacing: 0.02em; background: rgba(255,255,255,0.06); display: flex; align-items: center; gap: 8px; }
+.log .line { padding: 3px 12px; display: grid; grid-template-columns: 1fr; }
+.log .line.now { background: rgba(180, 85, 245, 0.25); box-shadow: inset 4px 0 0 #b455f5; }
+.log .dim { opacity: 0.55; }
+.k-roll { color: #f6ae00; } .k-move { color: #8fd16a; } .k-power { color: #ee83b3; } .k-warp { color: #6ca1d8; }
+
+.plan { display: grid; gap: 12px; }
+.step { display: grid; grid-template-columns: 2.4rem 1fr auto; gap: 14px; align-items: start; border-bottom: 2px solid var(--line); padding-bottom: 12px; }
+.step:last-child { border-bottom: 0; }
+.step .n { font: 1.4rem var(--font-display); width: 2.4rem; height: 2.4rem; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--outline); background: var(--c); color: #17181a; }
+.step .effort { font-size: 0.78rem; font-weight: 700; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.step p { color: var(--muted); font-size: 0.92rem; }
+
+.decisions { display: grid; gap: 10px; }
+.decision { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 14px 16px; border: 2px solid var(--line); border-radius: 14px; }
+.decision b { font-size: 0.95rem; }
+.decision span { color: var(--muted); font-size: 0.9rem; }
+
+.theme-toggle { position: fixed; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 5; }
+
+@media (max-width: 560px) {
+  .step { grid-template-columns: 2.4rem 1fr; }
+  .step .effort { grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="page">
+  <header class="stack">
+    <div class="stripe" aria-hidden="true"><span style="background:var(--blue)"></span><span style="background:var(--pink)"></span><span style="background:var(--yellow)"></span><span style="background:var(--green)"></span><span style="background:var(--orange)"></span></div>
+    <span class="eyebrow">Proposal for the magsim web app</span>
+    <h1>A board-game look for magsim</h1>
+    <p class="lede prose">The app works, but it looks like a generic admin dashboard. This proposal keeps the layout and the charts and changes the visual language: neutral, calm surfaces for reading data, plus a small set of game-box details taken from your GitHub badge. Chunky outlines, the five track colors, a rounded display face, and a race track that looks like a printed board.</p>
+  </header>
+
+  <section class="stack">
+    <h2>The idea in one sentence</h2>
+    <p class="prose">Data areas stay quiet and readable in both themes; the game shows up in three places only: the track, the controls (pill tabs and outlined buttons with a printed offset shadow), and the headings. If everything is colorful, nothing reads, so the five colors carry meaning instead of decoration.</p>
+  </section>
+
+  <section class="stack">
+    <h2>Color</h2>
+    <p class="prose">The five track colors from the badge become the game palette. Purple stays the single interactive accent (selected tab, primary button, focus), as you suggested. Neutrals lean slightly green in dark mode to match the existing chart background, and stay a clean paper white in light mode.</p>
+    <div class="panel">
+      <div class="swatches">
+        <div class="swatch"><div class="chip" style="background:var(--blue)"></div><div class="meta"><b>Track blue</b><code>#6ca1d8</code><span>better than average</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--pink)"></div><div class="meta"><b>Track pink</b><code>#ee83b3</code><span>worse than average</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--yellow)"></div><div class="meta"><b>Track yellow</b><code>#f6ae00</code><span>current racer, focus, dice</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--green)"></div><div class="meta"><b>Track green</b><code>#539912</code><span>forward moves, start</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--orange)"></div><div class="meta"><b>Track orange</b><code>#fd5a10</code><span>twist cards, warnings</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--accent)"></div><div class="meta"><b>Purple accent</b><code>#8120c4 / #b455f5</code><span>interaction only</span></div></div>
+      </div>
+      <div class="roles">
+        <div class="role" style="--c:var(--blue)"><b>Heatmaps</b>The diverging scale runs pink (worse) to blue (better), the badge's own pair, with deeper ends for strong effects.</div>
+        <div class="role" style="--c:var(--orange)"><b>Twist cards</b>Orange replaces today's purple for card names, so purple only ever means "you can click this".</div>
+        <div class="role" style="--c:var(--yellow)"><b>Attention</b>Yellow marks the current racer, the dice and keyboard focus, on the track and in the log.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>Type</h2>
+    <p class="prose">A rounded, heavy display face gives the game-box feel in headings, the logo, tab-group names and the track's centre board. Everything you read for numbers stays in Inter; the event log stays monospaced.</p>
+    <div class="type-grid">
+      <div class="type-card pick">
+        <span class="badge-pick">Recommended</span>
+        <div class="big" style="font-family:var(--font-display)">Ability Speed</div>
+        <p class="small">Lilita One for display. Chunky and friendly, close to the badge lettering, readable at 18 px and up. Used only for headings and labels on the board.</p>
+      </div>
+      <div class="type-card">
+        <div class="big" style="font-family:var(--font-alt);font-weight:800">Ability Speed</div>
+        <p class="small">Bricolage Grotesque as a calmer alternative: modern, with a hint of 70s poster type, but less playful.</p>
+      </div>
+      <div class="type-card">
+        <div style="font-family:var(--font-body);font-weight:600;font-size:1.05rem">Scoocher moves 1 when another racer's power happens.</div>
+        <div style="font-family:var(--font-mono);font-size:0.85rem;color:var(--muted)">Dice Roll: 4 | Mods: GunkSlime(−1) → 3</div>
+        <p class="small">Inter for all data and tables, with tabular numbers. JetBrains Mono for the event log.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>Controls</h2>
+    <p class="prose">Pill shapes echo the track spaces. Buttons get a 2 px outline and a hard offset shadow, like a printed card lifted off the table. Navigation groups get a name and a color dot instead of anonymous dividers.</p>
+    <div class="panel">
+      <div class="tabs" role="tablist" aria-label="Analysis views">
+        <span class="tab-group" style="--c:var(--blue)"><i></i>Racers</span>
+        <button class="tab on" type="button">Consistency</button>
+        <button class="tab" type="button">Momentum</button>
+        <button class="tab" type="button">Engine</button>
+        <span class="tab-group" style="--c:var(--green)"><i></i>Race</span>
+        <button class="tab" type="button">Ability Speed</button>
+        <button class="tab" type="button">Interactions</button>
+        <button class="tab" type="button">Environments</button>
+        <span class="tab-group" style="--c:var(--yellow)"><i></i>Tables</span>
+        <button class="tab" type="button">Overview</button>
+      </div>
+      <div class="demo-row">
+        <button class="btn primary" type="button">Run analysis</button>
+        <button class="btn" type="button">Share link</button>
+        <span class="pill" style="--c:var(--yellow)">Filters changed</span>
+        <span class="pill" style="--c:var(--orange)">Twist: Piñata</span>
+        <span class="racer-chip"><span class="token" style="--fill:#FFE135;--ring:#000000"></span>Banana</span>
+        <span class="racer-chip"><span class="token" style="--fill:#87CEEB;--ring:#FF8C00"></span>Hare</span>
+        <span class="racer-chip"><span class="token" style="--fill:#556B2F;--ring:#8B4513"></span>Gunk</span>
+      </div>
+      <p class="small" style="color:var(--muted);font-size:0.85rem">Racer names are always written in the normal text color; the racer's colors live on the token. That fixes the unreadable Gunk, Legs and Coach labels in both themes.</p>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>The race track</h2>
+    <p class="prose">The biggest visual win. Today's track is grey boxes on a dark panel with the Goal tile wedged into the Start at an angle. The proposal draws it like the badge: a black track with a white rim, square-cut spaces with upright numbers, a checkered finish line, colored spaces only where a space does something, chunky racer tokens that fan out when they share a space, and a centre board that shows the roll during the race and the podium at the end.</p>
+    <div class="panel">
+      <div class="figure-scroll"><div id="track" role="img" aria-label="Mockup of the proposed race track with six racers, warp spaces and a checkered finish."></div></div>
+      <div class="compare">
+        <div>
+          <h3>What changes</h3>
+          <ul>
+            <li>Upright numbers in the corner of each space; the space's effect (→15, +2, VP) is the main label.</li>
+            <li>Start and finish share the line, with a checkered strip instead of a crooked "G" tile.</li>
+            <li>Warp pairs share one badge color, linked by a curved arrow with an arrowhead.</li>
+            <li>Stacked racers fan out from the space with short leader lines, so six names at the start stay readable.</li>
+            <li>Current racer: a yellow halo and a small pointer, not a thin dashed ring.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>What stays</h3>
+          <ul>
+            <li>The 30-space oval geometry, tooltips on hover, and the step-by-step playback.</li>
+            <li>The track is always drawn as a dark printed board, in both themes, on purpose; the panel around it follows the theme.</li>
+            <li>Racer palettes (main color, ring, outline) from <code>palettes.py</code>.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>The event log</h2>
+    <p class="prose">The log keeps its colors (they match the notebook), but drops the repeated "INFO" and the debug prefix unless debug logging is on, uses the display face for turn headers, and marks the current step with a purple row instead of a red dashed line that reads like an error.</p>
+    <div class="log" aria-label="Mockup of the event log">
+      <div class="turn">Turn 15 · Gunk</div>
+      <div class="line dim"><span><span class="k-roll">Dice roll</span> 6 → <span class="k-power">Critic</span> makes Gunk reroll</span></div>
+      <div class="line now"><span><span class="k-roll">Dice roll</span> 4 · <span class="k-move">Main move</span> Gunk 5 → 9</span></div>
+      <div class="turn">Turn 16 · Critic</div>
+      <div class="line"><span><span class="k-roll">Dice roll</span> 5, <span class="k-power">GunkSlime</span> −1 → 4 · <span class="k-move">Main move</span> Critic 0 → 4</span></div>
+      <div class="line"><span><span class="k-warp">Warp</span> Critic 4 → 6</span></div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>Plan</h2>
+    <p class="prose">Ordered so that each step is visible on its own and nothing is built twice. The UX quick fixes from the review (upright text, readable labels, heatmap legend and axis captions, Ability Speed legend) are already done.</p>
+    <div class="plan">
+      <div class="step" style="--c:var(--blue)"><span class="n">1</span><div><h3>Tokens and type</h3><p>Move colors to the palette above, load the two new fonts, make twist names orange and keep purple for interaction.</p></div><span class="effort">small</span></div>
+      <div class="step" style="--c:var(--pink)"><span class="n">2</span><div><h3>Controls</h3><p>Pill tabs with named groups, outlined buttons with offset shadow, racer chips with tokens in tables and filters.</p></div><span class="effort">small</span></div>
+      <div class="step" style="--c:var(--yellow)"><span class="n">3</span><div><h3>Race track</h3><p>Rebuild the track renderer: board, spaces, finish, warp arrows, fanned tokens, centre board with podium.</p></div><span class="effort">large</span></div>
+      <div class="step" style="--c:var(--green)"><span class="n">4</span><div><h3>Event log</h3><p>Turn headers, current-step row, prefixes only in debug mode. Highlighting stays identical to the notebook.</p></div><span class="effort">medium</span></div>
+      <div class="step" style="--c:var(--orange)"><span class="n">5</span><div><h3>Charts</h3><p>Chart text in the new type, pink/blue heatmap ends from the badge, card treatment for chart areas in both themes.</p></div><span class="effort">small</span></div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>Decisions for you</h2>
+    <div class="decisions">
+      <div class="decision"><b>Display face: Lilita One or Bricolage Grotesque?</b><span>Lilita is closer to the badge and more playful; Bricolage is calmer.</span></div>
+      <div class="decision"><b>Heatmap ends: badge pink and blue, or today's magenta and blue?</b><span>The badge pair ties the charts to the brand; today's pair has a slightly stronger contrast.</span></div>
+      <div class="decision"><b>Track in light mode: always a dark board, or a light board?</b><span>A dark printed board keeps one look for screenshots and sharing; a light board blends with the light theme.</span></div>
+      <div class="decision"><b>Offset shadows in dark mode?</b><span>They read as "printed" in light mode; in dark mode they can look heavy. Option: outlines only in dark mode.</span></div>
+    </div>
+  </section>
+</div>
+
+<button class="btn theme-toggle" id="theme-toggle" type="button">Switch theme</button>
+
+<script>
+(function () {
+  const root = document.documentElement;
+  const toggle = document.getElementById("theme-toggle");
+  toggle.addEventListener("click", () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+  });
+
+  // Track mockup: the app's 30-space stadium geometry, drawn the proposed way.
+  const NS = "http://www.w3.org/2000/svg";
+  const W = 920, H = 430, SPACES = 30;
+  const START_X = 210, START_Y = 95, STRAIGHT = 500, RADIUS = 120, TILE_W = 52, TILE_H = 44;
+  const perimeter = 2 * STRAIGHT + 2 * Math.PI * RADIUS;
+  function pos(i) {
+    const d = (i / SPACES) * perimeter;
+    if (d < STRAIGHT) return { x: START_X + d, y: START_Y, a: 0 };
+    if (d < STRAIGHT + Math.PI * RADIUS) {
+      const t = -Math.PI / 2 + ((d - STRAIGHT) / (Math.PI * RADIUS)) * Math.PI;
+      return { x: START_X + STRAIGHT + RADIUS * Math.cos(t), y: START_Y + RADIUS + RADIUS * Math.sin(t), a: (t * 180) / Math.PI + 90 };
+    }
+    if (d < 2 * STRAIGHT + Math.PI * RADIUS) return { x: START_X + STRAIGHT - (d - STRAIGHT - Math.PI * RADIUS), y: START_Y + 2 * RADIUS, a: 180 };
+    const t = Math.PI / 2 + ((d - 2 * STRAIGHT - Math.PI * RADIUS) / (Math.PI * RADIUS)) * Math.PI;
+    return { x: START_X + RADIUS * Math.cos(t), y: START_Y + RADIUS + RADIUS * Math.sin(t), a: (t * 180) / Math.PI + 90 };
+  }
+  const upright = (a) => { const n = ((a % 360) + 360) % 360; return n > 90 && n < 270 ? n - 180 : n; };
+  const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", style: "min-width:620px;display:block" });
+  const defs = el("defs", {}, svg);
+  const marker = el("marker", { id: "arrow", viewBox: "0 0 10 10", refX: "8", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" }, defs);
+  el("path", { d: "M0 0 L10 5 L0 10 z", fill: "context-stroke" }, marker);
+  const checker = el("pattern", { id: "checker", width: "8", height: "8", patternUnits: "userSpaceOnUse" }, defs);
+  el("rect", { width: "8", height: "8", fill: "#ffffff" }, checker);
+  el("rect", { width: "4", height: "4", fill: "#17181a" }, checker);
+  el("rect", { x: "4", y: "4", width: "4", height: "4", fill: "#17181a" }, checker);
+
+  // board base: white rim + black track, like the badge
+  const ring = (inset, color) => el("rect", { x: START_X - RADIUS - TILE_H / 2 - inset, y: START_Y - TILE_H / 2 - inset, width: STRAIGHT + 2 * RADIUS + TILE_H + 2 * inset, height: 2 * RADIUS + TILE_H + 2 * inset, rx: RADIUS + TILE_H / 2 + inset, fill: color }, svg);
+  ring(12, "#ffffff");
+  ring(7, "#17181a");
+
+  const features = {
+    3: { label: "→7", fill: "#6ca1d8" }, 7: { label: "→3", fill: "#6ca1d8" },
+    18: { label: "→22", fill: "#ee83b3" }, 22: { label: "→18", fill: "#ee83b3" },
+    16: { label: "+2", fill: "#539912", text: "#ffffff" }, 24: { label: "VP", fill: "#f6ae00" },
+    10: { label: "T", fill: "#fd5a10", text: "#ffffff" }, 27: { label: "−3", fill: "#ee83b3" },
+  };
+  const warps = [[3, 7, "#6ca1d8"], [22, 18, "#ee83b3"]];
+  const center = { x: START_X + STRAIGHT / 2, y: START_Y + RADIUS };
+
+  for (let i = 0; i < SPACES; i++) {
+    const p = pos(i), f = features[i];
+    const g = el("g", { transform: `rotate(${p.a} ${p.x} ${p.y})` }, svg);
+    el("rect", { x: p.x - TILE_W / 2 + 1.5, y: p.y - TILE_H / 2 + 1.5, width: TILE_W - 3, height: TILE_H - 3, rx: 6, style: `fill:${f ? f.fill : "var(--tile)"}`, stroke: "#17181a", "stroke-width": "2" }, g);
+    const tg = el("g", { transform: `rotate(${upright(p.a)} ${p.x} ${p.y})` }, svg);
+    if (i === 0) {
+      el("rect", { x: p.x - TILE_W / 2 + 4, y: p.y - TILE_H / 2 + 4, width: 10, height: TILE_H - 8, fill: "url(#checker)", stroke: "#17181a", "stroke-width": "1.5" }, svg);
+      el("text", { x: p.x + 8, y: p.y + 6, "text-anchor": "middle", style: "font: 15px var(--font-display); fill: var(--tile-text)" }, tg).textContent = "START";
+      continue;
+    }
+    if (f) el("text", { x: p.x, y: p.y + 7, "text-anchor": "middle", style: `font: 19px var(--font-display); fill: ${f.text || "#17181a"}` }, tg).textContent = f.label;
+    el("text", { x: p.x - TILE_W / 2 + 7, y: p.y - TILE_H / 2 + 13, style: `font: 600 9.5px var(--font-body); fill: ${f ? "#17181a" : "var(--tile-text)"}; opacity: ${f ? 0.75 : 0.9}` }, tg).textContent = String(i);
+  }
+
+  for (const [a, b, color] of warps) {
+    const p1 = pos(a), p2 = pos(b);
+    const inward = p1.y < center.y ? 1 : -1;
+    const mx = (p1.x + p2.x) / 2;
+    const my = p1.y + inward * 70;
+    el("path", { d: `M ${p1.x} ${p1.y + inward * 22} Q ${mx} ${my} ${p2.x} ${p2.y + inward * 22}`, fill: "none", stroke: color, "stroke-width": "3", "stroke-linecap": "round", "marker-end": "url(#arrow)", opacity: "0.95" }, svg);
+  }
+
+  // centre board, like the badge's inner panel
+  el("rect", { x: center.x - 150, y: center.y - 52, width: 300, height: 104, rx: 14, style: "fill: var(--board-center)", stroke: "#ffffff", "stroke-width": "4" }, svg);
+  el("text", { x: center.x, y: center.y - 14, "text-anchor": "middle", style: "font: 15px var(--font-display); fill: #f6ae00; letter-spacing: 0.08em" }, svg).textContent = "TURN 15 · GUNK";
+  el("rect", { x: center.x - 56, y: center.y + 2, width: 38, height: 38, rx: 8, fill: "#ffffff", stroke: "#17181a", "stroke-width": "2" }, svg);
+  [[-46, 12], [-28, 30], [-46, 30], [-28, 12]].forEach(([dx, dy]) => el("circle", { cx: center.x + dx, cy: center.y + dy, r: 3.6, fill: "#17181a" }, svg));
+  el("text", { x: center.x + 10, y: center.y + 34, style: "font: 36px var(--font-display); fill: var(--board-center-text)" }, svg).textContent = "4";
+  el("text", { x: center.x + 40, y: center.y + 33, style: "font: 600 12px var(--font-body); fill: var(--board-center-text); opacity: 0.75" }, svg).textContent = "→ 9";
+
+  // racers: Banana, Hare, Gunk (current), Critic, Hotel, Centaur; three share space 0
+  const racers = [
+    { name: "Banana", tile: 0, fill: "#FFE135", ring: "#000000" },
+    { name: "Hotel", tile: 0, fill: "#9b5de5", ring: "#f6ae00" },
+    { name: "Centaur", tile: 0, fill: "#A52A2A", ring: "#DEB887" },
+    { name: "Hare", tile: 6, fill: "#87CEEB", ring: "#FF8C00" },
+    { name: "Gunk", tile: 9, fill: "#556B2F", ring: "#8B4513", current: true },
+    { name: "Critic", tile: 21, fill: "#4fb3bf", ring: "#ffffff" },
+  ];
+  const byTile = {};
+  racers.forEach((r) => (byTile[r.tile] = byTile[r.tile] || []).push(r));
+  for (const tile in byTile) {
+    const group = byTile[tile], p = pos(Number(tile));
+    const outward = p.y < center.y ? -1 : 1;
+    group.forEach((r, k) => {
+      const spread = (k - (group.length - 1) / 2) * 62;
+      const tx = p.x + spread, ty = p.y + outward * (group.length > 1 ? 50 : 40);
+      el("line", { x1: p.x, y1: p.y, x2: tx, y2: ty, stroke: "#ffffff", "stroke-width": "2", opacity: "0.8" }, svg);
+      if (r.current) el("circle", { cx: tx, cy: ty, r: 21, fill: "none", stroke: "#f6ae00", "stroke-width": "4" }, svg);
+      el("circle", { cx: tx, cy: ty, r: 15, fill: r.fill, stroke: "#17181a", "stroke-width": "2.5" }, svg);
+      el("circle", { cx: tx, cy: ty, r: 10, fill: "none", stroke: r.ring, "stroke-width": "3" }, svg);
+      const label = el("text", { x: tx, y: ty + outward * 30 + (outward > 0 ? 4 : 0), "text-anchor": "middle", style: "font: 13px var(--font-display); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 4px" }, svg);
+      label.textContent = r.name;
+    });
+  }
+
+  document.getElementById("track").appendChild(svg);
+})();
+</script>

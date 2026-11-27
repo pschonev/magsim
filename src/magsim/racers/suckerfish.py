@@ -37,6 +37,9 @@ if TYPE_CHECKING:
     from magsim.engine.game_engine import GameEngine
 
 
+RIDE_SOURCE: AbilityName = "SuckerfishRide"
+
+
 @dataclass(eq=False)
 class SuckerfishTargetModifier(
     RacerModifier,
@@ -60,6 +63,11 @@ class SuckerfishTargetModifier(
         distance: int,
         move_cmd_event: MoveCmdEvent,
     ) -> tuple[int, list[AbilityTriggeredEvent]]:
+        # Only the ride itself lands on the target; another move that arrives first (a trample)
+        # moves normally and leaves the target for the ride.
+        if move_cmd_event.source != RIDE_SOURCE:
+            return start_tile + distance, []
+
         # We force the destination to be the specific tile we want.
         # This overrides normal distance math, but ensures we hit the target
         # even if other modifiers tried to mess with us.

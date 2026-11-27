@@ -5,7 +5,7 @@ description = "A simulator for Magical Athlete"
 authors = [{ name = "Philipp Schoneville", email = "philipp@schoneville.com" }]
 license = "MIT"
 readme = "README.md"
-requires-python = "==3.12.7"
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "rich>=13.7.1",
     "cappa>=0.31.0",
@@ -18,17 +18,13 @@ dependencies = [
 Repository = "https://github.com/pschonev/magsim"
 Changelog = "https://github.com/pschonev/magsim/blob/main/CHANGELOG.md"
 
-[project.optional-dependencies]
-frontend = ["marimo==0.18.4", "altair==6.0.0", "numpy>=2.4.1"]
-
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
-    "basedpyright==1.23.0",
-    "marimo[lsp]",
     "ruff>=0.14.10",
     "poethepoet>=0.40.0",
     "commitizen>=4.11.0",
+    "pyrefly>=1.5.0",
 ]
 
 [project.scripts]
@@ -55,23 +51,13 @@ ignore = [
 exclude = ["tests"]
 target-version = "py312"
 
-# Pyright
-[tool.basedpyright]
-include = ["src", "tests"]
-executionEnvironments = [{ root = "src" }, { root = "tests" }]
-
-pythonVersion = "3.12"
-
-reportImportCycles = "none"
-reportAny = "none"
-reportExplicitAny = "none"
-reportUnusedCallResult = "none"
-reportMissingTypeStubs = "none"
-reportUnusedParameter = "none"
-
 # Pyrefly
 [tool.pyrefly]
 preset = "strict"
+project-includes = ["src", "tests"]
+search-path = ["src", "tests"]
+project-excludes = ["tests/reference"]
+python-version = "3.12"
 
 [tool.pyrefly.errors]
 implicit-bool = "ignore"
@@ -99,7 +85,20 @@ clean = "rm -rf dist"
 bump-files = "cz bump --yes --files-only"
 release-prep = "python scripts/release_prep.py"
 
-git-add = "git add pyproject.toml uv.lock CHANGELOG.md docs/ frontend/magical_athlete_analysis.py"
+# One command for a complete new batch: the main batch, the Mush-only games in results_mush/ and Mush's merged power pairs
+batch-main = "magsim batch -f configs/twisty_oversampled.toml"
+batch-mush = "magsim batch -f --seed-offset 10000000 --results-dir results_mush configs/mush_only.toml"
+mush-pairs = "python scripts/prepare_mush_pairs.py"
+ai-compare = "python scripts/ai_compare.py"
+batch = { sequence = ["batch-main", "batch-mush", "mush-pairs", "ai-compare"] }
+# Only the Mush games (the main batch already exists): `uv run poe mush`, then `uv run poe web-build`
+mush = { sequence = ["batch-mush", "mush-pairs"] }
+
+web-assets = "python scripts/prepare_web_assets.py"
+web-dev = { sequence = ["web-assets", { cmd = "npm run dev", cwd = "web" }] }
+web-build = { sequence = ["web-assets", { cmd = "npm run build", cwd = "web" }] }
+
+git-add = "git add pyproject.toml uv.lock CHANGELOG.md docs/results"
 git-finalize = "python scripts/release_git.py"
 
 release-build = "uv build"

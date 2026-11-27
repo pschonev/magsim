@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Arial Rounded MT Bold", "Arial Black", "Helvetica Neue", Impact, sans-serif;
+}
+
+/*
+ * Theming: the app uses Tailwind's slate scale for neutrals and indigo/rose/emerald/amber for accents.
+ * Both are redefined here per theme, so components never branch on the theme.
+ * Dark neutrals are built around the chart background (#181c1a); light neutrals are a warm cream.
+ */
+:root {
+  color-scheme: dark;
+
+  --color-slate-50: #f6f9f7;
+  --color-slate-100: #eaf0ec;
+  --color-slate-200: #d7dfda;
+  --color-slate-300: #bcc6c0;
+  --color-slate-400: #9ba69f;
+  --color-slate-500: #7a8680;
+  --color-slate-600: #566059;
+  --color-slate-700: #3e4742;
+  --color-slate-800: #2d3430;
+  --color-slate-900: #212724;
+  --color-slate-950: #181c1a;
+
+  --color-indigo-50: #f6e9ff;
+  --color-indigo-100: #ecd2ff;
+  --color-indigo-200: #dcaaff;
+  --color-indigo-300: #c97dff;
+  --color-indigo-400: #b455f5;
+  --color-indigo-500: #9b2fe0;
+  --color-indigo-600: #8120c4;
+  --color-indigo-700: #6a1aa0;
+  --color-indigo-800: #52167c;
+  --color-indigo-900: #3b1058;
+  --color-indigo-950: #2a0b40;
+
+  --color-rose-50: #ffecea;
+  --color-rose-100: #ffd5d1;
+  --color-rose-200: #ffaba3;
+  --color-rose-300: #ff7b70;
+  --color-rose-400: #f2493d;
+  --color-rose-500: #e0291d;
+  --color-rose-600: #bf1f15;
+  --color-rose-700: #9a1810;
+  --color-rose-800: #76130d;
+  --color-rose-900: #4f0d09;
+  --color-rose-950: #330806;
+
+  --color-emerald-50: #e8fbea;
+  --color-emerald-100: #c9f4ce;
+  --color-emerald-200: #a2e8ab;
+  --color-emerald-300: #74d982;
+  --color-emerald-400: #4cc85d;
+  --color-emerald-500: #2fb145;
+  --color-emerald-600: #22933a;
+  --color-emerald-700: #1b742e;
+  --color-emerald-800: #155a24;
+  --color-emerald-900: #0f401a;
+  --color-emerald-950: #092a11;
+
+  --color-amber-50: #fffbe0;
+  --color-amber-100: #fff3a8;
+  --color-amber-200: #ffe96b;
+  --color-amber-300: #ffdc2e;
+  --color-amber-400: #f9c800;
+  --color-amber-500: #d9a900;
+  --color-amber-600: #b08500;
+  --color-amber-700: #856200;
+  --color-amber-800: #5f4700;
+  --color-amber-900: #403000;
+  --color-amber-950: #2a2000;
+
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-slate-50: #17140f;
+  --color-slate-100: #27231b;
+  --color-slate-200: #3a352a;
+  --color-slate-300: #504a3b;
+  --color-slate-400: #6e6654;
+  --color-slate-500: #8f8570;
+  --color-slate-600: #b5aa8e;
+  --color-slate-700: #d3c9ad;
+  --color-slate-800: #e6dec9;
+  --color-slate-900: #fffdf8;
+  --color-slate-950: #f4eedf;
+
+  --color-indigo-300: #7a22c4;
+  --color-indigo-400: #8120c4;
+  --color-indigo-950: #f0dcff;
+  --color-rose-100: #76130d;
+  --color-rose-200: #9a1810;
+  --color-rose-300: #bf1f15;
+  --color-rose-400: #c9241a;
+  --color-rose-950: #ffe4e1;
+  --color-emerald-200: #155a24;
+  --color-emerald-400: #1b742e;
+  --color-amber-300: #856200;
+  --color-amber-400: #b08500;
+  --color-amber-950: #fff4c2;
+  --color-fuchsia-100: #701a75;
+  --color-fuchsia-300: #a21caf;
+  --color-fuchsia-400: #a21caf;
+  --color-fuchsia-950: #fae8ff;
+  --color-sky-300: #0369a1;
+}
+
+/* Printed-board buttons: a pill with a hard outline; the offset shadow only in the light theme. */
+@utility btn-print {
+  border: 2px solid var(--color-slate-50);
+  border-radius: 9999px;
+  font-family: var(--font-display);
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+:root[data-theme="light"] .btn-print {
+  box-shadow: 3px 3px 0 var(--color-slate-50);
+}
+
+:root[data-theme="light"] .btn-print:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--color-slate-50);
+}
+
+/* Scrollable areas without a visible scrollbar (touch and wheel scrolling still work). */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility text-on-accent {
+  color: #fff;
+}
+
+html,
+body {
+  background: var(--color-slate-950);
+}
+
+/* Keep the page width the same whether or not a scrollbar is showing, so fitted grids never re-flow. */
+html {
+  scrollbar-gutter: stable;
+}

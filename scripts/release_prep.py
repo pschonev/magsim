@@ -1,96 +1,31 @@
+"""Refresh the committed docs/results snapshot from the latest batch output in results/."""
+
 from __future__ import annotations
 
-import pathlib
-import re
 import shutil
-import subprocess
-import tomllib  # Requires Python 3.11+
+import sys
+from pathlib import Path
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-PYPROJECT = ROOT / "pyproject.toml"
-NOTEBOOK = ROOT / "frontend" / "magical_athlete_analysis.py"
-DOCS_DIR = ROOT / "docs"
+ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = ROOT / "results"
-
-PACKAGE = "magsim"
-
-
-def read_version() -> str:
-    """Reads the project version using standard tomllib."""
-    # tomllib.load requires opening the file in binary mode
-    with PYPROJECT.open("rb") as f:
-        data = tomllib.load(f)
-
-    # Assumes PEP 621 metadata structure
-    try:
-        return data["project"]["version"]
-    except KeyError:
-        raise SystemExit("Could not find [project] version in pyproject.toml")
+SNAPSHOT_DIR = ROOT / "docs" / "results"
+DATASET_FILES = ("races.parquet", "racer_results.parquet")
+OPTIONAL_FILES = ("mush_pairs.parquet", "ai_compare.parquet")
 
 
-def update_notebook_pin(version: str) -> None:
-    """Updates the version constant in the notebook file."""
-    text = NOTEBOOK.read_text(encoding="utf-8")
-
-    # Universal pattern: any assignment to this variable
-    pattern = r'(MAGSIM_VERSION\s*=\s*)(["\'])([^"\']+)\2'
-
-    # Find ALL matches first
-    matches = list(re.finditer(pattern, text))
-    if len(matches) != 1:
-        print(f"Found {len(matches)} matches instead of 1:")
-        for i, m in enumerate(matches):
-            print(f"  {i}: '{m.group(0)}'")
-        raise SystemExit(f"Expected exactly 1 match, found {len(matches)}")
-
-    # Replace the single match
-    new_text = re.sub(pattern, rf"\g<1>\g<2>{version}\g<2>", text)
-
-    NOTEBOOK.write_text(new_text, encoding="utf-8")
-    print(f"✅ Updated version: {version}")
-
-
-def export_docs() -> None:
-    (DOCS_DIR / "results").mkdir(parents=True, exist_ok=True)
-
-    # Copy CSS BEFORE export so marimo can find it
-    shutil.copy2(
-        ROOT / "frontend" / "docs" / "magical_athlete_analysis.css",
-        DOCS_DIR / "magical_athlete_analysis.css",
-    )
-
-    subprocess.check_call(
-        [
-            "uvx",
-            "marimo",
-            "export",
-            "html-wasm",
-            "--mode",
-            "run",
-            "--no-show-code",
-            str(NOTEBOOK),
-            "-o",
-            str(DOCS_DIR),
-        ]
-    )
-
-    target_files = ["racer_results.parquet", "races.parquet"]
-
-    for filename in target_files:
-        source_file = RESULTS_DIR / filename
-        if source_file.exists():
-            shutil.copy2(source_file, DOCS_DIR / "results" / filename)
-        else:
-            print(
-                f"⚠️ Warning: Expected data file {filename} not found in {RESULTS_DIR}"
-            )
-
-
-def main() -> None:
-    version = read_version()
-    update_notebook_pin(version)
-    export_docs()
+def sync_results() -> None:
+    missing = [name for name in DATASET_FILES if not (RESULTS_DIR / name).exists()]
+    if missing:
+        sys.exit(f"Missing {missing} in {RESULTS_DIR}; run `magsim batch` first.")
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    for name in DATASET_FILES:
+        shutil.copy2(RESULTS_DIR / name, SNAPSHOT_DIR / name)
+        print(f"Synced {name} -> {SNAPSHOT_DIR}")
+    for name in OPTIONAL_FILES:
+        if (RESULTS_DIR / name).exists():
+            shutil.copy2(RESULTS_DIR / name, SNAPSHOT_DIR / name)
+            print(f"Synced {name} -> {SNAPSHOT_DIR}")
 
 
 if __name__ == "__main__":
-    main()
+    sync_results()

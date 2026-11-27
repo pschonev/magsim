@@ -70,6 +70,24 @@ class Race(msgspec.Struct, array_like=True, gc=False):
         """
 
 
+FACE_COLUMNS: tuple[str, ...] = tuple(f"rolled_{face}" for face in range(1, 7))
+# Columns added after the first batches: name -> SQL type (an older table gets them appended)
+LATE_COLUMNS: dict[str, str] = {
+    **dict.fromkeys(FACE_COLUMNS, "BIGINT"),
+    "avg_rank_frac": "DOUBLE",
+    "turns_started_last": "BIGINT",
+    "turns_started_ahead": "BIGINT",
+    "hotel_stops": "BIGINT",
+    "eliminated_by": "BIGINT",
+    "main_roll_totals": "INTEGER[]",
+    "predicted_racer_id": "BIGINT",
+    "copied_racers": "VARCHAR[]",
+    "guessed_rolls": "INTEGER[]",
+    **{f"dice_{face}": "BIGINT" for face in range(1, 7)},
+    "drawn_powers": "VARCHAR[]",
+}
+
+
 class RacerResult(msgspec.Struct, array_like=True, gc=False):
     """
     Represents the result of one racer in a specific race.
@@ -116,6 +134,31 @@ class RacerResult(msgspec.Struct, array_like=True, gc=False):
     # --- Metrics ---
     midgame_relative_pos: float = 0.0
 
+    # --- Main-roll face counts (appended last: tables are filled by position) ---
+    rolled_1: int = 0
+    rolled_2: int = 0
+    rolled_3: int = 0
+    rolled_4: int = 0
+    rolled_5: int = 0
+    rolled_6: int = 0
+    avg_rank_frac: float | None = None  # mean rank over the race, 0 = leading, 1 = last
+    turns_started_last: int | None = None  # own turns that began in last place
+    turns_started_ahead: int | None = None  # own turns that began anywhere else
+    hotel_stops: int | None = None  # times the racer stopped on Hotel's space
+    eliminated_by: int | None = None  # racer_id whose turn it was when this racer was eliminated
+    main_roll_totals: list[int] | None = None  # final main roll of each turn, only for TOTAL_TRACKED racers
+    predicted_racer_id: int | None = None  # racer_id Mastermind predicted to win
+    copied_racers: list[str] | None = None  # superseded by drawn_powers: lost when Mush finished or was eliminated
+    guessed_rolls: list[int] | None = None  # numbers Cheatah set that were guessed
+    # Every die the racer rolled for any reason (rerolls, duels, extra dice), not only the kept main roll
+    dice_1: int = 0
+    dice_2: int = 0
+    dice_3: int = 0
+    dice_4: int = 0
+    dice_5: int = 0
+    dice_6: int = 0
+    drawn_powers: list[str] | None = None  # racers whose powers Mush drew, in order; [] for Mush without a draw
+
     @classmethod
     def get_create_sql(cls) -> str:
         return """
@@ -141,6 +184,28 @@ class RacerResult(msgspec.Struct, array_like=True, gc=False):
             finish_position BIGINT,
             eliminated BOOLEAN,
             midgame_relative_pos DOUBLE,
+            rolled_1 BIGINT,
+            rolled_2 BIGINT,
+            rolled_3 BIGINT,
+            rolled_4 BIGINT,
+            rolled_5 BIGINT,
+            rolled_6 BIGINT,
+            avg_rank_frac DOUBLE,
+            turns_started_last BIGINT,
+            turns_started_ahead BIGINT,
+            hotel_stops BIGINT,
+            eliminated_by BIGINT,
+            main_roll_totals INTEGER[],
+            predicted_racer_id BIGINT,
+            copied_racers VARCHAR[],
+            guessed_rolls INTEGER[],
+            dice_1 BIGINT,
+            dice_2 BIGINT,
+            dice_3 BIGINT,
+            dice_4 BIGINT,
+            dice_5 BIGINT,
+            dice_6 BIGINT,
+            drawn_powers VARCHAR[],
             PRIMARY KEY (config_hash, racer_id)
         )
         """

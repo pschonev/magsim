@@ -20,6 +20,7 @@ class SisyphusCurse(Ability, SetupPhaseMixin):
     name: AbilityName = "SisyphusCurse"
     triggers: tuple[type[GameEvent], ...] = (RollResultEvent,)
     preferred_dice: D6VAlueSet = frozenset([1, 2, 3, 4, 5])
+    avoid_dice: D6VAlueSet = frozenset({6})
 
     @override
     def on_setup(

@@ -5,7 +5,9 @@ Logic for running comparative experiments (AI baselines, House Rules, Racer Impa
 from __future__ import annotations
 
 import logging
+import math
 import random
+import statistics
 import time
 import uuid
 from collections import defaultdict
@@ -24,6 +26,8 @@ from magsim.engine.scenario import GameScenario, RacerConfig
 from magsim.simulation.combinations import generate_combinations
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from magsim.core.agent import Agent
     from magsim.simulation.config import GameConfig
 
@@ -87,6 +91,9 @@ class ExperimentResult:
     elapsed_control: float
     elapsed_treatment: float
 
+    # Standard error of vp_delta when the per-game paired differences are known
+    vp_delta_se: float | None = None
+
     @property
     def winrate_delta(self) -> float:
         return self.winrate_treatment - self.winrate_control
@@ -141,12 +148,16 @@ def run_ai_comparison(
     n_games: int = 500,
     seed_offset: int = 0,
     max_turns: int = 200,
+    *,
+    quiet: bool = False,
+    on_game: Callable[[], None] | None = None,
 ) -> ExperimentResult:
-    """Compare BaselineAgent vs SmartAgent for a specific racer."""
+    """Compare BaselineAgent vs SmartAgent for a specific racer; `quiet` drops the progress bar and per-sim lines, `on_game` fires after each counted paired game."""
 
     all_racers = list(get_args(RacerName))
     all_boards = list(get_args(BoardName))
-    estimated_needed = n_games * 10
+    # The target is in about 5 of every len(all_racers) lineups; draw enough lineups to find n_games with it.
+    estimated_needed = n_games * len(all_racers)
 
     gen = generate_combinations(
         eligible_racers=all_racers,
@@ -163,15 +174,17 @@ def run_ai_comparison(
 
     games_processed = 0
     run_id = str(uuid.uuid4())[:8]
+    vp_diffs: list[int] = []
 
-    with tqdm(total=n_games, desc=f"Comparing {target_racer}") as pbar:
+    with tqdm(total=n_games, desc=f"Comparing {target_racer}", disable=quiet) as pbar:
         for config in gen:
             if games_processed >= n_games:
                 break
             if target_racer not in config.racers:
                 continue
 
-            tqdm.write(f"[Sim {games_processed + 1}] {config.repr}")
+            if not quiet:
+                tqdm.write(f"[Sim {games_processed + 1}] {config.repr}")
 
             target_idx = config.racers.index(target_racer)
 
@@ -186,7 +199,8 @@ def run_ai_comparison(
             t1 = time.perf_counter()
 
             if res_c is None:
-                tqdm.write(f"⚠️ Skipped Sim {games_processed}: Control timeout")
+                if not quiet:
+                    tqdm.write(f"⚠️ Skipped Sim {games_processed}: Control timeout")
                 continue
 
             time_control += t1 - t0
@@ -206,7 +220,8 @@ def run_ai_comparison(
             t3 = time.perf_counter()
 
             if res_t is None:
-                tqdm.write(f"⚠️ Skipped Sim {games_processed}: Treatment timeout")
+                if not quiet:
+                    tqdm.write(f"⚠️ Skipped Sim {games_processed}: Treatment timeout")
                 # Note: We discard both if one fails to keep comparison fair?
                 # Or keep control? Usually safe to discard both for strict A/B.
                 # Since we already updated stats.control above, we should technically rollback or just accept the noise.
@@ -218,9 +233,12 @@ def run_ai_comparison(
                 is_winner=(res_t.winner_idx == target_idx),
                 vp=res_t.vp_scores[target_idx],
             )
+            vp_diffs.append(res_t.vp_scores[target_idx] - res_c.vp_scores[target_idx])
 
             games_processed += 1
             pbar.update(1)
+            if on_game is not None:
+                on_game()
 
     return ExperimentResult(
         run_id=run_id,
@@ -239,6 +257,7 @@ def run_ai_comparison(
         max_vp_treatment=stats.max_vp_treatment,
         elapsed_control=time_control,
         elapsed_treatment=time_treatment,
+        vp_delta_se=statistics.stdev(vp_diffs) / math.sqrt(len(vp_diffs)) if len(vp_diffs) > 1 else None,
     )
 
 

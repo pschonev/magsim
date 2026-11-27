@@ -49,10 +49,14 @@ class SpoilsportCancel(Ability):
             f"{owner.repr} cries foul! The race is cancelled (+{BONUS_VP} VP, "
             f"Total: {owner.victory_points}).",
         )
-        end_race(engine)
-        return AbilityTriggeredEvent(
-            responsible_racer_idx=owner.idx,
-            source=self.name,
-            phase=event.phase,
-            target_racer_idx=owner.idx,
+        # Queue the trigger first: end_race flushes the queue to telemetry and then clears it
+        engine.push_event(
+            AbilityTriggeredEvent(
+                responsible_racer_idx=owner.idx,
+                source=self.name,
+                phase=event.phase,
+                target_racer_idx=owner.idx,
+            ),
         )
+        end_race(engine)
+        return "skip_trigger"

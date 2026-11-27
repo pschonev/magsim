@@ -7,6 +7,7 @@ from magsim.ai.evaluation import (
     get_benefit_at,
     get_current_modifiers,
     get_hazard_at,
+    keeps_roll_for_draw,
 )
 from magsim.core.abilities import Ability
 from magsim.core.agent import (
@@ -84,6 +85,9 @@ class MoleTunnel(Ability, BooleanDecisionMixin):
             return True
 
         target = me.position + TUNNEL_DISTANCE + get_current_modifiers(engine, me.idx)
+
+        if keeps_roll_for_draw(engine, me, target):
+            return False
 
         if benefit := get_benefit_at(engine, target):
             engine.log_info(f"{me.repr} uses {self.name} to reach {benefit}!")

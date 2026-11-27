@@ -216,6 +216,7 @@ rules.md
 .gitignore
 
 /results
+/results_mush/
 /docs/docs/results/
 release_notes.md
 *.pdf

@@ -5,7 +5,6 @@
 
 <p align="center">
   <a href="#installation"><img alt="Python" src="https://img.shields.io/badge/python-3.12%2B-blue?color=539912&logo=python&logoColor=white" /></a>
-  <a href="https://marimo.io/"><img alt="Marimo" src="https://img.shields.io/badge/marimo-dashboard-blue?color=ee83b3&logo=marimo&logoColor=white" /></a>
   <a href="#development"><img alt="CI" src="https://img.shields.io/badge/tests-pytest-green?color=6ca1d8&logo=githubactions&logoColor=white" /></a>
   <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue?color=f6ae00" /></a>
 </p>
@@ -41,14 +40,14 @@
 `magsim` translates the physical game into a high-performance Python engine. Capable of running 60+ full races per second with complete state logging, it allows you to:
 - **Simulate Races:** Run single game simulations in the command line or UI
 - **Data Generation:** Run high-volume batch simulations to generate datasets for analysis
-- **Visual Analytics:** Visualize races and analyze aggregated data in a reactive `marimo` dashboard
+- **Visual Analytics:** Visualize races and analyze aggregated data in an interactive web dashboard that runs fully in your browser (Pyodide)
 - **A/B Experiments:** Pit Smart AI against Random AI, compare the impact of racers and measure modifying rules changes the balance via the CLI tool
 
 ---
 
 ## Quickstart
 
-The fastest way to use `magsim` is **via the [web-based frontend](LINK)**. The dashboard runs in WASM-mode, expect long loading times.
+The fastest way to use `magsim` is **via the [web app](https://pschonev.github.io/magsim/)**. Python runs in your browser (Pyodide), so the first load downloads the runtime.
 
 To run `magsim` locally, I recommend using `uv` ([Install `uv` here](https://docs.astral.sh/uv/getting-started/installation/)). 
 
@@ -112,7 +111,10 @@ Run high-volume batch simulations driven by a TOML configuration. Saves results 
 | **Max Runs** | `--max` | Override the maximum total runs across the batch. |
 | **Turn Limit** | `--turns` | Override the max turns per race. |
 | **Seed Offset** | `--seed-offset` | Offset for RNG seeds to prevent overlap. *(Default: `0`)* |
-| **Force** | `-f, --force` | Delete existing Parquet/DuckDB files in `results/` without prompting. |
+| **Results Dir** | `--results-dir` | Where the database and Parquet files go. *(Default: `results`)* |
+| **Force** | `-f, --force` | Delete existing Parquet/DuckDB files in the results directory without prompting. |
+
+The config can name `required_racers`: those racers are in every game and the rest of each team is drawn from the pool (see `configs/mush_only.toml`).
 
 **Examples:**
 ```bash
@@ -177,11 +179,21 @@ cd magical-athlete-simulator
 ```bash
 magsim batch configs/sim.toml
 ```
-
-**3. Start the dashboard:**
+The dashboard's own dataset takes two runs, which one command does (it replaces `results/` and `results_mush/`):
 ```bash
-uv run marimo run --no-sandbox frontend/magical_athlete_analysis.py
+uv run poe batch       # main batch (configs/twisty_oversampled.toml) + Mush-only games + Mush's merged power pairs + AI comparison
+uv run poe mush        # only the Mush-only games and the pairs, when the main batch already exists
+uv run poe ai-compare  # only the smart-vs-baseline AI comparison (results/ai_compare.parquet; `-- --games 500 --racers Banana Mastermind` for a quick run)
 ```
+The AI comparison plays every racer with decisions (except Cheatah, whose outcome depends on the guesser's model of the pick, so a fixed baseline is not comparable) over the same games twice, once with simple fixed choices and once with the smart AI, one process per racer. `poe web-build` ships it (and the Second Wind winners & losers table, computed from `results/`) as small JSON files in the Fun facts tab; both are hidden for uploaded datasets.
+Mush's power pairs need far more Mush games than a uniform batch holds. The Mush-only games go to `results_mush/` and are never merged into `results/`, because they would make Mush a third of all races and tilt every other statistic. Only a small table of pairs (`results/mush_pairs.parquet`, about 10 KB) is merged and shipped with the dashboard; `poe release-prep` copies it into the committed `docs/results` snapshot next to the two datasets. A dataset you upload in the dashboard has no such table, so its Mush charts use only its own Mush games (and stay empty without enough of them).
+
+**3. Build and start the dashboard with your results:**
+```bash
+uv run poe web-build   # uses results/ if present (error if incomplete), else the committed docs/results snapshot
+uv run magsim gui      # serves web/dist locally; without a build it opens the hosted app
+```
+Requires Node.js. During development use `uv run poe web-dev` instead.
 
 ---
 

@@ -18,9 +18,10 @@ def test_copycat_basic_ability_gain(scenario: type[GameScenario]):
 
     game.run_turn()
 
-    # Copycat trampling logic: 5 -> 9. Scoocher pushed back.
+    # Copycat trampling logic: 5 -> 9. Scoocher pushed back 2, then scooches 1 for the trample
+    # (switching who Copycat copies is not a use of a power, so no scooch for that).
     assert game.get_racer(0).position == 9
-    assert game.get_racer(1).position == 7
+    assert game.get_racer(1).position == 6
 
 
 def test_copycat_deterministic_tie_break(scenario: type[GameScenario]):

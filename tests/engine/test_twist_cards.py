@@ -374,7 +374,7 @@ def test_scrying_pool_counts_the_distance_after_modifiers(
     game = scenario(
         [plain(0, 13), plain(1), plain(2)],
         dice_rolls=[1, 3, 1],
-        board=twisty(),
+        board=twisty("Bonkbug"),  # crossing 13 -> 14 draws a card; Bonkbug only touches 28-29
     )
     for r in game.state.racers:
         add_racer_modifier(game.engine, r.idx, ConveyorBeltBonus(owner_idx=None))

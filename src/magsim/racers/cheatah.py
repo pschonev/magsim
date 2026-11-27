@@ -3,7 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, override
 
-from magsim.ai.evaluation import get_benefit_at, get_current_modifiers, get_hazard_at
+from magsim.ai.evaluation import (
+    banned_faces,
+    get_benefit_at,
+    get_current_modifiers,
+    get_hazard_at,
+    wished_faces,
+)
 from magsim.core.abilities import Ability
 from magsim.core.agent import (
     Agent,
@@ -34,18 +40,25 @@ def face_utilities(
     me: ActiveRacerState,
     faces: Sequence[int],
 ) -> dict[int, int]:
-    """Hazard faces are worse than not moving and are dropped; the rest are ranked (benefit tile, then distance), utility = rank from 1."""
+    """Banned and hazard faces are dropped; the rest are ranked (benefit tile, wished, distance), utility = rank from 1; wishes keep only wished and benefit faces."""
     mods = get_current_modifiers(engine, me.idx)
+    banned = banned_faces(engine, me)
+    wished = wished_faces(engine, me)
 
     def landing(face: int) -> int:
         return me.position + face + mods
 
-    safe = [f for f in faces if get_hazard_at(engine, landing(f)) is None]
-    ranked = sorted(
-        safe,
-        key=lambda f: (get_benefit_at(engine, landing(f)) is not None, landing(f)),
-    )
-    return {face: rank for rank, face in enumerate(ranked, start=1)}
+    def has_benefit(face: int) -> bool:
+        return get_benefit_at(engine, landing(face)) is not None
+
+    allowed = [f for f in faces if f not in banned] or list(faces)
+    safe = [f for f in allowed if get_hazard_at(engine, landing(f)) is None]
+    ranked = sorted(safe, key=lambda f: (has_benefit(f), f in wished, landing(f)))
+    utilities = {face: rank for rank, face in enumerate(ranked, start=1)}
+    if not wished:
+        return utilities
+    kept = {f: u for f, u in utilities.items() if f in wished or has_benefit(f)}
+    return kept or utilities
 
 
 def solve_mix(
@@ -124,6 +137,7 @@ class CheatahSleightOfPaw(Ability, SelectionDecisionMixin[int]):
             source=self.name,
             phase=event.phase,
             target_racer_idx=owner.idx,
+            detail=face,
         )
 
     @override

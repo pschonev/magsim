@@ -12,6 +12,7 @@ from magsim.core.agent import (
     SelectionDecisionContext,
     SelectionInteractive,
 )
+from magsim.ai.baseline_agent import BaselineAgent
 from magsim.engine.board import BOARD_DEFINITIONS
 from magsim.engine.scenario import GameScenario, RacerConfig
 from magsim.racers.mastermind import AbilityMastermindPredict
@@ -449,3 +450,91 @@ def test_mastermind_stripped_on_first_turn_predicts_once_he_regains_his_power(
     game.run_turn()
 
     assert stashed.prediction is not None
+
+
+class PickByName(Agent):
+    """Always uses powers and picks the option with the given racer name."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    @override
+    def make_boolean_decision(
+        self, engine, ctx: DecisionContext[BooleanInteractive]
+    ) -> bool:
+        return True
+
+    @override
+    def make_selection_decision[R](
+        self,
+        engine,
+        ctx: SelectionDecisionContext[SelectionInteractive[R], R],
+    ) -> R | None:
+        return next(
+            o
+            for o in ctx.options
+            if getattr(o, "racer_name", getattr(o, "name", None)) == self.name
+        )
+
+
+def test_show_off_extra_dice_do_not_make_scoocher_move(scenario: type[GameScenario]):
+    """Open question: Show-Off's power never registers as used, so Scoocher ignores his extra dice."""
+    game = scenario(
+        [
+            RacerConfig(0, "ShowOff", agent=BaselineAgent()),
+            cfg(1, "Scoocher", 20),
+            dummy(2, 25),
+        ],
+        dice_rolls=[2, 5],
+    )
+
+    game.run_turn()
+
+    assert game.get_racer(0).position == 7
+    assert game.get_racer(1).position == 20
+
+
+def test_mr_dice_guy_roll_does_not_make_scoocher_move(scenario: type[GameScenario]):
+    """Open question: Mr. Dice Guy's six-dice roll never registers as a power use for Scoocher."""
+    game = scenario(
+        [cfg(0, "MrDiceGuy"), cfg(1, "Scoocher", 20), dummy(2, 25)],
+        dice_rolls=[4, 4, 1, 2, 3, 6],
+    )
+
+    game.run_turn()
+
+    assert game.get_racer(0).position == 4
+    assert game.get_racer(1).position == 20
+
+
+def test_stunner_forced_roll_does_not_make_scoocher_move(scenario: type[GameScenario]):
+    """Open question: Stunner forcing a 1 never registers as a power use for Scoocher."""
+    game = scenario(
+        [dummy(0, 10), cfg(1, "Stunner", 11), cfg(2, "Scoocher", 20)],
+        dice_rolls=[6],
+    )
+
+    game.run_turn()
+
+    assert game.get_racer(0).position == 11
+    assert game.get_racer(2).position == 20
+
+
+def test_understudy_copying_mastermind_and_mastermind_both_claim_second(
+    scenario: type[GameScenario],
+):
+    """Open question: both copies of Mastermind's power predict the winner and both finish 2nd."""
+    game = scenario(
+        [
+            RacerConfig(0, "Understudy", agent=PickByName("Mastermind")),
+            RacerConfig(1, "Mastermind", agent=PickByName("Centaur")),
+            cfg(2, "Centaur", 29),
+        ],
+        dice_rolls=[1],
+    )
+    game.engine.agents[0] = PickByName("Centaur")
+
+    game.run_turns(3)
+
+    assert [r.finish_position for r in game.state.racers] == [2, 2, 1]
+    assert [r.victory_points for r in game.state.racers] == [2, 2, 4]

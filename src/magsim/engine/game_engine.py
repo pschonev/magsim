@@ -105,6 +105,7 @@ class GameEngine:
 
     # Callback for external observers
     on_event_processed: Callable[[GameEngine, GameEvent], None] | None = None
+    on_die_rolled: Callable[[int, int], None] | None = None  # (roller_idx, value) for every die that counts
     verbose: bool = True
     _logger: logging.Logger = field(init=False, repr=False)
 
@@ -133,6 +134,8 @@ class GameEngine:
         for racer in self.get_active_racers():
             # 1. Initial Identity (e.g. "Egg", "Copycat")
             initial_core = self.instantiate_racer_abilities(racer.name)
+            for ab in initial_core:
+                ab.own = True
             self.replace_core_abilities(racer.idx, initial_core)
 
             _ = self.agents.setdefault(racer.idx, SmartAgent())
@@ -182,7 +185,8 @@ class GameEngine:
         self.log_context.start_turn_log(f"{racer.idx}•{racer.name}")
         self.log_info(f"=== START TURN: {racer.repr} ===")
 
-        # --- Pre-Turn Recording (for Heckler) ---
+        # Where the turn started, for powers that compare it at turn end (Heckler)
+        self.state.turn_start_position = racer.position
         self.push_event(
             PreTurnStartEvent(
                 responsible_racer_idx=None,
@@ -678,21 +682,29 @@ class GameEngine:
         """
         Updates the racer's Intrinsic (Identity) abilities.
         Preserves any ability that inherits from ExternalAbilityMixin or was granted.
+        When a granted power swaps the core, the racer's own ability is preserved too.
         """
         racer = self.get_racer(racer_idx)
 
         # 1. Keep the buffs (The ones that opt-in to being External)
-        external_abilities = [
+        swapped_by_granted = any(ab.granted for ab in new_core_instances)
+        kept_abilities = [
             ab
             for ab in racer.active_abilities
-            if isinstance(ab, ExternalAbilityMixin) or ab.granted
+            if isinstance(ab, ExternalAbilityMixin)
+            or ab.granted
+            or (
+                ab.own
+                and swapped_by_granted
+                and not any(ab.matches_identity(new) for new in new_core_instances)
+            )
         ]
 
         # 2. Combine with new identity
-        final_list = external_abilities + [
+        final_list = kept_abilities + [
             ab
             for ab in new_core_instances
-            if not any(ab is ext for ext in external_abilities)
+            if not any(ab is kept for kept in kept_abilities)
         ]
 
         # 3. Reconcile

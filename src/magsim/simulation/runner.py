@@ -85,6 +85,7 @@ def run_single_simulation(
         aggregator.on_event(event=event, engine=engine)
 
     engine.on_event_processed = on_event_processed
+    engine.on_die_rolled = aggregator.on_die_rolled
 
     def bridge_notification_event(event: GameEvent, _owner: int, engine: GameEngine):
         aggregator.on_event(event=event, engine=engine)
@@ -174,26 +175,13 @@ def run_single_simulation(
 
         df_pos_long = prepare_position_data(df_pos_wide)
 
-        # D. Results DataFrame
-        df_results_min = pl.DataFrame(
-            [
-                {
-                    "config_hash": r.config_hash,
-                    "racer_id": r.racer_id,
-                    "turns_taken": aggregator.race_one_turns[r.racer_id],
-                    "finish_position": aggregator.race_one_finish[r.racer_id],
-                }
-                for r in metrics
-            ],
-        ).with_columns(
-            pl.col("racer_id").cast(pl.Int64),
-            pl.col("finish_position").cast(pl.Int64),
-        )
-
         # 3. Compute Metrics
         df_race_stats, df_racer_stats = compute_race_metrics(
             df_pos_long,
-            df_results_min,
+            pl.DataFrame(
+                [{"config_hash": r.config_hash, "hotel_id": r.racer_id} for r in metrics if r.racer_name == "Hotel"],
+                schema={"config_hash": pl.Utf8, "hotel_id": pl.Int64},
+            ),
         )
 
         # 4. Extract
@@ -204,13 +192,15 @@ def run_single_simulation(
 
         # Map midgame stats
         if df_racer_stats.height > 0:
-            midgame_map = {
-                row["racer_id"]: row["midgame_relative_pos"]
-                for row in df_racer_stats.to_dicts()
-            }
+            racer_rows = {row["racer_id"]: row for row in df_racer_stats.to_dicts()}
             for r in metrics:
-                if r.racer_id in midgame_map:
-                    r.midgame_relative_pos = midgame_map[r.racer_id]
+                if (row := racer_rows.get(r.racer_id)) is not None:
+                    r.midgame_relative_pos = row["midgame_relative_pos"] or 0.0
+                    r.avg_rank_frac = row["avg_rank_frac"]
+                    r.turns_started_last = row["turns_started_last"]
+                    r.turns_started_ahead = row["turns_started_ahead"]
+                    r.hotel_stops = row["hotel_stops"]
+                    r.eliminated_by = row["eliminated_by"]
 
         tqdm.write(
             f"🏁 Done in {execution_time_ms:.2f}ms | {turn_counter} turns | 1st: {winner_name}, 2nd: {runner_up}",

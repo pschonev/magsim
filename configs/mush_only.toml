@@ -1,0 +1,14 @@
+# Games with Mush in every lineup (all boards, 4/5/6 players), run by `poe batch` into results_mush/
+# and never merged into the main results: only Mush's rows feed the dashboard's power pairs.
+# Mush in every game: all boards, 4/5/6 players, any other racers
+required_racers = ["Mush"]
+exclude_twists = ["Time Imp"]
+racer_counts = [4, 5, 6]
+boards = ["Standard", "WildWilds", "WhirlyWorld", "TwistyTwirl"]
+runs_per_combination = 1
+max_total_runs = 100000
+max_turns_per_race = 300
+
+[[filters]]
+racers = ["Copycat", "Scoocher"]
+boards = ["Standard"]

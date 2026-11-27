@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, override
 
+from magsim.ai.evaluation import keeps_roll_for_draw
 from magsim.core.abilities import Ability
 from magsim.core.agent import (
     SelectionDecisionContext,
@@ -119,6 +120,9 @@ class FlipFlopSwap(Ability, SelectionDecisionMixin[ActiveRacerState]):
         ctx: SelectionDecisionContext[Self, ActiveRacerState],
     ) -> ActiveRacerState | None:
         if (me := engine.get_active_racer(ctx.source_racer_idx)) is None:
+            return None
+
+        if all(keeps_roll_for_draw(engine, me, r.position) for r in ctx.options):
             return None
 
         # 1. WIN NOW: If we can finish by rolling, do it.

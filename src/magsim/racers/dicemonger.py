@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import reduce
 from typing import TYPE_CHECKING, override
 
+from magsim.ai.evaluation import (
+    DEFAULT_PREFERRED_DICE,
+    banned_faces,
+    draw_faces,
+    get_benefit_at,
+    soft_wishes,
+)
 from magsim.core.abilities import Ability
 from magsim.core.agent import BooleanDecisionMixin, DecisionContext
 from magsim.core.events import (
@@ -17,7 +23,7 @@ from magsim.core.mixins import (
     ExternalAbilityMixin,
     LifecycleManagedMixin,
 )
-from magsim.core.types import D6Values, D6VAlueSet
+from magsim.core.types import D6VAlueSet
 from magsim.engine.movement import push_move
 from magsim.engine.roll import trigger_reroll
 
@@ -128,21 +134,18 @@ class DicemongerRerollAction(Ability, BooleanDecisionMixin, ExternalAbilityMixin
         if dice_val is None:
             return False
 
-        default_dice_preference = frozenset[D6Values]([4, 5, 6])
-        racer = engine.get_racer(ctx.source_racer_idx)
+        if (racer := engine.get_active_racer(ctx.source_racer_idx)) is None:
+            return False
+        if dice_val in banned_faces(engine, racer):
+            return True
 
-        preferred_dice_sets = [
-            a.preferred_dice
-            for a in racer.active_abilities
-            if a.preferred_dice != default_dice_preference
-        ]
-        preferred_dice_sets = (
-            preferred_dice_sets if preferred_dice_sets else [default_dice_preference]
-        )
+        final_value = ctx.game_state.roll_state.final_value
+        if get_benefit_at(engine, racer.position + final_value) is not None:
+            return False
+        if dice_val in draw_faces(engine, racer):
+            return False
 
-        preferred_dice = reduce(lambda a, b: a.intersection(b), preferred_dice_sets)
-        preferred_dice = preferred_dice if preferred_dice else default_dice_preference
-
+        preferred_dice = soft_wishes(racer) or DEFAULT_PREFERRED_DICE
         engine.log_debug(f"{preferred_dice=} for {racer.repr}")
         return dice_val not in preferred_dice
 

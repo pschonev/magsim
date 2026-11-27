@@ -328,12 +328,14 @@ def _resolve_warp_destination(
     engine: GameEngine,
     *,
     event: WarpCmdEvent,
+    departing_owners: frozenset[int] = frozenset(),
 ) -> int:
     resolved = engine.state.board.resolve_position(
         event.target_tile,
         event.target_racer_idx,
         engine,
         event=event,
+        departing_owners=departing_owners,
     )
     if resolved < 0:
         engine.log_info(
@@ -438,6 +440,13 @@ def handle_simultaneous_warp_cmd(engine: GameEngine, evt: SimultaneousWarpCmdEve
     # We store the plan as: (original_warp_event, start_tile, resolved_end_tile)
     # We create temporary "single" WarpCmdEvents to reuse your existing helpers easily.
     planned_warps: list[tuple[WarpCmdEvent, int, int]] = []
+    # Racers that leave their tile in this warp take their space modifiers with them (swaps)
+    departing = frozenset(
+        warp.warping_racer_idx
+        for warp in evt.warps
+        if is_active(racer := engine.get_racer(warp.warping_racer_idx))
+        and racer.position != warp.target_tile
+    )
 
     for warp in evt.warps:
         racer = engine.get_racer(warp.warping_racer_idx)
@@ -472,7 +481,11 @@ def handle_simultaneous_warp_cmd(engine: GameEngine, evt: SimultaneousWarpCmdEve
         )
 
         # 2. Resolve destination
-        resolved = _resolve_warp_destination(engine, event=single_warp_evt)
+        resolved = _resolve_warp_destination(
+            engine,
+            event=single_warp_evt,
+            departing_owners=departing - {warp.warping_racer_idx},
+        )
 
         # If resolution results in no movement (e.g. bounce back to start), skip
         if resolved == start:

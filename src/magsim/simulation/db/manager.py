@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 # Import the models (Source of Truth)
 from magsim.simulation.db.models import (
+    LATE_COLUMNS,
     Race,
     RacePositionLogHelper,
     RacerResult,
@@ -90,6 +91,10 @@ class SimulationDatabase:
             )
             self._migrate_single_twist_column()
             self.conn.execute(RacerResult.get_create_sql())
+            for column, sql_type in LATE_COLUMNS.items():
+                self.conn.execute(
+                    f"ALTER TABLE racer_results ADD COLUMN IF NOT EXISTS {column} {sql_type}",
+                )
             self.conn.execute(RacePositionLogHelper.get_create_sql())
 
             # Check if empty, import legacy if needed
@@ -138,7 +143,7 @@ class SimulationDatabase:
                 )
             if self.results_parquet.exists():
                 self.conn.execute(
-                    f"INSERT INTO racer_results SELECT * FROM read_parquet('{self.results_parquet}')",
+                    f"INSERT INTO racer_results BY NAME SELECT * FROM read_parquet('{self.results_parquet}')",
                 )
             if self.positions_parquet.exists():
                 self.conn.execute(

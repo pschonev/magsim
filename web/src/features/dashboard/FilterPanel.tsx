@@ -1,0 +1,255 @@
+import { AlertTriangle, Ban, BookOpen, Bot, Check, ChevronDown, ChevronRight, Play, SlidersHorizontal, X } from "lucide-react";
+import { useState } from "react";
+import { MultiSelect } from "../../components/MultiSelect";
+import type {
+  AnalysisFilterDTO,
+  ComboMode,
+  DatasetMetaDTO,
+} from "../../types/api";
+import { COMBO_MODE_LABELS, addCombo, removeCombo } from "./filters";
+import { displayName } from "../../utils/names";
+import { SecondWindBadge } from "./SecondWindBadge";
+
+const SELECT_BUTTON_CLASS =
+  "inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 max-sm:min-h-10 pointer-coarse:min-h-10 max-sm:w-full max-sm:justify-center";
+
+interface FilterPanelProps {
+  meta: DatasetMetaDTO;
+  draft: AnalysisFilterDTO;
+  onChange: (next: AnalysisFilterDTO) => void;
+  isStale: boolean;
+  running: boolean;
+  onRun: () => void;
+  analyzedCount: number | null;
+}
+
+export function FilterPanel({
+  meta,
+  draft,
+  onChange,
+  isStale,
+  running,
+  onRun,
+  analyzedCount,
+}: FilterPanelProps) {
+  const [comboMode, setComboMode] = useState<ComboMode>("include");
+  const [comboRacers, setComboRacers] = useState<string[]>([]);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  const automatic = meta.racers.filter((r) => meta.automatic_racers.includes(r));
+  const secondWind = meta.racers.filter((r) => meta.second_wind_racers.includes(r));
+  const baseGame = meta.racers.filter((r) => !meta.second_wind_racers.includes(r));
+  const summary = [
+    draft.racers.length === meta.racers.length
+      ? `All ${meta.racers.length} racers`
+      : `${draft.racers.length} of ${meta.racers.length} racers`,
+    `${draft.counts.join("/")} players`,
+    draft.boards.length === meta.boards.length ? "all boards" : draft.boards.map(displayName).join(", "),
+    ...(draft.combos.length > 0 ? [`${draft.combos.length} combo filter(s)`] : []),
+    ...(draft.forced_twists.length > 0 ? [`only ${draft.forced_twists.map(displayName).join(" + ")}`] : []),
+    ...(draft.excluded_twists.length > 0 ? [`without ${draft.excluded_twists.map(displayName).join(", ")}`] : []),
+    ...(analyzedCount !== null ? [`${analyzedCount.toLocaleString()} races analyzed`] : []),
+  ].join(" · ");
+
+  return (
+    <section className="rounded-xl border border-slate-800 bg-slate-900/70">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs font-medium text-slate-200 max-sm:min-h-10 pointer-coarse:min-h-10 max-sm:basis-full"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+          Filters
+          {open ? (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+          )}
+          <span className="min-w-0 font-normal text-slate-400 sm:truncate">{summary}</span>
+        </button>
+        <div className="flex items-center gap-3 max-sm:w-full max-sm:justify-between">
+          {isStale && (
+            <span className="text-xs text-amber-400">
+              <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+              Filters changed
+            </span>
+          )}
+          <button
+            type="button"
+            title="Click to process data with current filters."
+            disabled={running}
+            onClick={onRun}
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60 max-sm:ml-auto max-sm:min-h-10 pointer-coarse:min-h-10 ${
+              isStale
+                ? "btn-print bg-indigo-600 text-on-accent hover:bg-indigo-500"
+                : "rounded-full border border-slate-700 bg-slate-900 text-indigo-300 hover:border-indigo-500"
+            }`}
+          >
+            <Play className="h-3 w-3" />
+            {running ? "Running analysis..." : "Run Analysis"}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="space-y-3 border-t border-slate-800 p-3 sm:p-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <MultiSelect
+          label="Racers (roster pool)"
+          options={meta.racers}
+          selected={draft.racers}
+          onChange={(racers) => onChange({ ...draft, racers })}
+          searchable
+          className="w-full sm:w-64"
+        />
+        <button
+          type="button"
+          title="Select all racers that do not require human/AI decisions."
+          onClick={() => onChange({ ...draft, racers: automatic })}
+          className={SELECT_BUTTON_CLASS}
+        >
+          <Bot className="h-3.5 w-3.5" />
+          Select automatic racers
+        </button>
+        <button
+          type="button"
+          title="Select the base game racers."
+          onClick={() => onChange({ ...draft, racers: baseGame })}
+          className={SELECT_BUTTON_CLASS}
+        >
+          <BookOpen className="h-3.5 w-3.5" />
+          Select base game
+        </button>
+        <button
+          type="button"
+          title="Select the Second Wind expansion racers."
+          onClick={() => onChange({ ...draft, racers: secondWind })}
+          className={SELECT_BUTTON_CLASS}
+        >
+          <SecondWindBadge size={14} />
+          Select Second Wind
+        </button>
+        <MultiSelect
+          label="Player counts"
+          options={meta.counts.map(String)}
+          selected={draft.counts.map(String)}
+          onChange={(counts) => onChange({ ...draft, counts: counts.map(Number) })}
+          className="w-full sm:w-40"
+        />
+        <MultiSelect
+          label="Board(s)"
+          options={meta.boards}
+          selected={draft.boards}
+          onChange={(boards) => onChange({ ...draft, boards })}
+          className="w-full sm:w-48"
+        />
+        {meta.twists.length > 0 && (
+          <>
+            <MultiSelect
+              label="Force twist cards"
+              options={meta.twists}
+              selected={draft.forced_twists}
+              onChange={(forced_twists) => onChange({ ...draft, forced_twists })}
+              className="w-full sm:w-52"
+            />
+            <MultiSelect
+              label="Exclude twist cards"
+              options={meta.twists}
+              selected={draft.excluded_twists}
+              onChange={(excluded_twists) => onChange({ ...draft, excluded_twists })}
+              className="w-full sm:w-52"
+            />
+          </>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-slate-800 bg-slate-950/50">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((v) => !v)}
+          className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-slate-300 hover:text-slate-50 max-sm:min-h-10 pointer-coarse:min-h-10"
+        >
+          Advanced Combination Filters
+          <span className="text-slate-500">{advancedOpen ? "▾" : "▸"}</span>
+        </button>
+        {advancedOpen && (
+          <div className="space-y-3 border-t border-slate-800 p-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block max-sm:w-full">
+                <span className="mb-1 block text-[11px] font-medium text-slate-400">
+                  Filter Type
+                </span>
+                <select
+                  value={comboMode}
+                  onChange={(e) => setComboMode(e.target.value as ComboMode)}
+                  className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 max-sm:min-h-10 pointer-coarse:min-h-10 max-sm:w-full"
+                >
+                  {(Object.keys(COMBO_MODE_LABELS) as ComboMode[]).map((mode) => (
+                    <option key={mode} value={mode}>
+                      {COMBO_MODE_LABELS[mode]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <MultiSelect
+                label="Select Racers for Combo"
+                options={meta.racers}
+                selected={comboRacers}
+                onChange={setComboRacers}
+                searchable
+                className="w-full sm:w-64"
+              />
+              <button
+                type="button"
+                disabled={comboRacers.length === 0}
+                onClick={() => {
+                  onChange(addCombo(draft, comboMode, comboRacers));
+                  setComboRacers([]);
+                }}
+                className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 max-sm:min-h-10 pointer-coarse:min-h-10 max-sm:w-full"
+              >
+                Add Combo Filter
+              </button>
+            </div>
+
+            <div className="border-t border-slate-800 pt-3">
+              {draft.combos.length === 0 ? (
+                <span className="text-xs italic text-slate-500">No active filters</span>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {draft.combos.map((combo, index) => (
+                    <button
+                      key={`${combo.mode}-${combo.racers.join("|")}`}
+                      type="button"
+                      title="Click to remove"
+                      onClick={() => onChange(removeCombo(draft, index))}
+                      className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium max-sm:min-h-9 pointer-coarse:min-h-9 ${
+                        combo.mode === "include"
+                          ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+                          : "border-rose-500/50 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25"
+                      }`}
+                    >
+                      {combo.mode === "include" ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <Ban className="h-3 w-3" />
+                      )}
+                      {combo.racers.map(displayName).join(", ")}
+                      <X className="h-3 w-3 opacity-60" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+        </div>
+      )}
+    </section>
+  );
+}
