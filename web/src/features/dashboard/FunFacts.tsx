@@ -338,31 +338,34 @@ export function FunFacts({ analysis, racerColors, bundled, secondWind }: FunFact
       ],
     });
   }
+  let splitCard: ReactNode = null;
   if (splits.length > 0) {
     const baseline = facts.last_place_baseline === null ? "many" : `${Math.round(facts.last_place_baseline * 100)}%`;
-    cards.push(
+    splitCard = (
       <Card
         key="split"
         title="Split decisions"
         hint={`Last place counts ties, so a typical racer starts ${baseline} of its turns there. Stepdad: how often the racer playing right after Stepdad wins, compared with how often that same racer wins in general.`}
       >
         <SplitRows rows={splits} theme={theme} />
-      </Card>,
+      </Card>
     );
   }
 
+  let outCard: ReactNode = null;
   if (facts.outcomes.length > 0) {
-    cards.push(
+    outCard = (
       <Card key="out" title="How their races end">
         <OutcomeDonuts outcomes={facts.outcomes} colorOf={colorOf} theme={theme} />
-      </Card>,
+      </Card>
     );
   }
 
+  let maCard: ReactNode = null;
   if (specific.magical_athlete_faces.length > 0) {
-    cards.push(
+    maCard = (
       <Card key="ma" title="Magical Athlete's lucky numbers" caption="VP per extra roll, for each number rolled.">
-        <EChart renderer="svg" height={130} option={faceEffectColumns(specific.magical_athlete_faces, theme, (face) => MAGICAL_ATHLETE_FACES[face] ?? "")} />
+        <EChart renderer="svg" height={130} option={faceEffectColumns(specific.magical_athlete_faces, colorOf("MagicalAthlete"), theme,(face) => MAGICAL_ATHLETE_FACES[face] ?? "")} />
         <div className="grid grid-cols-6 px-1.5">
           {specific.magical_athlete_faces.map((f) => (
             <div key={f.face} className="flex justify-center">
@@ -370,15 +373,16 @@ export function FunFacts({ analysis, racerColors, bundled, secondWind }: FunFact
             </div>
           ))}
         </div>
-      </Card>,
+      </Card>
     );
   }
 
+  let vpCard: ReactNode = null;
   if (facts.vp_distributions.length > 0) {
-    cards.push(
+    vpCard = (
       <Card key="vp" title="VP per race">
         <EChart renderer="svg" height={GROUPED_COLUMNS_HEIGHT} option={vpHistogram(facts.vp_distributions, colorOf, theme)} />
-      </Card>,
+      </Card>
     );
   }
 
@@ -386,22 +390,26 @@ export function FunFacts({ analysis, racerColors, bundled, secondWind }: FunFact
     { name: "MrDiceGuy", color: colorOf("MrDiceGuy"), faces: facts.mr_dice_guy_faces, verb: "picks", noMove: "all six dice differ, nothing to pick" },
     { name: "Cheatah", color: colorOf("Cheatah"), faces: facts.cheatah_numbers, verb: "sets the die to", noMove: "number guessed, no move" },
   ].filter((d) => d.faces.length > 0);
+  let pickCard: ReactNode = null;
   if (dice.length > 0) {
-    cards.push(
+    pickCard = (
       <Card key="pick" title="Choosy racers" caption="✗ = no move, counts as 0 in the average. Faded part = guessed.">
         <SharedDice series={dice} theme={theme} />
-      </Card>,
+      </Card>
     );
   }
 
+  let totalsCard: ReactNode = null;
   if (facts.dice_totals.length > 0) {
     const { labels, series } = diceTotalSeries(facts.dice_totals, colorOf);
-    cards.push(
+    totalsCard = (
       <Card key="totals" title="Dice totals" caption="Final roll of the turn. ✗ = rolled lower, no move (counts as 0).">
         <EChart renderer="svg" height={GROUPED_COLUMNS_HEIGHT} option={buildGroupedColumns(labels, series, "total", theme)} />
-      </Card>,
+      </Card>
     );
   }
+
+  cards.push(...[vpCard, outCard, totalsCard, splitCard, pickCard, maCard].filter((card) => card !== null));
 
   const bottom: ReactNode[] = [];
 
@@ -491,7 +499,7 @@ export function FunFacts({ analysis, racerColors, bundled, secondWind }: FunFact
     const best = calls.slice(0, Math.min(5, Math.ceil(calls.length / 2)));
     const worst = calls.slice(best.length);
     const percent0 = (v: number) => `${v.toFixed(0)}%`;
-    const barOptions = { compact: true, labelWidth: MIND_LABEL_WIDTH, labelRoom: MIND_NOTE_ROOM };
+    const barOptions = { compact: true, labelWidth: MIND_LABEL_WIDTH, labelRoom: MIND_NOTE_ROOM, max: Math.max(...calls.map((c) => c.rate * 100)) };
     const wideListHeight = calls.length * MIND_BAR_ROW.wide + 2 * (MIND_CAPTION_ROW + MIND_BAR_PADDING);
     bottom.push(
       <Card key="mind" placement={ORDER.mind} title="Mastermind" hint="Mastermind's prediction is right when the racer he predicted wins the race.">

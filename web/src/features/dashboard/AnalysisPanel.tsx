@@ -17,6 +17,7 @@ import {
   Waves,
   Zap,
 } from "lucide-react";
+import type { ECharts } from "echarts/core";
 import { BRAND, readableText, textOn } from "../../utils/palette";
 import { type ComponentType, type CSSProperties, Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { DataTable } from "../../components/DataTable";
@@ -40,6 +41,8 @@ import {
   type ColorScale,
   type HeatmapAxis,
   type HeatmapCell,
+  ABILITY_METRICS,
+  type AbilityMetricKey,
   PERCENT_SCALE,
   TRIGGER_COUNT_SCALE,
   TRIGGER_SCALE,
@@ -383,6 +386,18 @@ export function AnalysisPanel({ analysis, racerColors, profiles, bundled, second
   const [adjustTriggers, setAdjustTriggers] = useState(true);
   const [swapTriggerAxes, setSwapTriggerAxes] = useState(true);
   const [playersFirst, setPlayersFirst] = useState(false);
+  const [abilitySolo, setAbilitySolo] = useState<AbilityMetricKey | null>(null);
+
+  const attachAbilitySolo = (chart: ECharts) => {
+    const onLegendSelect = (params: unknown) => {
+      const name = (params as { name: string }).name;
+      const key = ABILITY_METRICS.find((m) => m.label === name)?.key;
+      if (!key) return;
+      setAbilitySolo((current) => (current === key ? null : key));
+    };
+    chart.on("legendselectchanged", onLegendSelect);
+    return () => chart.off("legendselectchanged", onLegendSelect);
+  };
 
   const quadrant = QUADRANT_TABS.find((q) => q.id === view);
   const table = analysis.summary_tables.find((t) => t.id === view);
@@ -449,11 +464,26 @@ export function AnalysisPanel({ analysis, racerColors, profiles, bundled, second
 
       {view === "ability" && (
         <>
-          <ViewToolbar info={info} />
+          <ViewToolbar
+            info={info}
+            trailing={
+              abilitySolo && (
+                <button
+                  type="button"
+                  aria-label="Show all metrics"
+                  onClick={() => setAbilitySolo(null)}
+                  className="ml-auto block rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:border-indigo-500 hover:bg-slate-800 max-sm:min-h-9 pointer-coarse:min-h-9"
+                >
+                  Reset
+                </button>
+              )
+            }
+          />
           <EChart
             renderer="svg"
             height={Math.max(height, analysis.abilities.length * ABILITY_ROW_HEIGHT + 130)}
-            option={buildAbilityOption(analysis.abilities, racerColors, theme, narrow)}
+            option={buildAbilityOption(analysis.abilities, racerColors, theme, narrow, abilitySolo)}
+            onChartReady={attachAbilitySolo}
           />
         </>
       )}

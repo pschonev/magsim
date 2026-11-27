@@ -10,7 +10,6 @@ Rules for the React + Pyodide frontend refactor. Plan: `docs/react_frontend_arch
 - Edit only: `src/magsim/analysis`, `src/magsim/web`, `src/magsim/simulation`, `src/magsim/cli`, `web/`, `scripts/`, `pyproject.toml`, `docs/react_frontend_architecture.md`, plus new files under `tests/`.
 - Do not touch `src/magsim/engine`, `racers`, `core`, `ai`, `data`. If a refactor need cannot be met outside them, make the smallest change and ask first.
 - Exception already made: `src/magsim/engine/logging.py` (lazy `rich` import for Pyodide).
-- `frontend/` (legacy Marimo notebook) stays untouched until the M6 cutover.
 
 ## Regressions
 

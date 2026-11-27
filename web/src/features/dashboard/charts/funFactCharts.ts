@@ -2,7 +2,7 @@ import type { EChartsOption } from "../../../components/EChart";
 import type { FaceEffectDTO, MushPairDTO, OutcomeShareDTO, ProfileDTO, VpShareDTO } from "../../../types/api";
 import { displayName } from "../../../utils/names";
 import type { ChartTheme } from "../../../utils/theme";
-import { BRAND, DIVERGING, NEUTRAL } from "../../../utils/palette";
+import { BRAND, DIVERGING, NEUTRAL, textOn, tint } from "../../../utils/palette";
 import { readableOn } from "./chartOptions";
 
 export const BADGE = { ...BRAND, silver: NEUTRAL.silver };
@@ -53,6 +53,8 @@ interface BarOptions {
   labelWidth?: number;
   /** Extra px kept free right of the plot (with `labelWidth`), for value labels that carry a `note`. */
   labelRoom?: number;
+  /** Value that sets the axis length (a little room is added for the labels); default the largest item. Share it so equal bars mean equal values across charts. */
+  max?: number;
 }
 
 /** Room between the name column's right edge and the axis line: the default axis label margin plus a little slack. */
@@ -65,9 +67,9 @@ function barGrid(compact: boolean, labelWidth: number | undefined, labelRoom: nu
 }
 
 /** Horizontal bars (or lollipops) with the value at the end of each bar; one racer per row. */
-export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) => string, { lollipop = false, compact = false, labelWidth, labelRoom = 0 }: BarOptions = {}): EChartsOption {
+export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) => string, { lollipop = false, compact = false, labelWidth, labelRoom = 0, max: axisValue }: BarOptions = {}): EChartsOption {
   const names = items.map((i) => displayName(i.name));
-  const max = Math.max(...items.map((i) => i.value), 0) * (compact ? 1.2 : 1.25) || 1;
+  const max = (axisValue ?? Math.max(...items.map((i) => i.value), 0)) * (compact ? 1.2 : 1.25) || 1;
   const fontSize = compact ? 11 : 12;
   const labels = racerLabels(items.map((i) => ({ text: displayName(i.name), color: i.racer ? i.color : undefined })), t, fontSize);
   const valueText = (p: { value: number; dataIndex: number }) => {
@@ -192,6 +194,7 @@ export function buildColumns(
   colors: string[],
   t: ChartTheme,
   format?: (v: number) => string,
+  borders?: string[],
 ): EChartsOption {
   return {
     ...base(t),
@@ -209,7 +212,7 @@ export function buildColumns(
       {
         type: "bar",
         barWidth: "62%",
-        data: values.map((v, i) => ({ value: v, itemStyle: { color: colors[i], borderRadius: v >= 0 ? [3, 3, 0, 0] : [0, 0, 3, 3] } })),
+        data: values.map((v, i) => ({ value: v, itemStyle: { color: colors[i], borderRadius: v >= 0 ? [3, 3, 0, 0] : [0, 0, 3, 3], ...(borders ? { borderColor: borders[i], borderWidth: 2 } : {}) } })),
         label: format ? { show: true, position: "top", color: t.text, fontSize: 11, fontWeight: 700, formatter: (p: { value: number }) => format(p.value) } : { show: false },
         markLine: { silent: true, symbol: "none", label: { show: false }, lineStyle: { color: t.reference, type: "dashed" }, data: [{ yAxis: 0 }] },
       },
@@ -217,15 +220,20 @@ export function buildColumns(
   };
 }
 
-/** Columns without number labels (the caller draws dice underneath); hovering shows what the number does. */
-export function faceEffectColumns(faces: FaceEffectDTO[], t: ChartTheme, describe: (face: number) => string): EChartsOption {
+/** Share of white mixed into the fill of a losing column: lighter than the solid gains, same hue. */
+const LOSS_FILL_TINT = 0.6;
+
+/** Columns in `color` without number labels (the caller draws dice underneath): gains solid, losses light with a solid border. Hovering shows what the number does. */
+export function faceEffectColumns(faces: FaceEffectDTO[], color: string, t: ChartTheme, describe: (face: number) => string): EChartsOption {
+  const lossFill = tint(color, LOSS_FILL_TINT);
   return {
     ...buildColumns(
       faces.map(() => ""),
       faces.map((f) => f.vp_per_roll),
-      faces.map((f) => (f.vp_per_roll >= 0 ? DIVERGING.good : DIVERGING.bad)),
+      faces.map((f) => (f.vp_per_roll >= 0 ? color : lossFill)),
       t,
       (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`,
+      faces.map(() => color),
     ),
     tooltip: {
       trigger: "axis",
@@ -789,20 +797,39 @@ export function mushRoses(pairs: MushPairDTO[], colorOf: (racer: string) => stri
   ];
 }
 
-/** A plain pie with the name and share outside each slice. */
+/** Slices (in %) below this get no number inside the ring. */
+const PIE_MIN_LABEL_PERCENT = 4;
+
+/** A ring with the share inside each slice and a legend of "name · share" underneath. */
 export function buildPie(items: { name: string; value: number; color: string }[], t: ChartTheme): EChartsOption {
+  const total = items.reduce((sum, i) => sum + i.value, 0);
+  const percentOf = (name: string) => `${(((items.find((i) => i.name === name)?.value ?? 0) / total) * 100).toFixed(0)}%`;
   return {
     ...base(t),
     tooltip: { show: false },
+    legend: {
+      bottom: 0,
+      icon: "circle",
+      itemWidth: 10,
+      itemHeight: 10,
+      itemGap: 10,
+      textStyle: { color: t.text, fontSize: 11 },
+      formatter: (name: string) => `${name} · ${percentOf(name)}`,
+    },
     series: [
       {
         type: "pie",
-        radius: ["30%", "52%"],
-        center: ["50%", "50%"],
+        radius: ["36%", "74%"],
+        center: ["50%", "42%"],
         itemStyle: { borderColor: t.bg, borderWidth: 2 },
-        label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { name: string; percent: number }) => `${p.name.replace(", ", ",\n")}\n${p.percent.toFixed(0)}%` },
-        labelLine: { length: 4, length2: 4 },
-        data: items.map((i) => ({ name: i.name, value: i.value, itemStyle: { color: i.color } })),
+        label: {
+          position: "inside",
+          fontSize: 11,
+          fontWeight: 700,
+          formatter: (p: { percent: number }) => (p.percent >= PIE_MIN_LABEL_PERCENT ? `${p.percent.toFixed(0)}%` : ""),
+        },
+        labelLine: { show: false },
+        data: items.map((i) => ({ name: i.name, value: i.value, itemStyle: { color: i.color }, label: { color: textOn(i.color) } })),
       },
     ],
   };

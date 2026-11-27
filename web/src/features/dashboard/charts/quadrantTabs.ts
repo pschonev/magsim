@@ -125,11 +125,16 @@ export const QUADRANT_TABS: QuadrantTab<RacerStatRowDTO>[] = [
 export const ABILITY_DESCRIPTION: DescriptionLine[] = [
   {
     bold: "Left Side:",
-    text: " Beneficial Self (Speed Boosts) and -Others (Pushing others/Tripping).",
+    text: " Beneficial Self (Speed Boosts) and -Others (setting others back).",
   },
   {
     bold: "Right Side:",
     text: " Cost/Altruism (-Self Investments/Cooldowns and Others Helping).",
   },
+  {
+    bold: "Setting back:",
+    text: " Besides pushing racers backwards, this counts tripping, forced rolls and skipped moves (a skipped move counts as an average roll). The same goes for - Self.",
+  },
   { bold: "Sorting:", text: " Racers are ordered by Net Benefit (Total Good - Total Cost)." },
+  { bold: "Legend:", text: " Click a legend entry to show only that metric and sort by it; click it again or press Reset to see all." },
 ];

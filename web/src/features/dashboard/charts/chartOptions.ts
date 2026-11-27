@@ -384,29 +384,39 @@ const ABILITY_GRID_MARGIN = 3;
 
 const ABILITY_LEGEND: Record<string, string> = {
   "+ Self": "moves itself forward",
-  "- Others": "moves others back",
-  "- Self": "moves itself back",
+  "- Others": "sets others back",
+  "- Self": "sets itself back",
   "+ Others": "moves others forward",
 };
 
+export type AbilityMetricKey = (typeof ABILITY_METRICS)[number]["key"];
+
+/** `solo` shows only that metric, with the racers sorted by it; `null` shows all four in the incoming (net benefit) order. */
 export function buildAbilityOption(
-  rows: AbilityBreakdownRowDTO[],
+  allRows: AbilityBreakdownRowDTO[],
   racerColors: Record<string, string>,
   t: ChartTheme,
   narrow = false,
+  solo: AbilityMetricKey | null = null,
 ): EChartsOption {
   const baseText = { color: t.text };
   const signedValue = (r: AbilityBreakdownRowDTO, m: (typeof ABILITY_METRICS)[number]) =>
     m.side * Math.abs(r[m.key]);
+  const visible = ABILITY_METRICS.filter((m) => solo === null || m.key === solo);
+  const rows = solo === null ? allRows : [...allRows].sort((a, b) => Math.abs(b[solo]) - Math.abs(a[solo]));
   const negativeEdge = rows.map((r) =>
-    ABILITY_METRICS.filter((m) => m.side < 0).reduce((s, m) => s + signedValue(r, m), 0),
+    visible.filter((m) => m.side < 0).reduce((s, m) => s + signedValue(r, m), 0),
   );
   const positiveEdge = rows.map((r) =>
-    ABILITY_METRICS.filter((m) => m.side > 0).reduce((s, m) => s + signedValue(r, m), 0),
+    visible.filter((m) => m.side > 0).reduce((s, m) => s + signedValue(r, m), 0),
   );
+  const hasLeft = visible.some((m) => m.side < 0);
+  const hasRight = visible.some((m) => m.side > 0);
   const minEdge = Math.min(0, ...negativeEdge);
-  const domainMin = minEdge < 0 ? minEdge * (narrow ? 1.5 : 1.1) : -1;
-  const domainMax = Math.max(0, ...positiveEdge) * 1.05;
+  const maxEdge = Math.max(0, ...positiveEdge);
+  const leftRoom = hasLeft && minEdge < 0 ? minEdge * (narrow ? 1.5 : 1.1) : -1;
+  const domainMin = hasLeft ? leftRoom : -(maxEdge || 1) * (narrow ? 0.8 : 0.5);
+  const domainMax = hasRight ? maxEdge * 1.05 || 1 : -domainMin * 0.05;
   const plotWidth = 100 - 2 * ABILITY_GRID_MARGIN;
   const zeroShare = -domainMin / (domainMax - domainMin);
   const leftCentre = ABILITY_GRID_MARGIN + (plotWidth * zeroShare) / 2;
@@ -423,8 +433,12 @@ export function buildAbilityOption(
           { text: "costs ▶", right: 6, top: 6, textStyle: headerStyle },
         ]
       : [
-          { text: "◀ gains: own boosts, taking movement from others", left: `${leftCentre}%`, textAlign: "center", top: 6, textStyle: headerStyle },
-          { text: "costs: own setbacks, giving movement to others ▶", left: `${rightCentre}%`, textAlign: "center", top: 6, textStyle: headerStyle },
+          ...(hasLeft
+            ? [{ text: "◀ gains: own boosts, taking movement from others", left: `${leftCentre}%`, textAlign: "center", top: 6, textStyle: headerStyle }]
+            : []),
+          ...(hasRight
+            ? [{ text: "costs: own setbacks, giving movement to others ▶", left: `${rightCentre}%`, textAlign: "center", top: 6, textStyle: headerStyle }]
+            : []),
         ],
     xAxis: {
       type: "value",
@@ -457,6 +471,7 @@ export function buildAbilityOption(
       top: 30,
       left: "center",
       data: ["+ Self", "- Others", "- Self", "+ Others"],
+      selected: Object.fromEntries(ABILITY_METRICS.map((m) => [m.label, visible.includes(m)])),
       formatter: (name: string) => ABILITY_LEGEND[name] ?? name,
       textStyle: baseText,
     },
@@ -472,31 +487,27 @@ export function buildAbilityOption(
         }`,
     },
     series: [
-      ...ABILITY_METRICS.map((m, metricIndex) => ({
-      type: "bar" as const,
-      name: m.label,
-      stack: "total",
-      itemStyle: { color: markOn(m.color, t) },
-      barWidth: "70%",
-      data: rows.map((r) => ({ value: signedValue(r, m), name: r.racer_name })),
-      ...(metricIndex === 0
-        ? {
-            markLine: {
-              silent: true,
-              symbol: "none",
-              label: { show: false },
-              lineStyle: { type: "dashed" as const, color: t.reference },
-              data: [{ xAxis: 0 }],
-            },
-          }
-        : {}),
-    })),
+      ...ABILITY_METRICS.map((m) => ({
+        type: "bar" as const,
+        name: m.label,
+        stack: "total",
+        itemStyle: { color: markOn(m.color, t) },
+        barWidth: "70%",
+        data: rows.map((r) => ({ value: signedValue(r, m), name: r.racer_name })),
+      })),
       {
         type: "scatter" as const,
         symbolSize: 0,
         silent: true,
         tooltip: { show: false },
         z: 5,
+        markLine: {
+          silent: true,
+          symbol: "none",
+          label: { show: false },
+          lineStyle: { type: "dashed" as const, color: t.reference },
+          data: [{ xAxis: 0 }],
+        },
         data: rows.map((r, i) => ({
           value: [negativeEdge[i], r.racer_name],
           label: {
