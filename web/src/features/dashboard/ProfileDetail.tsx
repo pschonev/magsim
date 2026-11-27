@@ -29,15 +29,16 @@ function SmallStat({ label, value, title }: { label: string; value: string; titl
   );
 }
 
-function RacerCard({ profile, ink }: { profile: ProfileDTO; ink: string }) {
+function RacerCard({ profile, ink, expansion }: { profile: ProfileDTO; ink: string; expansion: boolean }) {
   const entry = RACER_GLOSSARY.find((e) => e.key === profile.racer_name);
   return (
     <div
       className="min-w-0 space-y-1 rounded-lg border border-slate-700 bg-slate-900 p-3"
       style={{ borderLeftColor: ink, borderLeftWidth: 4 }}
     >
-      <div className="font-display text-base font-bold" style={{ color: ink }}>
+      <div className="flex items-center gap-1.5 font-display text-base font-bold" style={{ color: ink }}>
         {displayName(profile.racer_name)}
+        {expansion && <SecondWindBadge size={16} />}
       </div>
       {entry && (
         <>
@@ -117,7 +118,7 @@ function ShareHeading({ profile }: { profile: ProfileDTO }) {
 
 interface ProfileDetailProps {
   profile: ProfileDTO;
-  /** True for a Second Wind expansion racer: shows the badge beside the name. */
+  /** True for a Second Wind expansion racer: shows the badge beside the name on the racer card. */
   expansion: boolean;
   /** All racers in the current sort order; previous and next follow it. */
   rows: ProfileDTO[];
@@ -190,11 +191,10 @@ export function ProfileDetail({
             <ChevronLeft className="h-5 w-5" aria-hidden="true" />
           </button>
           <span
-            className="inline-flex min-w-32 items-center justify-center gap-1.5 text-center font-display text-lg font-bold"
+            className="min-w-32 text-center font-display text-lg font-bold"
             style={{ color: ink }}
           >
             {displayName(profile.racer_name)}
-            {expansion && <SecondWindBadge size={20} />}
           </span>
           <button
             type="button"
@@ -243,7 +243,7 @@ export function ProfileDetail({
           </div>
         </div>
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
-          <RacerCard profile={profile} ink={ink} />
+          <RacerCard profile={profile} ink={ink} expansion={expansion} />
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-stretch gap-3 md:grid-cols-[auto_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)] xl:grid-cols-[auto_minmax(0,1fr)]">
             <StatList profile={profile} rows={rows} statColors={statColors} />
             <BestWorstConditions racerName={profile.racer_name} matchups={matchups} environments={environments} inks={inks} />

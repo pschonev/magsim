@@ -67,13 +67,20 @@ def _racer_r2(frame: pl.DataFrame, groups: FactorExprs) -> dict[str, float]:
 
 
 def _summary(joined: pl.DataFrame) -> pl.DataFrame:
-    """Races, average VP, win rate, raw speed and ability triggers per turn of every racer with enough races."""
+    """Races, average VP, win, second-place and elimination rates (0 to 1), raw speed and ability triggers per turn of every racer with enough races."""
+    eliminated = (
+        pl.col("eliminated").cast(pl.Boolean).fill_null(value=False).mean()
+        if "eliminated" in joined.columns
+        else pl.lit(0.0)
+    )
     return (
         joined.group_by("racer_name")
         .agg(
             pl.len().alias("races"),
             pl.col("final_vp").mean().alias("avg_vp"),
             (pl.col("finish_position") == 1).fill_null(value=False).mean().alias("win_rate"),
+            (pl.col("finish_position") == 2).fill_null(value=False).mean().alias("second_rate"),
+            eliminated.alias("eliminated_rate"),
             pl.col("speed_raw_calc").mean().alias("speed"),
             (pl.col("ability_trigger_count") / pl.col("total_turns_clean")).mean().alias("triggers_per_turn"),
         )
@@ -84,6 +91,9 @@ def _summary(joined: pl.DataFrame) -> pl.DataFrame:
 
 def compute_profiles(results: pl.DataFrame, races: pl.DataFrame) -> pl.DataFrame:
     """One row per racer with at least `MIN_RACES` races: performance, factor R squared values and their percentile ranks.
+
+    `win_rate`, `second_rate` and `eliminated_rate` are shares of all the racer's races (0 to 1);
+    a missing finish position or elimination flag counts as not won, not second, not eliminated.
 
     `r2_*` is the adjusted R squared of the racer's final VP regressed on one factor group
     (players, seat, board, twist card, opponents present, dice), `explained_share` the same for all groups

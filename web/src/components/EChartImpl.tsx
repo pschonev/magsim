@@ -1,5 +1,6 @@
 import { BarChart, HeatmapChart, LineChart, PieChart, ScatterChart } from "echarts/charts";
 import {
+  AriaComponent,
   DataZoomComponent,
   GraphicComponent,
   GridComponent,
@@ -23,6 +24,7 @@ echarts.use([
   LineChart,
   PieChart,
   HeatmapChart,
+  AriaComponent,
   TitleComponent,
   TooltipComponent,
   GridComponent,

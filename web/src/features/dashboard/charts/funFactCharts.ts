@@ -1,5 +1,5 @@
 import type { EChartsOption } from "../../../components/EChart";
-import type { FaceEffectDTO, MushPairDTO, OutcomeShareDTO, VpShareDTO } from "../../../types/api";
+import type { FaceEffectDTO, MushPairDTO, OutcomeShareDTO, ProfileDTO, VpShareDTO } from "../../../types/api";
 import { displayName } from "../../../utils/names";
 import type { ChartTheme } from "../../../utils/theme";
 import { BRAND, DIVERGING, NEUTRAL } from "../../../utils/palette";
@@ -534,7 +534,16 @@ export interface RacerValue {
 export interface HistogramGroup {
   label: string;
   color: string;
+  /** Draws the group's bars striped and its mean line dotted, so it stays apart from the other group without relying on hue. */
+  striped?: boolean;
   racers: RacerValue[];
+}
+
+/** Diagonal white stripes over the bar colour; also shown in the legend swatch. */
+const STRIPES = { symbol: "rect", dashArrayX: [1, 0], dashArrayY: [2, 3], rotation: Math.PI / 4, color: "rgba(255,255,255,0.5)" };
+
+function barStyle(color: string, striped: boolean | undefined) {
+  return { color, borderRadius: [2, 2, 0, 0], ...(striped ? { decal: STRIPES } : {}) };
 }
 
 export const HISTOGRAM_BINS = 9;
@@ -543,6 +552,18 @@ export function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+export function mean(values: number[]): number {
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+/** Unweighted mean over the racers, in %: 1st place, 2nd place, top 2, eliminated. */
+export function outcomeMeans(profiles: ProfileDTO[]): number[] {
+  const first = mean(profiles.map((p) => p.win_rate));
+  const second = mean(profiles.map((p) => p.second_rate));
+  const eliminated = mean(profiles.map((p) => p.eliminated_rate));
+  return [first, second, first + second, eliminated].map((share) => share * 100);
 }
 
 interface HistogramBins {
@@ -564,14 +585,14 @@ function binGroups(groups: HistogramGroup[], count = HISTOGRAM_BINS): HistogramB
   return { min, width, members };
 }
 
-/** Room above the plot for the legend and two staggered median labels; below it for the bin labels and the axis name. */
+/** Room above the plot for the legend and two staggered mean labels; below it for the bin labels and the axis name. */
 const OVERLAY_TOP = 54;
 const OVERLAY_BOTTOM = 36;
-const MEDIAN_LABEL_STEP = 14;
+const MEAN_LABEL_STEP = 14;
 
 /**
- * Grouped histogram: one bar per group in each shared bin, plus a dashed median line per group.
- * The lines live on a hidden value axis spanning the bins' outer edges, so they sit at the true median.
+ * Grouped histogram: one bar per group in each shared bin, plus a dashed mean line per group.
+ * The lines live on a hidden value axis spanning the bins' outer edges, so they sit at the true mean.
  */
 export function buildOverlaidHistogram(groups: HistogramGroup[], axisName: string, t: ChartTheme): EChartsOption {
   const { min, width, members } = binGroups(groups);
@@ -631,7 +652,7 @@ export function buildOverlaidHistogram(groups: HistogramGroup[], axisName: strin
         name: legendOf(g),
         barGap: "10%",
         barCategoryGap: "20%",
-        itemStyle: { color: g.color, borderRadius: [2, 2, 0, 0] },
+        itemStyle: barStyle(g.color, g.striped),
         data: members.map((bin) => bin[gi].length),
       })),
       {
@@ -643,24 +664,80 @@ export function buildOverlaidHistogram(groups: HistogramGroup[], axisName: strin
           silent: true,
           symbol: "none",
           data: groups.map((g, gi) => {
-            const mid = median(g.racers.map((r) => r.value));
+            const average = mean(g.racers.map((r) => r.value));
             return {
-              xAxis: mid,
-              lineStyle: { color: g.color, type: "dashed" as const, width: 2 },
+              xAxis: average,
+              lineStyle: { color: g.color, type: g.striped ? ("dotted" as const) : ("dashed" as const), width: 2 },
               label: {
                 show: true,
                 position: "end" as const,
-                formatter: `median ${mid.toFixed(2)}`,
+                formatter: `mean ${average.toFixed(2)}`,
                 color: readableOn(g.color, t),
                 fontSize: 11,
                 fontWeight: 700,
-                offset: [0, -gi * MEDIAN_LABEL_STEP],
+                offset: [0, -gi * MEAN_LABEL_STEP],
               },
             };
           }),
         },
       },
     ],
+  };
+}
+
+export interface OutcomeGroup {
+  label: string;
+  color: string;
+  /** Draws the group's bars striped. */
+  striped?: boolean;
+  racers: ProfileDTO[];
+}
+
+const OUTCOME_CATEGORIES = ["1st place", "2nd place", "Top 2", "Eliminated"];
+
+/** Grouped bars of how the racers' races end (mean share in %), one series per group. */
+export function buildGroupedOutcomeBars(groups: OutcomeGroup[], t: ChartTheme): EChartsOption {
+  const legendOf = (g: OutcomeGroup) => `${g.label} (${g.racers.length})`;
+  return {
+    ...base(t),
+    legend: {
+      top: 0,
+      itemWidth: 10,
+      itemHeight: 10,
+      data: groups.map((g) => ({ name: legendOf(g), textStyle: { color: readableOn(g.color, t), fontSize: 11 } })),
+    },
+    grid: { left: 6, right: 10, top: GROUPED_TOP, bottom: GROUPED_BOTTOM, containLabel: true },
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      confine: true,
+      backgroundColor: t.tooltipBg,
+      borderColor: t.tooltipBorder,
+      textStyle: { color: t.text, fontSize: 12 },
+      formatter: (params: { name: string; seriesName: string; value: number; color: string }[]) =>
+        [`<b>${params[0].name}</b>`, ...params.map((p) => `<span style="color:${p.color}">●</span> ${p.seriesName}: ${p.value.toFixed(1)}%`)].join("<br/>"),
+    },
+    xAxis: {
+      type: "category",
+      data: OUTCOME_CATEGORIES,
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: t.axisLine } },
+      axisLabel: { color: t.text, fontSize: 11 },
+    },
+    yAxis: {
+      type: "value",
+      axisLabel: { color: t.text, fontSize: 11, formatter: "{value}%" },
+      splitLine: { lineStyle: { color: t.gridLine } },
+    },
+    series: groups.map((g) => ({
+      type: "bar" as const,
+      name: legendOf(g),
+      barGap: "10%",
+      barCategoryGap: "30%",
+      itemStyle: barStyle(g.color, g.striped),
+      label: { show: true, position: "top", color: t.text, fontSize: 10, fontWeight: 700, formatter: (p: { value: number }) => `${p.value.toFixed(1)}%` },
+      data: outcomeMeans(g.racers),
+    })),
   };
 }
 

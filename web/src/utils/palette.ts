@@ -13,7 +13,10 @@ export const BRAND = {
 
 export const BRAND_LIST = [BRAND.blue, BRAND.pink, BRAND.gold, BRAND.green, BRAND.orange] as const;
 
-export const NEUTRAL = { silver: "#c8d0cc", slate: "#5c6560" } as const;
+/** Colours of the two game boxes: base game red, Second Wind green. */
+export const EDITION = { baseGame: "#DE3F2A", secondWind: "#359A51" } as const;
+
+export const NEUTRAL ={ silver: "#c8d0cc", slate: "#5c6560" } as const;
 
 /** Good and bad for heatmaps and gain/loss bars. Blue against magenta/red stays apart for every kind of colour blindness. */
 export const DIVERGING = {

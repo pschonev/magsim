@@ -1,11 +1,12 @@
-import { BRAND } from "../../utils/palette";
+const PINK = "#ffb3d2";
+const RED = "#d9210d";
 
 const RINGS = [
-  { r: 11, fill: BRAND.pink },
-  { r: 8.5, fill: BRAND.orange },
-  { r: 6, fill: BRAND.pink },
-  { r: 3.5, fill: BRAND.orange },
-  { r: 1.5, fill: BRAND.pink },
+  { r: 11, fill: RED },
+  { r: 8.5, fill: PINK },
+  { r: 6, fill: RED },
+  { r: 3.5, fill: PINK },
+  { r: 1.5, fill: RED },
 ] as const;
 
 const LABEL = "Second Wind expansion racer";
@@ -15,7 +16,7 @@ interface SecondWindBadgeProps {
   className?: string;
 }
 
-/** Concentric pink and orange rings, like the warp on the Second Wind box; marks an expansion racer. */
+/** Concentric red and light pink rings (strong contrast on both themes), like the warp on the Second Wind box; marks an expansion racer. */
 export function SecondWindBadge({ size = 14, className }: SecondWindBadgeProps) {
   return (
     <svg

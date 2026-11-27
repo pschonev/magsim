@@ -2,16 +2,20 @@ import { type ReactNode, useState } from "react";
 import { EChart } from "../../components/EChart";
 import type { AiCompareDTO, ExpansionEffectDTO, ProfileDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
-import { BRAND, CATEGORY } from "../../utils/palette";
+import { BRAND, CATEGORY, EDITION } from "../../utils/palette";
 import type { ChartTheme } from "../../utils/theme";
 import {
   type DivergingColors,
   type DivergingItem,
   type HistogramGroup,
+  type OutcomeGroup,
   type RacerValue,
   buildDivergingBars,
+  buildGroupedOutcomeBars,
   buildOverlaidHistogram,
+  mean,
   median,
+  outcomeMeans,
 } from "./charts/funFactCharts";
 import { Card } from "./FactCard";
 import { FilterScopeBadge } from "./FilterScopeBadge";
@@ -110,18 +114,21 @@ function RankedBarsCard({ title, caption, items, theme, colors, controls }: Rank
   );
 }
 
-type Measure = "avg_vp" | "speed";
+type Measure = "avg_vp" | "speed" | "triggers_per_turn";
+type Tab = Measure | "outcomes";
 
 const MEASURES: { key: Measure; label: string; axisName: string; summary: string }[] = [
   { key: "avg_vp", label: "VP", axisName: "average VP", summary: "VP" },
   { key: "speed", label: "Speed", axisName: "speed", summary: "speed" },
+  { key: "triggers_per_turn", label: "Triggers/turn", axisName: "ability triggers per turn", summary: "triggers per turn" },
 ];
-const BASE_COLOR = BRAND.blue;
-const SECOND_WIND_COLOR = BRAND.pink;
+const TABS: { key: Tab; label: string }[] = [...MEASURES, { key: "outcomes", label: "Outcomes" }];
+const BASE_COLOR = EDITION.baseGame;
+const SECOND_WIND_COLOR = EDITION.secondWind;
 const HISTOGRAM_HEIGHT = 230;
 
 const BASE_VS_SECOND_WIND_TIP =
-  "Each dot-sized bin counts racers by their average VP (or speed) over all simulated races, one data point per racer, so racers with many games do not dominate. Dashed lines are the medians. Based on the shipped results, not the filters.";
+  "Each bin counts racers by their average over all simulated races, one data point per racer, so racers with many games do not dominate. Dashed lines are the group means. Outcomes shows the mean share of each racer's races finished 1st, 2nd, in the top 2, or eliminated. Based on the shipped results, not the filters.";
 
 interface BaseVsSecondWindCardProps {
   profiles: ProfileDTO[];
@@ -129,35 +136,56 @@ interface BaseVsSecondWindCardProps {
   theme: ChartTheme;
 }
 
-/** Base-game racers against Second Wind racers: overlaid histograms of their average VP or speed. */
+/** Base-game racers against Second Wind racers: overlaid histograms of their average VP, speed or triggers, or grouped outcome bars. */
 function BaseVsSecondWindCard({ profiles, secondWind, theme }: BaseVsSecondWindCardProps) {
-  const [measure, setMeasure] = useState<Measure>("avg_vp");
-  const { axisName, summary } = MEASURES.find((m) => m.key === measure) ?? MEASURES[0];
-  const racersOf = (inSecondWind: boolean): RacerValue[] =>
-    profiles.filter((p) => secondWind.has(p.racer_name) === inSecondWind).map((p) => ({ name: p.racer_name, value: p[measure] }));
+  const [tab, setTab] = useState<Tab>("avg_vp");
+  const baseRacers = profiles.filter((p) => !secondWind.has(p.racer_name));
+  const secondWindRacers = profiles.filter((p) => secondWind.has(p.racer_name));
+  const tabs = (
+    <div role="group" aria-label="Measure" className="mb-2 flex gap-1">
+      {TABS.map(({ key, label }) => (
+        <button
+          key={key}
+          type="button"
+          aria-pressed={tab === key}
+          onClick={() => setTab(key)}
+          className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${tab === key ? "border-slate-500 bg-slate-800 text-slate-50" : "border-slate-700 text-slate-300 hover:text-slate-50"}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+  if (tab === "outcomes") {
+    const groups: OutcomeGroup[] = [
+      { label: "Base game", color: BASE_COLOR, racers: baseRacers },
+      { label: "Second Wind", color: SECOND_WIND_COLOR, striped: true, racers: secondWindRacers },
+    ];
+    const [baseTopTwo, secondWindTopTwo] = groups.map((g) => outcomeMeans(g.racers)[2]);
+    return (
+      <Card title="Base game vs Second Wind" caption={BASE_VS_SECOND_WIND_TIP}>
+        {tabs}
+        <EChart renderer="svg" height={HISTOGRAM_HEIGHT} option={buildGroupedOutcomeBars(groups, theme)} />
+        <p className="mt-1 text-[11px] text-slate-300">
+          Top 2: base {baseTopTwo.toFixed(1)} %, Second Wind {secondWindTopTwo.toFixed(1)} %
+        </p>
+      </Card>
+    );
+  }
+  const { axisName, summary } = MEASURES.find((m) => m.key === tab) ?? MEASURES[0];
+  const valuesOf = (racers: ProfileDTO[]): RacerValue[] => racers.map((p) => ({ name: p.racer_name, value: p[tab] }));
   const groups: HistogramGroup[] = [
-    { label: "Base game", color: BASE_COLOR, racers: racersOf(false) },
-    { label: "Second Wind", color: SECOND_WIND_COLOR, racers: racersOf(true) },
+    { label: "Base game", color: BASE_COLOR, racers: valuesOf(baseRacers) },
+    { label: "Second Wind", color: SECOND_WIND_COLOR, striped: true, racers: valuesOf(secondWindRacers) },
   ];
-  const [baseMedian, secondWindMedian] = groups.map((g) => median(g.racers.map((r) => r.value)));
+  const [baseValues, secondWindValues] = groups.map((g) => g.racers.map((r) => r.value));
   return (
     <Card title="Base game vs Second Wind" caption={BASE_VS_SECOND_WIND_TIP}>
-      <div role="group" aria-label="Measure" className="mb-2 flex gap-1">
-        {MEASURES.map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={measure === key}
-            onClick={() => setMeasure(key)}
-            className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${measure === key ? "border-slate-500 bg-slate-800 text-slate-50" : "border-slate-700 text-slate-300 hover:text-slate-50"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {tabs}
       <EChart renderer="svg" height={HISTOGRAM_HEIGHT} option={buildOverlaidHistogram(groups, axisName, theme)} />
       <p className="mt-1 text-[11px] text-slate-300">
-        Median {summary}: base {baseMedian.toFixed(2)}, Second Wind {secondWindMedian.toFixed(2)}
+        Mean {summary}: base {mean(baseValues).toFixed(2)}, Second Wind {mean(secondWindValues).toFixed(2)} (median {median(baseValues).toFixed(2)} /{" "}
+        {median(secondWindValues).toFixed(2)})
       </p>
     </Card>
   );
@@ -210,7 +238,7 @@ function ExpansionCard({ rows, colorOf, theme }: ExpansionCardProps) {
   );
 }
 
-/** True when the profiles hold racers of both groups, so both histograms and their medians exist. */
+/** True when the profiles hold racers of both groups, so both groups' histograms and means exist. */
 function hasBothGroups(profiles: ProfileDTO[] | null, secondWind: ReadonlySet<string>): profiles is ProfileDTO[] {
   if (profiles === null) return false;
   return profiles.some((p) => secondWind.has(p.racer_name)) && profiles.some((p) => !secondWind.has(p.racer_name));

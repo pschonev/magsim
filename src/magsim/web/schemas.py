@@ -239,12 +239,14 @@ class MushPairDTO(msgspec.Struct, frozen=True):
 
 
 class ProfileDTO(msgspec.Struct, frozen=True):
-    """One racer's performance, adjusted R squared per factor group and the percentile rank (0 to 1) of each among all racers."""
+    """One racer's performance (win, second-place and elimination rates as 0 to 1 shares), adjusted R squared per factor group and the percentile rank (0 to 1) of each among all racers."""
 
     racer_name: str
     races: int
     avg_vp: float
     win_rate: float
+    second_rate: float
+    eliminated_rate: float
     speed: float
     triggers_per_turn: float
     r2_players: float

@@ -199,6 +199,8 @@ export interface ProfileDTO {
   races: number;
   avg_vp: number;
   win_rate: number;
+  second_rate: number;
+  eliminated_rate: number;
   speed: number;
   triggers_per_turn: number;
   r2_players: number;
