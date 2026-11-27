@@ -16,8 +16,8 @@ interface Sort {
 const COLUMNS: { key: SortKey; label: string; numeric: boolean }[] = [
   { key: "pair", label: "Pair", numeric: false },
   { key: "games", label: "Races", numeric: true },
-  { key: "average_vp", label: "Average VP", numeric: true },
-  { key: "top2_rate", label: "Top 2 %", numeric: true },
+  { key: "average_vp", label: "Avg VP", numeric: true },
+  { key: "top2_rate", label: "Top 2", numeric: true },
 ];
 
 const pairLabel = (p: MushPairDTO) => `${displayName(p.first)} + ${displayName(p.second)}`;
@@ -152,7 +152,7 @@ export function MushTable({ pairs, textColorOf }: MushTableProps) {
                 </td>
                 <td className="px-2 py-1 text-right text-slate-200 tabular-nums">{p.average_vp.toFixed(2)}</td>
                 {hasTop2 && (
-                  <td className="px-2 py-1 text-right text-slate-200 tabular-nums">{p.top2_rate === null ? "–" : (p.top2_rate * 100).toFixed(1)}</td>
+                  <td className="px-2 py-1 text-right text-slate-200 tabular-nums">{p.top2_rate === null ? "–" : `${(p.top2_rate * 100).toFixed(1)}%`}</td>
                 )}
               </tr>
             ))}

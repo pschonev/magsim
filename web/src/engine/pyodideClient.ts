@@ -16,10 +16,12 @@ import type {
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (err: Error) => void;
+  onFiltered?: (raceCount: number) => void;
 }
 
 type WorkerInbound =
   | { type: "progress"; progress: BootProgress }
+  | { type: "filtered"; id: number; raceCount: number }
   | { type: "result"; id: number; data: unknown }
   | { type: "error"; id: number; error: string };
 
@@ -41,6 +43,10 @@ export class PyodideEngineClient implements EngineClient {
       }
       const entry = this.pending.get(msg.id);
       if (!entry) return;
+      if (msg.type === "filtered") {
+        entry.onFiltered?.(msg.raceCount);
+        return;
+      }
       this.pending.delete(msg.id);
       if (msg.type === "result") {
         entry.resolve(msg.data);
@@ -60,12 +66,14 @@ export class PyodideEngineClient implements EngineClient {
   private call<T>(
     payload: Record<string, unknown>,
     transfer?: Transferable[],
+    onFiltered?: (raceCount: number) => void,
   ): Promise<T> {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
       this.pending.set(id, {
         resolve: resolve as (value: unknown) => void,
         reject,
+        onFiltered,
       });
       if (transfer && transfer.length > 0) {
         this.worker.postMessage({ id, ...payload }, transfer);
@@ -101,8 +109,15 @@ export class PyodideEngineClient implements EngineClient {
     );
   }
 
-  runAnalysis(filter: AnalysisFilterDTO): Promise<DashboardAnalysisDTO> {
-    return this.call<DashboardAnalysisDTO>({ method: "runAnalysis", filter });
+  runAnalysis(
+    filter: AnalysisFilterDTO,
+    onFiltered?: (raceCount: number) => void,
+  ): Promise<DashboardAnalysisDTO> {
+    return this.call<DashboardAnalysisDTO>(
+      { method: "runAnalysis", filter },
+      undefined,
+      onFiltered,
+    );
   }
 
   queryRawTable(query: RawTableQueryDTO): Promise<RawTablePageDTO> {

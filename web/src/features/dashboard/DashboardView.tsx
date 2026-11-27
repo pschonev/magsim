@@ -1,6 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 import type { DashboardAnalysisDTO, DatasetMetaDTO, EngineClient } from "../../types/api";
 import { AnalysisPanel } from "./AnalysisPanel";
+import { AnalysisProgressBar } from "./AnalysisProgressBar";
 import { FilterPanel } from "./FilterPanel";
 import { useDashboard } from "./useDashboard";
 import { useProfiles } from "./useProfiles";
@@ -15,7 +16,7 @@ interface DashboardViewProps {
 
 export function DashboardView({ client, meta, initialAnalysis, bundled }: DashboardViewProps) {
   const profiles = useProfiles(bundled);
-  const { draft, setDraft, analysis, running, failure, isStale, run } = useDashboard(
+  const { draft, setDraft, analysis, running, expectedMs, failure, isStale, run } = useDashboard(
     client,
     meta,
     initialAnalysis,
@@ -34,6 +35,8 @@ export function DashboardView({ client, meta, initialAnalysis, bundled }: Dashbo
         analyzedCount={analysis && !message ? analysis.filtered_race_count : null}
       />
 
+      <AnalysisProgressBar running={running} expectedMs={expectedMs} />
+
       {message && (
         <div className="rounded-lg border border-rose-500/40 bg-rose-950/40 p-3 text-xs font-semibold text-rose-300">
           <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
@@ -42,9 +45,9 @@ export function DashboardView({ client, meta, initialAnalysis, bundled }: Dashbo
       )}
 
       {!message && analysis && (
-        <>
+        <div aria-busy={running} className={`transition-opacity duration-200 ${running ? "opacity-60" : ""}`}>
           <AnalysisPanel analysis={analysis} racerColors={meta.racer_colors} profiles={profiles} />
-        </>
+        </div>
       )}
 
       {!analysis && !message && (

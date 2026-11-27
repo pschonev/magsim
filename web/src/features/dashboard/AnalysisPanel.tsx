@@ -5,8 +5,6 @@ import {
   Footprints,
   Gem,
   Globe,
-  ChevronRight,
-  Info,
   Layers,
   Map as MapIcon,
   Share2,
@@ -20,9 +18,11 @@ import {
   Zap,
 } from "lucide-react";
 import { BRAND, readableText, textOn } from "../../utils/palette";
-import { type ComponentType, type CSSProperties, Fragment, type ReactNode, useState } from "react";
+import { type ComponentType, type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { DataTable } from "../../components/DataTable";
 import { EChart } from "../../components/EChart";
+import { InfoTip } from "../../components/InfoTip";
+import { ScrollFade } from "../../components/ScrollFade";
 import { Switch } from "../../components/Switch";
 import type { DashboardAnalysisDTO } from "../../types/api";
 import { useTheme } from "../../utils/ThemeProvider";
@@ -145,7 +145,7 @@ const SECTIONS: Section[] = [
       { id: "movement", label: "Movement", icon: Footprints },
       { id: "vp", label: "VP", icon: Gem },
       { id: "abilities", label: "Abilities", icon: Sparkles },
-      { id: "dynamics", label: "Dynamics", icon: Activity },
+      { id: "dynamics", label: "Race feel", icon: Activity },
     ],
   },
 ];
@@ -195,19 +195,75 @@ function TabButton({
   onSelect: () => void;
 }) {
   const Icon = spec.icon;
+  const ref = useRevealWhenActive(active);
   const activeClass = color ? "" : "bg-indigo-600 text-on-accent";
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onSelect}
+      aria-current={active ? "true" : undefined}
       style={active && color ? { backgroundColor: color, color: textOn(color) } : undefined}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 font-display text-xs whitespace-nowrap transition-colors ${
+      className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 font-display text-xs whitespace-nowrap transition-colors max-sm:min-h-9 pointer-coarse:min-h-9 ${
         active ? activeClass : "text-slate-400 hover:bg-slate-800 hover:text-slate-50"
       }`}
     >
       <Icon className={`h-3.5 w-3.5 ${active || color ? "" : "text-indigo-400"}`} style={!active && ink ? { color: ink } : undefined} />
       {spec.label}
     </button>
+  );
+}
+
+/** Scrolls a tab into view in its scrolling row when it becomes active. */
+function useRevealWhenActive(active: boolean) {
+  const ref = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (active) ref.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [active]);
+  return ref;
+}
+
+interface SubTabsProps {
+  section: Section;
+  view: string;
+  onSelect: (view: string) => void;
+  color?: string;
+  ink?: string;
+}
+
+function SubTab({ spec, active, color, ink, onSelect }: { spec: ViewSpec; active: boolean; color?: string; ink?: string; onSelect: () => void }) {
+  const ref = useRevealWhenActive(active);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onSelect}
+      aria-current={active ? "true" : undefined}
+      style={!active && ink ? { color: ink } : undefined}
+      className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-medium whitespace-nowrap transition-colors max-sm:min-h-9 pointer-coarse:min-h-9 ${
+        active ? "bg-slate-50 text-slate-950" : `${color ? "" : "text-indigo-300"} hover:bg-slate-50/10 hover:text-slate-50`
+      }`}
+    >
+      {spec.label}
+    </button>
+  );
+}
+
+/** The views of the active section, as a full-width scrolling row below the section tabs. */
+function SubTabs({ section, view, onSelect, color, ink }: SubTabsProps) {
+  return (
+    <div
+      className={`rounded-full border ${color ? "" : "border-indigo-400/60 bg-indigo-500/10"}`}
+      style={color ? { borderColor: `${color}99`, backgroundColor: `${color}1a` } : undefined}
+    >
+      <ScrollFade className="rounded-full" fadeFrom="from-slate-950" hideScrollbar>
+        <div className="flex w-max min-w-full items-center gap-0.5 p-0.5">
+          {section.views.map((spec) => (
+            <SubTab key={spec.id} spec={spec} active={spec.id === view} color={color} ink={ink} onSelect={() => onSelect(spec.id)} />
+          ))}
+        </div>
+      </ScrollFade>
+    </div>
   );
 }
 
@@ -225,13 +281,13 @@ function HeatmapLegend({ scale, legendFormat }: { scale: ColorScale; legendForma
   const stops = heatmapColors(theme);
   const gradient = `linear-gradient(90deg, ${stops.map((c, i) => `${c} ${(i / (stops.length - 1)) * 100}%`).join(", ")})`;
   return (
-    <div className="hidden items-center gap-2 text-[11px] text-slate-400 md:flex">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
       <span>≤ {legendFormat(-scale.strong)}</span>
       <div className="relative h-2.5 w-40 rounded-full" style={{ background: gradient }}>
         <span className="absolute -bottom-4 left-1/2 -translate-x-1/2">0</span>
       </div>
       <span>≥ {legendFormat(scale.strong)}</span>
-      <span className="ml-2 text-slate-500">grey: within ±{legendFormat(scale.neutral).replace("+", "")}</span>
+      <span className="text-slate-500 lg:ml-2">grey: within ±{legendFormat(scale.neutral).replace("+", "")}</span>
     </div>
   );
 }
@@ -246,38 +302,29 @@ function Heatmap({ axis, ys, cells, height, scale }: Omit<HeatmapProps, "legendF
     { ...RACER_DESCRIPTIONS, ...axis.descriptions },
   );
   return (
-    <div className="no-scrollbar overflow-x-auto">
-      <div style={{ minWidth: narrow ? axis.keys.length * NARROW_COLUMN_WIDTH + 100 : undefined }}>
-        <EChart
-          key={`${axis.keys.length}x${ys.length}${narrow}`}
-          height={height}
-          onChartReady={attach}
-          option={buildHeatmapOption(axis, ys, cells, theme, scale, narrow)}
-        />
-      </div>
+    <div className="space-y-1">
+      {narrow && <p className="text-[11px] text-slate-400">Scroll sideways for more columns →</p>}
+      <ScrollFade hideScrollbar>
+        <div style={{ minWidth: narrow ? axis.keys.length * NARROW_COLUMN_WIDTH + 100 : undefined }}>
+          <EChart
+            key={`${axis.keys.length}x${ys.length}${narrow}`}
+            height={height}
+            onChartReady={attach}
+            option={buildHeatmapOption(axis, ys, cells, theme, scale, narrow)}
+          />
+        </div>
+      </ScrollFade>
     </div>
   );
 }
 
 const swapCell = (cell: HeatmapCell): HeatmapCell => ({ ...cell, x: cell.y, y: cell.x });
 
-function InfoTip({ lines }: { lines: DescriptionLine[] }) {
+function ChartInfo({ lines }: { lines: DescriptionLine[] }) {
   return (
-    <span className="group relative inline-flex">
-      <button
-        type="button"
-        aria-label="About this chart"
-        className="rounded-full p-1 text-slate-400 hover:text-slate-50 focus:text-slate-50"
-      >
-        <Info className="h-4 w-4" />
-      </button>
-      <span
-        role="tooltip"
-        className="absolute top-full left-0 z-30 mt-1 hidden w-[28rem] max-w-[90vw] rounded-md border border-slate-700 bg-slate-900 p-3 text-left shadow-lg group-focus-within:block group-hover:block"
-      >
-        <Description lines={lines} />
-      </span>
-    </span>
+    <InfoTip label="About this chart">
+      <Description lines={lines} />
+    </InfoTip>
   );
 }
 
@@ -290,9 +337,9 @@ interface ViewToolbarProps {
 function ViewToolbar({ info, children, trailing }: ViewToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      {info.length > 0 && <InfoTip lines={info} />}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">{children}</div>
-      {trailing && <div className="ml-auto">{trailing}</div>}
+      {info.length > 0 && <ChartInfo lines={info} />}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 max-sm:gap-x-4">{children}</div>
+      {trailing && <div className="ml-auto max-lg:ml-0 max-lg:w-full">{trailing}</div>}
     </div>
   );
 }
@@ -335,45 +382,35 @@ export function AnalysisPanel({ analysis, racerColors, profiles }: AnalysisPanel
   const triggerScale = usePercent ? TRIGGER_SCALE : TRIGGER_COUNT_SCALE;
   const info = descriptionFor(view);
   const section = sectionOf(view);
+  const sectionColor = SECTION_COLORS[section.id];
+  const sectionInk = sectionColor ? readableText(sectionColor, theme.bg) : undefined;
   const legend = (scale: ColorScale, format: (v: number) => string) => (
     <HeatmapLegend scale={scale} legendFormat={format} />
   );
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-1 rounded-lg bg-slate-900 p-1">
-        {SECTIONS.map((sec) => {
-          const active = sec.id === section.id;
-          const color = SECTION_COLORS[sec.id];
-          const ink = color ? readableText(color, theme.bg) : undefined;
-          return (
-            <Fragment key={sec.id}>
-              <TabButton spec={sec} active={active} color={color} ink={ink} onSelect={() => setView(sec.views[0].id)} />
-              {active && sec.views.length > 1 && (
-                <div
-                  className={`flex flex-wrap items-center gap-0.5 rounded-full border py-0.5 pr-1 pl-2 ${color ? "" : "border-indigo-400/60 bg-indigo-500/10"}`}
-                  style={color ? { borderColor: `${color}99`, backgroundColor: `${color}1a` } : undefined}
-                >
-                  <ChevronRight className={`h-3.5 w-3.5 ${color ? "" : "text-indigo-300"}`} style={ink ? { color: ink } : undefined} />
-                  {sec.views.map((spec) => (
-                    <button
-                      key={spec.id}
-                      type="button"
-                      onClick={() => setView(spec.id)}
-                      style={spec.id !== view && ink ? { color: ink } : undefined}
-                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
-                        spec.id === view
-                          ? "bg-slate-50 text-slate-950"
-                          : `${color ? "" : "text-indigo-300"} hover:bg-slate-50/10 hover:text-slate-50`
-                      }`}
-                    >
-                      {spec.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </Fragment>
-          );
-        })}
+      <div className="space-y-1.5">
+        <ScrollFade className="rounded-lg bg-slate-900" fadeFrom="from-slate-900" hideScrollbar>
+          <div className="flex w-max min-w-full items-center gap-1 p-1">
+            {SECTIONS.map((sec) => {
+              const color = SECTION_COLORS[sec.id];
+              const ink = color ? readableText(color, theme.bg) : undefined;
+              return (
+                <TabButton
+                  key={sec.id}
+                  spec={sec}
+                  active={sec.id === section.id}
+                  color={color}
+                  ink={ink}
+                  onSelect={() => setView(sec.views[0].id)}
+                />
+              );
+            })}
+          </div>
+        </ScrollFade>
+        {section.views.length > 1 && (
+          <SubTabs section={section} view={view} onSelect={setView} color={sectionColor} ink={sectionInk} />
+        )}
       </div>
 
       {quadrant && (

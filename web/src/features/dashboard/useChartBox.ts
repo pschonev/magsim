@@ -12,21 +12,32 @@ const MIN_CHANGE = 4;
 
 const settle = (next: number) => (prev: number) => (prev !== 0 && Math.abs(prev - next) < MIN_CHANGE ? prev : next);
 
-/** The element's width in px, kept up to date; 0 until the first measurement. */
-export function useWidth(): { ref: RefObject<HTMLDivElement | null>; width: number } {
+/** The element's width and height in px, kept up to date; 0 until the first measurement. */
+export function useSize(): { ref: RefObject<HTMLDivElement | null>; width: number; height: number } {
   const ref = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
+  const [height, setHeight] = useState(0);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const measure = () => setWidth(settle(Math.floor(el.getBoundingClientRect().width)));
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      setWidth(settle(Math.floor(rect.width)));
+      setHeight(settle(Math.floor(rect.height)));
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
 
+  return { ref, width, height };
+}
+
+/** The element's width in px, kept up to date; 0 until the first measurement. */
+export function useWidth(): { ref: RefObject<HTMLDivElement | null>; width: number } {
+  const { ref, width } = useSize();
   return { ref, width };
 }
 

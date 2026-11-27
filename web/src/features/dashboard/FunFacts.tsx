@@ -1,15 +1,18 @@
 import type { CSSProperties, ReactNode } from "react";
 import { EChart, type EChartsOption } from "../../components/EChart";
 import { InfoTip } from "../../components/InfoTip";
-import type { DashboardAnalysisDTO } from "../../types/api";
+import type { DashboardAnalysisDTO, OutcomeShareDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
 import { useTheme } from "../../utils/ThemeProvider";
 import type { ChartTheme } from "../../utils/theme";
-import { BRAND, visibleMark } from "../../utils/palette";
+import { BRAND, textOn, visibleMark } from "../../utils/palette";
 import { readableOn } from "./charts/chartOptions";
+import { FilterScopeBadge } from "./FilterScopeBadge";
 import { MushTable } from "./MushTable";
+import { useSize, useWidth } from "./useChartBox";
 import {
   BADGE,
+  DONUT_COMPACT_WIDTH,
   MIN_PAIR_GAMES,
   type BarItem,
   type ColumnSeries,
@@ -22,7 +25,6 @@ import {
   buildGroupedColumns,
   buildPie,
   buildRoses,
-  buildSplitRows,
   faceEffectColumns,
   mushRoses,
   vpHistogram,
@@ -40,6 +42,11 @@ const PIPS: Record<number, [number, number][]> = {
 const SPAN: Record<1 | 2 | 3, string> = { 1: "", 2: "sm:col-span-2", 3: "sm:col-span-2 xl:col-span-3" };
 const DICE_TOTAL_CAP = 12;
 const EXTREME_COLUMNS: Record<number, string> = { 2: "2xl:grid-cols-2", 3: "2xl:grid-cols-3" };
+/** Every grid starts with one `minmax(0, 1fr)` track: an implicit auto track would grow to its widest chart and never shrink back. */
+const ONE_COLUMN = "grid-cols-[minmax(0,1fr)]";
+/** Smallest segment of a split bar that gets its percentage written inside, as a share of the whole bar. */
+const SPLIT_MIN_SHARE_FOR_TEXT = 0.06;
+const DONUT_HEIGHT = { roomy: 190, compact: 215 };
 /** Mush roses: `stacked` below 2xl (table underneath), `wide` from 2xl to fill the card beside the taller table. */
 const MUSH_ROSE_HEIGHT = { stacked: 260, wide: 310 };
 const COLLECTOR_ROSE_HEIGHT = 250;
@@ -67,12 +74,12 @@ const ORDER = {
   mush: "order-5 xl:order-5",
 };
 const MAGICAL_ATHLETE_FACES: Record<number, string> = {
-  1: "he moves 7.",
-  2: "the last place racer warps to him.",
-  3: "he warps to another racer and trips them.",
-  4: "he moves 4 and takes an extra turn.",
-  5: "the lead racer moves backwards 5.",
-  6: "he moves 6 and trips any racers he passes.",
+  1: "Moves 7.",
+  2: "The last place racer warps to him.",
+  3: "Warps to another racer and trips them.",
+  4: "Moves 4 and takes an extra turn.",
+  5: "The lead racer moves backwards 5.",
+  6: "Moves 6 and trips any racers he passes.",
 };
 
 interface CardProps {
@@ -83,12 +90,14 @@ interface CardProps {
   span?: 1 | 2 | 3;
   /** Extra grid placement classes. */
   placement?: string;
+  /** Shown after the title and info tip. */
+  badge?: ReactNode;
 }
 
-function Card({ title, caption, hint, children, span = 1, placement = "" }: CardProps) {
+function Card({ title, caption, hint, children, span = 1, placement = "", badge }: CardProps) {
   return (
-    <section className={`rounded-xl border border-slate-800 bg-slate-900 p-3 ${SPAN[span]} ${placement}`}>
-      <div className="mb-1.5 flex items-center gap-1.5">
+    <section className={`min-w-0 rounded-xl border border-slate-800 bg-slate-900 p-3 ${SPAN[span]} ${placement}`}>
+      <div className="mb-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
         <h3 className="font-display text-sm text-slate-50">{title}</h3>
         {(caption || hint) && (
           <InfoTip label={`More about ${title}`}>
@@ -96,6 +105,7 @@ function Card({ title, caption, hint, children, span = 1, placement = "" }: Card
             {hint && <p>{hint}</p>}
           </InfoTip>
         )}
+        {badge}
       </div>
       {children}
     </section>
@@ -105,7 +115,7 @@ function Card({ title, caption, hint, children, span = 1, placement = "" }: Card
 /** One rose with its title (in the section colour) and an info tip carrying the explanation. */
 function RoseCard({ section, height, theme }: { section: RoseSection; height: { stacked: number; wide: number }; theme: ChartTheme }) {
   return (
-    <div>
+    <div className="min-w-0">
       <div className="mb-1 flex h-5 items-center justify-center gap-1.5">
         <h4 className="text-[13px] font-bold" style={{ color: readableOn(section.color, theme) }}>
           {section.title}
@@ -116,18 +126,81 @@ function RoseCard({ section, height, theme }: { section: RoseSection; height: { 
           ))}
         </InfoTip>
       </div>
-      <WideAwareChart stacked={height.stacked} wide={height.wide} option={buildRoses([section], theme)} />
+      <WideAwareChart stacked={height.stacked} wide={height.wide} optionFor={(size) => buildRoses([section], theme, size.width, size.height)} />
     </div>
   );
 }
 
+interface ChartSize {
+  width: number;
+  height: number;
+}
+
+interface WideAwareChartProps {
+  stacked: number;
+  wide: number;
+  /** The option, given the chart's measured size in px (0 before the first measurement). */
+  optionFor: (size: ChartSize) => EChartsOption;
+}
+
 /** Chart whose height switches from `stacked` to `wide` px at the 2xl breakpoint. */
-function WideAwareChart({ stacked, wide, option }: { stacked: number; wide: number; option: EChartsOption }) {
+function WideAwareChart({ stacked, wide, optionFor }: WideAwareChartProps) {
   const heights = { "--h-stacked": `${stacked}px`, "--h-wide": `${wide}px` } as CSSProperties;
+  const { ref, width, height } = useSize();
   return (
-    <div className="h-[var(--h-stacked)] 2xl:h-[var(--h-wide)]" style={heights}>
-      <EChart renderer="svg" height="100%" option={option} />
+    <div ref={ref} className="h-[var(--h-stacked)] min-w-0 2xl:h-[var(--h-wide)]" style={heights}>
+      <EChart renderer="svg" height="100%" option={optionFor({ width, height })} />
     </div>
+  );
+}
+
+/** One donut per racer; below `DONUT_COMPACT_WIDTH` the shares sit inside the rings so neighbouring donuts never collide. */
+function OutcomeDonuts({ outcomes, colorOf, theme }: { outcomes: OutcomeShareDTO[]; colorOf: (racer: string) => string; theme: ChartTheme }) {
+  const { ref, width } = useWidth();
+  const compact = width > 0 && width < DONUT_COMPACT_WIDTH;
+  return (
+    <div ref={ref} className="min-w-0">
+      <EChart renderer="svg" height={compact ? DONUT_HEIGHT.compact : DONUT_HEIGHT.roomy} option={buildDonuts(outcomes, colorOf, theme, width)} />
+    </div>
+  );
+}
+
+/** One 100 % bar per row. The names of the segments sit in a legend under the bar, so no text can collide inside a short segment. */
+function SplitRows({ rows, theme }: { rows: SplitRow[]; theme: ChartTheme }) {
+  return (
+    <ul className="space-y-2.5">
+      {rows.map((row) => (
+        <li key={row.name} className="grid min-w-0 gap-x-3 gap-y-0.5 sm:grid-cols-[8rem_minmax(0,1fr)]">
+          <span className="text-xs font-bold sm:pt-1" style={{ color: row.color ? readableOn(row.color, theme) : theme.text }}>
+            {row.name}
+          </span>
+          <div className="min-w-0">
+            <div className="flex h-[26px] overflow-hidden rounded-sm">
+              {row.parts.map((p) => (
+                <div
+                  key={p.label || "spacer"}
+                  title={p.label ? `${p.label} ${Math.round(p.share * 100)}%` : undefined}
+                  className="flex min-w-0 items-center justify-center overflow-hidden text-[11px] font-extrabold whitespace-nowrap"
+                  style={{ width: `${p.share * 100}%`, backgroundColor: p.color, color: textOn(p.color) }}
+                >
+                  {p.label && p.share >= SPLIT_MIN_SHARE_FOR_TEXT ? `${Math.round(p.share * 100)}%` : ""}
+                </div>
+              ))}
+            </div>
+            <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-300">
+              {row.parts
+                .filter((p) => p.label)
+                .map((p) => (
+                  <li key={p.label} className="inline-flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: p.color }} />
+                    {p.share >= SPLIT_MIN_SHARE_FOR_TEXT ? p.label : `${p.label} ${Math.round(p.share * 100)}%`}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -189,7 +262,7 @@ function SharedDice({ series, theme }: { series: DiceSeries[]; theme: ChartTheme
           </span>
         ))}
       </div>
-      <div className="flex justify-around pt-1">
+      <div className="flex flex-wrap justify-around gap-x-2 gap-y-3 pt-1">
         {faces.map((face) => (
           <div key={face} className="flex flex-col items-center gap-1">
             <div className="flex h-28 items-end gap-0.5">
@@ -197,7 +270,7 @@ function SharedDice({ series, theme }: { series: DiceSeries[]; theme: ChartTheme
                 const share = shareOf(s, face);
                 return (
                   <div key={s.name} className="flex h-full flex-col items-center justify-end" title={tip(s, face)}>
-                    <span className="text-[10px] font-semibold text-slate-200">{share === 0 ? "" : (share * 100).toFixed(share < 0.1 ? 1 : 0)}</span>
+                    <span className="text-[10px] font-semibold text-slate-200">{share === 0 ? "" : pct(share)}</span>
                     <div className="flex w-3 flex-col overflow-hidden rounded-t" style={{ height: `${(share / top) * 85}%`, opacity: faded(i) }}>
                       <div style={{ flex: guessedOf(s, face), backgroundColor: s.color, opacity: 0.35 }} />
                       <div style={{ flex: 1 - guessedOf(s, face), backgroundColor: s.color }} />
@@ -256,14 +329,14 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
       { label: b, share: 1 - share, color: colors[1] },
     ] as SplitRow["parts"];
   if (facts.blunderdog_forward !== null) {
-    splits.push({ name: "Blunderdog's moves", color: colorOf("Blunderdog"), parts: both("forward", "back", [BADGE.blue, BADGE.pink])(facts.blunderdog_forward) });
+    splits.push({ name: "Blunderdog's moves", color: colorOf("Blunderdog"), parts: both("Forward", "Back",[BADGE.blue, BADGE.pink])(facts.blunderdog_forward) });
   }
   if (facts.diva_forward !== null) {
-    splits.push({ name: "Diva's swaps", color: colorOf("Diva"), parts: both("forward", "back", [BADGE.blue, BADGE.pink])(facts.diva_forward) });
+    splits.push({ name: "Diva's swaps", color: colorOf("Diva"), parts: both("Forward", "Back",[BADGE.blue, BADGE.pink])(facts.diva_forward) });
   }
   if (facts.hog_for_himself !== null && facts.hog_for_others !== null && facts.hog_for_himself + facts.hog_for_others > 0) {
     const share = facts.hog_for_himself / (facts.hog_for_himself + facts.hog_for_others);
-    splits.push({ name: "Hog Knight's hog", color: colorOf("HogKnight"), parts: both("for him", "for others", [BADGE.gold, BADGE.blue])(share) });
+    splits.push({ name: "Hog Knight's hog", color: colorOf("HogKnight"), parts: both("For Hog Knight", "For others", [BADGE.gold, BADGE.blue])(share) });
   }
   const stepkidGames = specific.stepkid_wins.reduce((sum, r) => sum + r.games, 0);
   if (stepkidGames > 0) {
@@ -271,14 +344,13 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
       specific.stepkid_wins.reduce((sum, r) => sum + pick(r) * r.games, 0) / stepkidGames;
     const behind = weighted((r) => r.win_rate);
     const overall = weighted((r) => r.usual_win_rate);
-    const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
     splits.push({
       name: "Stepdad support",
       color: colorOf("Stepdad"),
       parts: [
-        { label: "his stepkids winrate", share: behind, color: BADGE.gold, text: `his stepkids winrate ${pct(behind)}` },
-        { label: "", share: Math.max(0, 1 - behind - overall), color: theme.gridLine, text: "" },
-        { label: "others", share: overall, color: BADGE.blue, text: `others ${pct(overall)}` },
+        { label: "Stepkids' win rate", share: behind, color: BADGE.gold },
+        { label: "", share: Math.max(0, 1 - behind - overall), color: theme.gridLine },
+        { label: "Their usual win rate", share: overall, color: BADGE.blue },
       ],
     });
   }
@@ -288,9 +360,9 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
       <Card
         key="split"
         title="Split decisions"
-        hint={`Last place counts ties, so a typical racer starts ${baseline} of its turns there. Stepdad: how often the racer playing right after him wins, compared with how often that same racer wins in general.`}
+        hint={`Last place counts ties, so a typical racer starts ${baseline} of its turns there. Stepdad: how often the racer playing right after Stepdad wins, compared with how often that same racer wins in general.`}
       >
-        <EChart renderer="svg" height={splits.length * 40 + 12} option={buildSplitRows(splits, theme)} />
+        <SplitRows rows={splits} theme={theme} />
       </Card>,
     );
   }
@@ -298,7 +370,7 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   if (facts.outcomes.length > 0) {
     cards.push(
       <Card key="out" title="How their races end">
-        <EChart renderer="svg" height={190} option={buildDonuts(facts.outcomes, colorOf, theme)} />
+        <OutcomeDonuts outcomes={facts.outcomes} colorOf={colorOf} theme={theme} />
       </Card>,
     );
   }
@@ -362,12 +434,12 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     .filter((r) => collected.has(r.name) && r.items.length > 0)
     .map((r) => {
       const c = collected.get(r.name);
-      return { ...r, color: colorOf(r.name), caption: `${(c?.per_race ?? 0).toFixed(2)} ${verbs[r.name]} per race\nnobody in ${((c?.no_one ?? 0) * 100).toFixed(0)}% of races` };
+      return { ...r, color: colorOf(r.name), caption: `${(c?.per_race ?? 0).toFixed(2)} ${verbs[r.name]} per race\nNobody in ${((c?.no_one ?? 0) * 100).toFixed(0)}% of races` };
     });
   if (roses.length > 0) {
     bottom.push(
       <Card key="collectors" span={2} placement={ORDER.collectors} title="Collectors" hint="Hotel: stops on Hotel's space per game. Mouth and Bite Mark: share of the games with the victim in which they ate it (Bite Mark's transformation is not counted as a meal).">
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className={`grid ${ONE_COLUMN} gap-2 md:grid-cols-3`}>
           {roses.map((r) => (
             <RoseCard key={r.name} section={r} height={{ stacked: COLLECTOR_ROSE_HEIGHT, wide: COLLECTOR_ROSE_HEIGHT }} theme={theme} />
           ))}
@@ -408,9 +480,9 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
         caption="VP change of the racer, net of what the opponent, board or card does to every racer."
         hint="Only clear effects count: at least 4 standard errors away from zero, with 100 or more games."
       >
-        <div className={`grid gap-2 ${EXTREME_COLUMNS[extremeSets.length] ?? ""}`}>
+        <div className={`grid ${ONE_COLUMN} gap-2 ${EXTREME_COLUMNS[extremeSets.length] ?? ""}`}>
           {extremeSets.map((c) => (
-            <div key={c.kind}>
+            <div key={c.kind} className="min-w-0">
               <p className="text-xs font-semibold text-slate-200">{c.title}</p>
               <EChart renderer="svg" height={c.items.length * 28 + 4} option={buildDivergingBars(c.items, theme)} />
             </div>
@@ -438,39 +510,41 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
     const barOptions = { compact: true, labelWidth: MIND_LABEL_WIDTH, labelRoom: MIND_NOTE_ROOM };
     const wideListHeight = calls.length * MIND_BAR_ROW.wide + 2 * (MIND_CAPTION_ROW + MIND_BAR_PADDING);
     bottom.push(
-      <Card key="mind" placement={ORDER.mind} title="Mastermind" hint="His prediction is right when the racer he predicted wins the race.">
-        <div className="grid gap-2 2xl:grid-cols-2">
-          <div>
+      <Card key="mind" placement={ORDER.mind} title="Mastermind" hint="Mastermind's prediction is right when the racer he predicted wins the race.">
+        <div className={`grid ${ONE_COLUMN} gap-2 2xl:grid-cols-2`}>
+          <div className="min-w-0">
             {calls.length > 0 && (
               <>
-                <p className="text-[11px] text-slate-400">the racer he predicted won this often</p>
+                <p className="text-[11px] text-slate-400">Mastermind&apos;s pick won this often</p>
                 <WideAwareChart
                   stacked={best.length * MIND_BAR_ROW.stacked + MIND_BAR_PADDING}
                   wide={best.length * MIND_BAR_ROW.wide + MIND_BAR_PADDING}
-                  option={buildBars(callBars(best), theme, percent0, barOptions)}
+                  optionFor={() => buildBars(callBars(best), theme, percent0, barOptions)}
                 />
-                <p className="text-[11px] text-slate-400">…and this rarely</p>
+                <p className="text-[11px] text-slate-400">… and this rarely</p>
                 <WideAwareChart
                   stacked={worst.length * MIND_BAR_ROW.stacked + MIND_BAR_PADDING}
                   wide={worst.length * MIND_BAR_ROW.wide + MIND_BAR_PADDING}
-                  option={buildBars(callBars(worst), theme, percent0, barOptions)}
+                  optionFor={() => buildBars(callBars(worst), theme, percent0, barOptions)}
                 />
               </>
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <WideAwareChart
               stacked={MIND_DONUT_HEIGHT.stacked}
               wide={Math.max(MIND_DONUT_HEIGHT.wide, wideListHeight)}
-              option={buildPie(
-                [
-                  { name: "1st", value: facts.mastermind_first, color: BADGE.gold },
-                  { name: "2nd, predicted", value: facts.mastermind_second_predicted, color: BADGE.silver },
-                  { name: "2nd, natural", value: facts.mastermind_second, color: BADGE.blue },
-                  { name: "other", value: rest, color: colorOf("Mastermind") },
-                ],
-                theme,
-              )}
+              optionFor={() =>
+                buildPie(
+                  [
+                    { name: "1st", value: facts.mastermind_first ?? 0, color: BADGE.gold },
+                    { name: "2nd, predicted", value: facts.mastermind_second_predicted ?? 0, color: BADGE.silver },
+                    { name: "2nd, natural", value: facts.mastermind_second ?? 0, color: BADGE.blue },
+                    { name: "Other", value: rest, color: colorOf("Mastermind") },
+                  ],
+                  theme,
+                )
+              }
             />
           </div>
         </div>
@@ -481,14 +555,16 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   if (facts.mush_table.length > 0) {
     const textColorOf = (name: string) => readableOn(colorOf(name), theme);
     bottom.push(
-      <Card key="mush" span={3} placement={ORDER.mush} title="Mush picks without repeat" hint={`Pairs of powers he drew in the same race, from all his games whatever the filters say. Only pairs with at least ${MIN_PAIR_GAMES} races are ranked in the charts, and each power appears at most once per chart. The table lists every pair.`}>
-        <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_26rem]">
-          <div className="grid gap-2 md:grid-cols-3">
+      <Card key="mush" span={3} placement={ORDER.mush} title="Mush picks without repeat" badge={<FilterScopeBadge />} hint={`Pairs of powers Mush drew in the same race, from all of Mush's games whatever the filters say. Only pairs with at least ${MIN_PAIR_GAMES} races are ranked in the charts, and each power appears at most once per chart. The table lists every pair.`}>
+        <div className={`grid ${ONE_COLUMN} gap-3 2xl:grid-cols-[minmax(0,1fr)_26rem]`}>
+          <div className={`grid ${ONE_COLUMN} gap-2 md:grid-cols-3`}>
             {mushRoses(facts.mush_table, colorOf).map((r) => (
               <RoseCard key={r.name} section={r} height={MUSH_ROSE_HEIGHT} theme={theme} />
             ))}
           </div>
-          <MushTable pairs={facts.mush_table} textColorOf={textColorOf} />
+          <div className="min-w-0">
+            <MushTable pairs={facts.mush_table} textColorOf={textColorOf} />
+          </div>
         </div>
       </Card>,
     );
@@ -503,5 +579,5 @@ export function FunFacts({ analysis, racerColors }: { analysis: DashboardAnalysi
   }
 
   if (cards.length === 0) return <p className="text-xs text-slate-400">No facts for this filter.</p>;
-  return <div className="grid grid-flow-dense gap-3 sm:grid-cols-2 xl:grid-cols-3">{cards}</div>;
+  return <div className={`grid ${ONE_COLUMN} grid-flow-dense gap-3 sm:grid-cols-2 xl:grid-cols-3`}>{cards}</div>;
 }

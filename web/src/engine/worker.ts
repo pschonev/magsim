@@ -48,6 +48,7 @@ type WorkerRequest =
 
 type WorkerResponse =
   | { type: "progress"; progress: BootProgress }
+  | { type: "filtered"; id: number; raceCount: number }
   | { type: "result"; id: number; data: unknown }
   | { type: "error"; id: number; error: string };
 
@@ -279,12 +280,20 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
           req.format,
         );
         break;
-      case "runAnalysis":
-        data = callPyJson<DashboardAnalysisDTO>(
-          "analyze_dashboard",
+      case "runAnalysis": {
+        const raceCount = callPyJson<number>(
+          "filter_dashboard",
           JSON.stringify(req.filter),
         );
+        const filtered: WorkerResponse = {
+          type: "filtered",
+          id: req.id,
+          raceCount,
+        };
+        self.postMessage(filtered);
+        data = callPyJson<DashboardAnalysisDTO>("analyze_filtered");
         break;
+      }
       case "queryRawTable":
         data = callPyJson<RawTablePageDTO>(
           "query_raw_table",

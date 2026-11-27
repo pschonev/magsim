@@ -5,6 +5,7 @@ import type {
   DatasetMetaDTO,
   EngineClient,
 } from "../../types/api";
+import { estimateAnalysisMs, rememberAnalysisTiming } from "./analysisTiming";
 import { defaultFilter, filtersEqual } from "./filters";
 
 export interface DashboardState {
@@ -12,6 +13,8 @@ export interface DashboardState {
   setDraft: (next: AnalysisFilterDTO) => void;
   analysis: DashboardAnalysisDTO | null;
   running: boolean;
+  /** Estimated duration of the current or next analysis, for the progress bar. */
+  expectedMs: number;
   failure: string | null;
   isStale: boolean;
   run: () => void;
@@ -33,15 +36,25 @@ export function useDashboard(
   const [analysis, setAnalysis] = useState<DashboardAnalysisDTO | null>(seed);
   const [running, setRunning] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [expectedMs, setExpectedMs] = useState(() => estimateAnalysisMs(seed?.filtered_race_count ?? meta.race_count));
   const latestRun = useRef(0);
+  const lastRaceCount = useRef<number | null>(seed?.filtered_race_count ?? null);
 
   const runWith = useCallback(
     async (filter: AnalysisFilterDTO) => {
       const runId = ++latestRun.current;
+      const started = performance.now();
+      setExpectedMs(estimateAnalysisMs(lastRaceCount.current ?? meta.race_count));
       setRunning(true);
       try {
-        const result = await client.runAnalysis(filter);
+        const result = await client.runAnalysis(filter, (races) => {
+          if (runId === latestRun.current) setExpectedMs(estimateAnalysisMs(races));
+        });
         if (runId !== latestRun.current) return;
+        if (!result.error) {
+          rememberAnalysisTiming(performance.now() - started, result.filtered_race_count);
+          lastRaceCount.current = result.filtered_race_count;
+        }
         setApplied(filter);
         setAnalysis(result);
         setFailure(null);
@@ -51,7 +64,7 @@ export function useDashboard(
         if (runId === latestRun.current) setRunning(false);
       }
     },
-    [client],
+    [client, meta],
   );
 
   useEffect(() => {
@@ -69,6 +82,7 @@ export function useDashboard(
     setDraft,
     analysis,
     running,
+    expectedMs,
     failure,
     isStale: applied !== null && !filtersEqual(draft, applied),
     run: () => void runWith(draft),

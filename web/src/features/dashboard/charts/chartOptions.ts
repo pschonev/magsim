@@ -8,7 +8,8 @@ import type {
   TriggerInductionCellDTO,
   ValueShareDTO,
 } from "../../../types/api";
-import { type ECharts, graphic } from "echarts/core";
+import { type ECharts, format, graphic } from "echarts/core";
+import { CHART_FONT } from "../../../utils/chartFont";
 import { CATEGORY, DIVERGING, SERIES, readableText, visibleMark } from "../../../utils/palette";
 import type { ChartTheme } from "../../../utils/theme";
 import { rankTransform } from "./rank";
@@ -61,6 +62,8 @@ export const signedPercent = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toF
 export const signedWholePercent = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(0)}%`;
 export const wholePercent = (v: number) => `${(v * 100).toFixed(0)}%`;
 export const percent = (v: number) => `${(v * 100).toFixed(1)}%`;
+/** Axis tick as a percentage with at most one decimal and no trailing zero (2.5%, 4%). */
+export const axisPercent = (v: number) => `${Number((v * 100).toFixed(1))}%`;
 
 export interface QuadrantRow {
   racer_name: string;
@@ -78,6 +81,9 @@ export interface QuadrantSpec<R extends QuadrantRow> {
   yKey: keyof R;
   xTitle: string;
   yTitle: string;
+  /** Shorter axis titles for narrow charts, where the long ones would crowd the plot. */
+  xTitleShort?: string;
+  yTitleShort?: string;
   quadLabels: [string, string, string, string];
   reverseX?: boolean;
   zeroCenter?: boolean;
@@ -165,6 +171,22 @@ function leastSquares(xs: number[], ys: number[]): { slope: number; intercept: n
   return { slope, intercept: my - slope * mx };
 }
 
+/** Share of the plot a quadrant name sits in from the corner. */
+const QUADRANT_INSET = 0.02;
+/** Racer names kept on the map when the rest are hidden or crowded: the points furthest from the centre. */
+const EXTREME_LABELS = 8;
+/**
+ * `hideOverlap` keeps the label of the host with the biggest symbol (ties: first drawn), so the symbol sizes rank the
+ * names: corner names (24) over the extreme racers' names (22) over all other racers' names (18).
+ */
+const EXTREME_TWIN_SIZE = 22;
+const QUADRANT_NAME_SIZE = 24;
+/** Extra px around each racer name ([vertical, horizontal]) that other names must keep clear of. */
+const LABEL_GAP = [4, 8];
+/** Chart widths in px (maxWidth of the media queries) below which only the extreme names show / the axis titles shrink. */
+const PHONE_CHART_WIDTH = 499;
+const NARROW_CHART_WIDTH = 640;
+
 export function buildQuadrantOption<R extends QuadrantRow>(
   allRows: R[],
   spec: QuadrantSpec<R>,
@@ -196,8 +218,8 @@ export function buildQuadrantOption<R extends QuadrantRow>(
   const midY = ranked ? 0.5 : pickMid(spec.midY, ys, absY.mid);
   const trend = spec.trendLine && !ranked && rows.length > 2 ? leastSquares(xs, ys) : null;
 
-  const padX = (domX[1] - domX[0]) * 0.05;
-  const padY = (domY[1] - domY[0]) * 0.05;
+  const padX = (domX[1] - domX[0]) * QUADRANT_INSET;
+  const padY = (domY[1] - domY[0]) * QUADRANT_INSET;
   const left = spec.reverseX ? domX[1] - padX : domX[0] + padX;
   const right = spec.reverseX ? domX[0] + padX : domX[1] - padX;
   const top = domY[1] - padY;
@@ -205,100 +227,148 @@ export function buildQuadrantOption<R extends QuadrantRow>(
   const [tl, tr, bl, br] = spec.quadLabels;
   const quadrant = (x: number, y: number, text: string, position: "right" | "left", dy: number) => ({
     value: [x, y],
-    label: {
-      show: true,
-      formatter: text,
-      position,
-      offset: [0, dy],
-      color: t.text,
-      opacity: 0.6,
-      fontWeight: "bold" as const,
-      fontSize: 14,
-    },
+    label: { formatter: text, position, offset: [0, dy] },
   });
 
+  const spanX = domX[1] - domX[0];
+  const spanY = domY[1] - domY[0];
+  const fromCentre = (i: number) => Math.hypot((px[i] - midX) / spanX, (py[i] - midY) / spanY);
+  const extremes = rows
+    .map((_, i) => i)
+    .sort((a, b) => fromCentre(b) - fromCentre(a))
+    .slice(0, EXTREME_LABELS);
+  const isExtreme = new Set(extremes);
+  /** Series-level name style; `show` here is what the phone media query switches off. A data item sets only its own colour and text. */
+  const racerLabelStyle = {
+    show: true,
+    position: "top" as const,
+    fontSize: 13,
+    fontWeight: 700,
+    textBorderColor: t.bg,
+    textBorderWidth: 3,
+    // Padding covers the full text height; `textMargin` ([vertical, horizontal]) grows the box `hideOverlap` tests, so names keep a visible gap.
+    padding: [2, 6],
+    textMargin: LABEL_GAP,
+  };
+  const racerLabelOf = (r: R) => ({ color: readableOn(r.color, t), formatter: displayName(r.racer_name) });
+  const narrowTitles = {
+    xAxis: { name: spec.xTitleShort ?? spec.xTitle },
+    yAxis: { name: spec.yTitleShort ?? spec.yTitle },
+    grid: { left: 56, right: 16, bottom: 60 },
+  };
+
   return {
-    backgroundColor: t.bg,
-    animation: false,
-    grid: { left: 70, right: 30, top: 30, bottom: 70 },
-    xAxis: valueAxis(spec.xTitle, domX, spec.reverseX === true, ranked, ranked ? rankX : null, t, spec.xFormat),
-    yAxis: valueAxis(spec.yTitle, domY, false, ranked, ranked ? rankY : null, t, spec.yFormat),
-    dataZoom: [
-      { type: "inside", xAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseWheel: false, filterMode: "none" },
-      { type: "inside", yAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseWheel: false, filterMode: "none" },
-    ],
-    tooltip: {
-      trigger: "item",
-      backgroundColor: t.tooltipBg,
-      borderColor: t.tooltipBorder,
-      textStyle: baseText,
-      extraCssText: "max-width: 340px; white-space: normal;",
-      formatter: (params: { seriesIndex: number; dataIndex: number }) => {
-        if (params.seriesIndex !== 0) return "";
-        const row = rows[params.dataIndex];
-        const lines = [
-          `<b>${displayName(row.racer_name)}</b>`,
-          ...(racerBlurb(row.racer_name) ? [`<i>${racerBlurb(row.racer_name)?.split(" — ")[1]}</i>`] : []),
-          `${spec.xTitle}: ${(spec.xFormat ?? fixed(2))(row[spec.xKey] as number)}`,
-          `${spec.yTitle}: ${(spec.yFormat ?? fixed(2))(row[spec.yKey] as number)}`,
-          ...(spec.extra ?? []).map((e) => `${e.label}: ${e.format(row[e.key] as number)}`),
-        ];
-        return lines.join("<br/>");
-      },
-    },
-    series: [
-      {
-        type: "scatter",
-        symbolSize: 18,
-        z: 3,
-        data: rows.map((r, i) => ({
-          name: r.racer_name,
-          value: [px[i], py[i]],
-          itemStyle: { color: markOn(r.color, t), opacity: 0.9 },
-          label: {
-            show: true,
-            formatter: displayName(r.racer_name),
-            position: "top",
-            color: readableOn(r.color, t),
-            fontSize: 13,
-            fontWeight: 700,
-            textBorderColor: t.bg,
-            textBorderWidth: 3,
-          },
-        })),
-        markLine: {
-          silent: true,
-          symbol: "none",
-          label: { show: false },
-          lineStyle: { type: "dashed", color: t.reference },
-          data: [{ xAxis: midX }, { yAxis: midY }],
+    baseOption: {
+      backgroundColor: t.bg,
+      animation: false,
+      grid: { left: 70, right: 30, top: 30, bottom: 70 },
+      xAxis: valueAxis(spec.xTitle, domX, spec.reverseX === true, ranked, ranked ? rankX : null, t, spec.xFormat),
+      yAxis: valueAxis(spec.yTitle, domY, false, ranked, ranked ? rankY : null, t, spec.yFormat),
+      dataZoom: [
+        { type: "inside", xAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseWheel: false, filterMode: "none" },
+        { type: "inside", yAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseWheel: false, filterMode: "none" },
+      ],
+      tooltip: {
+        trigger: "item",
+        backgroundColor: t.tooltipBg,
+        borderColor: t.tooltipBorder,
+        textStyle: baseText,
+        extraCssText: "max-width: 340px; white-space: normal;",
+        formatter: (params: { seriesIndex: number; dataIndex: number }) => {
+          if (params.seriesIndex !== 0) return "";
+          const row = rows[params.dataIndex];
+          const lines = [
+            `<b>${displayName(row.racer_name)}</b>`,
+            ...(racerBlurb(row.racer_name) ? [`<i>${racerBlurb(row.racer_name)?.split(" — ")[1]}</i>`] : []),
+            `${spec.xTitle}: ${(spec.xFormat ?? fixed(2))(row[spec.xKey] as number)}`,
+            `${spec.yTitle}: ${(spec.yFormat ?? fixed(2))(row[spec.yKey] as number)}`,
+            ...(spec.extra ?? []).map((e) => `${e.label}: ${e.format(row[e.key] as number)}`),
+          ];
+          return lines.join("<br/>");
         },
       },
-      ...(trend
-        ? [
-            {
-              type: "line" as const,
-              silent: true,
-              showSymbol: false,
-              z: 2,
-              tooltip: { show: false },
-              lineStyle: { color: t.accent, width: 2, opacity: 0.8 },
-              data: [domX[0], domX[1]].map((x) => [x, trend.intercept + trend.slope * x]),
-            },
-          ]
-        : []),
+      series: [
+        {
+          type: "scatter",
+          symbolSize: 18,
+          z: 3,
+          data: rows.map((r, i) => ({
+            name: r.racer_name,
+            value: [px[i], py[i]],
+            itemStyle: { color: markOn(r.color, t), opacity: 0.9 },
+            label: isExtreme.has(i) ? { show: false } : racerLabelOf(r),
+          })),
+          label: racerLabelStyle,
+          labelLayout: { hideOverlap: true },
+          markLine: {
+            silent: true,
+            symbol: "none",
+            label: { show: false },
+            lineStyle: { type: "dashed", color: t.reference },
+            data: [{ xAxis: midX }, { yAxis: midY }],
+          },
+        },
+        {
+          // Invisible twin of the most extreme points: their names win over crowded neighbours and stay on phones.
+          type: "scatter",
+          symbolSize: EXTREME_TWIN_SIZE,
+          z: 4,
+          silent: true,
+          tooltip: { show: false },
+          itemStyle: { color: "transparent" },
+          data: extremes.map((i) => ({ value: [px[i], py[i]], label: racerLabelOf(rows[i]) })),
+          label: racerLabelStyle,
+          labelLayout: { hideOverlap: true },
+        },
+        ...(trend
+          ? [
+              {
+                type: "line" as const,
+                silent: true,
+                showSymbol: false,
+                z: 2,
+                tooltip: { show: false },
+                lineStyle: { color: t.accent, width: 2, opacity: 0.8 },
+                data: [domX[0], domX[1]].map((x) => [x, trend.intercept + trend.slope * x]),
+              },
+            ]
+          : []),
+        {
+          // Invisible symbols just big enough to rank the corner names above every racer name in the overlap check.
+          type: "scatter",
+          symbolSize: QUADRANT_NAME_SIZE,
+          z: 6,
+          silent: true,
+          tooltip: { show: false },
+          itemStyle: { color: "transparent" },
+          labelLayout: { hideOverlap: true },
+          label: {
+            show: true,
+            color: t.text,
+            backgroundColor: t.bg,
+            borderColor: t.axisLine,
+            borderWidth: 1,
+            borderRadius: 4,
+            padding: [2, 6],
+            opacity: 0.85,
+            fontWeight: "bold",
+            fontSize: 14,
+          },
+          data: [
+            quadrant(left, top, tl, "right", 12),
+            quadrant(right, top, tr, "left", 12),
+            quadrant(left, bottom, bl, "right", -12),
+            quadrant(right, bottom, br, "left", -12),
+          ],
+        },
+      ],
+    },
+    media: [
       {
-        type: "scatter",
-        symbolSize: 0,
-        silent: true,
-        tooltip: { show: false },
-        data: [
-          quadrant(left, top, tl, "right", 10),
-          quadrant(right, top, tr, "left", 10),
-          quadrant(left, bottom, bl, "right", -10),
-          quadrant(right, bottom, br, "left", -10),
-        ],
+        query: { maxWidth: PHONE_CHART_WIDTH },
+        option: { series: [{ label: { show: false }, labelLayout: { hideOverlap: true } }] },
       },
+      { query: { maxWidth: NARROW_CHART_WIDTH }, option: narrowTitles },
     ],
   };
 }
@@ -455,9 +525,9 @@ export interface GlobalMetric {
 export const GLOBAL_METRICS_A: readonly GlobalMetric[] = [
   { key: "avg_vp", label: "Avg VP" },
   { key: "avg_turns", label: "Avg Turns" },
-  { key: "tightness", label: "Tightness" },
+  { key: "tightness", label: "Spread" },
   { key: "volatility", label: "Volatility" },
-  { key: "trip_rate", label: "Trip Rate" },
+  { key: "trip_rate", label: "Trip Rate", share: true },
 ];
 
 export const GLOBAL_METRICS_B: readonly GlobalMetric[] = [
@@ -472,31 +542,46 @@ export function sortedCounts(rows: GlobalDynamicsRowDTO[]): number[] {
   return [...new Set(rows.map((r) => r.racer_count))].sort((a, b) => a - b);
 }
 
+const BAR_GRID_LEFT = 55;
+const BAR_GRID_RIGHT = 10;
+/** Board names get two lines until a category is narrower than this many px; then they are tilted on one line. */
+const MIN_UPRIGHT_SLOT = 42;
+const TILT_DEGREES = 35;
+
+/** `width` is the chart's width in px (0 while unknown); it decides whether the board names are tilted. */
 export function buildGroupedBarOption(
   rows: GlobalDynamicsRowDTO[],
   key: keyof GlobalDynamicsRowDTO,
   label: string,
   t: ChartTheme,
   share = false,
+  width = 0,
 ): EChartsOption {
   const baseText = { color: t.text };
   const boards = sortBoards(rows.map((r) => r.board));
   const counts = sortedCounts(rows);
+  const tilted = width > 0 && (width - BAR_GRID_LEFT - BAR_GRID_RIGHT) / boards.length < MIN_UPRIGHT_SLOT;
   return {
     backgroundColor: t.bg,
     animation: false,
     title: { text: label, left: "center", textStyle: { ...baseText, fontSize: 13 } },
-    grid: { left: 55, right: 10, top: 40, bottom: 40 },
+    grid: { left: BAR_GRID_LEFT, right: BAR_GRID_RIGHT, top: 40, bottom: tilted ? 58 : 40 },
     xAxis: {
       type: "category",
       data: boards,
-      axisLabel: { ...baseText, interval: 0, fontSize: 10, formatter: (v: string) => shortBoard(v).replace(" ", "\n") },
+      axisLabel: {
+        ...baseText,
+        interval: 0,
+        fontSize: 10,
+        rotate: tilted ? TILT_DEGREES : 0,
+        formatter: (v: string) => (tilted ? shortBoard(v) : shortBoard(v).replace(" ", "\n")),
+      },
       axisTick: { show: false },
       axisLine: { lineStyle: { color: t.axisLine } },
     },
     yAxis: {
       type: "value",
-      axisLabel: share ? { ...baseText, formatter: wholePercent } : baseText,
+      axisLabel: share ? { ...baseText, formatter: axisPercent } : baseText,
       splitLine: { lineStyle: { color: t.gridLine } },
     },
     tooltip: {
@@ -533,7 +618,8 @@ export function valueRange(rows: ValueShareDTO[], series: string): ValueRange {
   return { min: Math.min(...values), max: Math.max(...values) };
 }
 
-function medianOf(rows: ValueShareDTO[]): number {
+/** The value at which the cumulative share of the rows reaches one half. */
+export function valueMedian(rows: ValueShareDTO[]): number {
   let total = 0;
   for (const r of [...rows].sort((x, y) => x.value - y.value)) {
     total += r.pct;
@@ -544,50 +630,79 @@ function medianOf(rows: ValueShareDTO[]): number {
 
 const shareAt = (rows: ValueShareDTO[], value: number) => rows.find((r) => r.value === value)?.pct ?? 0;
 
-function exactValueAxis(range: ValueRange, name: string, t: ChartTheme) {
+const LABEL_STEPS = [1, 2, 5, 10, 20, 25, 50, 100];
+const TICK_CHAR_WIDTH = 6;
+const TICK_GAP = 10;
+
+/** Smallest round step (labels at multiples of it) that keeps neighbouring labels apart; 1 while the width is unknown. */
+function labelStep(count: number, plotWidth: number, chars: number): number {
+  if (plotWidth <= 0) return 1;
+  const needed = (chars * TICK_CHAR_WIDTH + TICK_GAP) / (plotWidth / count);
+  return LABEL_STEPS.find((s) => s >= needed) ?? LABEL_STEPS[LABEL_STEPS.length - 1];
+}
+
+/** Every value is a category; labels sit at a regular round step that fits `plotWidth` (px, 0 = unknown). */
+function exactValueAxis(range: ValueRange, name: string, t: ChartTheme, plotWidth = 0) {
+  const count = range.max - range.min + 1;
+  const step = labelStep(count, plotWidth, String(range.max).length);
   return {
     type: "category" as const,
-    data: Array.from({ length: range.max - range.min + 1 }, (_, i) => String(range.min + i)),
+    data: Array.from({ length: count }, (_, i) => String(range.min + i)),
     name,
     nameLocation: "middle" as const,
     nameGap: 28,
     nameTextStyle: { color: t.text, fontWeight: "bold" as const },
-    axisLabel: { color: t.text, fontSize: 10, hideOverlap: true },
-    axisTick: { alignWithLabel: true },
+    axisLabel: {
+      color: t.text,
+      fontSize: 10,
+      interval: 0,
+      formatter: (v: string) => (Number(v) % step === 0 ? v : ""),
+    },
+    axisTick: { show: false },
     axisLine: { lineStyle: { color: t.axisLine } },
   };
 }
 
-function shareAxis(max: number, t: ChartTheme, showLabels = true) {
+const SHARE_STEPS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1];
+
+/** Share axis that ends on a round tick, so the top label never sits between two ticks and overlaps its neighbour. */
+function shareAxis(max: number, t: ChartTheme, showLabels = true, maxTicks = 5) {
+  const interval = SHARE_STEPS.find((s) => max / s <= maxTicks) ?? 1;
   return {
     type: "value" as const,
-    max,
+    min: 0,
+    max: Math.round(Math.ceil(max / interval) * interval * 1000) / 1000,
+    interval,
     axisLabel: { color: t.text, fontSize: 10, show: showLabels, formatter: wholePercent },
     splitLine: { lineStyle: { color: t.gridLine } },
   };
 }
 
-/** One histogram over exact values (game length in turns or total VP), with the median marked. */
+const HISTOGRAM_GRID_LEFT = 50;
+const HISTOGRAM_GRID_RIGHT = 20;
+
+/** One histogram over exact values (game length in turns or total VP), with the median marked. `width`: chart width in px, 0 if unknown. */
 export function buildValueHistogramOption(
   rows: ValueShareDTO[],
   range: ValueRange,
   axisName: string,
   color: string,
   t: ChartTheme,
+  width = 0,
 ): EChartsOption {
-  const median = medianOf(rows);
+  const median = valueMedian(rows);
   return {
     backgroundColor: t.bg,
     animation: false,
-    grid: { left: 50, right: 20, top: 40, bottom: 48 },
+    grid: { left: HISTOGRAM_GRID_LEFT, right: HISTOGRAM_GRID_RIGHT, top: 40, bottom: 48 },
     title: {
       subtext: `median ${median}`,
       subtextStyle: { color: t.text, fontSize: 12 },
       left: "center",
       top: 0,
     },
-    xAxis: exactValueAxis(range, axisName, t),
-    yAxis: shareAxis(Math.max(...rows.map((r) => r.pct)) * 1.1, t),
+    xAxis: exactValueAxis(range, axisName, t, width > 0 ? width - HISTOGRAM_GRID_LEFT - HISTOGRAM_GRID_RIGHT : 0),
+    yAxis: shareAxis(Math.max(...rows.map((r) => r.pct)) * 1.05, t),
     tooltip: {
       trigger: "axis",
       axisPointer: { type: "shadow" },
@@ -617,7 +732,25 @@ export function buildValueHistogramOption(
   };
 }
 
-/** Small multiple for one board: one curve per player count, on the shared range and share axis. */
+const CURVES_GRID_LEFT = 44;
+const CURVES_GRID_RIGHT = 12;
+const CURVES_MAX_TICKS = 4;
+
+/** Median of every player count in the rows, in the order of `allCounts` (the legend's order). */
+export function mediansByPlayerCount(
+  rows: ValueShareDTO[],
+  allCounts: number[],
+): { count: number; index: number; median: number }[] {
+  return allCounts.flatMap((count, index) => {
+    const own = rows.filter((r) => r.racer_count === count);
+    return own.length === 0 ? [] : [{ count, index, median: valueMedian(own) }];
+  });
+}
+
+/**
+ * Small multiple for one board: one curve per player count, on the shared range and share axis.
+ * `allCounts` fixes each count's colour to its place in the legend; `width` is the chart width in px (0 if unknown).
+ */
 export function buildBoardCurvesOption(
   rows: ValueShareDTO[],
   range: ValueRange,
@@ -626,16 +759,28 @@ export function buildBoardCurvesOption(
   showAxis: boolean,
   t: ChartTheme,
   baseline: ValueShareDTO[] = [],
+  allCounts: number[] = [],
+  width = 0,
 ): EChartsOption {
   const counts = [...new Set(rows.flatMap((r) => (r.racer_count === null ? [] : [r.racer_count])))].sort(
     (a, b) => a - b,
   );
+  const colorIndex = (count: number, own: number) => {
+    const shared = allCounts.indexOf(count);
+    return shared >= 0 ? shared : own;
+  };
+  const axis = exactValueAxis(
+    range,
+    axisName,
+    t,
+    width > 0 ? width - CURVES_GRID_LEFT - CURVES_GRID_RIGHT : 0,
+  );
   return {
     backgroundColor: t.bg,
     animation: false,
-    grid: { left: 44, right: 12, top: 10, bottom: showAxis ? 40 : 12 },
-    xAxis: { ...exactValueAxis(range, axisName, t), axisLabel: { color: t.text, fontSize: 10, hideOverlap: true, show: showAxis } },
-    yAxis: shareAxis(maxShare, t),
+    grid: { left: CURVES_GRID_LEFT, right: CURVES_GRID_RIGHT, top: 10, bottom: showAxis ? 40 : 12 },
+    xAxis: { ...axis, axisLabel: { ...axis.axisLabel, show: showAxis } },
+    yAxis: shareAxis(maxShare, t, true, CURVES_MAX_TICKS),
     tooltip: {
       trigger: "axis",
       backgroundColor: t.tooltipBg,
@@ -670,7 +815,7 @@ export function buildBoardCurvesOption(
         : []),
       ...counts.map((count, i) => {
       const own = rows.filter((r) => r.racer_count === count);
-      const color = playerCountColor(i, t);
+      const color = playerCountColor(colorIndex(count, i), t);
       return {
         type: "line" as const,
         name: String(count),
@@ -726,7 +871,30 @@ export function plainAxis(names: string[]): HeatmapAxis {
 
 const STAGGER_SLOTS = 6;
 const STAGGER_ROW_HEIGHT = 13;
-const ROTATED_LABEL_HEIGHT = 90;
+const ROTATED_LABEL_HEIGHT = 100;
+/**
+ * Narrowest column in px at which staggered horizontal names (six slots, so a name has six columns of room) do not
+ * touch; narrower columns get names rotated by 90 degrees. A container that scrolls horizontally can use this as its
+ * minimum column width to avoid rotating.
+ */
+export const HEATMAP_MIN_STAGGER_COLUMN = 16;
+/** Space above (and below) the outermost label row, and the height of the group names that sit on the outermost offset of the staggered layout. */
+const HEATMAP_EDGE_AIR = 12;
+const HEATMAP_GROUP_LABEL_HEIGHT = 20;
+const HEATMAP_SIDE_LABELS = 220;
+/** Left margin 84 plus right margin 10 of the narrow layout. */
+const HEATMAP_NARROW_SIDE_LABELS = 94;
+/** Narrowest column in px that fits a two-line group name over four columns / a one-digit sub-header. */
+const GROUP_NAME_MIN_COLUMN = 14;
+const SUB_HEADER_MIN_COLUMN = 10;
+/** Label margin (8) plus clear air between the tip of the longest rotated group name and the section heading row above it. */
+const ROTATED_GROUP_GAP = 16;
+const PAGE_PADDING = 48;
+
+/** Whether the columns would be narrower than `HEATMAP_MIN_STAGGER_COLUMN` in the current viewport. */
+function columnsTooNarrow(columns: number): boolean {
+  return (window.innerWidth - HEATMAP_SIDE_LABELS - PAGE_PADDING) / columns < HEATMAP_MIN_STAGGER_COLUMN;
+}
 
 /** Maps a shift to [-1, 1]: a grey zone up to `neutral`, saturated colours from `strong` on. */
 function scaled(value: number, { neutral, strong }: ColorScale): number {
@@ -751,12 +919,19 @@ export function buildHeatmapOption(
   const baseText = { color: t.text };
   const xIndex = new Map(axis.keys.flatMap((k, i) => (k === null ? [] : [[k, i] as const])));
   const yIndex = new Map(ys.map((y, i) => [y, i]));
-  const rotate = narrow && axis.stagger;
+  const rotate = axis.stagger && (narrow || columnsTooNarrow(axis.keys.length));
   const staggerHeight = rotate ? ROTATED_LABEL_HEIGHT : (STAGGER_SLOTS / 2) * STAGGER_ROW_HEIGHT;
   const groupHeight = axis.groups.reduce((sum, g) => sum + g.offset, 0);
-  const chrome = axis.stagger ? 24 + staggerHeight + (axis.groups.length > 0 ? groupHeight + 20 : 0) : 60 + groupHeight;
+  const chrome = axis.stagger
+    ? HEATMAP_EDGE_AIR + staggerHeight + (axis.groups.length > 0 ? groupHeight + HEATMAP_GROUP_LABEL_HEIGHT : 0)
+    : HEATMAP_EDGE_AIR + groupHeight;
   const bottomChrome = rotate ? (axis.groups.length > 0 ? groupHeight + 30 : 12) : chrome;
   const mainLabel = { ...baseText, rotate: 0, interval: 0, fontSize: 11, fontWeight: 600 };
+  const groupText = (group: HeatmapGroup, singleLine: boolean) => (value: string, index: number) => {
+    if (value === "") return "";
+    const accent = group.accentFrom !== undefined && index >= group.accentFrom && index <= (group.accentTo ?? Number.POSITIVE_INFINITY);
+    return `{${accent ? "accent" : "plain"}|${singleLine ? value.replace(/\n/g, " ") : value}}`;
+  };
   const groupAxis = (group: HeatmapGroup, position: "top" | "bottom") => ({
     type: "category" as const,
     data: group.labels,
@@ -767,13 +942,11 @@ export function buildHeatmapOption(
     axisLine: { show: false },
     axisLabel: {
       interval: 0,
+      hideOverlap: true,
       fontSize: group.fontSize,
       fontWeight: "bold" as const,
       lineHeight: group.fontSize + 3,
-      formatter: (value: string, index: number) =>
-        value === ""
-          ? ""
-          : `{${group.accentFrom !== undefined && index >= group.accentFrom && index <= (group.accentTo ?? Number.POSITIVE_INFINITY) ? "accent" : "plain"}|${value}}`,
+      formatter: groupText(group, false),
       rich: {
         plain: { color: t.text, fontSize: group.fontSize, fontWeight: "bold" as const, lineHeight: group.fontSize + 3 },
         accent: { color: t.accent, fontSize: group.fontSize, fontWeight: "bold" as const, lineHeight: group.fontSize + 3 },
@@ -796,6 +969,7 @@ export function buildHeatmapOption(
       fontSize: 10.5,
       fontWeight: 600,
       margin: 4,
+      hideOverlap: true,
       formatter: (value: string, index: number) =>
         value !== "" && axis.accent?.[index] ? `{accent|${value}}` : value,
       rich: { accent: { color: t.accent, fontSize: 10.5, fontWeight: "bold" as const } },
@@ -808,7 +982,7 @@ export function buildHeatmapOption(
     triggerEvent: true,
     axisTick: { show: false },
     axisLine: { show: false },
-    axisLabel: { ...baseText, rotate: 90, interval: 0, fontSize: 9, margin: 4 },
+    axisLabel: { ...baseText, rotate: 90, interval: 0, fontSize: 10, margin: 4, hideOverlap: true },
   };
   const xAxes = rotate
     ? [rotatedAxis, ...axis.groups.map((g) => groupAxis(g, "bottom")), ...axis.groups.map((g) => groupAxis(g, "top"))]
@@ -833,7 +1007,35 @@ export function buildHeatmapOption(
         ...axis.groups.map((g) => groupAxis(g, "top")),
       ];
   const sideAxisLabel = { ...baseText, interval: 0, fontSize: narrow ? 10 : 11, fontWeight: 600, formatter: displayName };
-  return {
+  /**
+   * Responsive overrides for the horizontal-name layout (matched against the chart's own width, so they follow a resize):
+   * below `GROUP_NAME_MIN_COLUMN` px per column the group names are rotated on one line, below `SUB_HEADER_MIN_COLUMN`
+   * the per-column sub-headers (4 5 6 Σ) are dropped and the tooltip carries the information.
+   */
+  const groupedColumnsMedia = () => {
+    const sideWidth = narrow ? HEATMAP_NARROW_SIDE_LABELS : HEATMAP_SIDE_LABELS;
+    const widthFor = (column: number) => axis.keys.length * column + sideWidth;
+    const [names, ...sections] = axis.groups;
+    const font = `bold ${names.fontSize}px ${CHART_FONT}`;
+    const longestName = Math.max(...names.labels.map((l) => format.getTextRect(l.replace(/\n/g, " "), font).width));
+    const sectionOffset = names.offset + Math.ceil(longestName) + ROTATED_GROUP_GAP;
+    const extra = Math.max(0, sectionOffset - (sections[0]?.offset ?? 0));
+    const rotatedChrome = HEATMAP_EDGE_AIR + groupHeight + extra;
+    const groupOverrides = [
+      { axisLabel: { rotate: 90, hideOverlap: true, formatter: groupText(names, true) } },
+      ...sections.map((group) => ({ offset: group.offset + extra })),
+    ];
+    const rotated = {
+      grid: { top: rotatedChrome, bottom: rotatedChrome },
+      xAxis: [{}, {}, ...groupOverrides, ...groupOverrides],
+    };
+    const noSubHeaders = { xAxis: [{ axisLabel: { show: false } }, { axisLabel: { show: false } }] };
+    return [
+      { query: { maxWidth: widthFor(GROUP_NAME_MIN_COLUMN) }, option: rotated },
+      { query: { maxWidth: widthFor(SUB_HEADER_MIN_COLUMN) }, option: noSubHeaders },
+    ];
+  };
+  const unit = {
     backgroundColor: t.bg,
     animation: false,
     grid: { left: narrow ? 84 : 110, right: narrow ? 10 : 110, top: chrome, bottom: bottomChrome },
@@ -876,10 +1078,14 @@ export function buildHeatmapOption(
         type: "heatmap",
         xAxisIndex: 0,
         yAxisIndex: 0,
+        progressive: 0,
+        animation: false,
         data: cells.map((c) => [xIndex.get(c.x) ?? 0, yIndex.get(c.y) ?? 0, scaled(c.value, scale)]),
       },
     ],
   };
+  if (axis.stagger || axis.groups.length === 0) return unit;
+  return { baseOption: unit, media: groupedColumnsMedia() };
 }
 
 function lightThemeActive(): boolean {

@@ -11,7 +11,7 @@ export function Switch({ label, checked, onChange }: SwitchProps) {
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300"
+      className="inline-flex cursor-pointer items-center gap-2 text-left text-xs text-slate-300 max-sm:min-h-9 pointer-coarse:min-h-9"
     >
       <span
         className={`relative inline-block h-4 w-7 shrink-0 rounded-full transition-colors ${

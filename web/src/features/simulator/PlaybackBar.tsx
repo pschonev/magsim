@@ -16,7 +16,7 @@ interface PlaybackBarProps {
 }
 
 const NAV_BUTTON =
-  "rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-slate-50 disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex items-center justify-center rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-slate-50 disabled:cursor-not-allowed disabled:opacity-40 max-sm:min-h-10 pointer-coarse:min-h-10 max-sm:min-w-10 pointer-coarse:min-w-10";
 
 export function PlaybackBar({
   steps,
@@ -86,7 +86,7 @@ export function PlaybackBar({
           <select
             value={speedMs}
             onChange={(e) => onSpeedChange(Number(e.target.value))}
-            className="rounded-md border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-200"
+            className="rounded-md border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-200 max-sm:min-h-9 pointer-coarse:min-h-9"
           >
             <option value={900}>0.5×</option>
             <option value={450}>1×</option>
@@ -105,7 +105,7 @@ export function PlaybackBar({
           const target = turnMap[e.target.value];
           if (target) goTo(target[0]);
         }}
-        className="w-full accent-indigo-500"
+        className="w-full accent-indigo-500 max-sm:h-9 pointer-coarse:h-9"
       />
 
       <div className="flex items-center justify-between gap-1.5">
@@ -142,7 +142,7 @@ export function PlaybackBar({
           type="button"
           onClick={() => onPlayingChange(!playing)}
           title="Play / Pause (Space)"
-          className="btn-print inline-flex flex-1 items-center justify-center gap-1.5 bg-indigo-600 px-3 py-1.5 text-xs text-on-accent hover:bg-indigo-500"
+          className="btn-print inline-flex flex-1 items-center justify-center gap-1.5 bg-indigo-600 px-3 py-1.5 text-xs text-on-accent hover:bg-indigo-500 max-sm:min-h-10 pointer-coarse:min-h-10"
         >
           {playing ? (
             <Pause className="h-3.5 w-3.5" />

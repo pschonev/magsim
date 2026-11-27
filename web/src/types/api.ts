@@ -544,7 +544,11 @@ export interface EngineClient {
     resultsBytes: Uint8Array,
     format: "ipc" | "parquet",
   ): Promise<DatasetMetaDTO>;
-  runAnalysis(filter: AnalysisFilterDTO): Promise<DashboardAnalysisDTO>;
+  /** `onFiltered` receives the matching race count as soon as filtering is done, before the analysis finishes. */
+  runAnalysis(
+    filter: AnalysisFilterDTO,
+    onFiltered?: (raceCount: number) => void,
+  ): Promise<DashboardAnalysisDTO>;
   queryRawTable(query: RawTableQueryDTO): Promise<RawTablePageDTO>;
   getRaceByHash(configHash: string): Promise<Record<string, unknown> | null>;
   encodeConfig(req: SimulationRequestDTO): Promise<ConfigEncodeResponseDTO>;

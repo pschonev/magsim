@@ -1,4 +1,7 @@
-import type { CSSProperties, MouseEvent } from "react";
+import type { CSSProperties, PointerEvent } from "react";
+import { tipTarget } from "./useDismissTip";
+
+export const BIN_TIP_GROUP = "trigger-bins";
 
 export interface BinHit {
   bin: number;
@@ -29,8 +32,21 @@ function yAxis(max: number): { top: number; ticks: number[] } {
   return { top, ticks: Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i * step) };
 }
 
-const reporter = (onHover: BinHitHandler, bin: number) => (e: MouseEvent) =>
+const reporter = (onHover: BinHitHandler, bin: number) => (e: PointerEvent) =>
   onHover({ bin, x: e.clientX, y: e.clientY });
+
+/** Spacing between neighbouring tick labels, in px. */
+const LABEL_GAP = 6;
+
+/** Indices of the bins that get a label: always the first and the last, then every `every`-th while it stays clear of the last. */
+function labelledBins(labels: string[], slotWidth: number): Set<number> {
+  const last = labels.length - 1;
+  const longest = Math.max(...labels.map((l) => l.length));
+  const every = Math.max(1, Math.ceil((longest * LABEL_CHAR_WIDTH + LABEL_GAP) / slotWidth));
+  const shown = new Set([0, last]);
+  for (let i = every; i < last - every + 1; i += every) shown.add(i);
+  return shown;
+}
 
 interface TriggerHistogramProps {
   width: number;
@@ -55,8 +71,7 @@ export function TriggerHistogram({ width, height, label, labels, axisTitle, race
   const base = marginTop + plotHeight;
   const axis = yAxis(Math.max(...racer) * HEADROOM);
   const y = (share: number) => base - (share / axis.top) * plotHeight;
-  const longestLabel = Math.max(...labels.map((l) => l.length));
-  const labelEvery = Math.max(1, Math.ceil((longestLabel * LABEL_CHAR_WIDTH) / slotWidth));
+  const labelled = labelledBins(labels, slotWidth);
   const centerOf = (i: number) => slotWidth / 2 + i * slotWidth;
 
   return (
@@ -93,7 +108,7 @@ export function TriggerHistogram({ width, height, label, labels, axisTitle, race
         })}
       </g>
       {labels.map((text, i) =>
-        i % labelEvery === 0 || i === labels.length - 1 ? (
+        labelled.has(i) ? (
           <text key={text} x={left + centerOf(i)} y={base + 14} fontSize={11} textAnchor="middle" style={MUTED_TEXT}>
             {text}
           </text>
@@ -110,8 +125,13 @@ export function TriggerHistogram({ width, height, label, labels, axisTitle, race
           width={slotWidth}
           height={plotHeight}
           className={HIT_CLASS}
-          onMouseMove={reporter(onHover, i)}
-          onMouseLeave={() => onHover(null)}
+          {...tipTarget(BIN_TIP_GROUP)}
+          onPointerDown={reporter(onHover, i)}
+          onPointerMove={reporter(onHover, i)}
+          onPointerLeave={(e) => {
+            if (e.pointerType !== "touch") onHover(null);
+          }}
+          onPointerCancel={() => onHover(null)}
         />
       ))}
     </svg>

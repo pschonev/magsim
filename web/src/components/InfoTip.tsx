@@ -48,8 +48,8 @@ export function InfoTip({ label, children }: InfoTipProps) {
     <span
       ref={rootRef}
       className="relative inline-flex items-center"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(true)}
+      onPointerLeave={(e) => e.pointerType === "mouse" && setHovered(false)}
       onBlur={(e) => {
         if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;
         setFocused(false);
@@ -65,12 +65,16 @@ export function InfoTip({ label, children }: InfoTipProps) {
         aria-describedby={open ? id : undefined}
         onClick={() => setPinned((v) => !v)}
         onFocus={(e) => setFocused(e.currentTarget.matches(":focus-visible"))}
-        className="cursor-help rounded-full text-slate-500 hover:text-slate-200 focus-visible:text-slate-200 focus-visible:outline focus-visible:outline-1 focus-visible:outline-indigo-500"
+        className="relative cursor-help rounded-full text-slate-500 before:absolute before:-inset-2.5 before:content-[''] hover:text-slate-200 focus-visible:text-slate-200 focus-visible:outline focus-visible:outline-1 focus-visible:outline-indigo-500"
       >
         <Info size={14} aria-hidden="true" />
       </button>
       {open && (
-        <div ref={popoverRef} className="absolute left-0 top-full z-50 w-max max-w-xs pt-1" style={{ transform: `translateX(${shift}px)` }}>
+        <div
+          ref={popoverRef}
+          className="absolute left-0 top-full z-50 w-max max-w-[min(20rem,calc(100vw-24px))] pt-1"
+          style={{ transform: `translateX(${shift}px)` }}
+        >
           <div id={id} role="tooltip" className="space-y-1 rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs font-normal text-slate-200 shadow-2xl">
             {children}
           </div>

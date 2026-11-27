@@ -1,9 +1,10 @@
 import { type ReactNode, useState } from "react";
-import { EChart } from "../../../components/EChart";
+import { EChart, type EChartsOption } from "../../../components/EChart";
 import type { DashboardAnalysisDTO, ValueShareDTO } from "../../../types/api";
 import { displayName } from "../../../utils/names";
 import { useTheme } from "../../../utils/ThemeProvider";
 import { InfoTip } from "../../../components/InfoTip";
+import { useWidth } from "../useChartBox";
 import { Description, type DescriptionLine } from "./Description";
 import {
   GLOBAL_METRICS_A,
@@ -17,6 +18,7 @@ import {
   buildBoardCurvesOption,
   buildGroupedBarOption,
   buildValueHistogramOption,
+  mediansByPlayerCount,
   playerCountColor,
   sortBoards,
   sortedCounts,
@@ -65,14 +67,34 @@ function Legend({ counts }: { counts: number[] }) {
   );
 }
 
+interface SizedChartProps {
+  height: number;
+  /** The option for the chart's measured width in px (0 before the first measurement). */
+  optionFor: (width: number) => EChartsOption;
+}
+
+/** A chart whose option depends on its own width (tick spacing, tilted labels). */
+function SizedChart({ height, optionFor }: SizedChartProps) {
+  const { ref, width } = useWidth();
+  return (
+    <div ref={ref} className="min-w-0">
+      <EChart height={height} option={optionFor(width)} />
+    </div>
+  );
+}
+
 function MetricGrid({ analysis }: { analysis: DashboardAnalysisDTO }) {
   const { chart: theme } = useTheme();
   const rows = analysis.global_dynamics;
   const metrics = [...GLOBAL_METRICS_A, ...GLOBAL_METRICS_B];
   return (
-    <div className="grid grid-cols-2 gap-px bg-slate-800 lg:grid-cols-5">
+    <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-px bg-slate-800 lg:grid-cols-[repeat(5,minmax(0,1fr))]">
       {metrics.map((m) => (
-        <EChart key={m.key} height={230} option={buildGroupedBarOption(rows, m.key, m.label, theme, m.share)} />
+        <SizedChart
+          key={m.key}
+          height={230}
+          optionFor={(width) => buildGroupedBarOption(rows, m.key, m.label, theme, m.share, width)}
+        />
       ))}
     </div>
   );
@@ -106,7 +128,7 @@ function MetricSwitch({
           key={o.series}
           type="button"
           onClick={() => onChange(o.series)}
-          className={`rounded-md px-2.5 py-1 font-display transition-colors ${
+          className={`rounded-md px-2.5 py-1 font-display transition-colors max-sm:min-h-9 ${
             o.series === value ? "bg-indigo-600 text-on-accent" : "text-slate-300 hover:text-slate-50"
           }`}
         >
@@ -121,15 +143,15 @@ function Distributions({ analysis }: { analysis: DashboardAnalysisDTO }) {
   const { chart: theme } = useTheme();
   const rows = analysis.value_distributions;
   return (
-    <div className="grid gap-px bg-slate-800 md:grid-cols-3">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-px bg-slate-800 md:grid-cols-[repeat(3,minmax(0,1fr))]">
       {availableDistributions(analysis).map((d) => {
         const own = rows.filter((r) => r.series === d.series && r.board === null && r.twist === null);
         return (
-          <div key={d.series} className="bg-slate-900">
+          <div key={d.series} className="min-w-0 bg-slate-900">
             <h4 className="px-3 pt-2 text-xs font-semibold text-slate-200">{d.title}</h4>
-            <EChart
+            <SizedChart
               height={300}
-              option={buildValueHistogramOption(own, valueRange(rows, d.series), d.axisName, d.color, theme)}
+              optionFor={(width) => buildValueHistogramOption(own, valueRange(rows, d.series), d.axisName, d.color, theme, width)}
             />
           </div>
         );
@@ -138,7 +160,34 @@ function Distributions({ analysis }: { analysis: DashboardAnalysisDTO }) {
   );
 }
 
-function GroupCurves({ analysis, kind, series }: { analysis: DashboardAnalysisDTO; kind: "board" | "twist"; series: string }) {
+/** "median 26 · 31 · 36": the median of each player count, written in that count's legend colour. */
+function MedianLine({ medians }: { medians: { count: number; index: number; median: number }[] }) {
+  const { chart: theme } = useTheme();
+  if (medians.length === 0) return null;
+  return (
+    <div className="text-center text-[11px] text-slate-400 tabular-nums">
+      median{" "}
+      {medians.map((m, i) => (
+        <span key={m.count}>
+          {i > 0 && " · "}
+          <span className="font-semibold" style={{ color: playerCountColor(m.index, theme) }} title={`${m.count} players`}>
+            {m.median}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+interface GroupCurvesProps {
+  analysis: DashboardAnalysisDTO;
+  kind: "board" | "twist";
+  series: string;
+  /** Player counts in the legend's order: they fix each count's colour. */
+  counts: number[];
+}
+
+function GroupCurves({ analysis, kind, series, counts }: GroupCurvesProps) {
   const { chart: theme } = useTheme();
   const rows = analysis.value_distributions;
   const baselineOf = (series: string) =>
@@ -155,24 +204,32 @@ function GroupCurves({ analysis, kind, series }: { analysis: DashboardAnalysisDT
         return (
           <div key={d.series} className="bg-slate-900">
             <h4 className="px-3 pt-2 text-xs font-semibold text-slate-200">{d.title}</h4>
-            <div className="grid grid-cols-2 gap-px lg:grid-cols-4">
-              {ordered.map((group) => (
-                <div key={group}>
-                  <div className="px-3 pt-1 text-center text-xs text-slate-300">{displayName(group)}</div>
-                  <EChart
-                    height={170}
-                    option={buildBoardCurvesOption(
-                      own.filter((r) => groupOf(r) === group),
-                      valueRange(rows, d.series),
-                      maxShare,
-                      d.axisName,
-                      true,
-                      theme,
-                      baselineOf(d.series),
-                    )}
-                  />
-                </div>
-              ))}
+            <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-px lg:grid-cols-[repeat(4,minmax(0,1fr))]">
+              {ordered.map((group) => {
+                const groupRows = own.filter((r) => groupOf(r) === group);
+                return (
+                  <div key={group} className="min-w-0">
+                    <div className="px-3 pt-1 text-center text-xs text-slate-300">{displayName(group)}</div>
+                    <MedianLine medians={mediansByPlayerCount(groupRows, counts)} />
+                    <SizedChart
+                      height={170}
+                      optionFor={(width) =>
+                        buildBoardCurvesOption(
+                          groupRows,
+                          valueRange(rows, d.series),
+                          maxShare,
+                          d.axisName,
+                          true,
+                          theme,
+                          baselineOf(d.series),
+                          counts,
+                          width,
+                        )
+                      }
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -189,6 +246,7 @@ const NOTES = {
     { bold: "Extra VP When Active:", text: " VP a racer gains in races where its ability fires a lot compared with races where it fires little, as share of its average VP, averaged over racers." },
     { bold: "Going-First Bonus:", text: " how much more VP the first seat scores than the last, as a share of average VP." },
     { bold: "Lead Bonus:", text: " VP per tile of lead at two thirds of the race, as a share of average VP." },
+    { bold: "Spread:", text: " average distance of the racers from the pack's mean position, in tiles; higher means more spread out." },
     { bold: "Trip Rate:", text: " Percentage of total turns spent recovering from trips across the race." },
     { bold: "Abilities Triggered:", text: " Average total ability triggers per race, scaled by player count." },
   ],
@@ -209,12 +267,6 @@ export function GlobalCharts({ analysis, part }: { analysis: DashboardAnalysisDT
   const [series, setSeries] = useState<string>(TURNS_SERIES);
   const options = availableDistributions(analysis);
   const chosen = options.some((o) => o.series === series) ? series : TURNS_SERIES;
-  const controls = (
-    <div className="flex flex-wrap items-center gap-3">
-      <MetricSwitch options={options} value={chosen} onChange={setSeries} />
-      <Legend counts={counts} />
-    </div>
-  );
   return (
     <div className="space-y-4">
       {part === "dynamics" && (
@@ -232,11 +284,15 @@ export function GlobalCharts({ analysis, part }: { analysis: DashboardAnalysisDT
       )}
       {part === "twists" && (
         <>
-          <Card title="Distributions by board and player count" info={NOTES.boards} aside={controls}>
-            <GroupCurves analysis={analysis} kind="board" series={chosen} />
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <MetricSwitch options={options} value={chosen} onChange={setSeries} />
+            <Legend counts={counts} />
+          </div>
+          <Card title="Distributions by board and player count" info={NOTES.boards}>
+            <GroupCurves analysis={analysis} kind="board" series={chosen} counts={counts} />
           </Card>
-          <Card title="Distributions by Twisty Twirl card and player count" info={NOTES.twists} aside={controls}>
-            <GroupCurves analysis={analysis} kind="twist" series={chosen} />
+          <Card title="Distributions by Twisty Twirl card and player count" info={NOTES.twists}>
+            <GroupCurves analysis={analysis} kind="twist" series={chosen} counts={counts} />
           </Card>
         </>
       )}

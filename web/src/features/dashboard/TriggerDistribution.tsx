@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { InfoTip } from "../../components/InfoTip";
 import type { RacerDistributionsDTO } from "../../types/api";
 import { displayName } from "../../utils/names";
 import { MIN_RACES, averageText } from "./charts/distributionCharts";
 import { type BinHover, DistributionTip } from "./DistributionTip";
-import { TriggerHistogram } from "./DistributionBars";
+import { BIN_TIP_GROUP, TriggerHistogram } from "./DistributionBars";
 import { useRowHeight, useWidth } from "./useChartBox";
+import { useDismissTip } from "./useDismissTip";
 
 /** Card padding and the title row; the chart gets the rest of the card's height. */
 const CARD_CHROME = 64;
@@ -20,6 +21,8 @@ interface TriggerDistributionProps {
 /** The racer's ability triggers per race, for the races left by the dashboard filters. */
 export function TriggerDistribution({ racerName, ink, distributions }: TriggerDistributionProps) {
   const [hover, setHover] = useState<BinHover | null>(null);
+  const clearHover = useCallback(() => setHover(null), []);
+  useDismissTip(BIN_TIP_GROUP, hover !== null, clearHover);
   const { ref: cardRef, height } = useRowHeight(racerName);
   const { ref: chartRef, width } = useWidth();
   const racer = distributions.racers.find((r) => r.racer_name === racerName);

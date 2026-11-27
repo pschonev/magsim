@@ -4,7 +4,9 @@ import { BootScreen } from "./components/BootScreen";
 import { DatasetUploadModal } from "./components/DatasetUploadModal";
 import { GlossaryModal } from "./components/GlossaryModal";
 import { Logo } from "./components/Logo";
+import { type MenuAction, OverflowMenu } from "./components/OverflowMenu";
 import { PyodideEngineClient } from "./engine/pyodideClient";
+import { rememberAnalysisTiming } from "./features/dashboard/analysisTiming";
 import { DashboardView } from "./features/dashboard/DashboardView";
 import { RawDataView } from "./features/data/RawDataView";
 import { type IncomingRace, incomingFromRow } from "./features/simulator/simConfig";
@@ -105,7 +107,11 @@ export function App() {
         }, 100);
         const analysis = await worker.runAnalysis(defaultFilter(result.datasetMeta)).catch(() => null);
         window.clearInterval(ticker);
-        if (analysis) rememberDataMs(performance.now() - started);
+        if (analysis) {
+          const elapsed = performance.now() - started;
+          rememberDataMs(elapsed);
+          if (!analysis.error) rememberAnalysisTiming(elapsed, analysis.filtered_race_count);
+        }
         if (cancelled) return;
         setInitialAnalysis(analysis);
         setProgress({ stage: "Ready", percent: 100 });
@@ -160,21 +166,29 @@ export function App() {
   }
 
   const { datasetMeta } = bootResult;
+  const themeLabel = mode === "dark" ? "Switch to light theme" : "Switch to dark theme";
+  const menuActions: MenuAction[] = [
+    { id: "data", label: "Raw Data", icon: Database, onSelect: () => selectTab("data"), active: activeTab === "data" },
+    { id: "glossary", label: "Glossary", icon: BookOpen, onSelect: () => setGlossaryOpen(true) },
+    { id: "theme", label: themeLabel, icon: mode === "dark" ? Sun : Moon, onSelect: toggle },
+    { id: "upload", label: "Upload Dataset", icon: Upload, onSelect: () => setUploadOpen(true) },
+  ];
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
         <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-3">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <Logo />
 
-            <nav className="flex items-center gap-1 rounded-lg bg-slate-900 p-1">
+            <nav className="flex shrink-0 items-center gap-1 rounded-lg bg-slate-900 p-1">
               {TABS.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => selectTab(id)}
-                  className={`items-center gap-1.5 rounded-md px-2.5 py-1.5 font-display text-xs transition-colors sm:px-3 ${
+                  aria-current={id === activeTab ? "page" : undefined}
+                  className={`shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 font-display text-xs whitespace-nowrap transition-colors max-sm:min-h-9 pointer-coarse:min-h-9 sm:px-3 ${
                     id === "data" ? "hidden sm:inline-flex" : "inline-flex"
                   } ${
                     id === activeTab
@@ -189,45 +203,51 @@ export function App() {
             </nav>
           </div>
 
-          <div className="flex items-center gap-2">
-          <p className="hidden text-xs text-slate-400 sm:block">
-            {datasetMeta.race_count.toLocaleString()} races
-            {import.meta.env.DEV &&
-              ` · ${(bootResult.bootMs / 1000).toFixed(2)}s boot · Python ${bootResult.pythonVersion} · Polars ${bootResult.polarsVersion}`}
-          </p>
-          <button
-            type="button"
-            onClick={() => setGlossaryOpen(true)}
-            aria-label="Open glossary"
-            title="Glossary of racers and twist cards"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 p-1.5 text-xs font-medium text-slate-200 hover:border-indigo-500 hover:bg-slate-800 sm:px-3"
-          >
-            <BookOpen className="h-4 w-4 text-indigo-400 sm:h-3.5 sm:w-3.5" />
-            <span className="hidden sm:inline">Glossary</span>
-          </button>
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={mode === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-            title={mode === "dark" ? "Light theme" : "Dark theme"}
-            className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900 p-1.5 text-slate-200 hover:border-indigo-500 hover:bg-slate-800"
-          >
-            {mode === "dark" ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-400" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setUploadOpen(true)}
-            className="hidden items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-indigo-500 hover:bg-slate-800 sm:inline-flex"
-          >
-            <Upload className="h-3.5 w-3.5 text-indigo-400" />
-            Upload Dataset
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <p
+              title="All simulated races in the dataset; races that ended in an error are left out of the analysis"
+              className="hidden text-xs whitespace-nowrap text-slate-400 lg:block"
+            >
+              {datasetMeta.race_count.toLocaleString()} races simulated
+              {import.meta.env.DEV &&
+                ` · ${(bootResult.bootMs / 1000).toFixed(2)}s boot · Python ${bootResult.pythonVersion} · Polars ${bootResult.polarsVersion}`}
+            </p>
+            <OverflowMenu label="More: raw data, glossary, theme, upload" actions={menuActions} className="sm:hidden" />
+            <button
+              type="button"
+              onClick={() => setGlossaryOpen(true)}
+              aria-label="Open glossary"
+              title="Glossary of racers and twist cards"
+              className="hidden h-9 w-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-medium whitespace-nowrap text-slate-200 hover:border-indigo-500 hover:bg-slate-800 sm:inline-flex lg:h-auto lg:w-auto pointer-coarse:lg:min-h-9 lg:px-3 lg:py-1.5"
+            >
+              <BookOpen className="h-4 w-4 text-indigo-400 lg:h-3.5 lg:w-3.5" />
+              <span className="hidden lg:inline">Glossary</span>
+            </button>
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label={themeLabel}
+              title={mode === "dark" ? "Light theme" : "Dark theme"}
+              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-200 hover:border-indigo-500 hover:bg-slate-800 sm:inline-flex lg:h-auto lg:w-auto pointer-coarse:lg:min-h-9 lg:p-1.5"
+            >
+              {mode === "dark" ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-400" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              aria-label="Upload dataset"
+              title="Upload dataset"
+              className="hidden h-9 w-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-medium whitespace-nowrap text-slate-200 hover:border-indigo-500 hover:bg-slate-800 sm:inline-flex lg:h-auto lg:w-auto pointer-coarse:lg:min-h-9 lg:px-3 lg:py-1.5"
+            >
+              <Upload className="h-4 w-4 text-indigo-400 lg:h-3.5 lg:w-3.5" />
+              <span className="hidden lg:inline">Upload Dataset</span>
+            </button>
           </div>
         </div>
         <div className="h-1 bg-indigo-600" />
       </header>
 
-      <main className="w-full flex-1 p-2 sm:p-4">
+      <main className="w-full min-w-0 flex-1 p-2 sm:p-4">
         <div hidden={activeTab !== "dashboard"}>
           <DashboardView client={client} meta={datasetMeta} initialAnalysis={initialAnalysis} bundled={!uploaded} />
         </div>

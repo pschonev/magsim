@@ -189,7 +189,7 @@ function GlossaryDialog({ onClose, racerColors }: { onClose: () => void; racerCo
               type="button"
               onClick={onClose}
               aria-label="Close glossary"
-              className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-50"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-50 sm:h-8 sm:w-8 pointer-coarse:h-10 pointer-coarse:w-10"
             >
               <X className="h-4 w-4" />
             </button>
@@ -200,11 +200,11 @@ function GlossaryDialog({ onClose, racerColors }: { onClose: () => void; racerCo
               <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
               <input
                 type="search"
-                autoFocus
+                autoFocus={!window.matchMedia("(pointer: coarse)").matches}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search by name or ability text"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 py-1.5 pr-3 pl-8 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 py-1.5 pr-3 pl-8 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none max-sm:min-h-10 pointer-coarse:min-h-10"
               />
             </label>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -217,7 +217,7 @@ function GlossaryDialog({ onClose, racerColors }: { onClose: () => void; racerCo
                     type="button"
                     disabled={hits === 0}
                     onClick={() => jumpTo(section.id)}
-                    className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs text-slate-200 hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700"
+                    className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs text-slate-200 hover:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 max-sm:min-h-9 pointer-coarse:min-h-9"
                   >
                     {section.label}{" "}
                     <span className="text-slate-400">{searching ? `${hits}/${total}` : total}</span>

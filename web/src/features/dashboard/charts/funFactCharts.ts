@@ -74,7 +74,7 @@ export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) =
     const note = items[p.dataIndex].note;
     return note ? `{v|${format(p.value)}} {n|${note}}` : format(p.value);
   };
-  const valueRich = { v: { color: t.text, fontWeight: 700, fontSize }, n: { color: t.reference, fontWeight: 500, fontSize: fontSize - 1 } };
+  const valueRich = { v: { color: t.text, fontWeight: 700, fontSize }, n: { color: readableOn(t.reference, t), fontWeight: 500, fontSize: fontSize - 1 } };
   const hasDetail = items.some((i) => i.detail);
   return {
     ...base(t),
@@ -122,13 +122,35 @@ export function buildBars(items: BarItem[], t: ChartTheme, format: (v: number) =
 }
 
 const OUTCOME_COLORS = { first: BADGE.gold, second: BADGE.silver, other: NEUTRAL.slate, eliminated: DIVERGING.strongBad, cancelled: BADGE.blue };
-const OUTCOME_NAMES = { first: "1st", second: "2nd", other: "other", eliminated: "eliminated", cancelled: "race cancelled" };
+const OUTCOME_NAMES = { first: "1st", second: "2nd", other: "Other", eliminated: "Eliminated", cancelled: "Race cancelled" };
 
-/** One donut per racer showing how its races end. */
-export function buildDonuts(outcomes: OutcomeShareDTO[], colorOf: (racer: string) => string, t: ChartTheme): EChartsOption {
+/** Chart widths in px below which the donuts are too close for outside labels: the shares move into the rings. */
+export const DONUT_COMPACT_WIDTH = 560;
+const DONUT_MAX_OUTER = 56;
+const DONUT_INNER_SHARE = 0.5;
+/** Smallest slice (in %) that gets a number inside its ring. */
+const DONUT_MIN_INSIDE_PERCENT = 9;
+
+/** One donut per racer showing how its races end. `width` is the chart width in px (0 if unknown). */
+export function buildDonuts(outcomes: OutcomeShareDTO[], colorOf: (racer: string) => string, t: ChartTheme, width = 0): EChartsOption {
   const keys = (["first", "second", "other", "eliminated", "cancelled"] as const).filter((k) => outcomes.some((o) => o[k] > 0));
   const step = Math.min(50, 90 / outcomes.length);
   const centre = (i: number) => 50 + (i - (outcomes.length - 1) / 2) * step;
+  const compact = width > 0 && width < DONUT_COMPACT_WIDTH;
+  const outer = Math.floor(Math.min(DONUT_MAX_OUTER, (width * step) / 100 / 2 - 3));
+  const outsideLabel = {
+    color: t.text,
+    fontSize: 11,
+    fontWeight: 600,
+    formatter: (p: { percent: number }) => (p.percent >= 6 ? `${p.percent.toFixed(0)}%` : ""),
+  };
+  const insideLabel = {
+    position: "inside" as const,
+    color: "#101312",
+    fontSize: 10,
+    fontWeight: 700,
+    formatter: (p: { percent: number }) => (p.percent >= DONUT_MIN_INSIDE_PERCENT ? `${p.percent.toFixed(0)}%` : ""),
+  };
   return {
     ...base(t),
     legend: { bottom: 0, textStyle: { color: t.text, fontSize: 11 }, itemWidth: 10, itemHeight: 10, data: keys.map((k) => OUTCOME_NAMES[k]) },
@@ -137,17 +159,27 @@ export function buildDonuts(outcomes: OutcomeShareDTO[], colorOf: (racer: string
       left: `${centre(i)}%`,
       top: 0,
       textAlign: "center",
-      textStyle: { color: readableOn(colorOf(o.racer_name), t), fontSize: 13, fontWeight: 700 },
+      textStyle: { color: readableOn(colorOf(o.racer_name), t), fontSize: compact ? 12 : 13, fontWeight: 700 },
     })),
-    tooltip: { show: false },
+    tooltip: compact
+      ? {
+          trigger: "item",
+          backgroundColor: t.tooltipBg,
+          borderColor: t.tooltipBorder,
+          textStyle: { color: t.text, fontSize: 12 },
+          formatter: (p: { seriesName: string; name: string; percent: number }) => `${p.seriesName}: ${p.name} ${p.percent.toFixed(1)}%`,
+        }
+      : { show: false },
     series: outcomes.map((o, i) => ({
       type: "pie" as const,
-      radius: ["30%", "48%"],
-      center: [`${centre(i)}%`, "54%"],
+      name: displayName(o.racer_name),
+      radius: compact ? [Math.round(outer * DONUT_INNER_SHARE), outer] : ["30%", "48%"],
+      center: [`${centre(i)}%`, compact ? "55%" : "54%"],
       startAngle: 90,
       itemStyle: { borderColor: t.bg, borderWidth: 2 },
-      label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { percent: number }) => (p.percent >= 6 ? `${p.percent.toFixed(0)}%` : "") },
-      labelLine: { length: 4, length2: 4 },
+      label: compact ? insideLabel : outsideLabel,
+      labelLine: compact ? { show: false } : { length: 4, length2: 4 },
+      labelLayout: { hideOverlap: true },
       data: keys.map((k) => ({ name: OUTCOME_NAMES[k], value: o[k], itemStyle: { color: OUTCOME_COLORS[k] } })),
     })),
   };
@@ -314,60 +346,18 @@ export function vpHistogram(rows: VpShareDTO[], colorOf: (racer: string) => stri
 }
 
 export interface SplitPart {
+  /** What the segment stands for, written in the legend under the bar; empty for a spacer that is not named. */
   label: string;
   share: number;
   color: string;
-  /** Text inside the segment; default is the label and the share as a percentage. */
-  text?: string;
 }
 
 export interface SplitRow {
   name: string;
   /** Racer colour for the row name. */
   color?: string;
-  /** Two parts that add up to one; `label` is written inside the bar next to the percentage. */
   /** Two or three parts that add up to one. */
   parts: SplitPart[];
-}
-
-/** One 100 % bar per row, each split into two outcomes with its own wording. */
-export function buildSplitRows(rows: SplitRow[], t: ChartTheme): EChartsOption {
-  const columns = Math.max(...rows.map((r) => r.parts.length));
-  const part = (index: number) => ({
-    type: "bar" as const,
-    stack: "all",
-    barWidth: 26,
-    data: rows.map((r) => {
-      const p = r.parts[index];
-      if (!p) return { value: 0, label: { show: false } };
-      return {
-        value: p.share,
-        itemStyle: { color: p.color },
-        label: {
-          show: true,
-          color: "#101312",
-          fontWeight: 800,
-          fontSize: 11,
-          formatter: p.text ?? `${p.share < 0.2 ? "" : `${p.label} `}${Math.round(p.share * 100)}%`,
-        },
-      };
-    }),
-  });
-  return {
-    ...base(t),
-    grid: { left: 8, right: 8, top: 4, bottom: 4, containLabel: true },
-    xAxis: { type: "value", show: false, max: 1 },
-    yAxis: {
-      type: "category",
-      inverse: true,
-      data: rows.map((r) => r.name),
-      axisTick: { show: false },
-      axisLine: { show: false },
-      axisLabel: racerLabels(rows.map((r) => ({ text: r.name, color: r.color })), t),
-    },
-    tooltip: { show: false },
-    series: Array.from({ length: columns }, (_, i) => part(i)),
-  };
 }
 
 /** Best combinations on top, worst at the bottom; bars grow right for gains and left for losses. */
@@ -454,12 +444,35 @@ export interface RoseSection {
 }
 
 /** Percent of half the shorter chart side; the outer value leaves room for a two-line label around the longest slice. */
-const ROSE_RADIUS = ["9%", "64%"];
+const ROSE_OUTER_SHARE = 0.64;
+const ROSE_INNER_SHARE = 0.09;
+const ROSE_RADIUS = [`${ROSE_INNER_SHARE * 100}%`, `${ROSE_OUTER_SHARE * 100}%`];
+/** Room in px kept between the longest slice and the chart's side edge for its label (a name of up to nine letters and a value). */
+const ROSE_LABEL_ROOM = 64;
+const ROSE_MIN_OUTER = 30;
+/** Names longer than this wrap at every space. */
+const ROSE_ONE_LINE_NAME = 9;
 
-/** Side by side rose charts; the caller draws title and caption outside the chart so the roses use the whole area. */
-export function buildRoses(sections: RoseSection[], t: ChartTheme): EChartsOption {
+/** Radius of a single rose in a chart of this size: the usual share of the shorter side, pulled in when the sides would clip the labels. */
+function roseRadius(width: number, height: number): (string | number)[] {
+  if (width <= 0 || height <= 0) return ROSE_RADIUS;
+  const outer = Math.max(ROSE_MIN_OUTER, Math.min((ROSE_OUTER_SHARE * Math.min(width, height)) / 2, width / 2 - ROSE_LABEL_ROOM));
+  return [Math.round((outer * ROSE_INNER_SHARE) / ROSE_OUTER_SHARE), Math.round(outer)];
+}
+
+function roseName(name: string): string {
+  if (name.includes(" + ")) return name.replace(" + ", " +\n");
+  return name.length > ROSE_ONE_LINE_NAME ? name.replace(/ /g, "\n") : name;
+}
+
+/**
+ * Side by side rose charts; the caller draws title and caption outside the chart so the roses use the whole area.
+ * With the chart's `width` and `height` in px (0 if unknown), a single rose shrinks until its labels fit.
+ */
+export function buildRoses(sections: RoseSection[], t: ChartTheme, width = 0, height = 0): EChartsOption {
   const step = 100 / sections.length;
   const centre = (i: number) => `${step * i + step / 2}%`;
+  const radius = sections.length === 1 ? roseRadius(width, height) : ROSE_RADIUS;
   return {
     ...base(t),
     tooltip: {
@@ -473,11 +486,11 @@ export function buildRoses(sections: RoseSection[], t: ChartTheme): EChartsOptio
     series: sections.map((s, i) => ({
       type: "pie" as const,
       roseType: "radius" as const,
-      radius: ROSE_RADIUS,
+      radius,
       center: [centre(i), "50%"],
       itemStyle: { borderColor: t.bg, borderWidth: 2, borderRadius: 3 },
       labelLayout: { hideOverlap: true },
-      label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { name: string; value: number }) => `${p.name.replace(" + ", " +\n")}\n${s.format(p.value)}` },
+      label: { color: t.text, fontSize: 11, fontWeight: 600, formatter: (p: { name: string; value: number }) => `${roseName(p.name)}\n${s.format(p.value)}` },
       labelLine: { length: 3, length2: 3 },
       data: s.items.map((it) => ({
         name: displayName(it.name),
@@ -536,9 +549,9 @@ export function mushRoses(pairs: MushPairDTO[], colorOf: (racer: string) => stri
         ];
   const vp = (v: number) => `${v.toFixed(2)} VP`;
   return [
-    ...section("Best pairs", "Best pairs VP", best, "average VP in races with both powers\neach power once", (p) => p.average_vp, vp),
-    ...section("Worst pairs", "Worst pairs VP", worst, "average VP in races with both powers\neach power once", (p) => p.average_vp, vp),
-    ...section("Best pairs, top 2", "Best pairs, top 2", topTwo, "share of races finishing 1st or 2nd\neach power once", (p) => (p.top2_rate ?? 0) * 100, (v) => `${v.toFixed(0)}%`),
+    ...section("Best pairs", "Best pairs VP", best, "Average VP in races with both powers\nEach power once", (p) => p.average_vp, vp),
+    ...section("Worst pairs", "Worst pairs VP", worst, "Average VP in races with both powers\nEach power once", (p) => p.average_vp, vp),
+    ...section("Best pairs, top 2", "Best pairs, top 2", topTwo, "Share of races finishing 1st or 2nd\nEach power once", (p) => (p.top2_rate ?? 0) * 100, (v) => `${v.toFixed(0)}%`),
   ];
 }
 

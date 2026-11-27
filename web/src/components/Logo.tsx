@@ -20,7 +20,7 @@ export function Logo() {
           ))}
         </g>
       </svg>
-      <h1 className="font-display text-xl leading-tight tracking-tight text-slate-50">magsim</h1>
+      <h1 className="font-display text-xl leading-tight tracking-tight text-slate-50 max-md:sr-only">magsim</h1>
     </div>
   );
 }

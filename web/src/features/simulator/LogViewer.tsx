@@ -104,25 +104,27 @@ export function LogViewer({
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/70 p-3.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 max-sm:[&>div]:w-full">
         <h3 className="text-xs font-semibold text-slate-50">
           Simulation Event Log ({total.toLocaleString()})
         </h3>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+          <div className="relative max-sm:min-w-0 max-sm:flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-2 h-3 w-3 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search log..."
-              className="w-40 rounded-md border border-slate-700 bg-slate-950 py-1 pr-2 pl-6 text-[11px] text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              aria-label="Search log"
+              className="w-40 rounded-md border border-slate-700 bg-slate-950 py-1 pr-2 pl-6 text-[11px] text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none max-sm:min-h-10 pointer-coarse:min-h-10 max-sm:w-full"
             />
           </div>
           <select
             value={racerFilter}
             onChange={(e) => setRacerFilter(e.target.value)}
-            className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200"
+            aria-label="Filter log by racer"
+            className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 max-sm:min-h-10 pointer-coarse:min-h-10"
           >
             <option value="">All racers</option>
             {racerNames.map((name) => (
@@ -168,7 +170,7 @@ export function LogViewer({
                 borderBottom: "1px solid #333",
               }}
             >
-              <div style={{ fontSize: 9, color: "#666", fontWeight: "bold" }}>
+              <div style={{ fontSize: 11, color: "#888", fontWeight: "bold" }}>
                 TURN {seg.turn}
               </div>
               {seg.entries.map((entry, i) => (
@@ -203,7 +205,7 @@ function Marker({ markerRef }: { markerRef: React.RefObject<HTMLDivElement | nul
       ref={markerRef}
       style={{
         color: BRAND.orange,
-        fontSize: 10,
+        fontSize: 11,
         borderTop: `1px dashed ${BRAND.orange}`,
         marginTop: 2,
         marginBottom: 2,

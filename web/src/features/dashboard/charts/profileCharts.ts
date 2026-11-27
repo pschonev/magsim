@@ -69,6 +69,10 @@ const AXIS_SPECS: AxisSpec[] = [
   factorAxis("xDice", "VP explained by the dice the racer rolls", (p) => p.r2_dice, (p) => p.pct_r2_dice),
 ];
 
+/** One always-visible line that explains the x-factors, wedge length and numbers. */
+export const PROFILE_CAPTION =
+  "x = how much of this racer's VP swings the factor explains · wedge length = rank among racers · numbers = actual values";
+
 /** The eight wedges in clockwise order from the top. */
 export const PROFILE_AXES: ProfileAxis[] = AXIS_SPECS.map((spec, i) => ({ ...spec, color: PROFILE_COLORS[i] }));
 

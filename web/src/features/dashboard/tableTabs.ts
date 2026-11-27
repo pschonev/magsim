@@ -46,20 +46,20 @@ export const TABLE_TABS: TabSpec[] = [
     description: [
       { bold: "Movement & Efficiency", text: "" },
       {
-        bold: "Speed Raw:",
-        text: " Average movement per turn based purely on dice rolls and self-abilities.",
+        bold: "Speed:",
+        text: " Average movement per rolling turn based purely on dice rolls and self-abilities.",
       },
       {
-        bold: "Rel Abil Speed:",
+        bold: "Ability speed:",
         text: " Net movement advantage gained purely through abilities, normalized against the race duration.",
       },
       {
-        bold: "Abil +Self / Abil -Self:",
+        bold: "Own push / Own setback:",
         text: " Normalized positive and negative movement caused by a racer's own abilities.",
       },
       {
-        bold: "Abil +Other / Abil -Other:",
-        text: " Net movement (positive or negative) given to or taken from other racers.",
+        bold: "Pushes others / Sets others back:",
+        text: " Movement given to or taken from other racers.",
       },
     ],
   },
@@ -68,8 +68,9 @@ export const TABLE_TABS: TabSpec[] = [
     label: "VP Analysis",
     description: [
       { bold: "VP Analysis:", text: " Correlations to overall success." },
-      { bold: "Extra VP When Active %:", text: " How much more the racer scores in races where its power fires a lot, as a share of its average VP." },
-      { bold: "Eliminated %:", text: " Share of the racer's races in which it was eliminated." },
+      { bold: "Roll sensitivity:", text: " How much of the racer's VP is decided by the dice it rolls." },
+      { bold: "Extra VP when active:", text: " How much more the racer scores in races where its power fires a lot, as a share of its average VP." },
+      { bold: "Eliminated:", text: " Share of the racer's races in which it was eliminated." },
     ],
   },
   {
@@ -78,27 +79,27 @@ export const TABLE_TABS: TabSpec[] = [
     description: [
       { bold: "Abilities & Triggers", text: "" },
       {
-        bold: "Trig/Turn:",
+        bold: "Triggers / turn:",
         text: " Total times abilities fired, normalized by the total effective turns.",
       },
       {
-        bold: "Self-Targ/Turn:",
+        bold: "On self / turn:",
         text: " Number of times a racer's ability targeted themselves.",
       },
       {
-        bold: "OwnTurn Trig/Turn:",
+        bold: "On own turn / turn:",
         text: " Total triggers that only fire on the racer's active turn.",
       },
       {
-        bold: "Rolling Turns (%):",
-        text: " The percentage of a racer's turns where they actively rolled the dice (not tripped or skipping).",
+        bold: "Rolling turns:",
+        text: " The share of a racer's turns where they actively rolled the dice (not tripped or skipping).",
       },
     ],
   },
   {
     id: "dynamics",
-    label: "Dynamics",
-    description: [{ bold: "Dynamics:", text: " Effects on the game as a whole." }],
+    label: "Race feel",
+    description: [{ bold: "Race feel:", text: " Effects on the game as a whole." }],
   },
   {
     id: "triggerpull",

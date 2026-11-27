@@ -113,8 +113,10 @@ function withContrast(color: string, background: string, minimum: number): strin
   const direction = luminance(background) < 0.5 ? 1 : -1;
   let lightness = l;
   let candidate = color;
-  while (lightness > 0 && lightness < 1 && contrast(candidate, background) < minimum) {
-    lightness += direction * LIGHTNESS_STEP;
+  while (contrast(candidate, background) < minimum) {
+    const next = lightness + direction * LIGHTNESS_STEP;
+    if (next < 0 || next > 1) return candidate;
+    lightness = next;
     candidate = fromHsl([h, s, lightness]);
   }
   return candidate;

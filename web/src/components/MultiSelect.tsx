@@ -25,13 +25,20 @@ export function MultiSelect({
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => {
+    const onDown = (e: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   const chosen = new Set(selected);
@@ -55,8 +62,9 @@ export function MultiSelect({
       </span>
       <button
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-left text-xs text-slate-200 hover:border-slate-500"
+        className="flex w-full items-center justify-between gap-2 rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-left text-xs text-slate-200 hover:border-slate-500 max-sm:min-h-10 pointer-coarse:min-h-10"
       >
         <span className="truncate">
           {selected.length === options.length
@@ -77,20 +85,20 @@ export function MultiSelect({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search..."
-                className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none max-sm:min-h-9 pointer-coarse:min-h-9"
               />
             )}
             <button
               type="button"
               onClick={() => onChange([...options])}
-              className="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
+              className="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800 max-sm:min-h-9 pointer-coarse:min-h-9"
             >
               All
             </button>
             <button
               type="button"
               onClick={() => onChange([])}
-              className="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
+              className="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800 max-sm:min-h-9 pointer-coarse:min-h-9"
             >
               None
             </button>
@@ -99,7 +107,7 @@ export function MultiSelect({
             {shown.map((option) => (
               <label
                 key={option}
-                className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-slate-200 hover:bg-slate-800 max-sm:min-h-9 pointer-coarse:min-h-9"
               >
                 <input
                   type="checkbox"

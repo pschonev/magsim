@@ -67,9 +67,17 @@ def load_parquet_dataset(races_buf: object, results_buf: object) -> str:
     return _store(web.load_parquet(_to_bytes(races_buf), _to_bytes(results_buf)))
 
 
-def analyze_dashboard(filter_json: str) -> str:
+def filter_dashboard(filter_json: str) -> str:
+    """Apply the filter and return the matching race count, so the UI can size its progress estimate."""
     flt = msgspec.json.decode(filter_json, type=web.AnalysisFilterDTO)
     STATE.filtered = web.apply_filter(_loaded(), flt)
+    return json.dumps(STATE.filtered.races.height)
+
+
+def analyze_filtered() -> str:
+    if STATE.filtered is None:
+        msg = "No filter applied."
+        raise RuntimeError(msg)
     return _to_json(web.analyze(STATE.filtered, _loaded().mush_pairs))
 
 

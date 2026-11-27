@@ -126,7 +126,7 @@ export function SimulatorConfigPanel({
   };
 
   return (
-    <aside className="flex w-full shrink-0 flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/80 p-4">
+    <aside className="flex w-full shrink-0 flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/80 p-3 sm:p-4">
       {/* Board & Seed */}
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
@@ -136,7 +136,7 @@ export function SimulatorConfigPanel({
           <select
             value={config.board}
             onChange={(e) => onChange({ ...config, board: e.target.value })}
-            className="w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none max-sm:min-h-10 pointer-coarse:min-h-10"
           >
             {simMeta.boards.map((b) => (
               <option key={b} value={b}>
@@ -157,7 +157,7 @@ export function SimulatorConfigPanel({
               onChange={(e) =>
                 onChange({ ...config, seed: Number(e.target.value) || 0 })
               }
-              className="min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none max-sm:min-h-10 pointer-coarse:min-h-10"
             />
             <button
               type="button"
@@ -168,7 +168,8 @@ export function SimulatorConfigPanel({
                 })
               }
               title="Randomize seed"
-              className="rounded-md border border-slate-700 bg-slate-950 px-2 text-slate-300 hover:bg-slate-800 hover:text-slate-50"
+              aria-label="Randomize seed"
+              className="rounded-md border border-slate-700 bg-slate-950 px-2 text-slate-300 hover:bg-slate-800 hover:text-slate-50 max-sm:min-w-10 pointer-coarse:min-w-10"
             >
               <Dices className="h-3.5 w-3.5" />
             </button>
@@ -180,7 +181,7 @@ export function SimulatorConfigPanel({
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs font-medium text-slate-300">
           <span>Roster ({config.racers.length})</span>
-          <span className="text-[10px] text-slate-500">drag to reorder · VP · start tile</span>
+          <span className="text-[11px] text-slate-500">drag to reorder · VP · start tile</span>
         </div>
 
         <div className="flex gap-1.5">
@@ -195,7 +196,8 @@ export function SimulatorConfigPanel({
               if (e.key === "Enter") addRacer(racerToAdd);
             }}
             placeholder="Search racers to add..."
-            className="min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
+            aria-label="Search racers to add"
+            className="min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none max-sm:min-h-10 pointer-coarse:min-h-10"
           />
           <datalist id="racer-options">
             {availableRacers.map((r) => (
@@ -206,7 +208,7 @@ export function SimulatorConfigPanel({
             type="button"
             onClick={() => addRacer(racerToAdd)}
             disabled={!racerToAdd}
-            className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 max-sm:min-h-10 pointer-coarse:min-h-10"
           >
             <Plus className="h-3.5 w-3.5" />
             Add
@@ -243,7 +245,7 @@ export function SimulatorConfigPanel({
                   <button
                     type="button"
                     onClick={() => adjust("start_vps", idx, -1, MAX_START_VP)}
-                    className="rounded border border-slate-700 text-slate-300 hover:text-slate-50"
+                    className="rounded border border-slate-700 text-slate-300 hover:text-slate-50 max-sm:p-1.5"
                     aria-label="Fewer starting VP"
                   >
                     <Minus className="h-3 w-3" />
@@ -252,7 +254,7 @@ export function SimulatorConfigPanel({
                   <button
                     type="button"
                     onClick={() => adjust("start_vps", idx, 1, MAX_START_VP)}
-                    className="rounded border border-slate-700 text-slate-300 hover:text-slate-50"
+                    className="rounded border border-slate-700 text-slate-300 hover:text-slate-50 max-sm:p-1.5"
                     aria-label="More starting VP"
                   >
                     <Plus className="h-3 w-3" />
@@ -265,13 +267,14 @@ export function SimulatorConfigPanel({
                     max={MAX_START_TILE}
                     value={config.start_positions[idx] ?? 0}
                     onChange={(e) => updateStartPos(idx, Number(e.target.value))}
-                    className={`w-9 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-center font-mono text-[11px] text-slate-200 ${SPINNER_OFF}`}
+                    aria-label="Starting tile"
+                    className={`w-9 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-center font-mono text-[11px] text-slate-200 max-sm:min-h-9 ${SPINNER_OFF}`}
                   />
                   <span className="flex flex-col">
-                    <button type="button" onClick={() => adjust("start_positions", idx, 1, MAX_START_TILE)} className="text-slate-400 hover:text-slate-50" aria-label="Start one tile later">
+                    <button type="button" onClick={() => adjust("start_positions", idx, 1, MAX_START_TILE)} className="text-slate-400 hover:text-slate-50 max-sm:px-1.5 max-sm:py-0.5" aria-label="Start one tile later">
                       <ArrowUp className="h-3 w-3" />
                     </button>
-                    <button type="button" onClick={() => adjust("start_positions", idx, -1, MAX_START_TILE)} className="text-slate-400 hover:text-slate-50" aria-label="Start one tile earlier">
+                    <button type="button" onClick={() => adjust("start_positions", idx, -1, MAX_START_TILE)} className="text-slate-400 hover:text-slate-50 max-sm:px-1.5 max-sm:py-0.5" aria-label="Start one tile earlier">
                       <ArrowDown className="h-3 w-3" />
                     </button>
                   </span>
@@ -280,7 +283,8 @@ export function SimulatorConfigPanel({
                   type="button"
                   onClick={() => removeRacer(idx)}
                   disabled={config.racers.length <= 1}
-                  className="text-slate-500 hover:text-rose-400 disabled:opacity-30"
+                  aria-label={`Remove ${displayName(name)}`}
+                  className="text-slate-500 hover:text-rose-400 disabled:opacity-30 max-sm:p-2"
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>
@@ -411,7 +415,7 @@ export function SimulatorConfigPanel({
           onChange={(e) => onChange({ ...config, dice_text: e.target.value })}
           placeholder="Dice rolls, e.g. 6,1,4,2"
           aria-label="Dice rolls"
-          className="w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-xs text-slate-200 placeholder-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-40"
+          className="w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-xs text-slate-200 placeholder-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-40 max-sm:min-h-10 pointer-coarse:min-h-10"
         />
         {config.use_scripted_dice && diceError && (
           <div className="text-[11px] text-rose-400">{diceError}</div>
@@ -456,7 +460,8 @@ export function SimulatorConfigPanel({
               setImportError(null);
             }}
             placeholder="Paste sim config string..."
-            className="min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-[11px] text-slate-200 placeholder-slate-600 focus:border-indigo-500 focus:outline-none"
+            aria-label="Simulation config string"
+            className="min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-[11px] text-slate-200 placeholder-slate-600 focus:border-indigo-500 focus:outline-none max-sm:min-h-10 pointer-coarse:min-h-10"
           />
           <button
             type="button"
@@ -472,7 +477,7 @@ export function SimulatorConfigPanel({
                 );
               }
             }}
-            className="rounded-md bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+            className="rounded-md bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-40 max-sm:min-h-10 pointer-coarse:min-h-10"
           >
             Load
           </button>

@@ -130,13 +130,13 @@ export function RawDataView({ client, meta, onOpenRace }: RawDataViewProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1 rounded-lg bg-slate-900 p-1">
+        <div className="flex max-w-full gap-1 rounded-lg bg-slate-900 p-1">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => selectTab(tab.id)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors max-sm:min-h-9 pointer-coarse:min-h-9 ${
                 tab.id === query.table
                   ? "bg-indigo-600 text-on-accent"
                   : "text-slate-400 hover:bg-slate-800 hover:text-slate-50"
@@ -146,14 +146,15 @@ export function RawDataView({ client, meta, onOpenRace }: RawDataViewProps) {
             </button>
           ))}
         </div>
-        <div className="relative w-64">
+        <div className="relative w-full sm:w-64">
           <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
+            aria-label="Search rows"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search"
-            className="w-full rounded-md border border-slate-700 bg-slate-950 py-1.5 pr-2 pl-7 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-md border border-slate-700 bg-slate-950 py-1.5 pr-2 pl-7 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none max-sm:min-h-10 pointer-coarse:min-h-10"
           />
         </div>
       </div>
@@ -199,7 +200,8 @@ export function RawDataView({ client, meta, onOpenRace }: RawDataViewProps) {
             onChange={(e) =>
               setQuery((q) => ({ ...q, pageSize: Number(e.target.value), pageIndex: 0 }))
             }
-            className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200"
+            aria-label="Rows per page"
+            className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200 max-sm:min-h-10 pointer-coarse:min-h-10"
           >
             {PAGE_SIZES.map((size) => (
               <option key={size} value={size}>
@@ -211,7 +213,7 @@ export function RawDataView({ client, meta, onOpenRace }: RawDataViewProps) {
             type="button"
             disabled={query.pageIndex <= 0}
             onClick={() => setQuery((q) => ({ ...q, pageIndex: q.pageIndex - 1 }))}
-            className="rounded border border-slate-700 px-2 py-1 hover:bg-slate-800 disabled:opacity-40"
+            className="rounded border border-slate-700 px-2 py-1 hover:bg-slate-800 disabled:opacity-40 max-sm:min-h-10 pointer-coarse:min-h-10"
           >
             Previous
           </button>
@@ -222,7 +224,7 @@ export function RawDataView({ client, meta, onOpenRace }: RawDataViewProps) {
             type="button"
             disabled={query.pageIndex >= lastPage}
             onClick={() => setQuery((q) => ({ ...q, pageIndex: q.pageIndex + 1 }))}
-            className="rounded border border-slate-700 px-2 py-1 hover:bg-slate-800 disabled:opacity-40"
+            className="rounded border border-slate-700 px-2 py-1 hover:bg-slate-800 disabled:opacity-40 max-sm:min-h-10 pointer-coarse:min-h-10"
           >
             Next
           </button>

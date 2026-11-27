@@ -11,10 +11,10 @@ import {
   VisualMapComponent,
 } from "echarts/components";
 import * as echarts from "echarts/core";
+import { LabelLayout } from "echarts/features";
 import { CanvasRenderer, SVGRenderer } from "echarts/renderers";
 import { useEffect, useRef } from "react";
-
-const CHART_FONT = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+import { CHART_FONT } from "../utils/chartFont";
 
 echarts.use([
   ScatterChart,
@@ -31,11 +31,30 @@ echarts.use([
   MarkAreaComponent,
   DataZoomComponent,
   GraphicComponent,
+  LabelLayout,
   CanvasRenderer,
   SVGRenderer,
 ]);
 
 export type EChartsOption = echarts.EChartsCoreOption;
+
+type TooltipOption = Record<string, unknown>;
+
+/** Tooltips live on `document.body`, so neighbouring charts and `overflow: hidden` cards never cover or clip them. */
+function withBodyTooltip(unit: Record<string, unknown>): Record<string, unknown> {
+  const tooltip = unit.tooltip as TooltipOption | TooltipOption[] | undefined;
+  if (!tooltip || Array.isArray(tooltip)) return unit;
+  return { ...unit, tooltip: { appendToBody: true, ...tooltip } };
+}
+
+/** Applies the shared defaults to a plain option or to the `baseOption` of a responsive (`media`) option. */
+function withDefaults(option: EChartsOption): EChartsOption {
+  const unit = option as Record<string, unknown>;
+  const defaults = { textStyle: { fontFamily: CHART_FONT } };
+  const base = unit.baseOption as Record<string, unknown> | undefined;
+  if (base) return { ...unit, baseOption: withBodyTooltip({ ...defaults, ...base }) };
+  return withBodyTooltip({ ...defaults, ...unit });
+}
 
 export interface EChartProps {
   option: EChartsOption;
@@ -91,7 +110,7 @@ export function EChartImpl({
   useEffect(() => {
     const chart = instanceRef.current;
     if (!chart) return;
-    chart.setOption({ textStyle: { fontFamily: CHART_FONT }, ...option }, { notMerge: true, lazyUpdate: true });
+    chart.setOption(withDefaults(option), { notMerge: true, lazyUpdate: true });
     chart.resize();
   }, [option, height, renderer]);
 
@@ -101,6 +120,9 @@ export function EChartImpl({
       style={{
         height: typeof height === "number" ? `${height}px` : height,
         width: "100%",
+        minWidth: 0,
+        // The chart follows its container's width and never contributes to it, so a wide chart cannot keep a grid track wide.
+        contain: "inline-size",
       }}
       className={className}
     />
