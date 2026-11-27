@@ -1,6 +1,6 @@
 # React + Pyodide Frontend Architecture & Migration Plan
 
-This document captures the feasibility analysis, technical hurdles, architecture decisions, and milestone plan for replacing the current Marimo WASM notebook ([`frontend/magical_athlete_analysis.py`](../frontend/magical_athlete_analysis.py)) with a React single-page application powered by Pyodide (WASM Python + Polars), still deployed via GitHub Pages.
+This document captures the feasibility analysis, technical hurdles, architecture decisions, and milestone plan for replacing the current Marimo WASM notebook (`frontend/magical_athlete_analysis.py` (removed at the M6 cutover)) with a React single-page application powered by Pyodide (WASM Python + Polars), still deployed via GitHub Pages.
 
 The refactor is intended to be developed on a separate feature branch while keeping the existing Marimo frontend operational until final cutover.
 
@@ -8,7 +8,7 @@ The refactor is intended to be developed on a separate feature branch while keep
 
 ## 1. Current-State Inventory
 
-[`frontend/magical_athlete_analysis.py`](../frontend/magical_athlete_analysis.py) is a 3,786-line, 37-cell Marimo app combining two distinct experiences plus WASM deployment glue:
+`frontend/magical_athlete_analysis.py` (removed at the M6 cutover) is a 3,786-line, 37-cell Marimo app combining two distinct experiences plus WASM deployment glue:
 
 | Area | Current Implementation | Key Coupling / Pain Points |
 | --- | --- | --- |
@@ -229,7 +229,7 @@ magsim/
 │       │   ├── tables/           # RawRacesTable, RawResultsTable, SummaryTables (TanStack Table)
 │       │   └── charts/           # EChart wrapper, QuadrantChart, AbilitySpeedChart, GlobalCharts, Heatmaps
 │       └── App.tsx
-├── frontend/                     # Legacy Marimo notebook (untouched until M6 cutover)
+├── frontend/                     # Legacy Marimo notebook (removed at the M6 cutover)
 └── docs/
     ├── react_frontend_architecture.md
     └── results/                  # races.parquet, racer_results.parquet
@@ -244,12 +244,12 @@ All work happens on a dedicated branch (e.g., `feat/react-pyodide-frontend`), le
 | Milestone | Scope | Key Deliverables | Exit Criteria / Verification |
 | --- | --- | --- | --- |
 | **M0 — Pyodide + Polars Spike** | Risk retirement & benchmarks before full build-out. | Minimal Vite + Web Worker prototype that boots Pyodide, installs local `magsim-*.whl` (`deps=False`), loads `races.parquet` & `racer_results.parquet`, runs a Polars aggregation and a 1-race `GameScenario`. | Measured cold-start time & download size; verified whether `polars` reads Parquet natively or still requires `pyarrow`; confirmed `requires-python` & Pyodide version pairing; **Go/No-Go sign-off**. |
-| **M1 — Extract Python Backend APIs** | Refactor Python logic out of [`frontend/magical_athlete_analysis.py`](../frontend/magical_athlete_analysis.py) into `src/magsim/analysis/` and `src/magsim/web/`. | Typed DTOs (`schemas.py`), extracted `_calculate_all_data` metrics/heatmaps/filters, worker-side raw table pagination/sorting, and `simulator_api.py` (with structured log events & Second Wind–ready board/snapshot schema). | `pytest` parity tests comparing new `magsim.analysis` / `magsim.web` outputs against reference outputs from the current notebook on `docs/results/*.parquet`; `ruff` and `pyrefly` pass cleanly. |
+| **M1 — Extract Python Backend APIs** | Refactor Python logic out of `frontend/magical_athlete_analysis.py` (removed at the M6 cutover) into `src/magsim/analysis/` and `src/magsim/web/`. | Typed DTOs (`schemas.py`), extracted `_calculate_all_data` metrics/heatmaps/filters, worker-side raw table pagination/sorting, and `simulator_api.py` (with structured log events & Second Wind–ready board/snapshot schema). | `pytest` parity tests comparing new `magsim.analysis` / `magsim.web` outputs against reference outputs from the current notebook on `docs/results/*.parquet`; `ruff` and `pyrefly` pass cleanly. |
 | **M2 — React App Shell & Worker Bridge** | Build frontend foundation and dataset lifecycle. | Vite + React + TS + Tailwind v4 scaffold in `web/`, Web Worker + `EngineClient`, phased loading/progress screen, Parquet loader (default URL + optional local file upload), app navigation (Simulator / Analytics) & URL state helpers. | App boots cleanly in dev and production `vite preview`, loads both Parquet files in worker without UI jank, handles worker errors & retries gracefully. |
 | **M3 — Interactive Race Simulator** | Full simulator feature parity + improved UX. | Config panel (seed, board, scripted dice, debug toggle, roster add/remove/reorder/start pos), base64 `GameConfig` share/load + `?config=` URL param, declarative React SVG racetrack (31 tiles, palettes, offsets, tripped state, center die, tooltips, playback controls + keyboard shortcuts), structured interactive log viewer (auto-scroll, click-to-jump, racer/debug filter). | Visual & functional parity with Marimo simulator; deterministic replay matches encoded configs; smooth playback across 100+ step races. |
 | **M4 — Filters & Interactive Tables** | Port data filtering and all tabular views. | Filter sidebar (racer pool + "Automatic Racers", racer count, board, `Must Include All` / `Must Exclude Combination`, stale-filter indicator, `Run Analysis`), TanStack Table for worker-paginated `Races (Matrix View)` & `Racer Results` (with row-click → "Open in Simulator"), and the 5 summary tables (`Overview`, `Movement`, `VP Analysis`, `Abilities`, `Dynamics`). | Sorting, filtering, pagination, and row-click-to-simulator all work without main-thread lag; numeric values match M1 parity fixtures. |
 | **M5 — Interactive Charts & Heatmaps** | Port all visualizations with enhanced interactivity. | Reusable `<EChart />` (or Vega-Lite) wrapper; 4 quadrant scatter plots (`Consistency`, `Momentum`, `Excitement`, `Engine`) with rank-scale toggle, custom `RacerPalette` dot colors, dot labels & rich tooltips; `Ability Speed` diverging stacked bar; `Global` grouped facets & mirrored turn/VP histograms; `Interactions` & `Environments` heatmaps with `% shift` / absolute toggle; optional cross-chart racer highlight. | All 6 chart tabs + 2 heatmaps render accurately and resize cleanly across desktop/laptop viewports; hover tooltips and toggles match or exceed Marimo UX. |
-| **M6 — Cutover, Deploy & Cleanup** | Replace Marimo on GitHub Pages and clean up legacy tooling. | Finalize chosen GitHub Pages workflow (GH Actions or `docs/`), update `magsim gui` and [`pyproject.toml`](../pyproject.toml) `poe` tasks, run end-to-end parity checklist, remove `frontend/magical_athlete_analysis.py` & `marimo`/`altair` extras, update [`README.md`](../README.md). | Live GitHub Pages deployment serves React + Pyodide app; `magsim gui` works locally; CI passes; legacy Marimo dependencies removed. |
+| **M6 ✅ — Cutover, Deploy & Cleanup** | Replace Marimo on GitHub Pages and clean up legacy tooling. | Finalize chosen GitHub Pages workflow (GH Actions or `docs/`), update `magsim gui` and [`pyproject.toml`](../pyproject.toml) `poe` tasks, run end-to-end parity checklist, remove `frontend/magical_athlete_analysis.py` & `marimo`/`altair` extras, update [`README.md`](../README.md). | Live GitHub Pages deployment serves React + Pyodide app; `magsim gui` works locally; CI passes; legacy Marimo dependencies removed. |
 
 ---
 
