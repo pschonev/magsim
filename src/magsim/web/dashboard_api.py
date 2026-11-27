@@ -64,6 +64,7 @@ from magsim.web.schemas import (
     NamedValueDTO,
     OutcomeShareDTO,
     PickDTO,
+    PrecomputedDashboardDTO,
     RacerDistributionDTO,
     RacerDistributionsDTO,
     RacerFaceShareDTO,
@@ -719,6 +720,19 @@ def analyze(filtered: FilteredDataset, mush_pairs: pl.DataFrame | None = None) -
             ),
         ),
     )
+
+
+def default_filter(meta: DatasetMetaDTO) -> AnalysisFilterDTO:
+    """Every racer, board and player count, no combos or twist cards: the dashboard's opening view."""
+    return AnalysisFilterDTO(racers=meta.racers, boards=meta.boards, counts=meta.counts)
+
+
+def precompute_default(dataset: Dataset) -> PrecomputedDashboardDTO:
+    """The unfiltered analysis the browser would compute on first load, with its meta and filter."""
+    meta = get_metadata(dataset)
+    flt = default_filter(meta)
+    analysis = analyze(apply_filter(dataset, flt), dataset.mush_pairs)
+    return PrecomputedDashboardDTO(meta=meta, filter=flt, analysis=analysis)
 
 
 def query_raw_table(

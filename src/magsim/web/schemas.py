@@ -463,6 +463,14 @@ class DashboardAnalysisDTO(msgspec.Struct, frozen=True):
     summary_tables: list[SummaryTableDTO] = msgspec.field(default_factory=list)
 
 
+class PrecomputedDashboardDTO(msgspec.Struct, frozen=True):
+    """The default analysis of the bundled dataset, computed at build time, with the meta and filter it belongs to."""
+
+    meta: DatasetMetaDTO
+    filter: AnalysisFilterDTO
+    analysis: DashboardAnalysisDTO
+
+
 class RawTableQueryDTO(msgspec.Struct, frozen=True):
     """Pagination, search, and sorting parameters for raw data tables."""
 

@@ -194,6 +194,7 @@ uv run poe web-build   # uses results/ if present (error if incomplete), else th
 uv run magsim gui      # serves web/dist locally; without a build it opens the hosted app
 ```
 Requires Node.js. During development use `uv run poe web-dev` instead.
+`web-build` also precomputes the default (unfiltered) analysis, so the hosted dashboard shows it immediately while the Python engine finishes starting in the background.
 
 ---
 

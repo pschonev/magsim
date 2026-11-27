@@ -21,6 +21,15 @@ interface FilterPanelProps {
   running: boolean;
   onRun: () => void;
   analyzedCount: number | null;
+  /** False while the Python engine is still starting; filters stay editable but cannot run yet. */
+  engineReady: boolean;
+}
+
+const ENGINE_STARTING_TITLE = "The Python engine is still starting; filters can be applied in a few seconds.";
+
+function runLabel(engineReady: boolean, running: boolean): string {
+  if (!engineReady) return "Starting engine…";
+  return running ? "Running analysis..." : "Run Analysis";
 }
 
 export function FilterPanel({
@@ -31,6 +40,7 @@ export function FilterPanel({
   running,
   onRun,
   analyzedCount,
+  engineReady,
 }: FilterPanelProps) {
   const [comboMode, setComboMode] = useState<ComboMode>("include");
   const [comboRacers, setComboRacers] = useState<string[]>([]);
@@ -79,8 +89,8 @@ export function FilterPanel({
           )}
           <button
             type="button"
-            title="Click to process data with current filters."
-            disabled={running}
+            title={engineReady ? "Click to process data with current filters." : ENGINE_STARTING_TITLE}
+            disabled={running || !engineReady}
             onClick={onRun}
             className={`inline-flex items-center gap-1.5 px-4 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60 max-sm:ml-auto max-sm:min-h-10 pointer-coarse:min-h-10 ${
               isStale
@@ -89,7 +99,7 @@ export function FilterPanel({
             }`}
           >
             <Play className="h-3 w-3" />
-            {running ? "Running analysis..." : "Run Analysis"}
+            {runLabel(engineReady, running)}
           </button>
         </div>
       </div>

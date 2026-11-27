@@ -13,9 +13,11 @@ interface DashboardViewProps {
   initialAnalysis: DashboardAnalysisDTO | null;
   /** False once the user has uploaded their own dataset. */
   bundled: boolean;
+  /** False while the Python engine is still starting behind a precomputed analysis. */
+  engineReady: boolean;
 }
 
-export function DashboardView({ client, meta, initialAnalysis, bundled }: DashboardViewProps) {
+export function DashboardView({ client, meta, initialAnalysis, bundled, engineReady }: DashboardViewProps) {
   const profiles = useProfiles(bundled);
   const { draft, setDraft, analysis, running, expectedMs, failure, isStale, run } = useDashboard(
     client,
@@ -34,6 +36,7 @@ export function DashboardView({ client, meta, initialAnalysis, bundled }: Dashbo
         isStale={isStale}
         running={running}
         onRun={run}
+        engineReady={engineReady}
         analyzedCount={analysis && !message ? analysis.filtered_race_count : null}
       />
 

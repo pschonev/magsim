@@ -17,8 +17,10 @@ from magsim.analysis.expansion_effect import compute_expansion_effect
 from magsim.analysis.export import export_parquet_to_ipc
 from magsim.analysis.filters import clean_races_df
 from magsim.analysis.profiles import compute_profiles
+from magsim.web import load_ipc, precompute_default
 from magsim.web.schemas import AiCompareDTO, ExpansionEffectDTO, ProfileDTO
 
+DEFAULT_ANALYSIS_FILE = "default_analysis.json"
 PROFILES_FILE = "profiles.json"
 PROFILE_DECIMALS = 5
 EXPANSION_FILE = "expansion.json"
@@ -111,6 +113,16 @@ def write_ai_compare(src_parquet: Path, dst_json: Path) -> None:
     dst_json.write_bytes(msgspec.json.encode(dtos))
 
 
+def write_default_analysis(races_ipc: Path, results_ipc: Path, mush_ipc: Path | None, dst_json: Path) -> None:
+    """Run the browser's load -> default filter -> analyze path on the shipped IPC files and write the result."""
+    dataset = load_ipc(
+        races_ipc.read_bytes(),
+        results_ipc.read_bytes(),
+        None if mush_ipc is None else mush_ipc.read_bytes(),
+    )
+    dst_json.write_bytes(msgspec.json.encode(precompute_default(dataset)))
+
+
 def prepare_web_assets(
     repo_root: Path,
     *,
@@ -155,6 +167,15 @@ def prepare_web_assets(
     if (source_results / AI_COMPARE_PARQUET).exists():
         write_ai_compare(source_results / AI_COMPARE_PARQUET, ai_compare_json)
         manifest["aiCompare"] = f"results/{ai_compare_json.name}"
+    default_analysis_json = results_dir / DEFAULT_ANALYSIS_FILE
+    default_analysis_json.unlink(missing_ok=True)
+    write_default_analysis(
+        races_ipc,
+        results_ipc,
+        mush_ipc if "mushPairs" in manifest else None,
+        default_analysis_json,
+    )
+    manifest["defaultAnalysis"] = f"results/{default_analysis_json.name}"
     manifest_path = target_public / "runtime-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest

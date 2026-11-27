@@ -7,6 +7,8 @@ export interface MenuAction {
   icon: ComponentType<{ className?: string }>;
   onSelect: () => void;
   active?: boolean;
+  disabled?: boolean;
+  title?: string;
 }
 
 interface OverflowMenuProps {
@@ -24,7 +26,7 @@ export function OverflowMenu({ actions, label, className = "" }: OverflowMenuPro
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
 
-  const items = () => Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+  const items = () => Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? []);
 
   useEffect(() => {
     if (!open) return;
@@ -89,16 +91,18 @@ export function OverflowMenu({ actions, label, className = "" }: OverflowMenuPro
           onKeyDown={onMenuKeyDown}
           className="absolute top-full right-0 z-50 mt-2 min-w-52 rounded-lg border border-slate-700 bg-slate-900 p-1 shadow-2xl"
         >
-          {actions.map(({ id, label: text, icon: Icon, onSelect, active }) => (
+          {actions.map(({ id, label: text, icon: Icon, onSelect, active, disabled, title }) => (
             <button
               key={id}
               type="button"
               role="menuitem"
+              disabled={disabled}
+              title={title}
               onClick={() => {
                 setOpen(false);
                 onSelect();
               }}
-              className={`flex min-h-10 w-full items-center gap-2.5 rounded-md px-3 text-left text-sm focus-visible:outline focus-visible:outline-1 focus-visible:outline-indigo-500 ${
+              className={`flex min-h-10 w-full items-center gap-2.5 rounded-md px-3 text-left text-sm focus-visible:outline focus-visible:outline-1 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 ${
                 active ? "bg-indigo-600 text-on-accent" : "text-slate-200 hover:bg-slate-800 focus-visible:bg-slate-800"
               }`}
             >

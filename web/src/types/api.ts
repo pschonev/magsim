@@ -383,6 +383,13 @@ export interface DashboardAnalysisDTO {
   summary_tables: SummaryTableDTO[];
 }
 
+/** The default analysis of the bundled dataset, computed at build time, with the meta and filter it belongs to. */
+export interface PrecomputedDashboardDTO {
+  meta: DatasetMetaDTO;
+  filter: AnalysisFilterDTO;
+  analysis: DashboardAnalysisDTO;
+}
+
 export interface RawTableQueryDTO {
   table: RawTableName;
   offset: number;
@@ -550,6 +557,8 @@ export interface RuntimeManifest {
   expansion?: string;
   /** Smart against baseline AI per racer with decisions (JSON list of AiCompareDTO); absent without a batch run. */
   aiCompare?: string;
+  /** Default (unfiltered) analysis computed at build time (JSON PrecomputedDashboardDTO); older builds have none. */
+  defaultAnalysis?: string;
   pyodideVersion: string;
 }
 
