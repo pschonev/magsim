@@ -1,12 +1,13 @@
 import type {
   AnalysisFilterDTO,
   BootProgress,
-  BootResult,
   ConfigEncodeResponseDTO,
   DashboardAnalysisDTO,
   DatasetMetaDTO,
   DecodedConfigDTO,
   EngineClient,
+  EngineInfo,
+  EngineStage,
   RawTablePageDTO,
   RawTableQueryDTO,
   SimulationRequestDTO,
@@ -20,16 +21,21 @@ interface PendingRequest {
 }
 
 type WorkerInbound =
-  | { type: "progress"; progress: BootProgress }
+  | { type: "progress"; phase: EngineStage; progress: BootProgress }
   | { type: "filtered"; id: number; raceCount: number }
   | { type: "result"; id: number; data: unknown }
   | { type: "error"; id: number; error: string };
+
+type ProgressListener = (progress: BootProgress) => void;
 
 export class PyodideEngineClient implements EngineClient {
   private worker: Worker;
   private nextId = 1;
   private pending = new Map<number, PendingRequest>();
-  private progressListener: ((progress: BootProgress) => void) | null = null;
+  private progressListeners: Partial<Record<EngineStage, ProgressListener>> = {};
+  private engineStart: Promise<EngineInfo> | null = null;
+  private dataLoad: Promise<DatasetMetaDTO> | null = null;
+  private baseUrl = new URL(import.meta.env.BASE_URL, window.location.href).href;
 
   constructor() {
     this.worker = new Worker(new URL("./worker.ts", import.meta.url), {
@@ -38,7 +44,7 @@ export class PyodideEngineClient implements EngineClient {
     this.worker.onmessage = (event: MessageEvent<WorkerInbound>) => {
       const msg = event.data;
       if (msg.type === "progress") {
-        this.progressListener?.(msg.progress);
+        this.progressListeners[msg.phase]?.(msg.progress);
         return;
       }
       const entry = this.pending.get(msg.id);
@@ -83,19 +89,24 @@ export class PyodideEngineClient implements EngineClient {
     });
   }
 
-  async init(
-    onProgress?: (progress: BootProgress) => void,
-  ): Promise<BootResult> {
-    this.progressListener = onProgress ?? null;
-    const baseUrl = new URL(
-      import.meta.env.BASE_URL,
-      window.location.href,
-    ).href;
-    try {
-      return await this.call<BootResult>({ method: "init", baseUrl });
-    } finally {
-      this.progressListener = null;
-    }
+  startEngine(onProgress?: ProgressListener): Promise<EngineInfo> {
+    if (onProgress) this.progressListeners.engine = onProgress;
+    this.engineStart ??= this.call<EngineInfo>({
+      method: "startEngine",
+      baseUrl: this.baseUrl,
+    });
+    return this.engineStart;
+  }
+
+  loadBundledData(onProgress?: ProgressListener): Promise<DatasetMetaDTO> {
+    if (onProgress) this.progressListeners.data = onProgress;
+    this.dataLoad ??= this.startEngine().then(() =>
+      this.call<DatasetMetaDTO>({
+        method: "loadBundledData",
+        baseUrl: this.baseUrl,
+      }),
+    );
+    return this.dataLoad;
   }
 
   loadDatasetBytes(

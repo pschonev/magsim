@@ -1,4 +1,4 @@
-import { AlertTriangle, Ban, BookOpen, Bot, Check, ChevronDown, ChevronRight, Play, SlidersHorizontal, X } from "lucide-react";
+import { AlertTriangle, Ban, BookOpen, Bot, Check, ChevronDown, ChevronRight, Loader2, Play, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
 import { MultiSelect } from "../../components/MultiSelect";
 import type {
@@ -21,14 +21,28 @@ interface FilterPanelProps {
   running: boolean;
   onRun: () => void;
   analyzedCount: number | null;
-  /** False while the Python engine is still starting; filters stay editable but cannot run yet. */
-  engineReady: boolean;
+  /** Why the analysis cannot run yet (null when it can); filters stay editable meanwhile. */
+  runBlock: RunBlock | null;
+  /** Called when opening the panel or pressing Run while the race data is not requested yet. */
+  onNeedData: () => void;
+  /** Restarts a failed engine or data stage. */
+  onRetry: () => void;
 }
 
-const ENGINE_STARTING_TITLE = "The Python engine is still starting; filters can be applied in a few seconds.";
+/** idle: race data not requested yet; starting-engine / loading-data: in progress; failed: a stage errored. */
+export type RunBlock = "idle" | "starting-engine" | "loading-data" | "failed";
 
-function runLabel(engineReady: boolean, running: boolean): string {
-  if (!engineReady) return "Starting engine…";
+const RUN_BLOCK_TITLES: Record<RunBlock, string> = {
+  idle: "Click to load the race data and process it with current filters.",
+  "starting-engine": "The Python engine is still starting; filters can be applied in a few seconds.",
+  "loading-data": "The race data is still loading; filters can be applied in a few seconds.",
+  failed: "Loading failed. Click to try again.",
+};
+
+function runLabel(runBlock: RunBlock | null, running: boolean): string {
+  if (runBlock === "starting-engine") return "Starting engine…";
+  if (runBlock === "loading-data") return "Loading race data…";
+  if (runBlock === "failed") return "Retry loading";
   return running ? "Running analysis..." : "Run Analysis";
 }
 
@@ -40,12 +54,26 @@ export function FilterPanel({
   running,
   onRun,
   analyzedCount,
-  engineReady,
+  runBlock,
+  onNeedData,
+  onRetry,
 }: FilterPanelProps) {
   const [comboMode, setComboMode] = useState<ComboMode>("include");
   const [comboRacers, setComboRacers] = useState<string[]>([]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [open, setOpen] = useState(false);
+  const loading = runBlock === "starting-engine" || runBlock === "loading-data";
+
+  const toggleOpen = () => {
+    if (!open) onNeedData();
+    setOpen((v) => !v);
+  };
+
+  const handleRun = () => {
+    if (runBlock === "idle") onNeedData();
+    else if (runBlock === "failed") onRetry();
+    else onRun();
+  };
 
   const automatic = meta.racers.filter((r) => meta.automatic_racers.includes(r));
   const secondWind = meta.racers.filter((r) => meta.second_wind_racers.includes(r));
@@ -68,7 +96,7 @@ export function FilterPanel({
         <button
           type="button"
           aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
+          onClick={toggleOpen}
           className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs font-medium text-slate-200 max-sm:min-h-10 pointer-coarse:min-h-10 max-sm:basis-full"
         >
           <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
@@ -89,17 +117,17 @@ export function FilterPanel({
           )}
           <button
             type="button"
-            title={engineReady ? "Click to process data with current filters." : ENGINE_STARTING_TITLE}
-            disabled={running || !engineReady}
-            onClick={onRun}
+            title={runBlock ? RUN_BLOCK_TITLES[runBlock] : "Click to process data with current filters."}
+            disabled={running || loading}
+            onClick={handleRun}
             className={`inline-flex items-center gap-1.5 px-4 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60 max-sm:ml-auto max-sm:min-h-10 pointer-coarse:min-h-10 ${
               isStale
                 ? "btn-print bg-indigo-600 text-on-accent hover:bg-indigo-500"
                 : "rounded-full border border-slate-700 bg-slate-900 text-indigo-300 hover:border-indigo-500"
             }`}
           >
-            <Play className="h-3 w-3" />
-            {runLabel(engineReady, running)}
+            {loading ? <Loader2 className="h-3 w-3 motion-safe:animate-spin" /> : <Play className="h-3 w-3" />}
+            {runLabel(runBlock, running)}
           </button>
         </div>
       </div>

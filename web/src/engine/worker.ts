@@ -2,11 +2,12 @@ import bootstrapPy from "./pyodide_bootstrap.py?raw";
 import type {
   AnalysisFilterDTO,
   BootProgress,
-  BootResult,
   ConfigEncodeResponseDTO,
   DashboardAnalysisDTO,
   DatasetMetaDTO,
   DecodedConfigDTO,
+  EngineInfo,
+  EngineStage,
   RawTablePageDTO,
   RawTableQueryDTO,
   RuntimeManifest,
@@ -31,7 +32,8 @@ interface PyodideModule {
 type PyCallable = (...args: unknown[]) => unknown;
 
 type WorkerRequest =
-  | { id: number; method: "init"; baseUrl: string }
+  | { id: number; method: "startEngine"; baseUrl: string }
+  | { id: number; method: "loadBundledData"; baseUrl: string }
   | {
       id: number;
       method: "loadDatasetBytes";
@@ -47,7 +49,7 @@ type WorkerRequest =
   | { id: number; method: "runSimulation"; req: SimulationRequestDTO };
 
 type WorkerResponse =
-  | { type: "progress"; progress: BootProgress }
+  | { type: "progress"; phase: EngineStage; progress: BootProgress }
   | { type: "filtered"; id: number; raceCount: number }
   | { type: "result"; id: number; data: unknown }
   | { type: "error"; id: number; error: string };
@@ -56,15 +58,40 @@ const DEFAULT_PYODIDE_VERSION = "314.0.8";
 
 let pyodide: PyodideInstance | null = null;
 let pyarrowLoaded = false;
+let datasetUploaded = false;
 let fetchPatchedForCache = false;
+let manifestPromise: Promise<RuntimeManifest> | null = null;
 const fnCache = new Map<string, PyCallable>();
 
-function postProgress(stage: string, percent: number, detail?: string): void {
+function postProgress(
+  phase: EngineStage,
+  stage: string,
+  percent: number,
+  detail?: string,
+): void {
   const msg: WorkerResponse = {
     type: "progress",
+    phase,
     progress: { stage, percent, detail },
   };
   self.postMessage(msg);
+}
+
+function normalizeBase(baseUrl: string): string {
+  return baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+}
+
+function loadManifest(baseUrl: string): Promise<RuntimeManifest> {
+  manifestPromise ??= (async () => {
+    const res = await fetch(`${normalizeBase(baseUrl)}runtime-manifest.json`);
+    if (!res.ok) {
+      throw new Error(
+        `Failed to load runtime-manifest.json (HTTP ${res.status})`,
+      );
+    }
+    return (await res.json()) as RuntimeManifest;
+  })();
+  return manifestPromise;
 }
 
 /**
@@ -172,47 +199,35 @@ function callPyJson<T>(name: string, ...args: unknown[]): T {
   return JSON.parse(raw) as T;
 }
 
-async function handleInit(baseUrl: string): Promise<BootResult> {
+async function handleStartEngine(baseUrl: string): Promise<EngineInfo> {
   const t0 = performance.now();
-  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  const normalizedBase = normalizeBase(baseUrl);
 
-  postProgress("Fetching runtime manifest & Pyodide loader...", 8);
+  postProgress("engine", "Fetching runtime manifest & Pyodide loader...", 8);
 
-  const manifestRes = await fetch(`${normalizedBase}runtime-manifest.json`);
-  if (!manifestRes.ok) {
-    throw new Error(
-      `Failed to load runtime-manifest.json (HTTP ${manifestRes.status})`,
-    );
-  }
-  const manifest = (await manifestRes.json()) as RuntimeManifest;
+  const manifest = await loadManifest(baseUrl);
   const pyodideVersion = manifest.pyodideVersion || DEFAULT_PYODIDE_VERSION;
   const indexURL = `https://cdn.jsdelivr.net/pyodide/v${pyodideVersion}/full/`;
   const wheelUrl = `${normalizedBase}${manifest.wheel}`;
 
   installPyodideFetchCache(indexURL, `magsim-pyodide-v${pyodideVersion}`);
 
-  // Overlap dataset fetches, wheel prewarming, and Pyodide boot from t=0
-  postProgress("Loading Python WASM runtime & dataset in parallel...", 22);
+  postProgress("engine", "Loading Python WASM runtime...", 22);
   const prewarmPromise = prewarmPyodideWheels(indexURL);
-  const dataFetchPromise = Promise.all([
-    fetchBytes(`${normalizedBase}${manifest.races}`),
-    fetchBytes(`${normalizedBase}${manifest.racerResults}`),
-    manifest.mushPairs ? fetchBytes(`${normalizedBase}${manifest.mushPairs}`) : Promise.resolve(undefined),
-  ]);
 
   const pyodideMod = (await import(
     /* @vite-ignore */ `${indexURL}pyodide.mjs`
   )) as PyodideModule;
 
-  postProgress("Initializing Python WASM interpreter...", 42);
+  postProgress("engine", "Initializing Python WASM interpreter...", 42);
   pyodide = await pyodideMod.loadPyodide({ indexURL });
 
-  postProgress("Installing Polars, msgspec & magsim...", 64);
+  postProgress("engine", "Installing Polars, msgspec & magsim...", 64);
   await prewarmPromise;
   await pyodide.loadPackage(["polars", "msgspec"]);
   await pyodide.loadPackage(wheelUrl);
 
-  postProgress("Loading simulation engine & bootstrap...", 78);
+  postProgress("engine", "Loading simulation engine & bootstrap...", 88);
   await pyodide.runPythonAsync(bootstrapPy);
   fnCache.clear();
 
@@ -221,31 +236,64 @@ async function handleInit(baseUrl: string): Promise<BootResult> {
     polars: string;
     msgspec: string;
   }>("get_runtime_versions_json");
+  const simulatorMeta = callPyJson<SimulatorMetaDTO>("simulator_meta");
 
-  postProgress("Decoding Arrow IPC race dataset...", 88);
-  const [racesBytes, resultsBytes, mushBytes] = await dataFetchPromise;
+  const bootMs = Math.round(performance.now() - t0);
+  postProgress(
+    "engine",
+    "Ready",
+    100,
+    `Engine started in ${(bootMs / 1000).toFixed(2)}s`,
+  );
+
+  return {
+    simulatorMeta,
+    bootMs,
+    pythonVersion: versions.python,
+    polarsVersion: versions.polars,
+  };
+}
+
+async function handleLoadBundledData(baseUrl: string): Promise<DatasetMetaDTO> {
+  if (!pyodide) {
+    throw new Error("Pyodide runtime not initialized");
+  }
+  const normalizedBase = normalizeBase(baseUrl);
+  const manifest = await loadManifest(baseUrl);
+
+  postProgress("data", "Downloading the race data...", 5);
+  const files = [
+    manifest.races,
+    manifest.racerResults,
+    ...(manifest.mushPairs ? [manifest.mushPairs] : []),
+  ];
+  let fetched = 0;
+  const [racesBytes, resultsBytes, mushBytes] = await Promise.all(
+    files.map(async (file) => {
+      const bytes = await fetchBytes(`${normalizedBase}${file}`);
+      fetched += 1;
+      postProgress("data", "Downloading the race data...", 5 + (75 * fetched) / files.length);
+      return bytes;
+    }),
+  );
+
+  if (datasetUploaded) {
+    throw new Error("A custom dataset was uploaded; bundled data skipped");
+  }
+  postProgress("data", "Decoding Arrow IPC race dataset...", 85);
   const datasetMeta = callPyJson<DatasetMetaDTO>(
     "load_ipc_dataset",
     racesBytes,
     resultsBytes,
     mushBytes,
   );
-  const simulatorMeta = callPyJson<SimulatorMetaDTO>("simulator_meta");
-
-  const bootMs = Math.round(performance.now() - t0);
   postProgress(
+    "data",
     "Ready",
     100,
-    `${datasetMeta.race_count.toLocaleString()} races loaded in ${(bootMs / 1000).toFixed(2)}s`,
+    `${datasetMeta.race_count.toLocaleString()} races loaded`,
   );
-
-  return {
-    datasetMeta,
-    simulatorMeta,
-    bootMs,
-    pythonVersion: versions.python,
-    polarsVersion: versions.polars,
-  };
+  return datasetMeta;
 }
 
 async function handleLoadDatasetBytes(
@@ -257,12 +305,13 @@ async function handleLoadDatasetBytes(
     throw new Error("Pyodide runtime not initialized");
   }
   if (format === "parquet" && !pyarrowLoaded) {
-    postProgress("Loading pyarrow for custom Parquet upload...", 50);
     await pyodide.loadPackage("pyarrow");
     pyarrowLoaded = true;
   }
   const fnName = format === "ipc" ? "load_ipc_dataset" : "load_parquet_dataset";
-  return callPyJson<DatasetMetaDTO>(fnName, racesBytes, resultsBytes);
+  const meta = callPyJson<DatasetMetaDTO>(fnName, racesBytes, resultsBytes);
+  datasetUploaded = true;
+  return meta;
 }
 
 self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
@@ -270,8 +319,11 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   try {
     let data: unknown;
     switch (req.method) {
-      case "init":
-        data = await handleInit(req.baseUrl);
+      case "startEngine":
+        data = await handleStartEngine(req.baseUrl);
+        break;
+      case "loadBundledData":
+        data = await handleLoadBundledData(req.baseUrl);
         break;
       case "loadDatasetBytes":
         data = await handleLoadDatasetBytes(

@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import type { DashboardAnalysisDTO, DatasetMetaDTO, EngineClient } from "../../types/api";
 import { AnalysisPanel } from "./AnalysisPanel";
 import { AnalysisProgressBar } from "./AnalysisProgressBar";
-import { FilterPanel } from "./FilterPanel";
+import { FilterPanel, type RunBlock } from "./FilterPanel";
 import { useDashboard } from "./useDashboard";
 import { useProfiles } from "./useProfiles";
 
@@ -13,11 +13,21 @@ interface DashboardViewProps {
   initialAnalysis: DashboardAnalysisDTO | null;
   /** False once the user has uploaded their own dataset. */
   bundled: boolean;
-  /** False while the Python engine is still starting behind a precomputed analysis. */
-  engineReady: boolean;
+  /** Why filters cannot run yet while the engine or data load behind a precomputed analysis. */
+  runBlock: RunBlock | null;
+  onNeedData: () => void;
+  onRetry: () => void;
 }
 
-export function DashboardView({ client, meta, initialAnalysis, bundled, engineReady }: DashboardViewProps) {
+export function DashboardView({
+  client,
+  meta,
+  initialAnalysis,
+  bundled,
+  runBlock,
+  onNeedData,
+  onRetry,
+}: DashboardViewProps) {
   const profiles = useProfiles(bundled);
   const { draft, setDraft, analysis, running, expectedMs, failure, isStale, run } = useDashboard(
     client,
@@ -36,7 +46,9 @@ export function DashboardView({ client, meta, initialAnalysis, bundled, engineRe
         isStale={isStale}
         running={running}
         onRun={run}
-        engineReady={engineReady}
+        runBlock={runBlock}
+        onNeedData={onNeedData}
+        onRetry={onRetry}
         analyzedCount={analysis && !message ? analysis.filtered_race_count : null}
       />
 

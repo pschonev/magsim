@@ -570,8 +570,13 @@ export interface BootProgress {
   message?: string;
 }
 
-export interface BootResult {
-  datasetMeta: DatasetMetaDTO;
+/** Boot has two lazy stages: the Python engine, then the bundled datasets. */
+export type EngineStage = "engine" | "data";
+
+export type StageStatus = "idle" | "loading" | "ready" | "error";
+
+/** Result of the engine stage (runtime, packages and simulator metadata; no dataset). */
+export interface EngineInfo {
   simulatorMeta: SimulatorMetaDTO;
   bootMs: number;
   pythonVersion: string;
@@ -579,7 +584,10 @@ export interface BootResult {
 }
 
 export interface EngineClient {
-  init(onProgress?: (progress: BootProgress) => void): Promise<BootResult>;
+  /** Boots the Python runtime. Idempotent: repeated and concurrent calls share one start; progress goes to the latest callback. */
+  startEngine(onProgress?: (progress: BootProgress) => void): Promise<EngineInfo>;
+  /** Downloads and decodes the bundled datasets, starting the engine first if needed. Idempotent like `startEngine`. */
+  loadBundledData(onProgress?: (progress: BootProgress) => void): Promise<DatasetMetaDTO>;
   loadDatasetBytes(
     racesBytes: Uint8Array,
     resultsBytes: Uint8Array,

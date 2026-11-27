@@ -1,8 +1,11 @@
-import { Upload, X } from "lucide-react";
+import { Loader2, Upload, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import type { StageStatus } from "../types/api";
 
 interface DatasetUploadModalProps {
   open: boolean;
+  /** Uploading needs the Python engine; the submit button waits until it is ready. */
+  engineStatus: StageStatus;
   onClose: () => void;
   onUpload: (
     racesBytes: Uint8Array,
@@ -19,7 +22,9 @@ const detectFormat = (file: File): "ipc" | "parquet" => {
   return lower.endsWith(".ipc") || lower.endsWith(".feather") ? "ipc" : "parquet";
 };
 
-function UploadDialog({ onClose, onUpload }: Omit<DatasetUploadModalProps, "open">) {
+function UploadDialog({ engineStatus, onClose, onUpload }: Omit<DatasetUploadModalProps, "open">) {
+  const engineReady = engineStatus === "ready";
+  const engineFailed = engineStatus === "error";
   const titleId = useId();
   const firstInputRef = useRef<HTMLInputElement | null>(null);
   const [racesFile, setRacesFile] = useState<File | null>(null);
@@ -143,6 +148,11 @@ function UploadDialog({ onClose, onUpload }: Omit<DatasetUploadModalProps, "open
               {error}
             </div>
           )}
+          {engineFailed && (
+            <div role="alert" className="rounded-lg border border-rose-500/40 bg-rose-950/50 p-2.5 text-xs text-rose-200">
+              The Python engine failed to start. Close this dialog and retry from the Simulator tab, or reload the page.
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <button
@@ -156,10 +166,19 @@ function UploadDialog({ onClose, onUpload }: Omit<DatasetUploadModalProps, "open
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={loading || !racesFile || !resultsFile}
-              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-medium text-on-accent hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-10 pointer-coarse:min-h-10"
+              disabled={loading || !engineReady || !racesFile || !resultsFile}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-medium text-on-accent hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-10 pointer-coarse:min-h-10"
             >
-              {loading ? "Loading dataset..." : "Load Dataset"}
+              {engineStatus === "loading" || engineStatus === "idle" ? (
+                <>
+                  <Loader2 className="h-3 w-3 motion-safe:animate-spin" />
+                  Starting engine…
+                </>
+              ) : loading ? (
+                "Loading dataset..."
+              ) : (
+                "Load Dataset"
+              )}
             </button>
           </div>
         </div>
@@ -169,7 +188,7 @@ function UploadDialog({ onClose, onUpload }: Omit<DatasetUploadModalProps, "open
 }
 
 /** Dialog for loading a custom races / racer_results pair. */
-export function DatasetUploadModal({ open, onClose, onUpload }: DatasetUploadModalProps) {
+export function DatasetUploadModal({ open, engineStatus, onClose, onUpload }: DatasetUploadModalProps) {
   if (!open) return null;
-  return <UploadDialog onClose={onClose} onUpload={onUpload} />;
+  return <UploadDialog engineStatus={engineStatus} onClose={onClose} onUpload={onUpload} />;
 }
